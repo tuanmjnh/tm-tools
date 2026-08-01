@@ -1,0 +1,553 @@
+[{
+  "_id": "68d4fb89affaf5d3c66b036b",
+  "title": "[mp4]Best Short 144p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=256][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 144,
+  "h": 256,
+  "sort": 13,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0367",
+  "title": "[mp4]Best Short 720p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1280][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 720,
+  "h": 1280,
+  "sort": 9,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0375",
+  "title": "[webm]Best Audio",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestaudio[ext=webm]\""
+  ],
+  "w": 0,
+  "h": 0,
+  "sort": 23,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0373",
+  "title": "[3gp]144p",
+  "code": [
+    17
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 176,
+  "h": 144,
+  "sort": 21,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0360",
+  "title": "[mp4]Best 1080p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 1920,
+  "h": 1080,
+  "sort": 2,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0368",
+  "title": "[mp4]Best Short 480p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=854][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 480,
+  "h": 854,
+  "sort": 10,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0364",
+  "title": "[mp4]Best 240p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 426,
+  "h": 240,
+  "sort": 6,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0362",
+  "title": "[mp4]Best 480p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 854,
+  "h": 480,
+  "sort": 4,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b036d",
+  "title": "[mp4]720p60",
+  "code": [
+    298,
+    140
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 1280,
+  "h": 720,
+  "sort": 15,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0363",
+  "title": "[mp4]Best 360p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 640,
+  "h": 360,
+  "sort": 5,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0379",
+  "title": "[webm]Best Short 720p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1280][ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best\""
+  ],
+  "w": 720,
+  "h": 1280,
+  "sort": 27,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b036c",
+  "title": "[mp4]1080p60",
+  "code": [
+    299,
+    140
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 1920,
+  "h": 1080,
+  "sort": 14,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0372",
+  "title": "[mp4]144p",
+  "code": [
+    160,
+    599
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 256,
+  "h": 144,
+  "sort": 20,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0376",
+  "title": "[webm]Best 1080p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1080][ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best\""
+  ],
+  "w": 1920,
+  "h": 1080,
+  "sort": 24,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0366",
+  "title": "[mp4]Best Short 1080p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1920][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 1080,
+  "h": 1920,
+  "sort": 8,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b036a",
+  "title": "[mp4]Best Short 240p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=426][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 240,
+  "h": 426,
+  "sort": 12,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0374",
+  "title": "[m4a]Best Audio",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestaudio[ext=m4a]\""
+  ],
+  "w": 0,
+  "h": 0,
+  "sort": 22,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b036e",
+  "title": "[mp4]720p",
+  "code": [
+    22
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 1280,
+  "h": 720,
+  "sort": 16,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0369",
+  "title": "[mp4]Best Short 360p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=640][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 360,
+  "h": 640,
+  "sort": 11,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0378",
+  "title": "[webm]Best Short 1080p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=1920][ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best\""
+  ],
+  "w": 1080,
+  "h": 1920,
+  "sort": 26,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0370",
+  "title": "[mp4]360p",
+  "code": [
+    18
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 640,
+  "h": 360,
+  "sort": 18,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b035f",
+  "title": "[mp4]Best Quality",
+  "code": null,
+  "opt": [
+    "-S",
+    "ext:mp4:m4a"
+  ],
+  "w": 0,
+  "h": 0,
+  "sort": 1,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0365",
+  "title": "[mp4]Best 144p",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=144][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 256,
+  "h": 144,
+  "sort": 7,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0371",
+  "title": "[mp4]240p",
+  "code": [
+    133,
+    599
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 426,
+  "h": 240,
+  "sort": 19,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0377",
+  "title": "[webm]Best 720p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=720][ext=webm]+bestaudio[ext=webm]/best[ext=webm]/best\""
+  ],
+  "w": 1280,
+  "h": 720,
+  "sort": 25,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b0361",
+  "title": "[mp4]Best 720p60",
+  "code": null,
+  "opt": [
+    "-f",
+    "\"bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best\""
+  ],
+  "w": 1280,
+  "h": 720,
+  "sort": 3,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+},
+{
+  "_id": "68d4fb89affaf5d3c66b036f",
+  "title": "[mp4]480p",
+  "code": [
+    135,
+    139
+  ],
+  "opt": [
+    "-f"
+  ],
+  "w": 854,
+  "h": 480,
+  "sort": 17,
+  "flag": 1,
+  "created": {
+    "at": {
+      "$numberLong": "1758788489611"
+    },
+    "by": null,
+    "ip": null
+  }
+}]

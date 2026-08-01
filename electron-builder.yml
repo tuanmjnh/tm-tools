@@ -1,0 +1,39 @@
+appId: com.tm.tools
+productName: TM Tools
+directories:
+  output: release
+  buildResources: public
+files:
+  - electron/**/*
+  - .output/**/*
+  - package.json
+asarUnpack:
+  - .output/server/**
+extraResources:
+  - from: resources
+    to: resources
+    filter:
+      - "**/*.exe"
+      - "**/*.json"
+win:
+  executableName: TM Tools
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - dmg
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+npmRebuild: false

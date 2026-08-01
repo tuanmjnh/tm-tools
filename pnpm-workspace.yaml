@@ -1,0 +1,12 @@
+allowBuilds:
+  '@firebase/util': true
+  better-sqlite3: true
+  electron-winstaller: true
+  esbuild: true
+  maplibre-gl: true
+  protobufjs: true
+  unrs-resolver: true
+  vue-demi: true
+
+overrides:
+  source-map: 0.6.1

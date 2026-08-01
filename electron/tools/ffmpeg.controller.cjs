@@ -1,0 +1,573 @@
+const { ipcMain } = require('electron')
+const { existsSync, mkdirSync, statSync } = require('fs')
+const { spawn, execSync } = require('child_process')
+const path = require('path')
+const { getToolsBinaries } = require('./paths.cjs')
+const { TaskProcessManager } = require('./task-manager.cjs')
+const sqlite = require('./sqlite.cjs')
+
+const moduleName = 'tools:ffmpeg'
+let taskManager = new TaskProcessManager(1, 200, 2, 30 * 60 * 1000)
+let binaries = getToolsBinaries()
+const updateUI = { delay: 500, lastSend: 0 }
+
+function send(event, channel, data) {
+  try {
+    event.sender.send(channel, JSON.parse(JSON.stringify(data)))
+  } catch {
+    // ignore
+  }
+}
+
+function resolveExecutable() {
+  binaries = getToolsBinaries()
+  return binaries
+}
+
+function buildResponse(task) {
+  const meta = task.meta || {}
+  return {
+    taskId: meta.taskId,
+    taskKey: meta.taskKey,
+    thread: meta.thread,
+    input: meta.input,
+    inputs: meta.inputs,
+    output: meta.output,
+    outPath: meta.outPath,
+    duration: meta.duration
+  }
+}
+
+function initTaskManager(event, args) {
+  taskManager = new TaskProcessManager(
+    args?.threads || 1,
+    args?.delay || 200,
+    args?.maxRetry ?? 2,
+    args?.timeout || 30 * 60 * 1000
+  )
+  updateUI.delay = args?.delayUI || 500
+  send(event, `${moduleName}:managerInitialized`, args)
+}
+
+function detectGpuSupport() {
+  try {
+    const ffmpegExe = resolveExecutable().ffmpeg
+    const output = execSync(`"${ffmpegExe}" -encoders`, { encoding: 'utf8' })
+    return {
+      nvenc: output.includes('h264_nvenc'),
+      amf: output.includes('h264_amf'),
+      qsv: output.includes('h264_qsv')
+    }
+  } catch {
+    return { nvenc: false, amf: false, qsv: false }
+  }
+}
+
+function getFileSizeSync(filePath) {
+  try {
+    if (filePath && existsSync(filePath)) {
+      return statSync(filePath).size
+    }
+  } catch {
+    // ignore
+  }
+  return 0
+}
+
+function substituteVariables(pattern, inputFile, configTitle, idx) {
+  const ext = path.extname(inputFile).slice(1)
+  const name = path.basename(inputFile, path.extname(inputFile))
+  const fulldir = path.dirname(inputFile)
+  const dirname = path.basename(fulldir)
+
+  const now = new Date()
+  const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+  const timeStr = String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0')
+  const datetimeStr = `${dateStr}_${timeStr}`
+
+  let result = pattern
+    .replace(/{name}/g, name)
+    .replace(/{ext}/g, ext)
+    .replace(/{dirname}/g, dirname)
+    .replace(/{fulldir}/g, fulldir)
+    .replace(/{date}/g, dateStr)
+    .replace(/{datetime}/g, datetimeStr)
+    .replace(/{config}/g, configTitle || 'default')
+    .replace(/{idx}/g, String(idx + 1))
+
+  return path.resolve(result)
+}
+
+function buildFfmpegArgs(input, output, config, gpuSupport) {
+  const args = ['-y']
+
+  // Inputs
+  args.push('-i', input)
+
+  // If background file is used, add it as second input
+  let hasBgFile = false
+  if (config && config.background_type === 'file' && config.background_file) {
+    args.push('-i', config.background_file)
+    hasBgFile = true
+  }
+
+  // Video filter construction
+  let filterComplex = ''
+  let currentTag = '[0:v]'
+
+  if (config) {
+    // 1. Zoom (static center scale & crop to avoid zoompan errors)
+    if (config.zoom_enable && config.zoom_ratio > 1) {
+      const z = config.zoom_ratio
+      filterComplex += `${currentTag}scale=w=iw*${z}:h=ih*${z},crop=w=iw:h=ih[vzoom];`
+      currentTag = '[vzoom]'
+    }
+
+    // 2. Flips
+    if (config.hflip_enable) {
+      if (config.hflip_all) {
+        filterComplex += `${currentTag}hflip[vhflip];`
+        currentTag = '[vhflip]'
+      } else {
+        const start = config.hflip_time_start || 0
+        const dur = config.hflip_time_duration || 0
+        filterComplex += `${currentTag}hflip=enable='between(t,${start},${start + dur})'[vhflip];`
+        currentTag = '[vhflip]'
+      }
+    }
+    if (config.vflip_enable) {
+      if (config.vflip_all) {
+        filterComplex += `${currentTag}vflip[vvflip];`
+        currentTag = '[vvflip]'
+      } else {
+        const start = config.vflip_time_start || 0
+        const dur = config.vflip_time_duration || 0
+        filterComplex += `${currentTag}vflip=enable='between(t,${start},${start + dur})'[vvflip];`
+        currentTag = '[vvflip]'
+      }
+    }
+
+    // 3. Aspect Ratio & Background
+    if (config.aspect_ratio > 0) {
+      let tw = 1920, th = 1080
+      if (config.aspect_ratio === 2) {
+        tw = 1080
+        th = 1920
+      } else if (config.aspect_ratio === 3) {
+        tw = 1080
+        th = 1080
+      } else if (config.aspect_ratio === 4) {
+        tw = 1440
+        th = 1080
+      }
+
+      if (config.background_type === 'color') {
+        const color = config.background_color || '#000000'
+        filterComplex += `color=c=${color}:s=${tw}x${th}[vbg];`
+        filterComplex += `${currentTag}scale=${tw}:${th}:force_original_aspect_ratio=decrease[vfg];`
+        filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[vbgoverlay];`
+        currentTag = '[vbgoverlay]'
+      } else if (config.background_type === 'boxblur') {
+        const blur = config.background_boxblur || 10
+        filterComplex += `${currentTag}split[vsplit1][vsplit2];`
+        filterComplex += `[vsplit1]scale=${tw}:${th}:force_original_aspect_ratio=increase,crop=${tw}:${th},boxblur=${blur}[vbg];`
+        filterComplex += `[vsplit2]scale=${tw}:${th}:force_original_aspect_ratio=decrease[vfg];`
+        filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[vbgoverlay];`
+        currentTag = '[vbgoverlay]'
+      } else if (config.background_type === 'file' && hasBgFile) {
+        filterComplex += `[1:v]scale=${tw}:${th}[vbg];`
+        filterComplex += `${currentTag}scale=${tw}:${th}:force_original_aspect_ratio=decrease[vfg];`
+        filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[vbgoverlay];`
+        currentTag = '[vbgoverlay]'
+      }
+    }
+
+    // 4. Scale
+    if (config.scale_w > 0 && config.scale_h > 0) {
+      filterComplex += `${currentTag}scale=${config.scale_w}:${config.scale_h}[vscale];`
+      currentTag = '[vscale]'
+    }
+
+    // 5. Labels (Text overlay)
+    let labels = []
+    if (typeof config.labels === 'string') {
+      try {
+        labels = JSON.parse(config.labels)
+      } catch {
+        // ignore
+      }
+    } else if (Array.isArray(config.labels)) {
+      labels = config.labels
+    }
+
+    if (labels && labels.length > 0) {
+      labels.forEach((lbl, idx) => {
+        const text = (lbl.text || '').replace(/'/g, '\'\\\\\'\'')
+        const color = lbl.color || 'white'
+        const size = lbl.size || 24
+        const x = lbl.x || 0
+        const y = lbl.y || 0
+        const tag = `vlabel${idx}`
+        filterComplex += `${currentTag}drawtext=font='Arial':text='${text}':fontcolor=${color}:fontsize=${size}:x=${x}:y=${y}[${tag}];`
+        currentTag = `[${tag}]`
+      })
+    }
+
+    // 6. Subtitles
+    if (config.subtitle) {
+      const escapedSubPath = config.subtitle.replace(/\\/g, '/').replace(/:/g, '\\:')
+      filterComplex += `${currentTag}subtitles='${escapedSubPath}'[vsub];`
+      currentTag = '[vsub]'
+    }
+
+    // 7. Speed
+    if (config.speed && config.speed !== 1) {
+      filterComplex += `${currentTag}setpts=1/${config.speed}*PTS[vspeed];`
+      currentTag = '[vspeed]'
+    }
+  }
+
+  if (filterComplex) {
+    if (filterComplex.endsWith(';')) {
+      filterComplex = filterComplex.slice(0, -1)
+    }
+    args.push('-filter_complex', filterComplex, '-map', currentTag)
+  }
+
+  // Audio filters
+  let audioFilters = []
+  if (config) {
+    if (config.speed && config.speed !== 1) {
+      let s = config.speed
+      while (s > 2) {
+        audioFilters.push('atempo=2.0')
+        s /= 2
+      }
+      while (s < 0.5) {
+        audioFilters.push('atempo=0.5')
+        s /= 0.5
+      }
+      audioFilters.push(`atempo=${s}`)
+    }
+    if (config.volume !== undefined && config.volume !== 1) {
+      audioFilters.push(`volume=${config.volume}`)
+    }
+  }
+
+  if (audioFilters.length > 0) {
+    args.push('-filter:a', audioFilters.join(','))
+  } else {
+    // Map default audio
+    args.push('-map', '0:a?')
+  }
+
+  // Video and Audio Encoders
+  let vEncoder = 'libx264'
+  if (gpuSupport) {
+    if (gpuSupport.nvenc) vEncoder = 'h264_nvenc'
+    else if (gpuSupport.amf) vEncoder = 'h264_amf'
+    else if (gpuSupport.qsv) vEncoder = 'h264_qsv'
+  }
+
+  args.push('-c:v', vEncoder, '-preset', 'medium', '-crf', '23')
+  args.push('-c:a', 'aac', '-b:a', '128k')
+  args.push(output)
+
+  return args
+}
+
+function resolveTasks(args) {
+  const gpuSupport = detectGpuSupport()
+  const exe = resolveExecutable().ffmpeg
+
+  return (args || []).map((task, i) => {
+    const meta = task.meta || {}
+    let finalArgs = task.args
+
+    // Resolve output via variables substitution
+    if (meta.outputPattern) {
+      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, i)
+      meta.output = substitutedOutput
+    }
+
+    const config = meta.config || (meta.configId ? sqlite.getFfmpegConfig(meta.configId) : null)
+    if (config) {
+      finalArgs = buildFfmpegArgs(meta.input, meta.output, config, gpuSupport)
+    }
+
+    if (meta.output) {
+      const outDir = path.dirname(meta.output)
+      if (outDir && !existsSync(outDir)) {
+        mkdirSync(outDir, { recursive: true })
+      }
+    }
+
+    return {
+      ...task,
+      command: exe,
+      args: finalArgs,
+      meta: { ...meta, taskKey: i, thread: i }
+    }
+  })
+}
+
+function setTasks(event, args) {
+  const tasks = resolveTasks(args)
+  taskManager.setTasks(tasks)
+}
+
+function setGroupTasks(event, args) {
+  const exe = resolveExecutable().ffmpeg
+  const gpuSupport = detectGpuSupport()
+  const groups = (args || []).map((group, g) => group.map((task, j) => {
+    const meta = task.meta || {}
+    let finalArgs = task.args
+
+    if (meta.outputPattern) {
+      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, g)
+      meta.output = substitutedOutput
+    }
+
+    const config = meta.config || (meta.configId ? sqlite.getFfmpegConfig(meta.configId) : null)
+    if (config) {
+      finalArgs = buildFfmpegArgs(meta.input, meta.output, config, gpuSupport)
+    }
+
+    if (meta.output) {
+      const outDir = path.dirname(meta.output)
+      if (outDir && !existsSync(outDir)) {
+        mkdirSync(outDir, { recursive: true })
+      }
+    }
+
+    return {
+      ...task,
+      command: exe,
+      args: finalArgs,
+      meta: { ...meta, taskKey: j, thread: 0 }
+    }
+  }))
+  taskManager.setGroupedTasks(groups)
+}
+
+function startTasks(event) {
+  updateUI.lastSend = 0
+  taskManager.beforeRunTask = (thread, idx, task) => {
+    const response = { ...buildResponse(task), taskKey: idx, thread, percent: 0, done: false }
+    send(event, `${moduleName}:beforeRunTask`, response)
+  }
+
+  taskManager.onTaskStderr = (thread, idx, task, data) => {
+    const line = data.toString()
+    const regex = /frame=\s*(?<frame>\d+)\s+fps=\s*(?<fps>[\d.NA]+)\s+q=\s*(?<q>[\d.-NA]+)\s+size=\s*(?<size>\d+)(?<size_unit>\w+)\s+time=(?<time>\d+:\d+:\d+\.\d+)\s+bitrate=\s*(?<bitrate>[\d.NA]+)\s*(?<bitrate_unit>[kKmMbB]+bits\/s)\s+speed=\s*(?<speed>[\d.]+)x\s+elapsed=(?<elapsed>\d+:\d+:\d+\.\d+)/
+    const match = line.match(regex)
+    if (!match || !task.meta?.duration) return
+    const now = Date.now()
+    if (now - updateUI.lastSend < updateUI.delay) return
+    updateUI.lastSend = now
+    const currentSec = parseTimeToSeconds(match.groups?.time || '00:00:00')
+    const percent = Math.round(Math.min(100, (currentSec / task.meta.duration) * 100))
+    const response = {
+      ...buildResponse(task),
+      taskKey: idx,
+      thread,
+      percent,
+      speed: match.groups?.speed + 'x',
+      done: false,
+      stderr: match.groups
+    }
+    send(event, `${moduleName}:progressTask`, response)
+  }
+
+  taskManager.afterRunTask = (pid, thread, idx, task, code, signal, stdout, stderr) => {
+    const meta = task.meta || {}
+    const response = { ...buildResponse(task), taskKey: idx, thread, percent: 100, done: true, code }
+    send(event, `${moduleName}:progressTask`, response)
+
+    // Save to history SQLite
+    sqlite.addFfmpegHistory({
+      config_id: meta.configId || null,
+      config_title: meta.configTitle || null,
+      batch_config_id: meta.batchConfigId || null,
+      batch_config_title: meta.batchConfigTitle || null,
+      input_file: meta.input || null,
+      input_files: meta.inputs ? JSON.stringify(meta.inputs) : null,
+      output_file: meta.output || null,
+      output_path: meta.outPath || (meta.output ? path.dirname(meta.output) : null),
+      operation: meta.operation || 'render',
+      duration: meta.duration || 0,
+      file_size: code === 0 ? getFileSizeSync(meta.output) : 0,
+      status: code === 0 ? 'completed' : 'failed',
+      error_message: code === 0 ? null : stderr.slice(-500),
+      threads: meta.threads || 1,
+      started_at: meta.startedAt || new Date().toISOString(),
+      completed_at: new Date().toISOString()
+    })
+  }
+
+  taskManager.onAllTasksDone = (total) => {
+    send(event, `${moduleName}:allTasksDone`, { total })
+  }
+
+  taskManager.onTaskError = (thread, idx, task, code, signal, stderr) => {
+    const response = { ...buildResponse(task), taskKey: idx, thread, percent: 0, done: false, message: stderr, code }
+    send(event, `${moduleName}:errorTask`, response)
+  }
+
+  taskManager.onTaskRetry = (idx, retryCount) => {
+    send(event, `${moduleName}:taskRetry`, { taskKey: idx, retryCount })
+  }
+
+  taskManager.onTaskTimeout = (idx) => {
+    send(event, `${moduleName}:taskTimeout`, { taskKey: idx })
+  }
+
+  taskManager.start().catch(() => {})
+}
+
+function parseTimeToSeconds(time) {
+  const parts = String(time).split(':').map(Number)
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  return parts[0] || 0
+}
+
+function getMediaInfo(event, args) {
+  return new Promise((resolve) => {
+    const exe = resolveExecutable().ffprobe
+    const child = spawn(exe, args || [])
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+    child.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+    child.on('close', (code, signal) => {
+      resolve({ pid: child.pid, code, signal, stdout, stderr })
+    })
+    child.on('error', (err) => {
+      resolve({ pid: 0, code: -1, signal: null, stdout: '', stderr: err.message })
+    })
+  })
+}
+
+function globFiles(event, pattern) {
+  try {
+    const normalized = pattern.replace(/\\/g, '/')
+    const lastSlash = normalized.lastIndexOf('/')
+    if (lastSlash === -1) return []
+    const dir = normalized.slice(0, lastSlash) || '.'
+    const filePattern = normalized.slice(lastSlash + 1)
+
+    if (!existsSync(dir)) return []
+
+    const regexStr = '^' + filePattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.') + '$'
+    const regex = new RegExp(regexStr, 'i')
+
+    const files = require('fs').readdirSync(dir)
+    return files
+      .filter(f => regex.test(f))
+      .map(f => path.join(dir, f).replace(/\\/g, '/'))
+  } catch {
+    return []
+  }
+}
+
+function registerFfmpegController() {
+  ipcMain.handle(`${moduleName}:globFiles`, (event, pattern) => globFiles(event, pattern))
+  ipcMain.handle(`${moduleName}:checkExecutable`, () => {
+    const exe = resolveExecutable()
+    const rs = {}
+    for (const [key, value] of Object.entries(exe)) {
+      rs[key] = { path: value, exists: existsSync(value) }
+    }
+    return { data: rs, status: Object.values(rs).every(v => v.exists) }
+  })
+
+  ipcMain.handle(`${moduleName}:getStatus`, () => taskManager.getStatus())
+
+  ipcMain.handle(`${moduleName}:initTaskManager`, (event, args) => initTaskManager(event, args))
+
+  ipcMain.handle(`${moduleName}:setTasks`, (event, args) => setTasks(event, args))
+
+  ipcMain.handle(`${moduleName}:setGroupTasks`, (event, args) => setGroupTasks(event, args))
+
+  ipcMain.handle(`${moduleName}:startTasks`, event => startTasks(event))
+
+  ipcMain.handle(`${moduleName}:pauseTasks`, async () => {
+    await taskManager.pause()
+    return taskManager.getStatus()
+  })
+
+  ipcMain.handle(`${moduleName}:continueTasks`, async () => {
+    await taskManager.continue()
+    return taskManager.getStatus()
+  })
+
+  ipcMain.handle(`${moduleName}:stopTask`, (event, idx) => {
+    taskManager.stopTask(idx)
+    send(event, `${moduleName}:stoppedTask`, true)
+    return taskManager.getStatus()
+  })
+
+  ipcMain.handle(`${moduleName}:stopTasks`, async (event) => {
+    await taskManager.stop()
+    send(event, `${moduleName}:stoppedTasks`, true)
+    return taskManager.getStatus()
+  })
+
+  ipcMain.handle(`${moduleName}:getMediaInfo`, (event, args) => getMediaInfo(event, args))
+
+  // SQLite CRUD handlers
+  ipcMain.handle(`${moduleName}:listFfmpegConfigs`, () => sqlite.listFfmpegConfigs())
+  ipcMain.handle(`${moduleName}:createFfmpegConfig`, (event, data) => {
+    const id = sqlite.createFfmpegConfig(data)
+    return { status: true, data: { id } }
+  })
+  ipcMain.handle(`${moduleName}:updateFfmpegConfig`, (event, { id, data }) => {
+    sqlite.updateFfmpegConfig(id, data)
+    return { status: true }
+  })
+  ipcMain.handle(`${moduleName}:deleteFfmpegConfig`, (event, id) => {
+    sqlite.deleteFfmpegConfig(id)
+    return { status: true }
+  })
+
+  ipcMain.handle(`${moduleName}:listFfmpegBatchConfigs`, () => sqlite.listFfmpegBatchConfigs())
+  ipcMain.handle(`${moduleName}:createFfmpegBatchConfig`, (event, data) => {
+    const id = sqlite.createFfmpegBatchConfig(data)
+    return { status: true, data: { id } }
+  })
+  ipcMain.handle(`${moduleName}:updateFfmpegBatchConfig`, (event, { id, data }) => {
+    sqlite.updateFfmpegBatchConfig(id, data)
+    return { status: true }
+  })
+  ipcMain.handle(`${moduleName}:deleteFfmpegBatchConfig`, (event, id) => {
+    sqlite.deleteFfmpegBatchConfig(id)
+    return { status: true }
+  })
+
+  ipcMain.handle(`${moduleName}:listFfmpegHistory`, (event, limit) => sqlite.listFfmpegHistory(limit))
+  ipcMain.handle(`${moduleName}:deleteFfmpegHistory`, (event, id) => {
+    sqlite.deleteFfmpegHistory(id)
+    return { status: true }
+  })
+  ipcMain.handle(`${moduleName}:detectGpuSupport`, () => detectGpuSupport())
+}
+
+module.exports = { registerFfmpegController, ffmpegEvents: {
+  managerInitialized: `${moduleName}:managerInitialized`,
+  beforeRunTask: `${moduleName}:beforeRunTask`,
+  progressTask: `${moduleName}:progressTask`,
+  allTasksDone: `${moduleName}:allTasksDone`,
+  stoppedTask: `${moduleName}:stoppedTask`,
+  stoppedTasks: `${moduleName}:stoppedTasks`,
+  errorTask: `${moduleName}:errorTask`,
+  taskRetry: `${moduleName}:taskRetry`,
+  taskTimeout: `${moduleName}:taskTimeout`
+} }

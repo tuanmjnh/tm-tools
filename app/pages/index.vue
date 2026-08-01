@@ -1,0 +1,63 @@
+<script setup lang="ts">
+import { sub } from 'date-fns'
+import type { DropdownMenuItem } from '@nuxt/ui'
+import type { Period, Range } from '~/types'
+
+const { t } = useI18n()
+const { isNotificationsSlideoverOpen } = useDashboard()
+
+const items = computed<DropdownMenuItem[][]>(() => [[{
+  label: t('home.newMail'),
+  icon: 'i-lucide-send',
+  to: '/inbox'
+}, {
+  label: t('home.newCustomer'),
+  icon: 'i-lucide-user-plus',
+  to: '/customers'
+}]])
+
+const range = shallowRef<Range>({
+  start: sub(new Date(), { days: 14 }),
+  end: new Date()
+})
+const period = ref<Period>('daily')
+</script>
+
+<template>
+  <UDashboardPanel id="home">
+    <template #header>
+      <UDashboardNavbar :title="$t('home.title')" :ui="{ right: 'gap-3' }">
+        <template #leading>
+          <UDashboardSidebarCollapse />
+        </template>
+
+        <template #right>
+          <UTooltip :text="$t('home.notifications')" :shortcuts="['N']">
+            <UButton color="neutral" variant="ghost" square @click="isNotificationsSlideoverOpen = true">
+              <UChip color="error" inset>
+                <UIcon name="i-lucide-bell" class="size-5 shrink-0" />
+              </UChip>
+            </UButton>
+          </UTooltip>
+
+          <UDropdownMenu :items="items">
+            <UButton icon="i-lucide-plus" size="md" class="rounded-full" />
+          </UDropdownMenu>
+        </template>
+      </UDashboardNavbar>
+
+      <UDashboardToolbar>
+        <template #left>
+          <HomeDateRangePicker v-model="range" class="-ms-1" />
+          <HomePeriodSelect v-model="period" :range="range" />
+        </template>
+      </UDashboardToolbar>
+    </template>
+
+    <template #body>
+      <LazyHomeStats :period="period" :range="range" />
+      <LazyHomeChart :period="period" :range="range" />
+      <LazyHomeSales :period="period" :range="range" />
+    </template>
+  </UDashboardPanel>
+</template>
