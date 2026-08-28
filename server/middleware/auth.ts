@@ -26,12 +26,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Missing authorization token' })
+    throw createError({ statusCode: 401, statusMessage: 'error.tokenMissing', message: 'Missing authorization token' })
   }
   const payload = await verifyAccessToken(token)
 
   if (!payload) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
+    throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid or expired token' })
   }
 
   event.context.auth = payload

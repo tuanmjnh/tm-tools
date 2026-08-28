@@ -1,16 +1,51 @@
 const { spawn } = require('child_process')
+const { decodeBuffer } = require('./encoding.cjs')
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Force-kill a spawned process and its whole tree.
+// On Windows, child.kill() cannot terminate a process tree, so we use
+// `taskkill /F /T /PID` which force-kills the process and all children.
+function killProcessTree(child) {
+  return new Promise((resolve) => {
+    if (!child || !child.pid) {
+      resolve()
+      return
+    }
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { windowsHide: true })
+      killer.on('close', () => resolve())
+      killer.on('error', () => {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // ignore
+        }
+        resolve()
+      })
+    } else {
+      try {
+        process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // ignore
+        }
+      }
+      resolve()
+    }
+  })
+}
+
 class TaskProcessManager {
-  constructor(threads = 1, sleep = 200, maxRetry = 0, timeout = 10 * 60 * 1000, killSignal = 'SIGTERM') {
+  constructor(threads = 1, sleep = 200, maxRetry = 0, timeout = 10 * 60 * 1000) {
     this.totalThreads = threads
     this.sleep = sleep
     this.maxRetry = maxRetry
     this.defaultTimeout = timeout
-    this.killSignal = killSignal
     this.tasks = []
     this.taskGroups = []
     this.threads = Array(this.totalThreads).fill(null)
@@ -24,6 +59,7 @@ class TaskProcessManager {
     this.globalRetryLimit = 100
     this.globalRetryCount = 0
     this.taskStatus = {}
+    this.stoppedTasks = new Set()
     this.logLevel = 'info'
     this.retryDelay = 1000
   }
@@ -44,13 +80,16 @@ class TaskProcessManager {
     Object.values(this.timeouts).forEach(clearTimeout)
     this.timeouts = {}
     this.taskStatus = {}
+    this.stoppedTasks.clear()
   }
 
   setTasks(tasks) {
     this.tasks = tasks
     this.taskGroups = []
     this.resetState()
-    tasks.forEach((_, i) => { this.taskStatus[i] = 'waiting' })
+    tasks.forEach((_, i) => {
+      this.taskStatus[i] = 'waiting'
+    })
   }
 
   setGroupedTasks(groups) {
@@ -83,13 +122,18 @@ class TaskProcessManager {
     }
   }
 
-  async stop(signal = this.killSignal) {
+  async stop() {
     if (this.beforeStop) await this.beforeStop()
     this.isProcessing = false
     this.isPaused = false
-    for (const [, child] of this.children.entries()) {
-      child.kill(signal)
+    // Mark every running task as manually stopped so its close handler does not retry.
+    for (const idx of this.processing) {
+      this.stoppedTasks.add(idx)
     }
+    await Promise.all([...this.children.entries()].map(([idx, child]) => {
+      this.stoppedTasks.add(idx)
+      return killProcessTree(child)
+    }))
     this.children.clear()
     Object.values(this.timeouts).forEach(clearTimeout)
     this.timeouts = {}
@@ -99,15 +143,20 @@ class TaskProcessManager {
     if (this.afterStop) await this.afterStop()
   }
 
-  async stopTask(index, signal = this.killSignal) {
+  async stopTask(index) {
     const task = this.tasks[index]
     if (this.beforeStopTask) await this.beforeStopTask(index, task)
     const child = this.children.get(index)
     if (child) {
-      child.kill(signal)
+      this.stoppedTasks.add(index)
       this.children.delete(index)
+      await killProcessTree(child)
       this.processing = this.processing.filter(idx => idx !== index)
       this.threads = this.threads.map(t => (t === index ? null : t))
+      if (!this.processed.includes(index)) this.processed.push(index)
+    } else {
+      // Task was waiting (not started): cancel it so it is never picked up.
+      this.stoppedTasks.add(index)
       if (!this.processed.includes(index)) this.processed.push(index)
     }
     if (this.afterStopTask) await this.afterStopTask(index, task)
@@ -160,23 +209,28 @@ class TaskProcessManager {
         this.children.set(nextIdx, child)
 
         const timeoutMs = task.timeout || this.defaultTimeout
-        this.timeouts[nextIdx] = setTimeout(() => {
+        this.timeouts[nextIdx] = setTimeout(async () => {
           this.taskStatus[nextIdx] = 'timeout'
           if (this.onTaskTimeout) this.onTaskTimeout(nextIdx, task)
           if (this.children.has(nextIdx)) {
-            child.kill(this.killSignal)
+            const timedOutChild = this.children.get(nextIdx)
+            this.children.delete(nextIdx)
+            await killProcessTree(timedOutChild)
+            this.processing = this.processing.filter(idx => idx !== nextIdx)
+            this.threads[t] = null
+            if (!this.processed.includes(nextIdx)) this.processed.push(nextIdx)
             this.log('warn', 'Task timeout', { idx: nextIdx, timeoutMs })
           }
         }, timeoutMs)
 
-        let stdout = ''
+        let stdoutBuf = Buffer.alloc(0)
         child.stdout.on('data', (data) => {
-          stdout += data.toString()
+          stdoutBuf = Buffer.concat([stdoutBuf, data])
           if (this.onTaskStdout) this.onTaskStdout(t, nextIdx, task, data)
         })
-        let stderr = ''
+        let stderrBuf = Buffer.alloc(0)
         child.stderr.on('data', (data) => {
-          stderr += data.toString()
+          stderrBuf = Buffer.concat([stderrBuf, data])
           if (this.onTaskStderr) this.onTaskStderr(t, nextIdx, task, data)
         })
         child.on('close', async (code, signal) => {
@@ -186,9 +240,15 @@ class TaskProcessManager {
           this.processing = this.processing.filter(idx => idx !== nextIdx)
           if (!this.processed.includes(nextIdx)) this.processed.push(nextIdx)
           this.threads[t] = null
-          if (this.afterRunTask) await this.afterRunTask(child.pid, t, nextIdx, task, code, signal, stdout, stderr)
-          if (this.onStopTask) await this.onStopTask(nextIdx, task)
-          if (this.onTaskError && code !== 0) await this.onTaskError(t, nextIdx, task, code, signal, stderr)
+          const wasStopped = this.stoppedTasks.has(nextIdx)
+          this.stoppedTasks.delete(nextIdx)
+          if (wasStopped) {
+            this.taskStatus[nextIdx] = 'stopped'
+            this.log('info', 'Task stopped', { idx: nextIdx })
+            return
+          }
+          if (this.afterRunTask) await this.afterRunTask(child.pid, t, nextIdx, task, code, signal, decodeBuffer(stdoutBuf), decodeBuffer(stderrBuf))
+          if (this.onTaskError && code !== 0) await this.onTaskError(t, nextIdx, task, code, signal, decodeBuffer(stderrBuf))
           if (code === 0) {
             this.taskStatus[nextIdx] = 'done'
             this.log('info', 'Task done', { idx: nextIdx })
@@ -224,15 +284,15 @@ class TaskProcessManager {
       const child = spawn(task.command, task.args || [], task.options || {})
       this.log('info', `Run group ${gIdx} task ${tIdx}`, task)
 
-      let stdout = ''
-      let stderr = ''
+      let stdoutBuf = Buffer.alloc(0)
+      let stderrBuf = Buffer.alloc(0)
 
       child.stdout.on('data', (data) => {
-        stdout += data.toString()
+        stdoutBuf = Buffer.concat([stdoutBuf, data])
         if (this.onTaskStdout) this.onTaskStdout(gIdx, tIdx, task, data)
       })
       child.stderr.on('data', (data) => {
-        stderr += data.toString()
+        stderrBuf = Buffer.concat([stderrBuf, data])
         if (this.onTaskStderr) this.onTaskStderr(gIdx, tIdx, task, data)
       })
       child.on('close', async (code, signal) => {
@@ -241,7 +301,7 @@ class TaskProcessManager {
           if (this.onTaskDone) await this.onTaskDone(tIdx, task)
         } else {
           this.taskStatus[tIdx] = 'failed'
-          if (this.onTaskError) await this.onTaskError(gIdx, tIdx, task, code, signal, stderr)
+          if (this.onTaskError) await this.onTaskError(gIdx, tIdx, task, code, signal, decodeBuffer(stderrBuf))
         }
         resolve()
       })
@@ -262,12 +322,13 @@ class TaskProcessManager {
     if (this.onAllTasksDone) await this.onAllTasksDone(this.taskGroups.length)
   }
 
-  async destroy(signal = this.killSignal) {
+  async destroy() {
     this.isProcessing = false
     this.isPaused = false
-    for (const [, child] of this.children.entries()) {
-      child.kill(signal)
-    }
+    await Promise.all([...this.children.entries()].map(([idx, child]) => {
+      this.stoppedTasks.add(idx)
+      return killProcessTree(child)
+    }))
     this.children.clear()
     Object.values(this.timeouts).forEach(clearTimeout)
     this.timeouts = {}
@@ -275,6 +336,7 @@ class TaskProcessManager {
     this.threads = []
     this.processing = []
     this.processed = []
+    this.stoppedTasks.clear()
     if (this.onDestroy) await this.onDestroy()
   }
 

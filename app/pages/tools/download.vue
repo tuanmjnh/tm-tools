@@ -2,6 +2,7 @@
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { z } from 'zod'
 import type { ToolTask, PlaylistVideo, YoutubeFormat, YoutubeConfig, YoutubeHistory } from '~/types'
+import type { GridColumn } from '~/components/gridList/Index.vue'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -16,15 +17,50 @@ async function pickOutputFolder() {
 const taskManager = useToolTaskManager('youtube')
 
 // Unified Form state
+const STORAGE_KEY = 'tools:download:settings'
+const savedSettings = import.meta.client ? JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') : {}
+
 const state = reactive({
-  downloadMode: 'single' as 'single' | 'multiple',
-  singleUrl: '',
-  urlText: '',
-  outputPath: '',
-  threads: 4,
-  selectedFormatId: '',
-  selectedConfigId: ''
+  downloadMode: (savedSettings.downloadMode || 'single') as 'single' | 'multiple',
+  singleUrl: savedSettings.singleUrl || '',
+  urlText: savedSettings.urlText || '',
+  outputPath: savedSettings.outputPath || '',
+  threads: savedSettings.threads || 4,
+  selectedFormatId: savedSettings.selectedFormatId || '',
+  selectedConfigId: savedSettings.selectedConfigId || '',
+  advancedOpen: false,
+  fileName: savedSettings.fileName || '%(title)s.%(ext)s',
+  restrict: savedSettings.restrict === true,
+  overwrite: savedSettings.overwrite !== false,
+  encoding: savedSettings.encoding || 'utf-8',
+  autoFetchFormat: savedSettings.autoFetchFormat !== false
 })
+
+if (import.meta.client) {
+  watch(
+    () => ({
+      downloadMode: state.downloadMode,
+      singleUrl: state.singleUrl,
+      urlText: state.urlText,
+      outputPath: state.outputPath,
+      threads: state.threads,
+      selectedFormatId: state.selectedFormatId,
+      selectedConfigId: state.selectedConfigId,
+      fileName: state.fileName,
+      restrict: state.restrict,
+      overwrite: state.overwrite,
+      encoding: state.encoding,
+      autoFetchFormat: state.autoFetchFormat
+    }),
+    (newVal) => {
+      // console.log(newVal)
+      delete newVal.singleUrl
+      delete newVal.urlText
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal))
+    },
+    { deep: true }
+  )
+}
 
 // Playlist
 const isPlaylist = ref(false)
@@ -36,9 +72,38 @@ const showPlaylistPreview = ref(false)
 // Data
 const formats = ref<YoutubeFormat[]>([])
 const configs = ref<YoutubeConfig[]>([])
-const history = ref<YoutubeHistory[]>([])
-const loadingHistory = ref(false)
+const historyState = useCursorPagination<YoutubeHistory>({
+  fetch: (cursor, limit) => taskManager.api!.listHistoryCursor({ cursor, limit }),
+  limit: 30
+})
+const { items: history, loading: loadingHistory, refresh: loadHistory, loadMore: loadMoreHistory, hasMore: hasMoreHistory, reset: resetHistory } = historyState
 const showHistorySlideover = ref(false)
+
+function statusColor(h: YoutubeHistory): 'success' | 'error' | 'warning' {
+  return h.status === 'completed' ? 'success' : h.status === 'failed' ? 'error' : 'warning'
+}
+
+function formatHistoryFormat(h: YoutubeHistory): string {
+  if (h.format_title) return h.format_title
+  const f = formats.value.find(f2 => f2.id === h.format_id)
+  return f?.title || h.format_id || '-'
+}
+
+function formatHistorySize(h: YoutubeHistory): string {
+  const f = formats.value.find(f2 => f2.id === h.format_id)
+  if (f?.w && f?.h) return `${f.w}×${f.h}`
+  if (h.file_size) return formatBytes(h.file_size)
+  return '-'
+}
+
+const historyColumns: GridColumn[] = [
+  { key: 'title', label: t('tools.title') },
+  { key: 'url', label: t('tools.url') },
+  { key: 'format', label: t('tools.format') },
+  { key: 'size', label: t('tools.size') },
+  { key: 'status', label: t('tools.status') }
+  // { key: 'actions', label: '#' }
+]
 const exeState = ref<'unknown' | 'ok' | 'missing'>('unknown')
 const showVersionSlideover = ref(false)
 const ytdlpVersion = ref('')
@@ -84,11 +149,9 @@ const schema = computed(() => {
 
 watch(activeFormats, (newVal) => {
   if (newVal.length > 0) {
-    if (!newVal.some(f => f.id === state.selectedFormatId)) {
+    if (!state.selectedFormatId || !newVal.some(f => f.id === state.selectedFormatId)) {
       state.selectedFormatId = newVal[0]?.id || ''
     }
-  } else {
-    state.selectedFormatId = ''
   }
 })
 
@@ -96,10 +159,34 @@ let fetchTimeout: NodeJS.Timeout | null = null
 watch(() => state.singleUrl, (newUrl) => {
   if (fetchTimeout) clearTimeout(fetchTimeout)
   const url = newUrl.trim()
-  if (url.startsWith('http') && url.length > 10) {
+  if (state.autoFetchFormat && url.startsWith('http') && url.length > 10) {
     fetchTimeout = setTimeout(() => {
       fetchDynamicFormats()
     }, 800)
+  }
+})
+
+watch(() => state.autoFetchFormat, (val) => {
+  if (!val) {
+    dynamicFormats.value = []
+    state.selectedFormatId = formats.value[0]?.id || ''
+  }
+})
+
+function applyConfig(cfg: YoutubeConfig | undefined) {
+  if (!cfg) return
+  state.outputPath = cfg.out_path
+  state.threads = cfg.threads
+  state.selectedFormatId = cfg.format_id
+  state.fileName = cfg.file_name || '%(title)s.%(ext)s'
+  state.restrict = cfg.restrict === 1
+  state.overwrite = cfg.overwrite === undefined ? true : cfg.overwrite === 1
+  state.encoding = cfg.encoding || 'utf-8'
+}
+
+watch(() => state.selectedConfigId, (newId) => {
+  if (newId) {
+    applyConfig(configs.value.find(c => c.id === newId))
   }
 })
 
@@ -118,6 +205,7 @@ const deletingConfig = ref(false)
 // Computed
 const isProcessing = computed(() => taskManager.processing.value)
 const isPaused = computed(() => taskManager.paused.value)
+const controlsDisabled = computed(() => exeState.value === 'missing' || isProcessing.value || isPaused.value)
 
 async function refreshExe() {
   const rs = await taskManager.checkExecutable()
@@ -136,19 +224,12 @@ async function loadConfigs() {
   if (configs.value.length && !state.selectedConfigId) {
     state.selectedConfigId = configs.value[0]?.id || ''
   }
-}
-
-async function loadHistory() {
-  loadingHistory.value = true
-  try {
-    history.value = await taskManager.api!.listHistory?.(100) || []
-  } finally {
-    loadingHistory.value = false
-  }
+  applyConfig(configs.value.find(c => c.id === state.selectedConfigId))
 }
 
 async function openHistory() {
   showHistorySlideover.value = true
+  resetHistory()
   await loadHistory()
 }
 
@@ -158,6 +239,7 @@ async function clearAllHistory() {
     const rs = await taskManager.api!.deleteHistory()
     if (rs && rs.status) {
       toast.add({ title: t('global.success'), description: t('tools.historyCleared'), color: 'success' })
+      resetHistory()
       await loadHistory()
     } else {
       toast.add({ title: t('global.error'), description: t('tools.clearHistoryFailed'), color: 'error' })
@@ -197,20 +279,53 @@ const electronVersions = computed(() => window.electronAPI?.versions || { node: 
 
 function openFolder(path: string | null) {
   if (window.electronAPI?.openPath && path) {
-    window.electronAPI.openPath(path)
+    let normalizedPath = path
+    if (window.electronAPI.platform === 'win32') {
+      normalizedPath = normalizedPath.replace(/\//g, '\\')
+    }
+    // console.log(`[FE:openFolder] sending=${JSON.stringify(normalizedPath)}`)
+    window.electronAPI.openPath(normalizedPath).then(() => {
+      // console.log(`[FE:openFolder] result=ok`)
+    }).catch((e: unknown) => console.log('[FE:openFolder] rejected:', e))
   }
 }
 
 function openFile(folder: string | null, fileName: string | null) {
   if (window.electronAPI?.openPath && folder && fileName) {
-    const path = `${folder}/${fileName}`.replace(/\/+/g, '/')
-    window.electronAPI.openPath(path)
+    let fullPath = `${folder}/${fileName}`.replace(/\/+/g, '/')
+    if (window.electronAPI.platform === 'win32') {
+      fullPath = fullPath.replace(/\//g, '\\')
+    }
+    // console.log(`[2]openFile folder=${JSON.stringify(folder)} fileName=${JSON.stringify(fileName)} full=${JSON.stringify(fullPath)}`)
+    window.electronAPI.openPath(fullPath).then(() => {
+      // console.log(`[2]openFile result=ok`)
+    }).catch((e: unknown) => console.log('[2]openFile rejected:', e))
   }
 }
 
 function showInFolder(fullPath: string) {
   if (window.electronAPI?.showItemInFolder && fullPath) {
-    window.electronAPI.showItemInFolder(fullPath)
+    let normalizedPath = fullPath
+    if (window.electronAPI.platform === 'win32') {
+      normalizedPath = normalizedPath.replace(/\//g, '\\')
+    }
+    // console.log(`[2]showInFolder path=${JSON.stringify(normalizedPath)}`)
+    window.electronAPI.showItemInFolder(normalizedPath).then(() => {
+      // console.log(`[2]showInFolder result=ok`)
+    }).catch((e: unknown) => console.log('[2]showInFolder rejected:', e))
+  }
+}
+
+function openFileFullPath(fullPath: string) {
+  if (window.electronAPI?.openPath && fullPath) {
+    let normalizedPath = fullPath
+    if (window.electronAPI.platform === 'win32') {
+      normalizedPath = normalizedPath.replace(/\//g, '\\')
+    }
+    // console.log(`[2]openFileFullPath path=${JSON.stringify(normalizedPath)}`)
+    window.electronAPI.openPath(normalizedPath).then(() => {
+      // console.log(`[2]openFileFullPath result=ok`)
+    }).catch((e: unknown) => console.log('[2]openFileFullPath rejected:', e))
   }
 }
 
@@ -241,7 +356,7 @@ async function fetchDynamicFormats() {
 
 async function detectPlaylist() {
   const urls = state.urlText.trim().split('\n').filter(Boolean)
-  isPlaylist.value = urls.some(u => u.includes('playlist') || u.includes('channel') || u.includes('@'))
+  isPlaylist.value = urls.some((u: string) => u.includes('playlist') || u.includes('channel') || u.includes('@'))
 }
 
 async function crawlPlaylist() {
@@ -294,15 +409,26 @@ function getTasks(): ToolTask[] {
   } else if (showPlaylistPreview.value && selectedVideos.value.size > 0) {
     urls = playlistVideos.value.filter(v => selectedVideos.value.has(v.id)).map(v => v.url)
   } else {
-    urls = state.urlText.split('\n').map(u => u.trim()).filter(Boolean)
+    urls = state.urlText.split('\n').map((u: string) => u.trim()).filter(Boolean)
   }
 
   const cfg = configs.value.find(c => c.id === state.selectedConfigId)
   const outPath = state.outputPath || cfg?.out_path || ''
-  const fileName = cfg?.file_name || ''
+  const fileName = state.fileName || cfg?.file_name || '%(title)s.%(ext)s'
+
+  const extraArgs: string[] = []
+  if (state.restrict) {
+    extraArgs.push('--restrict-filenames')
+  }
+  if (!state.overwrite) {
+    extraArgs.push('--no-overwrites')
+  }
+  if (state.encoding) {
+    extraArgs.push('--encoding', state.encoding)
+  }
 
   return urls.map((url, i) => ({
-    args: [...getFormatArgs(), url],
+    args: [...getFormatArgs(), ...extraArgs, url],
     options: {},
     meta: {
       taskId: `yt-${Date.now()}-${i}`,
@@ -323,6 +449,10 @@ function getTasks(): ToolTask[] {
 }
 
 async function onSubmit() {
+  if (exeState.value === 'missing') {
+    toast.add({ title: t('tools.executableMissing'), color: 'error' })
+    return
+  }
   if (isProcessing.value || isPaused.value) return
 
   const tasks = getTasks()
@@ -360,7 +490,12 @@ async function updateConfig(data: Partial<YoutubeConfig>) {
     const rs = await taskManager.api!.updateConfig?.({ id: editingConfig.value.id, data })
     if (rs?.status) {
       toast.add({ title: t('tools.configSaved'), color: 'success' })
+      const currentId = state.selectedConfigId
+      state.selectedConfigId = ''
       await loadConfigs()
+      nextTick(() => {
+        state.selectedConfigId = currentId
+      })
     } else {
       toast.add({ title: t('tools.configSaveFailed'), color: 'error' })
     }
@@ -385,6 +520,16 @@ function onSaveConfig(data: Partial<YoutubeConfig>) {
   else saveConfig(data)
 }
 
+function onEditSelectedConfig() {
+  const cfg = configs.value.find(c => c.id === state.selectedConfigId)
+  if (cfg) openEditConfig(cfg)
+}
+
+function onDeleteSelectedConfig() {
+  const cfg = configs.value.find(c => c.id === state.selectedConfigId)
+  if (cfg) openDeleteConfig(cfg)
+}
+
 function openDeleteConfig(cfg: YoutubeConfig) {
   deleteConfigTarget.value = cfg
   showDeleteConfigModal.value = true
@@ -406,14 +551,6 @@ async function doDeleteConfig() {
     showDeleteConfigModal.value = false
     deleteConfigTarget.value = null
   }
-}
-
-async function applyConfig(cfg: YoutubeConfig) {
-  state.selectedConfigId = cfg.id
-  state.selectedFormatId = cfg.format_id
-  state.outputPath = cfg.out_path
-  state.threads = cfg.threads
-  toast.add({ title: t('tools.configApplied'), color: 'success' })
 }
 
 function formatBytes(bytes: number | null): string {
@@ -445,542 +582,403 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
 <template>
   <BasePage id="tools-download" :title="t('nav.download')">
-    <UForm
-      id="download-form"
-      :schema="schema"
-      :state="state"
-      class="flex flex-col flex-1 min-h-0"
-      @submit="onSubmit"
-    >
-      <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-4 p-1' }">
-        <!-- Alerts -->
-        <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 mb-4">
-          <UAlert
-            v-if="exeState === 'missing'"
-            icon="i-lucide-alert-triangle"
-            color="error"
-            variant="subtle"
-            :title="t('tools.executableMissing')"
-          />
-          <UAlert
-            v-if="!taskManager.isElectron.value"
-            icon="i-lucide-monitor"
-            color="warning"
-            variant="subtle"
-            :title="t('tools.noElectron')"
-          />
-        </div>
+    <UForm id="download-form" :schema="schema" :state="state"
+      class="flex flex-col flex-1 min-h-0 p-4 overflow-hidden gap-4 h-full" @submit="onSubmit">
+      <!-- Alerts -->
+      <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 shrink-0">
+        <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle">
+          <template #title>
+            {{ t('tools.executableMissing') }}
+          </template>
+          <template #description>
+            <div class="mt-2">
+              <UButton size="xs" color="error" variant="soft" to="/system/config?tab=tools">
+                {{ t('nav.goTo') }} {{ t('nav.config') }}
+              </UButton>
+            </div>
+          </template>
+        </UAlert>
+        <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
+          :title="t('tools.noElectron')" />
+      </div>
 
-        <!-- Two-Column Responsive Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <!-- Left Column: Source URL Input, Tasks & History -->
-          <div class="lg:col-span-2 space-y-6">
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-list-todo" class="text-primary size-5" />
-                    <p class="font-semibold">
-                      {{ t('tools.downloadForm') }}
-                    </p>
+      <!-- Two-Column Responsive Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full">
+        <!-- Left Column: Source URL Input, Tasks & History -->
+        <div class="lg:col-span-2 lg:h-full lg:min-h-0 flex flex-col">
+          <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
+            <div class="space-y-6">
+              <UCard>
+                <template #header>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <UIcon name="i-lucide-list-todo" class="text-primary size-5" />
+                      <p class="font-semibold">
+                        {{ t('tools.downloadForm') }}
+                      </p>
+                    </div>
+                    <div class="flex gap-1">
+                      <UButton icon="i-lucide-info" color="info" variant="ghost" size="sm"
+                        :title="t('tools.versionInfo')" @click="openVersionInfo" />
+                      <UButton icon="i-lucide-history" color="warning" variant="ghost" size="sm"
+                        :title="t('tools.history')" @click="openHistory" />
+                    </div>
                   </div>
-                  <div class="flex gap-1">
-                    <UButton
-                      icon="i-lucide-info"
-                      color="neutral"
-                      variant="ghost"
-                      size="sm"
-                      :title="t('tools.versionInfo')"
-                      @click="openVersionInfo"
-                    />
-                    <UButton
-                      icon="i-lucide-history"
-                      color="neutral"
-                      variant="ghost"
-                      size="sm"
-                      :title="t('tools.history')"
-                      @click="openHistory"
-                    />
-                  </div>
-                </div>
-              </template>
+                </template>
 
-              <!-- URL Input Area -->
-              <div class="mb-4 space-y-4 border-b pb-4 border-gray-100 dark:border-gray-800">
-                <UFormField name="downloadMode" :label="t('tools.downloadMode')">
-                  <URadioGroup
-                    v-model="state.downloadMode"
-                    :items="[
+                <!-- URL Input Area -->
+                <div class="mb-4 space-y-4 border-b pb-4 border-gray-100 dark:border-gray-800">
+                  <UFormField name="downloadMode" :label="t('tools.downloadMode')">
+                    <URadioGroup v-model="state.downloadMode" :items="[
                       { label: t('tools.singleVideo'), value: 'single' },
                       { label: t('tools.multipleVideos'), value: 'multiple' }
-                    ]"
-                    class="flex gap-4"
-                    :disabled="isProcessing || isPaused"
-                  />
-                </UFormField>
-
-                <div v-if="state.downloadMode === 'single'">
-                  <UFormField name="singleUrl" :label="t('tools.url')">
-                    <div class="flex gap-2 w-full">
-                      <UInput
-                        v-model="state.singleUrl"
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        class="flex-1"
-                        :loading="fetchingFormats"
-                        :disabled="isProcessing || isPaused || fetchingFormats"
-                      />
-                    </div>
+                    ]" class="flex gap-4" :disabled="controlsDisabled" />
                   </UFormField>
-                </div>
 
-                <div v-else>
-                  <UFormField name="urlText" :label="t('tools.urls')">
-                    <UTextarea
-                      v-model="state.urlText"
-                      :rows="4"
-                      class="w-full"
-                      placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=..."
-                      :disabled="isProcessing || isPaused"
-                    />
-                    <template #hint>
-                      <div class="flex items-center gap-2 text-xs text-muted">
-                        <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
-                        }}</span>
-                        <UButton
-                          v-if="isPlaylist && !loadingPlaylist"
-                          size="xs"
-                          variant="soft"
-                          :loading="loadingPlaylist"
-                          :disabled="isProcessing || isPaused"
-                          @click="crawlPlaylist"
-                        >
-                          {{ t('tools.getPlaylistInfo') }}
-                        </UButton>
+                  <div v-if="state.downloadMode === 'single'">
+                    <UFormField name="singleUrl" :label="t('tools.url')">
+                      <div class="flex gap-2 w-full">
+                        <UInput v-model="state.singleUrl" placeholder="https://www.youtube.com/watch?v=..."
+                          class="flex-1" :loading="fetchingFormats" :disabled="controlsDisabled || fetchingFormats" />
                       </div>
-                    </template>
-                  </UFormField>
-                </div>
-              </div>
-
-              <!-- Playlist Preview -->
-              <div v-if="showPlaylistPreview && playlistVideos.length" class="mb-4 p-4 border rounded-lg bg-muted/50">
-                <div class="flex items-center justify-between mb-2">
-                  <p class="font-medium">
-                    {{ t('tools.playlistPreview', { count: playlistVideos.length }) }}
-                  </p>
-                  <div class="flex gap-2">
-                    <UButton size="xs" variant="ghost" @click="toggleSelectAll">
-                      {{ selectedVideos.size === playlistVideos.length ? t('tools.deselectAll') : t('tools.selectAll')
-                      }}
-                    </UButton>
-                    <UButton size="xs" variant="ghost" @click="showPlaylistPreview = false">
-                      {{ t('tools.hidePreview') }}
-                    </UButton>
+                    </UFormField>
                   </div>
-                </div>
-                <div class="max-h-64 overflow-y-auto space-y-1">
-                  <div
-                    v-for="video in playlistVideos"
-                    :key="video.id"
-                    class="flex items-center gap-2 p-1 hover:bg-muted/50 rounded"
-                  >
-                    <UCheckbox v-model="selectedVideos" :value="video.id" />
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm truncate font-medium">
-                        {{ video.title }}
-                      </p>
-                      <p class="text-xs text-muted">
-                        {{ formatDuration(video.duration) }} · {{ video.uploader }} · {{
-                          video.viewCount.toLocaleString() }} views
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </UCard>
 
-            <!-- Task Manager Panel -->
-            <ToolsTaskManagerPanel
-              v-if="taskManager.taskList.value.length"
-              :items="taskManager.taskList.value"
-              :total="taskManager.total.value"
-              :done="taskManager.done.value"
-              :running="taskManager.running.value"
-              :processing="taskManager.processing.value"
-              :paused="taskManager.paused.value"
-              :retries="taskManager.globalRetryCount.value"
-              :can-start="false"
-              @refresh="taskManager.refreshStatus()"
-              @pause="taskManager.pause()"
-              @resume="taskManager.resume()"
-              @stop-all="taskManager.stopAll()"
-              @stop-task="(key) => taskManager.stopTask(key)"
-              @open-item="showInFolder"
-            />
-          </div>
-
-          <!-- Right Column: Settings & Configuration Presets -->
-          <div class="space-y-6">
-            <!-- Download Settings Card -->
-            <UCard>
-              <template #header>
-                <div class="flex items-center gap-2">
-                  <UIcon name="i-lucide-settings" class="text-primary size-5" />
-                  <p class="font-semibold">
-                    {{ t('nav.settings') }}
-                  </p>
-                </div>
-              </template>
-
-              <div class="space-y-4">
-                <!-- Output Folder Settings -->
-                <UFormField name="outputPath" :label="t('tools.output')">
-                  <UInput
-                    v-model="state.outputPath"
-                    placeholder="D:/Downloads/YouTube"
-                    :ui="{ trailing: 'pe-1' }"
-                    class="w-full"
-                    :disabled="isProcessing || isPaused"
-                  >
-                    <template #trailing>
-                      <div class="flex items-center gap-1">
-                        <UButton
-                          color="neutral"
-                          variant="ghost"
-                          size="sm"
-                          icon="i-lucide-external-link"
-                          :title="t('tools.openFolder')"
-                          :aria-label="t('tools.openFolder')"
-                          :disabled="!state.outputPath || !taskManager.isElectron.value"
-                          @click="openFolder(state.outputPath)"
-                        />
-                        <UButton
-                          color="neutral"
-                          variant="ghost"
-                          size="sm"
-                          icon="i-lucide-folder-open"
-                          :title="t('tools.browse')"
-                          :aria-label="t('tools.browse')"
-                          :disabled="!taskManager.isElectron.value || isProcessing || isPaused"
-                          @click="pickOutputFolder"
-                        />
-                      </div>
-                    </template>
-                  </UInput>
-                </UFormField>
-
-                <!-- Threads Settings -->
-                <UFormField name="threads" :label="t('tools.threads')">
-                  <UInput
-                    v-model.number="state.threads"
-                    type="number"
-                    min="1"
-                    max="8"
-                    class="w-full"
-                    :disabled="isProcessing || isPaused"
-                  />
-                </UFormField>
-
-                <!-- Format Settings -->
-                <UFormField name="selectedFormatId" :label="t('tools.format')">
-                  <USelectMenu
-                    v-model="state.selectedFormatId"
-                    :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
-                    :placeholder="t('tools.selectFormat')"
-                    :search-input="{ placeholder: t('global.search') }"
-                    value-key="value"
-                    class="w-full"
-                    :disabled="isProcessing || isPaused || fetchingFormats"
-                    :loading="fetchingFormats"
-                  >
-                    <template #empty>
-                      {{ t('tools.noFormats') }}
-                    </template>
-                  </USelectMenu>
-                </UFormField>
-
-                <!-- Preset Select Settings -->
-                <UFormField name="selectedConfigId" :label="t('tools.configPreset')">
-                  <div class="flex gap-2 w-full">
-                    <USelectMenu
-                      v-model="state.selectedConfigId"
-                      :items="configs.map(c => ({ label: c.title, value: c.id }))"
-                      :placeholder="t('tools.selectPreset')"
-                      :search-input="{ placeholder: t('global.search') }"
-                      value-key="value"
-                      class="flex-1"
-                      :disabled="isProcessing || isPaused"
-                    >
-                      <template #empty>
-                        {{ t('tools.noPresets') }}
+                  <div v-else>
+                    <UFormField name="urlText" :label="t('tools.urls')">
+                      <UTextarea v-model="state.urlText" :rows="4" class="w-full"
+                        placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=..."
+                        :disabled="controlsDisabled" />
+                      <template #hint>
+                        <div class="flex items-center gap-2 text-xs text-muted">
+                          <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
+                          }}</span>
+                          <UButton v-if="isPlaylist && !loadingPlaylist" size="xs" variant="soft"
+                            :loading="loadingPlaylist" :disabled="controlsDisabled" @click="crawlPlaylist">
+                            {{ t('tools.getPlaylistInfo') }}
+                          </UButton>
+                        </div>
                       </template>
-                    </USelectMenu>
-                    <UButton
-                      icon="i-lucide-plus"
-                      size="sm"
-                      :disabled="isProcessing || isPaused || fetchingFormats"
-                      @click="openCreateConfig"
-                    />
+                    </UFormField>
                   </div>
-                </UFormField>
-              </div>
-
-              <template #footer>
-                <div class="flex justify-end gap-2 w-full">
-                  <UButton
-                    v-if="isProcessing && !isPaused"
-                    icon="i-lucide-pause"
-                    :label="t('tools.pause')"
-                    color="warning"
-                    variant="subtle"
-                    @click="taskManager.pause()"
-                  />
-                  <UButton
-                    v-if="isPaused"
-                    icon="i-lucide-play"
-                    :label="t('tools.resume')"
-                    color="success"
-                    variant="solid"
-                    @click="taskManager.resume()"
-                  />
-                  <UButton
-                    v-if="isProcessing || isPaused"
-                    icon="i-lucide-square"
-                    :label="t('tools.stopAll')"
-                    color="error"
-                    variant="subtle"
-                    @click="taskManager.stopAll()"
-                  />
-                  <UButton
-                    icon="i-lucide-download"
-                    :label="t('tools.start')"
-                    color="primary"
-                    variant="solid"
-                    type="submit"
-                    :disabled="isProcessing || isPaused || fetchingFormats"
-                    :loading="isProcessing && !isPaused"
-                  />
                 </div>
-              </template>
-            </UCard>
 
-            <!-- Saved Presets Chips Card -->
-            <UCard v-if="configs.length">
-              <template #header>
-                <div class="flex items-center gap-2">
-                  <UIcon name="i-lucide-sliders" class="text-primary size-5" />
-                  <p class="font-semibold">
-                    {{ t('tools.savedConfigs') }}
-                  </p>
+                <!-- Playlist Preview -->
+                <div v-if="showPlaylistPreview && playlistVideos.length" class="mb-4 p-4 border rounded-lg bg-muted/50">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="font-medium">
+                      {{ t('tools.playlistPreview', { count: playlistVideos.length }) }}
+                    </p>
+                    <div class="flex gap-2">
+                      <UButton size="xs" variant="ghost" @click="toggleSelectAll">
+                        {{ selectedVideos.size === playlistVideos.length ? t('tools.deselectAll') : t('tools.selectAll')
+                        }}
+                      </UButton>
+                      <UButton size="xs" variant="ghost" @click="showPlaylistPreview = false">
+                        {{ t('tools.hidePreview') }}
+                      </UButton>
+                    </div>
+                  </div>
+                  <div class="max-h-64 overflow-y-auto space-y-1">
+                    <div v-for="video in playlistVideos" :key="video.id"
+                      class="flex items-center gap-2 p-1 hover:bg-muted/50 rounded">
+                      <UCheckbox v-model="selectedVideos" :value="video.id" />
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm truncate font-medium">
+                          {{ video.title }}
+                        </p>
+                        <p class="text-xs text-muted">
+                          {{ formatDuration(video.duration) }} · {{ video.uploader }} · {{
+                            video.viewCount.toLocaleString() }} views
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </template>
+              </UCard>
 
-              <div class="flex flex-wrap gap-2">
-                <UButton
-                  v-for="cfg in configs"
-                  :key="cfg.id"
-                  size="sm"
-                  :variant="state.selectedConfigId === cfg.id ? 'solid' : 'outline'"
-                  :color="state.selectedConfigId === cfg.id ? 'primary' : 'neutral'"
-                  class="flex items-center gap-1"
-                  :disabled="isProcessing || isPaused"
-                  @click="applyConfig(cfg)"
-                >
-                  <span class="max-w-32 truncate">{{ cfg.title }}</span>
-                  <UButton
-                    icon="i-lucide-pencil"
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    :disabled="isProcessing || isPaused"
-                    @click.stop="openEditConfig(cfg)"
-                  />
-                  <UButton
-                    icon="i-lucide-trash-2"
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    :disabled="isProcessing || isPaused"
-                    @click.stop="openDeleteConfig(cfg)"
-                  />
-                </UButton>
-              </div>
-            </UCard>
-          </div>
+              <!-- Task Manager Panel -->
+              <ToolsTaskManagerPanel v-if="taskManager.taskList.value.length" :items="taskManager.taskList.value"
+                :total="taskManager.total.value" :done="taskManager.done.value" :running="taskManager.running.value"
+                :processing="taskManager.processing.value" :paused="taskManager.paused.value"
+                :retries="taskManager.globalRetryCount.value" :can-start="true" @start="onSubmit"
+                @refresh="taskManager.refreshStatus()" @pause="taskManager.pause()" @resume="taskManager.resume()"
+                @stop-all="taskManager.stopAll()" @stop-task="(key) => taskManager.stopTask(key)"
+                @open-item="showInFolder" @open-file="openFileFullPath" />
+            </div>
+          </UScrollArea>
         </div>
 
-        <!-- Config Creation / Edit Slideover -->
-        <ToolsDownloadConfigSlideover
-          v-model:open="showConfigSlideover"
-          :config="editingConfig"
-          :formats="formats"
-          :loading="savingConfig"
-          @save="onSaveConfig"
-        />
+        <!-- Right Column: Settings & Configuration Presets -->
+        <div class="lg:h-full lg:min-h-0 flex flex-col">
+          <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
+            <div class="space-y-6">
+              <!-- Download Settings Card -->
+              <UCard>
+                <template #header>
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-settings" class="text-primary size-5" />
+                    <p class="font-semibold">
+                      {{ t('nav.settings') }}
+                    </p>
+                  </div>
+                </template>
 
-        <!-- Confirm modals -->
-        <LazyBaseConfirmModal
-          v-model:open="showDeleteConfigModal"
-          :title="t('tools.confirmDeleteConfigTitle')"
-          :description="t('tools.confirmDeleteConfigDesc', { name: deleteConfigTarget?.title || '' })"
-          confirm-icon="i-lucide-trash-2"
-          :loading="deletingConfig"
-          @confirm="doDeleteConfig"
-        />
+                <div class="space-y-4">
+                  <!-- Preset Select Settings -->
+                  <UFormField name="selectedConfigId" :label="t('tools.configPreset')">
+                    <div class="flex gap-2 w-full">
+                      <USelectMenu v-model="state.selectedConfigId" clear
+                        :items="configs.map(c => ({ label: c.title, value: c.id }))"
+                        :placeholder="t('tools.selectPreset')" :search-input="{ placeholder: t('global.search') }"
+                        value-key="value" class="flex-1" :disabled="controlsDisabled">
+                        <template #empty>
+                          {{ t('tools.noPresets') }}
+                        </template>
+                      </USelectMenu>
+                      <UButton v-if="state.selectedConfigId" icon="i-lucide-pencil" size="md" color="info"
+                        variant="soft" :disabled="controlsDisabled || fetchingFormats" :title="t('global.edit')"
+                        @click="onEditSelectedConfig" />
+                      <UButton v-if="state.selectedConfigId" icon="i-lucide-trash-2" size="md" color="error"
+                        variant="soft" :disabled="controlsDisabled || fetchingFormats" :title="t('global.delete')"
+                        @click="onDeleteSelectedConfig" />
+                      <UButton icon="i-lucide-plus" variant="soft" size="md"
+                        :disabled="controlsDisabled || fetchingFormats" :title="t('global.create')"
+                        @click="openCreateConfig" />
+                    </div>
+                  </UFormField>
 
-        <LazyBaseConfirmModal
-          v-model:open="showClearHistoryModal"
-          :title="t('tools.confirmClearHistoryTitle')"
-          :description="t('tools.confirmClearHistory')"
-          confirm-icon="i-lucide-trash-2"
-          :loading="clearingHistory"
-          @confirm="clearAllHistory"
-        />
+                  <!-- Output Folder Settings -->
+                  <UFormField name="outputPath" :label="t('tools.output')">
+                    <UInput v-model="state.outputPath" placeholder="D:/Downloads/YouTube"
+                      :ui="{ base: 'pr-16.5', trailing: 'pe-0.5' }" class="w-full" :disabled="controlsDisabled">
+                      <template #trailing>
+                        <div class="flex items-center gap-1">
+                          <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-external-link"
+                            :title="t('tools.openFolder')" :aria-label="t('tools.openFolder')"
+                            :disabled="!state.outputPath || !taskManager.isElectron.value"
+                            @click="openFolder(state.outputPath)" />
+                          <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open"
+                            :title="t('tools.browse')" :aria-label="t('tools.browse')"
+                            :disabled="!taskManager.isElectron.value || controlsDisabled" @click="pickOutputFolder" />
+                        </div>
+                      </template>
+                    </UInput>
+                  </UFormField>
 
-        <!-- History Slideover -->
-        <BaseResponsiveSlideover
-          v-model:open="showHistorySlideover"
-          :title="t('tools.history')"
-          icon="i-lucide-history"
-          side="right"
-        >
-          <template #body>
-            <div v-if="loadingHistory" class="flex justify-center py-8">
-              <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
+                  <!-- Threads Settings (multiple mode only) -->
+                  <UFormField v-if="state.downloadMode === 'multiple'" name="threads" :label="t('tools.threads')">
+                    <UInput v-model.number="state.threads" type="number" min="1" max="8" class="w-full"
+                      :disabled="controlsDisabled" />
+                  </UFormField>
+
+                  <!-- Format Settings -->
+                  <UFormField name="selectedFormatId" :label="t('tools.format')">
+                    <USelectMenu v-model="state.selectedFormatId"
+                      :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
+                      :placeholder="t('tools.selectFormat')" :search-input="{ placeholder: t('global.search') }"
+                      value-key="value" class="w-full" :disabled="controlsDisabled || fetchingFormats"
+                      :loading="fetchingFormats">
+                      <template #empty>
+                        {{ t('tools.noFormats') }}
+                      </template>
+                    </USelectMenu>
+                  </UFormField>
+
+                  <UCheckbox v-if="state.downloadMode === 'single'" v-model="state.autoFetchFormat"
+                    :label="t('tools.autoFetchFormat')" :disabled="controlsDisabled" />
+
+                  <!-- Advanced Settings -->
+                  <UCollapsible v-model:open="state.advancedOpen">
+                    <UButton block :trailing-icon="state.advancedOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                      color="neutral" variant="ghost" size="sm" :label="t('tools.advanced')" />
+                    <template #content>
+                      <div class="mt-3 space-y-4">
+                        <UFormField name="fileName" :label="t('tools.fileName')">
+                          <UInput v-model="state.fileName" placeholder="%(title)s.%(ext)s" class="w-full"
+                            :disabled="controlsDisabled" />
+                        </UFormField>
+
+                        <div class="space-y-3">
+                          <UCheckbox v-model="state.restrict" :label="t('tools.restrictNames')"
+                            :disabled="controlsDisabled" />
+                          <UCheckbox v-model="state.overwrite" :label="t('tools.overwriteFiles')"
+                            :disabled="controlsDisabled" />
+                        </div>
+
+                        <UFormField name="encoding" :label="t('tools.encoding')">
+                          <USelectMenu v-model="state.encoding" :items="['utf-8', 'ascii', 'latin-1']"
+                            :placeholder="t('tools.encoding')" :search-input="{ placeholder: t('global.search') }"
+                            class="w-full" :disabled="controlsDisabled" />
+                        </UFormField>
+                      </div>
+                    </template>
+                  </UCollapsible>
+                </div>
+
+                <template #footer>
+                  <div class="flex justify-end gap-2 w-full">
+                    <!-- <UButton v-if="isProcessing && !isPaused" icon="i-lucide-pause" :label="t('tools.pause')"
+                    color="warning" variant="subtle" @click="taskManager.pause()" />
+                  <UButton v-if="isPaused" icon="i-lucide-play" :label="t('tools.resume')" color="success"
+                    variant="solid" @click="taskManager.resume()" />
+                  <UButton v-if="isProcessing || isPaused" icon="i-lucide-square" :label="t('tools.stopAll')"
+                    color="error" variant="subtle" @click="taskManager.stopAll()" /> -->
+                    <UButton icon="i-lucide-download" :label="t('tools.start')" color="primary" variant="soft"
+                      type="submit" :disabled="controlsDisabled || fetchingFormats"
+                      :loading="isProcessing && !isPaused" />
+                  </div>
+                </template>
+              </UCard>
             </div>
-            <div v-else-if="history.length === 0" class="text-center py-12 text-muted">
-              <UIcon name="i-lucide-clock" class="text-3xl mb-2" />
-              <p>{{ t('tools.noHistory') }}</p>
-            </div>
-            <div v-else class="space-y-3">
-              <div
-                v-for="h in history"
-                :key="h.id"
-                class="p-3 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors flex flex-col gap-2"
-              >
+          </UScrollArea>
+        </div>
+      </div>
+
+      <!-- Config Creation / Edit Slideover -->
+      <ToolsDownloadConfigSlideover v-model:open="showConfigSlideover" :config="editingConfig" :formats="formats"
+        :loading="savingConfig" @save="onSaveConfig" />
+
+      <!-- Confirm modals -->
+      <LazyBaseConfirmModal v-model:open="showDeleteConfigModal" :title="t('tools.confirmDeleteConfigTitle')"
+        :description="t('tools.confirmDeleteConfigDesc', { name: deleteConfigTarget?.title || '' })"
+        confirm-icon="i-lucide-trash-2" :loading="deletingConfig" @confirm="doDeleteConfig" />
+
+      <LazyBaseConfirmModal v-model:open="showClearHistoryModal" :title="t('tools.confirmClearHistoryTitle')"
+        :description="t('tools.confirmClearHistory')" confirm-icon="i-lucide-trash-2" :loading="clearingHistory"
+        @confirm="clearAllHistory" />
+
+      <!-- History Slideover -->
+      <BaseResponsiveSlideover v-model:open="showHistorySlideover" :title="t('tools.history')" icon="i-lucide-history"
+        side="right" :ui="{ content: 'w-screen max-w-3xl' }">
+        <template #body>
+          <div class="h-[60vh]">
+            <LazyGridList :items="history" :columns="historyColumns" item-key="id" :loading="loadingHistory"
+              :can-load-more="hasMoreHistory" storage-key="tools-youtube-history" @refresh="loadHistory"
+              @load-more="loadMoreHistory">
+              <template #empty>
+                <UEmpty icon="i-lucide-clock" :title="t('tools.noHistory')" :description="t('tools.noHistoryDesc')" />
+              </template>
+
+              <template #mobile-content="{ item: h }">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <p class="text-sm font-semibold truncate flex-1" :title="h.title || h.url">
                     {{ h.title || h.url }}
                   </p>
-                  <UBadge
-                    :color="h.status === 'completed' ? 'success' : h.status === 'failed' ? 'error' : 'warning'"
-                    variant="soft"
-                    size="sm"
-                    class="shrink-0"
-                  >
-                    {{ t('global.' + h.status) }}
+                  <UBadge :color="statusColor(h)" variant="soft" size="sm" class="shrink-0">
+                    {{ t(`global.${h.status}`) }}
                   </UBadge>
                 </div>
+                <div class="flex items-center justify-between gap-2 min-w-0">
+                  <div class="flex flex-col">
+                    <p v-if="h.title" class="mt-1 text-xs text-muted truncate min-w-0 font-mono">
+                      {{ h.url }}
+                    </p>
+                    <div class="mt-2 flex items-center gap-3 text-xs text-muted">
+                      <span>{{ formatHistoryFormat(h) }}</span>
+                      <span>{{ formatBytes(h.file_size) }}</span>
+                      <span>{{ formatDuration(h.duration) }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-center gap-1">
+                    <UButton v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
+                      icon="i-lucide-play" size="xs" variant="ghost" color="primary" :title="t('tools.openFile')"
+                      @click="openFile(h.out_path, h.file_name)" />
+                    <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
+                      variant="ghost" color="neutral" :title="t('tools.openFolder')"
+                      @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
+                  </div>
+                </div>
+              </template>
 
-                <p v-if="h.title" class="text-xs text-muted truncate min-w-0 font-mono">
+              <template #title="{ item: h }">
+                <p class="text-sm font-semibold truncate" :title="h.title || h.url">
+                  {{ h.title || h.url }}
+                </p>
+              </template>
+
+              <template #url="{ item: h }">
+                <p class="truncate text-xs text-muted font-mono">
                   {{ h.url }}
                 </p>
+              </template>
 
-                <div class="flex items-center justify-between text-xs text-muted border-t pt-2 border-muted/50 mt-1">
-                  <div class="flex items-center gap-3">
-                    <span>{{ h.format_title || h.format_id || '-' }}</span>
-                    <span>{{ formatBytes(h.file_size) }}</span>
-                    <span>{{ formatDuration(h.duration) }}</span>
-                  </div>
-                  <div class="flex items-center gap-1">
-                    <UButton
-                      v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
-                      icon="i-lucide-play"
-                      size="xs"
-                      variant="ghost"
-                      color="primary"
-                      :title="t('tools.openFile')"
-                      @click="openFile(h.out_path, h.file_name)"
-                    />
-                    <UButton
-                      v-if="h.out_path && taskManager.isElectron.value"
-                      icon="i-lucide-folder"
-                      size="xs"
-                      variant="ghost"
-                      color="neutral"
-                      :title="t('tools.openFolder')"
-                      @click="openFolder(h.out_path)"
-                    />
-                  </div>
+              <template #format="{ item: h }">
+                <span class="text-xs">{{ formatHistoryFormat(h) }}</span>
+              </template>
+
+              <template #size="{ item: h }">
+                <span class="text-xs">{{ formatBytes(h.file_size) }}</span>
+              </template>
+
+              <template #status="{ item: h }">
+                <UBadge :color="statusColor(h)" variant="soft" size="sm">
+                  {{ t(`global.${h.status}`) }}
+                </UBadge>
+              </template>
+
+              <template #actions="{ item: h }">
+                <div class="flex items-center justify-center gap-1 pr-3">
+                  <UButton v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
+                    icon="i-lucide-play" size="xs" variant="ghost" color="primary" :title="t('tools.openFile')"
+                    @click="openFile(h.out_path, h.file_name)" />
+                  <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
+                    variant="ghost" color="neutral" :title="t('tools.openFolder')"
+                    @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
                 </div>
-              </div>
+              </template>
+            </LazyGridList>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-between w-full">
+            <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
+              @click="showHistorySlideover = false" />
+            <div class="flex gap-2">
+              <UButton v-if="history.length > 0" icon="i-lucide-trash-2" :label="t('tools.clearHistory')" color="error"
+                variant="soft" @click="showClearHistoryModal = true" />
+              <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loadingHistory"
+                @click="loadHistory" />
             </div>
-          </template>
-          <template #footer>
-            <div class="flex justify-between w-full">
-              <UButton
-                v-if="history.length > 0"
-                icon="i-lucide-trash-2"
-                :label="t('tools.clearHistory')"
-                color="error"
-                variant="subtle"
-                @click="showClearHistoryModal = true"
-              />
-              <div v-else />
-              <div class="flex gap-2">
-                <UButton
-                  variant="ghost"
-                  color="neutral"
-                  :label="t('global.cancel')"
-                  @click="showHistorySlideover = false"
-                />
-                <UButton
-                  icon="i-lucide-refresh-cw"
-                  :label="t('tools.refresh')"
-                  :loading="loadingHistory"
-                  @click="loadHistory"
-                />
-              </div>
-            </div>
-          </template>
-        </BaseResponsiveSlideover>
+          </div>
+        </template>
+      </BaseResponsiveSlideover>
 
-        <!-- Version Info Slideover -->
-        <BaseResponsiveSlideover
-          v-model:open="showVersionSlideover"
-          :title="t('tools.versionInfo')"
-          icon="i-lucide-info"
-          side="right"
-        >
-          <template #body>
-            <div v-if="loadingVersion" class="flex justify-center py-8">
-              <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
-            </div>
-            <div v-else class="space-y-4">
-              <div class="p-4 border rounded-lg bg-muted/20">
-                <div class="flex items-center gap-2 mb-2 font-semibold">
-                  <UIcon name="i-simple-icons-youtube" class="text-red-600 size-5" />
-                  <span>yt-dlp version</span>
-                </div>
-                <p class="text-sm font-mono bg-black/5 dark:bg-white/5 p-3 rounded select-all break-all">
-                  {{ ytdlpVersion || 'Unknown version' }}
-                </p>
+      <!-- Version Info Slideover -->
+      <BaseResponsiveSlideover v-model:open="showVersionSlideover" :title="t('tools.versionInfo')" icon="i-lucide-info"
+        side="right">
+        <template #body>
+          <div v-if="loadingVersion" class="flex justify-center py-8">
+            <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
+          </div>
+          <div v-else class="space-y-4">
+            <div class="p-4 border rounded-lg bg-muted/20">
+              <div class="flex items-center gap-2 mb-2 font-semibold">
+                <UIcon name="i-simple-icons-youtube" class="text-red-600 size-5" />
+                <span>yt-dlp version</span>
               </div>
+              <p class="text-sm font-mono bg-black/5 dark:bg-white/5 p-3 rounded select-all break-all">
+                {{ ytdlpVersion || 'Unknown version' }}
+              </p>
+            </div>
 
-              <div class="text-xs text-muted leading-relaxed space-y-1">
-                <p>Platform: <span class="font-mono text-default">{{ electronPlatform }}</span></p>
-                <p>Node.js: <span class="font-mono">{{ electronVersions.node || '-' }}</span></p>
-                <p>Chrome: <span class="font-mono">{{ electronVersions.chrome || '-' }}</span></p>
-                <p>Electron: <span class="font-mono">{{ electronVersions.electron || '-' }}</span></p>
-              </div>
+            <div class="text-xs text-muted leading-relaxed space-y-1">
+              <p>Platform: <span class="font-mono text-default">{{ electronPlatform }}</span></p>
+              <p>Node.js: <span class="font-mono">{{ electronVersions.node || '-' }}</span></p>
+              <p>Chrome: <span class="font-mono">{{ electronVersions.chrome || '-' }}</span></p>
+              <p>Electron: <span class="font-mono">{{ electronVersions.electron || '-' }}</span></p>
             </div>
-          </template>
-          <template #footer>
-            <UButton
-              variant="ghost"
-              color="neutral"
-              :label="t('global.cancel')"
-              @click="showVersionSlideover = false"
-            />
-            <UButton
-              icon="i-lucide-refresh-cw"
-              :label="t('tools.refresh')"
-              :loading="loadingVersion"
-              @click="fetchVersion"
-            />
-          </template>
-        </BaseResponsiveSlideover>
-      </UScrollArea>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex justify-between w-full">
+            <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
+              @click="showVersionSlideover = false" />
+            <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loadingVersion"
+              @click="fetchVersion" />
+          </div>
+        </template>
+      </BaseResponsiveSlideover>
     </UForm>
   </BasePage>
 </template>

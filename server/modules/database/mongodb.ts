@@ -279,6 +279,101 @@ export class MongoDBAdapter implements DatabaseAdapter {
     )
   }
 
+  async addPushSubscription(userId: string, subscription: unknown, deviceType?: string): Promise<void> {
+    const sub = subscription as any
+    const query = sub.fcmToken
+      ? { fcmToken: sub.fcmToken }
+      : { endpoint: sub.endpoint }
+    await this.getDb().collection('push_subscriptions').deleteOne(query)
+
+    await this.getDb().collection('push_subscriptions').insertOne({
+      userId,
+      ...sub,
+      deviceType,
+      createdAt: new Date()
+    })
+  }
+
+  async removePushSubscription(userId: string, identifier: string): Promise<void> {
+    await this.getDb().collection('push_subscriptions').deleteMany({
+      userId,
+      $or: [
+        { endpoint: identifier },
+        { fcmToken: identifier }
+      ]
+    })
+  }
+
+  async getPushSubscriptions(userId: string): Promise<unknown[]> {
+    return await this.getDb().collection('push_subscriptions').find({ userId }).toArray()
+  }
+
+  async saveNotification(notification: Record<string, unknown>): Promise<unknown> {
+    const doc = {
+      ...notification,
+      isRead: false,
+      createdAt: new Date().toISOString()
+    }
+    const res = await this.getDb().collection('notifications').insertOne(doc)
+    return { ...doc, id: res.insertedId.toString() }
+  }
+
+  async getUserNotifications(userId: string, options?: { limit?: number, unreadOnly?: boolean }): Promise<unknown[]> {
+    const query: any = { recipientId: userId }
+    if (options?.unreadOnly) {
+      query.isRead = false
+    }
+    const limit = options?.limit || 20
+    const list = await this.getDb().collection('notifications')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray()
+
+    return list.map((doc: any) => ({
+      id: doc._id.toString(),
+      unread: !doc.isRead,
+      sender: doc.sender || { name: 'System' },
+      body: doc.body || doc.message || '',
+      date: doc.createdAt || doc.date || new Date().toISOString()
+    }))
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<boolean> {
+    const { ObjectId } = await import('mongodb')
+    try {
+      const res = await this.getDb().collection('notifications').updateOne(
+        { _id: new ObjectId(notificationId), recipientId: userId },
+        { $set: { isRead: true, readAt: new Date().toISOString() } }
+      )
+      return res.modifiedCount > 0
+    } catch {
+      return false
+    }
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<number> {
+    const res = await this.getDb().collection('notifications').updateMany(
+      { recipientId: userId, isRead: false },
+      { $set: { isRead: true, readAt: new Date().toISOString() } }
+    )
+    return res.modifiedCount
+  }
+
+  async deleteNotifications(userId: string, ids: string[]): Promise<number> {
+    const { ObjectId } = await import('mongodb')
+    try {
+      const objectIds = ids.map(id => new ObjectId(id))
+      const res = await this.getDb().collection('notifications').deleteMany({
+        _id: { $in: objectIds },
+        recipientId: userId
+      })
+      return res.deletedCount
+    } catch {
+      return 0
+    }
+  }
+
   async seed(options?: { reset?: boolean }): Promise<void> {
     const { seedAuth } = await import('../auth/seed')
     await seedAuth(this as any, options)

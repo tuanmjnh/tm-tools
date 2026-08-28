@@ -4,7 +4,8 @@ const permissionMap: Record<string, string> = {
   '/api/rbac': 'rbac:read',
   '/api/users': 'users:read',
   '/api/customers': 'customers:read',
-  '/api/settings': 'settings:read'
+  '/api/settings': 'settings:read',
+  '/api/media': 'media:read'
 }
 
 export default defineEventHandler(async (event) => {
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
       const action = method === 'GET' ? 'read' : method === 'POST' ? 'write' : method === 'DELETE' ? 'delete' : 'write'
       const module = permission.split(':')[0] || ''
       if (!checkPermission(auth.permissions || [], module, action)) {
-        throw createError({ statusCode: 403, statusMessage: `Insufficient permissions for ${module}:${action}` })
+        throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: `Insufficient permissions for ${module}:${action}` })
       }
     }
   }

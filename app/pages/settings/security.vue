@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UserSession } from '~/types/auth'
 import { z } from 'zod'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 const toast = useToast()
 const { t } = useI18n()
@@ -30,8 +31,8 @@ async function onUpdatePassword() {
     passwordFields.current = ''
     passwordFields.new = ''
     toast.add({ title: t('settings.passwordUpdated'), icon: 'i-lucide-check', color: 'success' })
-  } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+  } catch (err: unknown) {
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     passwordSaving.value = false
   }
@@ -79,8 +80,8 @@ async function handleConfirm() {
     }
     toast.add({ title: t('auth.sessionRevoked'), icon: 'i-lucide-check', color: 'success' })
     refresh()
-  } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+  } catch (err: unknown) {
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     processing.value = false
     confirmAction.value = null

@@ -18,6 +18,7 @@ export type {
   FfmpegBatchConfig,
   FfmpegHistory,
   FfmpegLabel,
+  FfmpegSubFile,
   FileStat,
   FileNode,
   FileOptions,

@@ -1,3 +1,4 @@
+import { name, version, description } from '../package.json'
 export default defineAppConfig({
   // toaster: {
   //   position: 'top-right' as const,
@@ -62,5 +63,10 @@ export default defineAppConfig({
         ]
       }
     }
+  },
+  system: {
+    app_name: name,
+    app_version: version,
+    app_description: description,
   }
 })

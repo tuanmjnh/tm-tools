@@ -45,6 +45,16 @@ export interface DatabaseAdapter {
   getSystemConfig(): Promise<Record<string, string>>
   saveSystemConfig(values: Record<string, string>): Promise<void>
 
+  addPushSubscription(userId: string, subscription: unknown, deviceType?: string): Promise<void>
+  removePushSubscription(userId: string, identifier: string): Promise<void>
+  getPushSubscriptions(userId: string): Promise<unknown[]>
+
+  saveNotification(notification: Record<string, unknown>): Promise<unknown>
+  getUserNotifications(userId: string, options?: { limit?: number, unreadOnly?: boolean }): Promise<unknown[]>
+  markNotificationAsRead(notificationId: string, userId: string): Promise<boolean>
+  markAllNotificationsAsRead(userId: string): Promise<number>
+  deleteNotifications(userId: string, ids: string[]): Promise<number>
+
   seed(options?: { reset?: boolean }): Promise<void>
 }
 

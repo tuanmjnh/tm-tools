@@ -21,12 +21,12 @@ export class MongoDBAuthService implements AuthServiceProvider {
     }
 
     if (!user || !(user as any).password) {
-      throw createError({ statusCode: 401, statusMessage: 'Invalid email/username or password' })
+      throw createError({ statusCode: 401, statusMessage: 'error.invalidCredentials', message: 'Invalid email/username or password' })
     }
 
     const valid = await comparePassword(input.password, (user as any).password)
     if (!valid) {
-      throw createError({ statusCode: 401, statusMessage: 'Invalid email/username or password' })
+      throw createError({ statusCode: 401, statusMessage: 'error.invalidCredentials', message: 'Invalid email/username or password' })
     }
 
     const platform = input.platform || 'web'
@@ -47,7 +47,7 @@ export class MongoDBAuthService implements AuthServiceProvider {
     const db = await getDatabase()
     const existing = await db.findByEmail(input.email)
     if (existing) {
-      throw createError({ statusCode: 409, statusMessage: 'Email already registered' })
+      throw createError({ statusCode: 409, statusMessage: 'error.emailExists', message: 'Email already registered' })
     }
 
     const user = await db.createUser({ email: input.email, password: input.password, name: input.name, role: 'user', platform: 'web' })
@@ -65,14 +65,14 @@ export class MongoDBAuthService implements AuthServiceProvider {
   async refreshTokens(refreshToken: string): Promise<AuthResponse> {
     const db = await getDatabase()
     const decoded = await verifyRefreshToken(refreshToken)
-    if (!decoded) throw createError({ statusCode: 401, statusMessage: 'Invalid refresh token' })
+    if (!decoded) throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid refresh token' })
 
     const stored = await db.findRefreshToken(refreshToken)
-    if (!stored || stored.revokedAt) throw createError({ statusCode: 401, statusMessage: 'Refresh token revoked or expired' })
+    if (!stored || stored.revokedAt) throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Refresh token revoked or expired' })
 
     await db.revokeRefreshToken(refreshToken)
     const user = await db.findById(decoded.userId)
-    if (!user) throw createError({ statusCode: 401, statusMessage: 'User not found' })
+    if (!user) throw createError({ statusCode: 401, statusMessage: 'error.userNotFound', message: 'User not found' })
 
     const access = await getUserAccess(user.id, user.role)
     const payload: TokenPayload = { userId: user.id, email: user.email, role: user.role, permissions: access.permissions, allowedRoutes: access.allowedRoutes }

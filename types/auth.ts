@@ -1,6 +1,17 @@
 export type AuthProvider = 'mongodb' | 'supabase'
 export type LoginPlatform = 'web' | 'desktop' | 'mobile'
 
+export interface PushSubscriptionData {
+  fcmToken?: string
+  endpoint?: string
+  keys?: {
+    p256dh: string
+    auth: string
+  }
+  deviceType?: string
+  createdAt?: string
+}
+
 export interface User {
   id: string
   email: string
@@ -13,6 +24,7 @@ export interface User {
   lastLogin?: string
   lastIp?: string
   userAgent?: string
+  pushSubscriptions?: PushSubscriptionData[]
   createdAt: string
   updatedAt: string
 }

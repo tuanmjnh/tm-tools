@@ -22,6 +22,7 @@ const emit = defineEmits<{
   stopTask: [key: number]
   refresh: []
   openItem: [path: string]
+  openFile: [path: string]
 }>()
 
 const { t } = useI18n()
@@ -70,79 +71,31 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
           <div>
             <p class="font-semibold">
               {{ t('tools.taskManager') }}
+              <UBadge v-if="paused" color="warning" variant="subtle" size="sm" :label="t('tools.paused')" />
+              <UBadge v-else-if="processing" color="info" variant="subtle" size="sm" :label="t('tools.processing')" />
+              <UBadge v-else-if="allDone" color="success" variant="subtle" size="sm" :label="t('tools.done')" />
+              <UBadge v-else color="neutral" variant="subtle" size="sm" :label="t('tools.idle')" />
             </p>
             <p class="text-sm text-muted">
-              {{ total }} {{ t('tools.total') }} · {{ done }} {{ t('tools.done') }} · {{ running }} {{ t('tools.running') }}
+              {{ total }} {{ t('tools.total') }} · {{ done }} {{ t('tools.done') }} · {{ running }} {{
+                t('tools.running') }}
               <span v-if="retries > 0" class="ml-1">· {{ retries }} {{ t('tools.retries') }}</span>
             </p>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <UBadge
-            v-if="paused"
-            color="warning"
-            variant="subtle"
-            :label="t('tools.paused')"
-          />
-          <UBadge
-            v-else-if="processing"
-            color="info"
-            variant="subtle"
-            :label="t('tools.processing')"
-          />
-          <UBadge
-            v-else-if="allDone"
-            color="success"
-            variant="subtle"
-            :label="t('tools.done')"
-          />
-          <UBadge
-            v-else
-            color="neutral"
-            variant="subtle"
-            :label="t('tools.idle')"
-          />
 
-          <UButton
-            icon="i-lucide-refresh-cw"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :aria-label="t('tools.refreshStatus')"
-            @click="emit('refresh')"
-          />
-          <UButton
-            v-if="!processing && !paused && canStart && total > 0"
-            icon="i-lucide-play"
-            :label="t('tools.start')"
-            size="sm"
-            @click="emit('start')"
-          />
-          <UButton
-            v-if="processing && !paused"
-            icon="i-lucide-pause"
-            :label="t('tools.pause')"
-            color="warning"
-            size="sm"
-            @click="emit('pause')"
-          />
-          <UButton
-            v-if="paused"
-            icon="i-lucide-play"
-            :label="t('tools.resume')"
-            color="success"
-            size="sm"
-            @click="emit('resume')"
-          />
-          <UButton
-            v-if="processing || paused"
-            icon="i-lucide-square"
-            :label="t('tools.stopAll')"
-            color="error"
-            variant="soft"
-            size="sm"
-            @click="emit('stopAll')"
-          />
+
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="sm"
+            :aria-label="t('tools.refreshStatus')" @click="emit('refresh')" />
+          <UButton v-if="!processing && !paused && canStart && total > 0" icon="i-lucide-play" :label="t('tools.start')"
+            size="sm" variant="soft" @click="emit('start')" />
+          <UButton v-if="processing && !paused" icon="i-lucide-pause" :label="t('tools.pause')" color="warning"
+            variant="soft" size="sm" @click="emit('pause')" />
+          <UButton v-if="paused" icon="i-lucide-play" :label="t('tools.resume')" color="success" size="sm"
+            variant="soft" @click="emit('resume')" />
+          <UButton v-if="processing || paused" icon="i-lucide-square" :label="t('tools.stopAll')" color="error"
+            variant="soft" size="sm" @click="emit('stopAll')" />
         </div>
       </div>
     </template>
@@ -155,46 +108,32 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
     </div>
 
     <div v-else class="flex flex-col gap-3">
-      <div
-        v-for="item in items"
-        :key="item.key"
-        class="rounded-lg border border-dashed p-3"
-      >
+      <div v-for="item in items" :key="item.key" class="rounded-lg border border-dashed p-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
-            <UBadge variant="subtle" :label="`#${item.key}`" />
+            <UBadge variant="subtle" :label="`#${item.key}`" size="sm" />
             <p class="text-sm font-medium truncate">
               {{ item.task.meta?.fileName || item.task.meta?.output || item.task.meta?.input || `Task ${item.key}` }}
             </p>
           </div>
           <div class="flex items-center gap-2">
-            <UBadge :color="statusColor(item.status)" variant="subtle" :label="statusLabel(item.status)" />
+            <UBadge :color="statusColor(item.status)" variant="subtle" :label="statusLabel(item.status)" size="sm" />
             <span v-if="item.retry > 0" class="text-xs text-warning">{{ item.retry }}</span>
-            <UButton
-              v-if="item.status === 'done' && itemPath(item)"
-              icon="i-lucide-folder-search"
-              color="primary"
-              variant="ghost"
-              size="xs"
-              :aria-label="t('tools.showInFolder')"
-              :title="t('tools.showInFolder')"
-              @click="emit('openItem', itemPath(item))"
-            />
-            <UButton
-              icon="i-lucide-x"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :aria-label="t('tools.stop')"
-              :disabled="!processing"
-              @click="emit('stopTask', item.key)"
-            />
+            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-play" color="primary"
+              variant="ghost" size="xs" :aria-label="t('tools.openFile')" :title="t('tools.openFile')"
+              @click="emit('openFile', itemPath(item))" />
+            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-folder-search" color="primary"
+              variant="ghost" size="xs" :aria-label="t('tools.showInFolder')" :title="t('tools.showInFolder')"
+              @click="emit('openItem', itemPath(item))" />
+            <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" :aria-label="t('tools.stop')"
+              :disabled="!processing" @click="emit('stopTask', item.key)" />
           </div>
         </div>
 
         <div class="mt-2 flex items-center gap-3">
           <div class="flex-1">
-            <UProgress :value="item.progress" size="sm" :color="item.status === 'failed' || item.status === 'timeout' ? 'error' : 'primary'" />
+            <UProgress :value="item.progress" size="sm"
+              :color="item.status === 'failed' || item.status === 'timeout' ? 'error' : 'primary'" />
           </div>
           <span class="text-xs text-muted tabular-nums w-12 text-right">
             {{ Math.round(item.progress) }}%
@@ -204,7 +143,7 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
           </span>
         </div>
 
-        <p v-if="item.error" class="mt-1 text-xs text-error break-words line-clamp-2">
+        <p v-if="item.error" class="mt-1 text-xs text-error wrap-break-word line-clamp-2">
           {{ item.error }}
         </p>
       </div>

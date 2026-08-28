@@ -2,10 +2,10 @@ import { CONFIG_KEYS, flattenConfig, saveConfigValues, applyConfigValues } from 
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth
-  if (!auth) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  if (!auth) throw createError({ statusCode: 401, statusMessage: 'error.unauthorized', message: 'Unauthorized' })
 
   const isRoot = auth.role === 'root' || auth.permissions?.includes('*')
-  if (!isRoot) throw createError({ statusCode: 403, statusMessage: 'Only root role can update config' })
+  if (!isRoot) throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: 'Only root role can update config' })
 
   const body = await readBody<{ values?: Record<string, string> }>(event)
   const incoming = body?.values || {}

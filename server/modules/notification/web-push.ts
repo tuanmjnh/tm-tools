@@ -1,4 +1,4 @@
-import webPush from 'web-push'
+import webPush, { type PushSubscription } from 'web-push'
 import { config } from '../../config/index'
 
 export interface WebPushPayload {
@@ -20,7 +20,7 @@ export async function sendNotification(subscription: PushSubscription, payload: 
     return
   }
   webPush.setVapidDetails(config.webPush.subject, config.webPush.publicKey, config.webPush.privateKey)
-  await webPush.sendNotification(subscription as any, JSON.stringify(payload), { TTL: 86400 })
+  await webPush.sendNotification(subscription, JSON.stringify(payload), { TTL: 86400 })
 }
 
 export async function sendBulkNotifications(subscriptions: PushSubscription[], payload: WebPushPayload): Promise<void> {
@@ -28,7 +28,7 @@ export async function sendBulkNotifications(subscriptions: PushSubscription[], p
   await Promise.allSettled(subscriptions.map(sub => sendNotification(sub, payload)))
 }
 
-export function generateVapidKeys(): { publicKey: string; privateKey: string } {
+export function generateVapidKeys(): { publicKey: string, privateKey: string } {
   const keys = webPush.generateVAPIDKeys()
   return { publicKey: keys.publicKey, privateKey: keys.privateKey }
 }

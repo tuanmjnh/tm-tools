@@ -1,5 +1,4 @@
 export default defineNuxtConfig({
-  ssr: false,
 
   modules: [
     '@nuxt/eslint',
@@ -7,45 +6,12 @@ export default defineNuxtConfig({
     '@vueuse/nuxt',
     '@nuxtjs/i18n',
     '@nuxt/image'
-  ],
+  ], ssr: false,
 
-  image: {
-    domains: [
-      'res.cloudinary.com',
-      'images.unsplash.com',
-      'plus.unsplash.com',
-      'loremflickr.com',
-      'api.dicebear.com',
-      'images.pexels.com',
-      'cdn.pixabay.com',
-      'cdn.stocksnap.io',
-      'elements.envato.com'
-    ],
-    alias: {
-      cloudinary: 'https://res.cloudinary.com',
-      unsplashPlus: 'https://plus.unsplash.com',
-      unsplashImages: 'https://images.unsplash.com',
-      loremflickr: 'https://loremflickr.com',
-      dicebear: 'https://api.dicebear.com',
-      pexels: 'https://images.pexels.com',
-      pixabay: 'https://cdn.pixabay.com',
-      stocksnap: 'https://cdn.stocksnap.io',
-      envato: 'https://elements.envato.com'
-    }
-  },
-
-  i18n: {
-    locales: [
-      { code: 'en', language: 'en', name: 'English', file: 'en.json' },
-      { code: 'vi', language: 'vi', name: 'Tiếng Việt', file: 'vi.json' }
-    ],
-    defaultLocale: 'vi',
-    strategy: 'no_prefix',
-    detectBrowserLanguage: {
-      useCookie: true,
-      cookieKey: 'i18n_locale',
-      redirectOn: 'root'
-    },
+  imports: {
+    dirs: [
+      'shared/utils'
+    ]
   },
 
   devtools: {
@@ -54,6 +20,21 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  build: {
+    transpile: [
+      '@tiptap/vue-3',
+      '@tiptap/pm',
+      '@tiptap/extension-drag-handle-vue-3',
+      '@unovis/vue',
+      '@unovis/ts',
+      'firebase',
+      'firebase/app',
+      'shiki',
+      '@shikijs/core',
+      'sortablejs'
+    ]
+  },
+
   routeRules: {
     '/api/**': {
       cors: true
@@ -61,15 +42,6 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2026-06-30',
-
-  eslint: {
-    config: {
-      stylistic: {
-        commaDangle: 'never',
-        braceStyle: '1tbs'
-      }
-    }
-  },
 
   vite: {
     ssr: {
@@ -105,23 +77,62 @@ export default defineNuxtConfig({
     }
   },
 
-  build: {
-    transpile: [
-      '@tiptap/vue-3',
-      '@tiptap/pm',
-      '@tiptap/extension-drag-handle-vue-3',
-      '@unovis/vue',
-      '@unovis/ts',
-      'firebase',
-      'firebase/app',
-      'shiki',
-      '@shikijs/core',
-      'sortablejs'
-    ]
-  },
-
   typescript: {
     typeCheck: true,
-    strict: true
+    strict: true,
+    tsConfig: {
+      include: [
+        '../types/**/*.ts',
+        '../types/**/*.d.ts'
+      ]
+    }
+  },
+
+  eslint: {
+    config: {
+      stylistic: {
+        commaDangle: 'never',
+        braceStyle: '1tbs'
+      }
+    }
+  },
+
+  i18n: {
+    locales: [
+      { code: 'en', language: 'en', name: 'English', file: 'en.json' },
+      { code: 'vi', language: 'vi', name: 'Tiếng Việt', file: 'vi.json' }
+    ],
+    defaultLocale: 'vi',
+    strategy: 'no_prefix',
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'i18n_locale',
+      redirectOn: 'root'
+    }
+  },
+
+  image: {
+    domains: [
+      'res.cloudinary.com',
+      'images.unsplash.com',
+      'plus.unsplash.com',
+      'loremflickr.com',
+      'api.dicebear.com',
+      'images.pexels.com',
+      'cdn.pixabay.com',
+      'cdn.stocksnap.io',
+      'elements.envato.com'
+    ],
+    alias: {
+      cloudinary: 'https://res.cloudinary.com',
+      unsplashPlus: 'https://plus.unsplash.com',
+      unsplashImages: 'https://images.unsplash.com',
+      loremflickr: 'https://loremflickr.com',
+      dicebear: 'https://api.dicebear.com',
+      pexels: 'https://images.pexels.com',
+      pixabay: 'https://cdn.pixabay.com',
+      stocksnap: 'https://cdn.stocksnap.io',
+      envato: 'https://elements.envato.com'
+    }
   }
 })

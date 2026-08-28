@@ -37,6 +37,7 @@ export interface AppConfig {
     ytDlpPath: string
     ffmpegPath: string
     ffprobePath: string
+    ffplayPath: string
   }
   ai: {
     provider: string
@@ -54,7 +55,7 @@ function readEnv(key: string, fallback = ''): string {
 export function loadConfig(): AppConfig {
   return {
     auth: {
-      provider: (readEnv('AUTH_PROVIDER', 'supabase')) as 'mongodb' | 'supabase',
+      provider: (readEnv('AUTH_PROVIDER', 'mongodb')) as 'mongodb' | 'supabase',
       accessTokenSecret: readEnv('AUTH_ACCESS_TOKEN_SECRET', 'dbe14a60ba70621b213b2cf535aaa712e2b9c0c9a1b1e471add395f715450fb3'),
       refreshTokenSecret: readEnv('AUTH_REFRESH_TOKEN_SECRET', '60780ac5cd7b755ae1cce5322ac9874763f48a410f4657ee9a74e0019edbda89'),
       accessTokenExpiry: parseInt(readEnv('AUTH_ACCESS_TOKEN_EXPIRY', '900')),
@@ -93,7 +94,8 @@ export function loadConfig(): AppConfig {
     tools: {
       ytDlpPath: readEnv('TOOLS_YTDLP_PATH', ''),
       ffmpegPath: readEnv('TOOLS_FFMPEG_PATH', ''),
-      ffprobePath: readEnv('TOOLS_FFPROBE_PATH', '')
+      ffprobePath: readEnv('TOOLS_FFPROBE_PATH', ''),
+      ffplayPath: readEnv('TOOLS_FFPLAY_PATH', '')
     },
     ai: {
       provider: readEnv('AI_PROVIDER', 'gemini'),

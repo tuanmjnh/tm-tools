@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Role } from '~/types/rbac'
 import { z } from 'zod'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({
   middleware: () => {
@@ -188,7 +189,7 @@ async function onSubmit() {
     showModal.value = false
     refresh()
   } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally { saving.value = false }
 }
 
@@ -218,7 +219,7 @@ async function doDelete() {
     showDeleteModal.value = false
     refresh()
   } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     deleting.value = false
   }
@@ -236,7 +237,7 @@ async function doBatchDelete() {
     showBatchDeleteModal.value = false
     refresh()
   } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     batchDeleting.value = false
   }
@@ -272,53 +273,30 @@ const getActionOptions = (item: Role) => [
   <BasePage id="admin-roles" :title="$t('admin.rolesPermissions')">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton
-          v-if="selected.length"
-          :label="t('global.delete')"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-trash"
-          @click="showBatchDeleteModal = true"
-        >
+        <UButton v-if="selected.length" :label="t('global.delete')" color="error" variant="subtle" icon="i-lucide-trash"
+          @click="showBatchDeleteModal = true">
           <template #trailing>
             <UKbd>{{ selected.length }}</UKbd>
           </template>
         </UButton>
-        <UButton :label="$t('admin.addRole')" icon="i-lucide-plus" @click="openAdd" />
+        <UButton :label="$t('admin.addRole')" icon="i-lucide-plus" variant="soft" @click="openAdd" />
       </div>
     </template>
 
     <template #default>
       <div class="flex-1 min-h-0 relative h-full">
-        <LazyGridList
-          v-model:selected="selected"
-          :items="rolesRes?.data || []"
-          :columns="columns"
-          :loading="status === 'pending'"
-          item-key="id"
-          selectable
-          :action-options="getActionOptions"
-          @refresh="refresh"
-        >
+        <LazyGridList v-model:selected="selected" :items="rolesRes?.data || []" :columns="columns"
+          :loading="status === 'pending'" item-key="id" selectable :action-options="getActionOptions"
+          @refresh="refresh">
           <template #isSystem="{ item }">
-            <UBadge
-              v-if="item.isSystem"
-              :label="t('global.yes')"
-              color="neutral"
-              variant="subtle"
-            />
+            <UBadge v-if="item.isSystem" :label="t('global.yes')" color="neutral" variant="subtle" />
           </template>
 
           <template #mobile-content="{ item }">
             <div class="flex flex-col gap-2">
               <div class="flex justify-between items-start gap-2">
                 <span class="text-sm font-bold truncate">{{ item.name }}</span>
-                <UBadge
-                  v-if="item.isSystem"
-                  variant="subtle"
-                  color="neutral"
-                  class="text-[10px] shrink-0"
-                >
+                <UBadge v-if="item.isSystem" variant="subtle" color="neutral" class="text-[10px] shrink-0">
                   {{ t('admin.system') }}
                 </UBadge>
               </div>
@@ -329,7 +307,8 @@ const getActionOptions = (item: Role) => [
                 <div class="flex items-center gap-1">
                   <UIcon name="i-lucide-route" class="size-3.5 text-primary-500" />
                   <span class="text-[10px] text-gray-500">
-                    {{ t('admin.allowedRoutes') }}: {{ item.allowedRoutes === '*' ? t('admin.all') : (item.allowedRoutes?.length || 0) }}
+                    {{ t('admin.allowedRoutes') }}: {{ item.allowedRoutes === '*' ? t('admin.all') :
+                      (item.allowedRoutes?.length || 0) }}
                   </span>
                 </div>
                 <div class="flex items-center gap-1 ml-auto">
@@ -344,15 +323,8 @@ const getActionOptions = (item: Role) => [
         </LazyGridList>
       </div>
 
-      <BaseFormModal
-        v-model:open="showModal"
-        :title="editingRole ? t('admin.editRole') : t('admin.addRole')"
-        :schema="schema"
-        :state="form"
-        :loading="saving"
-        :ui="{ content: 'w-full max-w-3xl' }"
-        @submit="onSubmit"
-      >
+      <BaseFormModal v-model:open="showModal" :title="editingRole ? t('admin.editRole') : t('admin.addRole')"
+        :schema="schema" :state="form" :loading="saving" :ui="{ content: 'w-full max-w-3xl' }" @submit="onSubmit">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <UFormField :label="t('admin.name')" name="name" required>
             <UInput v-model="form.name" class="w-full" />
@@ -366,29 +338,14 @@ const getActionOptions = (item: Role) => [
           <div class="space-y-2">
             <div class="flex justify-between items-center">
               <div class="flex gap-2">
-                <UInput
-                  v-model="searchQuery"
-                  icon="i-lucide-search"
-                  size="sm"
-                  class="w-52"
-                />
+                <UInput v-model="searchQuery" icon="i-lucide-search" size="sm" class="w-52" />
                 <UTooltip :text="treeRef?.isAllExpanded ? $t('common.collapse_all') : $t('common.expand_all')">
-                  <UButton
-                    :icon="treeRef?.isAllExpanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'"
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    @click="treeRef?.toggleAll()"
-                  />
+                  <UButton :icon="treeRef?.isAllExpanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'"
+                    color="neutral" variant="ghost" size="sm" @click="treeRef?.toggleAll()" />
                 </UTooltip>
                 <UTooltip :text="isAllSelected ? $t('common.uncheck_all') : $t('common.check_all')">
-                  <UButton
-                    :icon="isAllSelected ? 'i-lucide-list-checks' : 'i-lucide-check-square'"
-                    color="neutral"
-                    variant="ghost"
-                    size="sm"
-                    @click="handleToggleAll"
-                  />
+                  <UButton :icon="isAllSelected ? 'i-lucide-list-checks' : 'i-lucide-check-square'" color="neutral"
+                    variant="ghost" size="sm" @click="handleToggleAll" />
                 </UTooltip>
               </div>
               <UBadge color="primary" variant="subtle">
@@ -397,15 +354,9 @@ const getActionOptions = (item: Role) => [
             </div>
 
             <div class="max-h-[40vh] overflow-y-auto border border-default rounded-lg p-2">
-              <SharedHeTreeMenu
-                ref="treeRef"
-                :model-value="filteredRoutes"
-                :selected-keys="allowedRoutesProxy"
-                :field-names="{ id: 'id', label: 'label', children: 'children' }"
-                :default-expand-all="false"
-                :draggable="false"
-                @node:select="onNodeSelect"
-              >
+              <SharedHeTreeMenu ref="treeRef" :model-value="filteredRoutes" :selected-keys="allowedRoutesProxy"
+                :field-names="{ id: 'id', label: 'label', children: 'children' }" :default-expand-all="false"
+                :draggable="false" @node:select="onNodeSelect">
                 <template #title="{ node }">
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate block">
                     {{ t(`nav.${node.label.replace('nav.', '')}`) || node.label }}
@@ -419,43 +370,27 @@ const getActionOptions = (item: Role) => [
 
         <UFormField :label="t('admin.permissions')" :description="$t('admin.actionsHelp')">
           <div class="space-y-2 w-full">
-            <div
-              v-for="perm in form.permissions"
-              :key="perm.module"
-              class="flex items-center justify-between p-2 rounded-md border border-default"
-            >
+            <div v-for="perm in form.permissions" :key="perm.module"
+              class="flex items-center justify-between p-2 rounded-md border border-default">
               <span class="text-sm font-medium capitalize">{{ perm.module }}</span>
               <div class="flex gap-1">
-                <UBadge
-                  v-for="action in allActions"
-                  :key="action"
-                  :label="$t(`admin.${action}`)"
+                <UBadge v-for="action in allActions" :key="action" :label="$t(`admin.${action}`)"
                   :variant="perm.actions.includes(action) ? 'solid' : 'subtle'"
-                  :color="perm.actions.includes(action) ? 'primary' : 'neutral'"
-                  class="cursor-pointer capitalize"
-                  @click="toggleAction(perm.module, action)"
-                />
+                  :color="perm.actions.includes(action) ? 'primary' : 'neutral'" class="cursor-pointer capitalize"
+                  @click="toggleAction(perm.module, action)" />
               </div>
             </div>
           </div>
         </UFormField>
       </BaseFormModal>
 
-      <LazyBaseConfirmModal
-        v-model:open="showDeleteModal"
-        :title="t('admin.deleteRoleConfirm')"
-        :description="t('admin.deleteRoleConfirmDesc', { name: deleteTarget?.name || '' })"
-        :loading="deleting"
-        @confirm="doDelete"
-      />
+      <LazyBaseConfirmModal v-model:open="showDeleteModal" :title="t('admin.deleteRoleConfirm')"
+        :description="t('admin.deleteRoleConfirmDesc', { name: deleteTarget?.name || '' })" :loading="deleting"
+        @confirm="doDelete" />
 
-      <LazyBaseConfirmModal
-        v-model:open="showBatchDeleteModal"
-        :title="t('admin.deleteRoleConfirm')"
+      <LazyBaseConfirmModal v-model:open="showBatchDeleteModal" :title="t('admin.deleteRoleConfirm')"
         :description="t('admin.deleteRoleConfirmDesc', { name: selected.filter(r => !r.isSystem).map(r => r.name).join(', ') })"
-        :loading="batchDeleting"
-        @confirm="doBatchDelete"
-      />
+        :loading="batchDeleting" @confirm="doBatchDelete" />
     </template>
   </BasePage>
 </template>

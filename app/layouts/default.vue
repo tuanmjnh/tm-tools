@@ -5,7 +5,7 @@ const route = useRoute()
 const { t } = useI18n()
 const auth = useAuth()
 const nav = useNavMenu()
-
+const appConfig = useAppConfig()
 const open = ref(false)
 
 watch(() => auth.isAuthenticated.value, async (val) => {
@@ -34,38 +34,30 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
 <template>
   <UDashboardGroup unit="rem">
-    <UDashboardSidebar
-      id="default"
-      v-model:open="open"
-      collapsible
-      resizable
-      class="bg-elevated/25"
-      :ui="{ footer: 'lg:border-t lg:border-default' }"
-    >
+    <UDashboardSidebar id="default" v-model:open="open" collapsible resizable class="bg-elevated/25"
+      :ui="{ footer: 'lg:border-t lg:border-default' }">
       <template #header="{ collapsed }">
         <LazyDashboardTeamsMenu :collapsed="collapsed" />
       </template>
 
       <template #default="{ collapsed }">
-        <UDashboardSearchButton
-          :collapsed="collapsed"
-          :label="$t('global.search')"
-          class="bg-transparent ring-default"
-        />
+        <UDashboardSearchButton :collapsed="collapsed" :label="$t('global.search')"
+          class="bg-transparent ring-default" />
 
-        <UNavigationMenu
-          v-if="links[0]?.length"
-          :collapsed="collapsed"
-          :items="links[0]"
-          orientation="vertical"
-          tooltip
-          popover
-        />
+        <UNavigationMenu v-if="links[0]?.length" :collapsed="collapsed" :items="links[0]" orientation="vertical" tooltip
+          popover />
       </template>
 
       <template #footer="{ collapsed }">
-        <LazyDashboardNetworkStatus icon-only class="mb-1 flex justify-center" />
-        <LazyDashboardUserMenu :collapsed="collapsed" />
+        <!-- <div
+          :class="collapsed ? 'flex flex-col gap-2 w-full items-center justify-center' : 'flex items-center justify-between w-full'"> -->
+        <div class="flex flex-col gap-2 w-full items-center justify-center">
+          <LazyDashboardUserMenu :collapsed="collapsed" />
+          <div class="flex items-center justify-between w-full px-3 text-xs">
+            <span>Version: <b>{{ appConfig.system.app_version }}</b></span>
+            <LazyDashboardNetworkStatus icon-only class="flex justify-center" />
+          </div>
+        </div>
       </template>
     </UDashboardSidebar>
 

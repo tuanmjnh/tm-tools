@@ -12,10 +12,10 @@ interface GeminiContent {
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth
-  if (!auth) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  if (!auth) throw createError({ statusCode: 401, statusMessage: 'error.unauthorized', message: 'Unauthorized' })
 
   const hasWrite = auth.role === 'root' || auth.permissions?.includes('chat:write')
-  if (!hasWrite) throw createError({ statusCode: 403, statusMessage: 'You do not have permission to use the chat' })
+  if (!hasWrite) throw createError({ statusCode: 403, statusMessage: 'error.chatNoPermission', message: 'You do not have permission to use the chat' })
 
   const body = await readBody<{ messages?: ChatMessage[] }>(event)
   const messages = (body?.messages || []).filter(
@@ -23,13 +23,13 @@ export default defineEventHandler(async (event) => {
   )
 
   if (messages.length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'messages is required' })
+    throw createError({ statusCode: 400, statusMessage: 'error.messagesRequired', message: 'messages is required' })
   }
 
   const provider = (config.ai.provider || 'gemini').toLowerCase()
   const apiKey = config.ai.apiKey
   if (!apiKey) {
-    throw createError({ statusCode: 400, statusMessage: 'AI API key is not configured' })
+    throw createError({ statusCode: 400, statusMessage: 'error.aiNotConfigured', message: 'AI API key is not configured' })
   }
 
   try {
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     return await handleOpenAICompatible(provider, messages, apiKey)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    throw createError({ statusCode: 502, statusMessage: `AI request failed: ${message}` })
+    throw createError({ statusCode: 502, statusMessage: 'error.aiFailed', message: `AI request failed: ${message}` })
   }
 })
 

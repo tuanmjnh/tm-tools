@@ -1,0 +1,121 @@
+[
+  {
+    "id": "fade",
+    "name": "Fade",
+    "group": "Fades",
+    "description_en": "Cross fade between clips.",
+    "description_vi": "Làm mờ giao nhau giữa hai phân đoạn."
+  },
+  {
+    "id": "fadeblack",
+    "name": "Fade to Black",
+    "group": "Fades",
+    "description_en": "Fade out to black, then fade in.",
+    "description_vi": "Làm mờ dần qua màu đen."
+  },
+  {
+    "id": "fadewhite",
+    "name": "Fade to White",
+    "group": "Fades",
+    "description_en": "Fade out to white, then fade in.",
+    "description_vi": "Làm mờ dần qua màu trắng."
+  },
+  {
+    "id": "slideleft",
+    "name": "Slide Left",
+    "group": "Slides",
+    "description_en": "Slide the next clip from right to left.",
+    "description_vi": "Trượt phân đoạn sau sang trái."
+  },
+  {
+    "id": "slideright",
+    "name": "Slide Right",
+    "group": "Slides",
+    "description_en": "Slide the next clip from left to right.",
+    "description_vi": "Trượt phân đoạn sau sang phải."
+  },
+  {
+    "id": "slideup",
+    "name": "Slide Up",
+    "group": "Slides",
+    "description_en": "Slide the next clip from bottom to top.",
+    "description_vi": "Trượt phân đoạn sau lên trên."
+  },
+  {
+    "id": "slidedown",
+    "name": "Slide Down",
+    "group": "Slides",
+    "description_en": "Slide the next clip from top to bottom.",
+    "description_vi": "Trượt phân đoạn sau xuống dưới."
+  },
+  {
+    "id": "wipeleft",
+    "name": "Wipe Left",
+    "group": "Wipes",
+    "description_en": "Wipe from right to left.",
+    "description_vi": "Quét dần sang trái."
+  },
+  {
+    "id": "wiperight",
+    "name": "Wipe Right",
+    "group": "Wipes",
+    "description_en": "Wipe from left to right.",
+    "description_vi": "Quét dần sang phải."
+  },
+  {
+    "id": "wipeup",
+    "name": "Wipe Up",
+    "group": "Wipes",
+    "description_en": "Wipe from bottom to top.",
+    "description_vi": "Quét dần lên trên."
+  },
+  {
+    "id": "wipedown",
+    "name": "Wipe Down",
+    "group": "Wipes",
+    "description_en": "Wipe from top to bottom.",
+    "description_vi": "Quét dần xuống dưới."
+  },
+  {
+    "id": "circlecrop",
+    "name": "Circle Crop",
+    "group": "Shapes & Masks",
+    "description_en": "Circle transition moving outward.",
+    "description_vi": "Mở rộng theo hình tròn."
+  },
+  {
+    "id": "rectcrop",
+    "name": "Rectangle Crop",
+    "group": "Shapes & Masks",
+    "description_en": "Rectangle transition moving outward.",
+    "description_vi": "Mở rộng theo hình chữ nhật."
+  },
+  {
+    "id": "radial",
+    "name": "Radial Wipe",
+    "group": "Shapes & Masks",
+    "description_en": "Radial swipe transition.",
+    "description_vi": "Quét theo vòng tỏa tròn."
+  },
+  {
+    "id": "dissolve",
+    "name": "Dissolve",
+    "group": "Artistic",
+    "description_en": "Dissolve pixels between clips.",
+    "description_vi": "Hòa tan điểm ảnh mượt mà."
+  },
+  {
+    "id": "pixelize",
+    "name": "Pixelize",
+    "group": "Artistic",
+    "description_en": "Pixelation effect during transition.",
+    "description_vi": "Hiệu ứng biến đổi ô vuông pixel."
+  },
+  {
+    "id": "zoomin",
+    "name": "Zoom In",
+    "group": "Artistic",
+    "description_en": "Zoom in to the next clip.",
+    "description_vi": "Phóng to thu hút vào phân đoạn sau."
+  }
+]

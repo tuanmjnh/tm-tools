@@ -25,9 +25,6 @@
           {{ $t('auth.createAccount') }}
         </UButton>
       </UForm>
-
-      <p v-if="error" class="text-red-500 text-sm mt-2">{{ error }}</p>
-
       <template #footer>
         <p class="text-center text-sm text-gray-500">
           {{ $t('auth.alreadyHaveAccount') }}
@@ -40,12 +37,14 @@
 
 <script setup lang="ts">
 import { z } from 'zod'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({ layout: false })
 
 const auth = useAuth()
 const router = useRouter()
-const error = ref('')
+const toast = useToast()
+const { t } = useI18n()
 
 const schema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -60,12 +59,11 @@ const state = reactive({
 })
 
 async function onSubmit() {
-  error.value = ''
   try {
     await auth.register(state)
     await router.push('/')
-  } catch (err: any) {
-    error.value = err?.data?.message || err?.message || 'Registration failed'
+  } catch (err: unknown) {
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   }
 }
 </script>

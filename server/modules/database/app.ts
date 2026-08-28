@@ -1,6 +1,5 @@
-import { Db } from 'mongodb'
+import type { Db } from 'mongodb'
 import type { User, Mail, Member, Notification } from '../../../types'
-import { generateId } from '../../utils/crypto'
 import { getSharedConnection } from './shared'
 
 export interface AppDatabase {
@@ -8,6 +7,14 @@ export interface AppDatabase {
   getMails(): Promise<Mail[]>
   getMembers(): Promise<Member[]>
   getNotifications(): Promise<Notification[]>
+  saveFeedback(data: {
+    email: string
+    type: string
+    title: string
+    description: string
+    screenshot?: string
+    userId?: string
+  }): Promise<void>
 }
 
 export class AppMongoDB implements AppDatabase {
@@ -47,5 +54,19 @@ export class AppMongoDB implements AppDatabase {
 
   async getNotifications(): Promise<Notification[]> {
     return (await this.getDb().collection('notifications').find().sort({ date: -1 }).toArray()) as unknown as Notification[]
+  }
+
+  async saveFeedback(data: {
+    email: string
+    type: string
+    title: string
+    description: string
+    screenshot?: string
+    userId?: string
+  }): Promise<void> {
+    await this.getDb().collection('feedbacks').insertOne({
+      ...data,
+      createdAt: new Date()
+    })
   }
 }

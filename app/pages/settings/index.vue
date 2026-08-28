@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 const auth = useAuth()
 const toast = useToast()
@@ -43,8 +44,8 @@ async function onSubmit() {
       body: { name: profile.name, email: profile.email, username: profile.username || undefined, avatar: profile.avatar }
     })
     toast.add({ title: t('settings.profileUpdated'), icon: 'i-lucide-check', color: 'success' })
-  } catch (err: any) {
-    toast.add({ title: err?.data?.message || err?.message || t('global.error'), color: 'error' })
+  } catch (err: unknown) {
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally { saving.value = false }
 }
 </script>
@@ -95,4 +96,16 @@ async function onSubmit() {
       </UFormField>
     </UPageCard>
   </UForm>
+
+  <UPageCard
+    :title="$t('settings.download')"
+    :description="$t('settings.downloadDesc')"
+    variant="naked"
+    orientation="horizontal"
+    class="mt-8"
+  >
+    <div class="w-full">
+      <ToolsDownloadConfigManager />
+    </div>
+  </UPageCard>
 </template>

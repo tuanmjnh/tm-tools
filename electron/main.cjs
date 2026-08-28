@@ -74,11 +74,14 @@ async function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
+    minWidth: 1024,
+    minHeight: 700,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      webSecurity: false
     }
   })
 
@@ -131,7 +134,7 @@ ipcMain.handle('get-config', () => {
       }
       result[key] = value
     }
-  } catch (_) {}
+  } catch (_) { }
   return result
 })
 
@@ -147,7 +150,7 @@ ipcMain.handle('set-config', (_event, values) => {
       if (eqIdx === -1) continue
       existing[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim()
     }
-  } catch (_) {}
+  } catch (_) { }
   const merged = { ...existing, ...values }
   const lines = Object.entries(merged).map(([k, v]) => `${k}=${v}`)
   fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
@@ -159,22 +162,39 @@ ipcMain.handle('set-config', (_event, values) => {
 
 ipcMain.handle('open-path', async (event, fullPath) => {
   const { shell } = require('electron')
-  if (fs.existsSync(fullPath)) {
+  const exists = fs.existsSync(fullPath)
+  // console.log('[open-path] path=' + JSON.stringify(fullPath), 'exists=', exists)
+  if (exists) {
     try {
-      await shell.openPath(fullPath)
-      return true
-    } catch (_) {}
+      const err = await shell.openPath(fullPath)
+      // console.log('[open-path] shell.openPath result=' + JSON.stringify(err))
+      return err === '' ? true : false
+    } catch (e) {
+      // console.log('[open-path] threw:', e)
+    }
   }
   return false
 })
 
 ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
   const { shell } = require('electron')
-  if (fullPath && fs.existsSync(fullPath)) {
+  const exists = fullPath && fs.existsSync(fullPath)
+  // console.log('[show-item-in-folder] FULL=' + JSON.stringify(fullPath), 'exists=', exists)
+  if (exists) {
     shell.showItemInFolder(fullPath)
     return true
   }
   return false
+})
+
+ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
+  const { verifyExecutable } = require('./tools/paths.cjs')
+  try {
+    const isValid = await verifyExecutable(filePath, type)
+    return { status: isValid }
+  } catch {
+    return { status: false }
+  }
 })
 
 app.whenReady().then(() => {

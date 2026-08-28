@@ -2,7 +2,7 @@ import { getDatabase } from '../../../modules/database/index'
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth
-  if (!auth) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  if (!auth) throw createError({ statusCode: 401, statusMessage: 'error.unauthorized', message: 'Unauthorized' })
 
   const db = await getDatabase()
   const sessions = await db.getUserSessions(auth.userId)

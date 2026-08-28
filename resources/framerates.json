@@ -1,0 +1,38 @@
+[
+  {
+    "fps": 24,
+    "name": "24 FPS (Cinematic)",
+    "description_en": "Cinema standard. Film look.",
+    "description_vi": "Tiêu chuẩn điện ảnh. Tạo cảm giác phim chiếu rạp."
+  },
+  {
+    "fps": 25,
+    "name": "25 FPS (PAL)",
+    "description_en": "European and Vietnamese television broadcast standard.",
+    "description_vi": "Tiêu chuẩn truyền hình châu Âu và Việt Nam."
+  },
+  {
+    "fps": 30,
+    "name": "30 FPS (NTSC / Web)",
+    "description_en": "US television and common online video standard. Fluid motion.",
+    "description_vi": "Tiêu chuẩn truyền hình Mỹ/Nhật và video trực tuyến phổ biến."
+  },
+  {
+    "fps": 50,
+    "name": "50 FPS (PAL High)",
+    "description_en": "High frame rate television format for sports.",
+    "description_vi": "Truyền hình tốc độ cao, thích hợp cho thể thao."
+  },
+  {
+    "fps": 60,
+    "name": "60 FPS (HFR / Action)",
+    "description_en": "Very smooth. Ideal for action cams, gaming, and detailed motion.",
+    "description_vi": "Cực kỳ mượt mà. Lý tưởng cho camera hành trình, game và chuyển động nhanh."
+  },
+  {
+    "fps": 120,
+    "name": "120 FPS (Slow Motion)",
+    "description_en": "Super high speed. Ideal for creating slow-motion effects.",
+    "description_vi": "Tốc độ siêu cao. Lý tưởng để tạo hiệu ứng chuyển động chậm."
+  }
+]

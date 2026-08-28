@@ -30,7 +30,7 @@ function readConfig() {
       }
       result[key] = value
     }
-  } catch (_) {}
+  } catch (_) { }
   return result
 }
 
@@ -46,8 +46,43 @@ function getToolsBinaries() {
   return {
     ytDlp: resolveToolPath('TOOLS_YTDLP_PATH', 'yt-dlp.exe'),
     ffmpeg: resolveToolPath('TOOLS_FFMPEG_PATH', 'ffmpeg.exe'),
-    ffprobe: resolveToolPath('TOOLS_FFPROBE_PATH', 'ffprobe.exe')
+    ffprobe: resolveToolPath('TOOLS_FFPROBE_PATH', 'ffprobe.exe'),
+    ffplay: resolveToolPath('TOOLS_FFPLAY_PATH', 'ffplay.exe')
   }
 }
 
-module.exports = { getResourcesDir, getResourcePath, getToolsBinaries }
+const { execFile } = require('child_process')
+
+function verifyExecutable(filePath, type) {
+  return new Promise((resolve) => {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return resolve(false)
+    }
+    try {
+      const stat = fs.statSync(filePath)
+      if (!stat.isFile()) {
+        return resolve(false)
+      }
+    } catch {
+      return resolve(false)
+    }
+    const args = type === 'ytDlp' ? ['--version'] : ['-version']
+    execFile(filePath, args, { timeout: 2000 }, (error, stdout, stderr) => {
+      // console.log('[verifyExecutable] file:', filePath, 'type:', type, 'error:', error, 'stdout:', stdout, 'stderr:', stderr)
+      const output = (stdout + stderr).toLowerCase()
+      if (type === 'ytDlp') {
+        resolve(output.includes('yt-dlp') || /^\d{4}\.\d{2}\.\d{2}/.test(output.trim()) || output.includes('youtube-dl'))
+      } else if (type === 'ffmpeg') {
+        resolve(output.includes('ffmpeg version'))
+      } else if (type === 'ffprobe') {
+        resolve(output.includes('ffprobe version'))
+      } else if (type === 'ffplay') {
+        resolve(output.includes('ffplay version'))
+      } else {
+        resolve(false)
+      }
+    })
+  })
+}
+
+module.exports = { getResourcesDir, getResourcePath, getToolsBinaries, verifyExecutable }

@@ -26,7 +26,7 @@ export async function deleteRole(id: string): Promise<void> {
   const db = await getDatabase()
   const role = await db.getRoleById(id)
   if (role?.isSystem) {
-    throw createError({ statusCode: 400, statusMessage: 'Cannot delete system roles' })
+    throw createError({ statusCode: 400, statusMessage: 'error.systemRoleProtected', message: 'Cannot delete system roles' })
   }
   await db.deleteRole(id)
 }

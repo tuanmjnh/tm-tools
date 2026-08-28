@@ -1,0 +1,172 @@
+[
+  {
+    "id": "h-360p",
+    "group": "Horizontal (16:9)",
+    "name": "nHD 360p (640x360)",
+    "width": 640,
+    "height": 360,
+    "bitrate": "800k",
+    "description_en": "Low resolution preview format.",
+    "description_vi": "Độ phân giải thấp cho xem thử."
+  },
+  {
+    "id": "h-480p",
+    "group": "Horizontal (16:9)",
+    "name": "SD 480p (854x480)",
+    "width": 854,
+    "height": 480,
+    "bitrate": "1200k",
+    "description_en": "Standard definition horizontal video.",
+    "description_vi": "Độ phân giải tiêu chuẩn SD."
+  },
+  {
+    "id": "h-720p",
+    "group": "Horizontal (16:9)",
+    "name": "HD 720p (1280x720)",
+    "width": 1280,
+    "height": 720,
+    "bitrate": "2500k",
+    "description_en": "High Definition 720p format.",
+    "description_vi": "Độ phân giải cao HD 720p tiêu chuẩn."
+  },
+  {
+    "id": "h-1080p",
+    "group": "Horizontal (16:9)",
+    "name": "Full HD 1080p (1920x1080)",
+    "width": 1920,
+    "height": 1080,
+    "bitrate": "5000k",
+    "description_en": "Full HD 1080p, YouTube and TV standard.",
+    "description_vi": "Độ phân giải Full HD 1080p, chuẩn YouTube và TV."
+  },
+  {
+    "id": "h-2k",
+    "group": "Horizontal (16:9)",
+    "name": "QHD 2K (2560x1440)",
+    "width": 2560,
+    "height": 1440,
+    "bitrate": "10000k",
+    "description_en": "Quad HD 2K video, very high quality.",
+    "description_vi": "Độ phân giải Quad HD 2K, chất lượng cao."
+  },
+  {
+    "id": "h-4k",
+    "group": "Horizontal (16:9)",
+    "name": "UHD 4K (3840x2160)",
+    "width": 3840,
+    "height": 2160,
+    "bitrate": "25000k",
+    "description_en": "4K Ultra HD, professional cinematic quality.",
+    "description_vi": "Độ phân giải siêu nét 4K Ultra HD chuyên nghiệp."
+  },
+  {
+    "id": "v-360p",
+    "group": "Vertical (9:16)",
+    "name": "Vertical 360p (360x640)",
+    "width": 360,
+    "height": 640,
+    "bitrate": "800k",
+    "description_en": "Low resolution vertical format.",
+    "description_vi": "Độ phân giải dọc thấp cho xem thử di động."
+  },
+  {
+    "id": "v-480p",
+    "group": "Vertical (9:16)",
+    "name": "Vertical 480p (480x854)",
+    "width": 480,
+    "height": 854,
+    "bitrate": "1200k",
+    "description_en": "Basic vertical format.",
+    "description_vi": "Độ phân giải dọc cơ bản."
+  },
+  {
+    "id": "v-720p",
+    "group": "Vertical (9:16)",
+    "name": "Vertical HD 720p (720x1280)",
+    "width": 720,
+    "height": 1280,
+    "bitrate": "2500k",
+    "description_en": "HD vertical format for Stories.",
+    "description_vi": "Độ phân giải dọc HD cho tin tức (Stories)."
+  },
+  {
+    "id": "v-1080p",
+    "group": "Vertical (9:16)",
+    "name": "Vertical FHD 1080p (1080x1920)",
+    "width": 1080,
+    "height": 1920,
+    "bitrate": "5000k",
+    "description_en": "FHD vertical format, recommended for TikTok/Shorts/Reels.",
+    "description_vi": "Độ phân giải dọc FHD khuyên dùng cho TikTok/Shorts/Reels."
+  },
+  {
+    "id": "v-2k",
+    "group": "Vertical (9:16)",
+    "name": "Vertical QHD 2K (1440x2560)",
+    "width": 1440,
+    "height": 2560,
+    "bitrate": "10000k",
+    "description_en": "High quality vertical format.",
+    "description_vi": "Độ phân giải dọc 2K chất lượng cao."
+  },
+  {
+    "id": "s-480p",
+    "group": "Square (1:1)",
+    "name": "Square 480p (480x480)",
+    "width": 480,
+    "height": 480,
+    "bitrate": "1200k",
+    "description_en": "Standard square format for basic feeds.",
+    "description_vi": "Độ phân giải vuông tiêu chuẩn."
+  },
+  {
+    "id": "s-720p",
+    "group": "Square (1:1)",
+    "name": "Square HD 720p (720x720)",
+    "width": 720,
+    "height": 720,
+    "bitrate": "2000k",
+    "description_en": "High quality square for Instagram feed.",
+    "description_vi": "Độ phân giải vuông HD chất lượng cho bảng tin Instagram."
+  },
+  {
+    "id": "s-1080p",
+    "group": "Square (1:1)",
+    "name": "Square FHD 1080p (1080x1080)",
+    "width": 1080,
+    "height": 1080,
+    "bitrate": "4000k",
+    "description_en": "FHD square format, very sharp.",
+    "description_vi": "Độ phân giải vuông FHD độ nét cao."
+  },
+  {
+    "id": "s-1920p",
+    "group": "Square (1:1)",
+    "name": "Square FHD+ (1920x1920)",
+    "width": 1920,
+    "height": 1920,
+    "bitrate": "6000k",
+    "description_en": "Maximum square format quality.",
+    "description_vi": "Độ phân giải vuông cao nhất cho nội dung cao cấp."
+  },
+  {
+    "id": "c-720p",
+    "group": "Classic (4:3)",
+    "name": "Classic SD (960x720)",
+    "width": 960,
+    "height": 720,
+    "bitrate": "2000k",
+    "description_en": "Traditional 4:3 standard format.",
+    "description_vi": "Tỷ lệ khung hình 4:3 truyền thống."
+  },
+  {
+    "id": "c-1080p",
+    "group": "Classic (4:3)",
+    "name": "Classic HD (1440x1080)",
+    "width": 1440,
+    "height": 1080,
+    "bitrate": "4000k",
+    "description_en": "High definition 4:3 format.",
+    "description_vi": "Tỷ lệ khung hình 4:3 độ nét cao."
+  }
+]

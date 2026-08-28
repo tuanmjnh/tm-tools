@@ -1,10 +1,13 @@
-const { ipcMain } = require('electron')
-const { existsSync, mkdirSync } = require('fs')
+const { ipcMain, app } = require('electron')
+const { existsSync, mkdirSync, readdirSync, statSync } = require('fs')
 const { spawn } = require('child_process')
 const path = require('path')
-const { getToolsBinaries } = require('./paths.cjs')
+const { getToolsBinaries, verifyExecutable } = require('./paths.cjs')
 const { TaskProcessManager } = require('./task-manager.cjs')
+const { decodeBuffer } = require('./encoding.cjs')
 const sqlite = require('./sqlite.cjs')
+
+const MEDIA_EXT = ['mp4', 'm4a', 'm4v', 'webm', 'mkv', 'mov', 'mp3', 'aac', 'flac', 'wav', 'ogg', 'opus', 'ts', 'flv', '3gp']
 
 const moduleName = 'tools:youtube'
 let taskManager = new TaskProcessManager(4, 200, 2, 10 * 60 * 1000)
@@ -67,9 +70,24 @@ function setTasks(event, args) {
       argsNoUrl.push('-o', path.join(meta.outPath, fileNameTemplate).replace(/\\/g, '/'))
       argsNoUrl.push('--continue')
     }
+    if (!argsNoUrl.includes('--encoding')) {
+      argsNoUrl.push('--encoding', 'utf-8')
+    }
+    if (binaries.ffmpeg) {
+      argsNoUrl.push('--ffmpeg-location', path.dirname(binaries.ffmpeg))
+    }
     if (url) argsNoUrl.push(url)
 
-    return { ...task, command: exe, args: argsNoUrl, meta: { ...meta, taskKey: i, thread: i } }
+    const options = {
+      ...(task.options || {}),
+      env: {
+        ...process.env,
+        ...(task.options?.env || {}),
+        PYTHONIOENCODING: 'utf-8'
+      }
+    }
+
+    return { ...task, command: exe, args: argsNoUrl, options, meta: { ...meta, taskKey: i, thread: i } }
   })
   taskManager.setTasks(tasks)
 }
@@ -106,9 +124,14 @@ function startTasks(event) {
 
     if (code === 0) {
       const fileSize = extractFileSize(stdout) || extractFileSize(stderr)
-      const fileName = extractFileName(stdout) || extractFileName(stderr) || meta.fileName || ''
+      let fileName = extractFileName(stdout) || extractFileName(stderr) || meta.fileName || ''
+      if (meta.outPath && (!fileName || !existsSync(path.join(meta.outPath, fileName)))) {
+        const real = resolveRealFile(meta.outPath, meta.title || fileName, fileName)
+        if (real) fileName = real
+      }
       const title = meta.title || (fileName ? fileName.substring(0, fileName.lastIndexOf('.')) || fileName : '')
       task.meta = { ...meta, fileName, output: meta.outPath ? path.join(meta.outPath, fileName).replace(/\\/g, '/') : fileName }
+      // console.log('[youtube:done] code=', code, 'meta.fileName=', JSON.stringify(fileName), 'meta.input=', JSON.stringify(meta.input), 'meta.outPath=', JSON.stringify(meta.outPath), 'title=', JSON.stringify(title), 'stdoutSnippet=', JSON.stringify(stdout.slice(-500)))
       sqlite.addHistory({
         url: meta.input,
         title: title,
@@ -167,14 +190,22 @@ function startTasks(event) {
     send(event, `${moduleName}:taskTimeout`, { taskKey: idx })
   }
 
-  taskManager.start().catch(() => {})
+  taskManager.start().catch(() => { })
 }
 
 function extractFileSize(output) {
-  const match = output?.match(/\[download\]\s+Destination:\s+.+\.(\w+)\s+\[.*?\]\s+([\d.]+)([KMG]iB)/)
+  if (!output) return null
+  const match = output.match(/\[download\]\s+\d+(?:\.\d+)?%\s+of\s+~?([\d.]+)([KMG]iB)/)
   if (match) {
-    const num = parseFloat(match[2])
-    const unit = match[3]
+    const num = parseFloat(match[1])
+    const unit = match[2]
+    const mult = unit === 'KiB' ? 1024 : unit === 'MiB' ? 1024 * 1024 : 1024 * 1024 * 1024
+    return Math.round(num * mult)
+  }
+  const match2 = output.match(/\[download\]\s+Destination:\s+.+\.(\w+)\s+\[.*?\]\s+([\d.]+)([KMG]iB)/)
+  if (match2) {
+    const num = parseFloat(match2[2])
+    const unit = match2[3]
     const mult = unit === 'KiB' ? 1024 : unit === 'MiB' ? 1024 * 1024 : 1024 * 1024 * 1024
     return Math.round(num * mult)
   }
@@ -204,15 +235,78 @@ function extractFileName(output) {
   return null
 }
 
+function normalizeMatch(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function lcsLen(a, b) {
+  const m = a.length
+  const n = b.length
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+  return dp[m][n]
+}
+
+function resolveRealFile(outPath, title, fallbackName) {
+  try {
+    if (!outPath || !statSync(outPath).isDirectory()) return null
+  } catch {
+    return null
+  }
+  let files = []
+  try {
+    files = readdirSync(outPath)
+  } catch {
+    // keep empty
+  }
+  const extSet = new Set(MEDIA_EXT)
+  const cands = []
+  for (const name of files) {
+    try {
+      if (statSync(path.join(outPath, name)).isDirectory()) continue
+      const ext = name.split('.').pop().toLowerCase()
+      if (extSet.has(ext)) cands.push(name)
+    } catch { /* skip unreadable */ }
+  }
+  if (!cands.length) return null
+
+  const key = normalizeMatch(title || fallbackName)
+  if (cands.length === 1) return cands[0]
+
+  let best = null
+  let bestLen = -1
+  const keyLen = key.length
+  for (const c of cands) {
+    const cb = normalizeMatch(c.split('.').slice(0, -1).join('.'))
+    const s = lcsLen(key, cb)
+    if (s > bestLen) {
+      bestLen = s
+      best = c
+    }
+  }
+  if (best && keyLen > 0 && bestLen / Math.max(keyLen, 1) >= 0.5) return best
+  return null
+}
+
 function crawlPlaylist(url) {
   return new Promise((resolve, reject) => {
     const exe = resolveExecutable()
-    const child = spawn(exe, ['--flat-playlist', '--print', '%(id)s|%(title)s|%(duration)s|%(uploader)s|%(view_count)s|%(upload_date)s', url])
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', d => stdout += d.toString())
-    child.stderr.on('data', d => stderr += d.toString())
+    const child = spawn(exe, ['--no-update', '--flat-playlist', '--print', '%(id)s|%(title)s|%(duration)s|%(uploader)s|%(view_count)s|%(upload_date)s', url])
+    let stdoutBuf = Buffer.alloc(0)
+    let stderrBuf = Buffer.alloc(0)
+    child.stdout.on('data', d => stdoutBuf = Buffer.concat([stdoutBuf, d]))
+    child.stderr.on('data', d => stderrBuf = Buffer.concat([stderrBuf, d]))
     child.on('close', (code) => {
+      const stdout = decodeBuffer(stdoutBuf)
+      const stderr = decodeBuffer(stderrBuf)
       if (code !== 0) return reject(new Error(stderr))
       const lines = stdout.trim().split('\n').filter(Boolean)
       const videos = lines.map((line) => {
@@ -228,12 +322,14 @@ function crawlPlaylist(url) {
 function getFormats(url) {
   return new Promise((resolve, reject) => {
     const exe = resolveExecutable()
-    const child = spawn(exe, ['-J', '--no-playlist', url])
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', d => stdout += d.toString())
-    child.stderr.on('data', d => stderr += d.toString())
+    const child = spawn(exe, ['-J', '--no-playlist', '--no-update', url])
+    let stdoutBuf = Buffer.alloc(0)
+    let stderrBuf = Buffer.alloc(0)
+    child.stdout.on('data', d => stdoutBuf = Buffer.concat([stdoutBuf, d]))
+    child.stderr.on('data', d => stderrBuf = Buffer.concat([stderrBuf, d]))
     child.on('close', (code) => {
+      const stdout = decodeBuffer(stdoutBuf)
+      const stderr = decodeBuffer(stderrBuf)
       if (code !== 0) return reject(new Error(stderr || 'Failed to fetch formats'))
       try {
         const metadata = JSON.parse(stdout)
@@ -249,10 +345,13 @@ function getFormats(url) {
           const res = f.resolution || `${f.width || '?'}x${f.height || '?'}`
           const fpsStr = f.fps ? ` (${f.fps}fps)` : ''
           const title = `[${f.ext}] ${res}${fpsStr}${sizeStr ? ' - ' + sizeStr : ''}`
+          const hasVideo = !!f.vcodec && f.vcodec !== 'none'
+          const hasAudio = !!f.acodec && f.acodec !== 'none'
+          const sel = hasVideo && !hasAudio ? `${f.format_id}+bestaudio/best` : f.format_id
           return {
             id: f.format_id,
             title,
-            opt: JSON.stringify(['-f', f.format_id]),
+            opt: JSON.stringify(['-f', sel]),
             w: f.width || 0,
             h: f.height || 0,
             sort: f.tbr || 0,
@@ -276,25 +375,31 @@ function getVersion() {
   return new Promise((resolve, reject) => {
     const exe = resolveExecutable()
     const child = spawn(exe, ['--version'])
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', d => stdout += d.toString())
-    child.stderr.on('data', d => stderr += d.toString())
+    let stdoutBuf = Buffer.alloc(0)
+    let stderrBuf = Buffer.alloc(0)
+    child.stdout.on('data', d => stdoutBuf = Buffer.concat([stdoutBuf, d]))
+    child.stderr.on('data', d => stderrBuf = Buffer.concat([stderrBuf, d]))
     child.on('close', (code) => {
+      const stdout = decodeBuffer(stdoutBuf)
+      const stderr = decodeBuffer(stderrBuf)
       if (code !== 0) return reject(new Error(stderr || 'Failed to get version'))
       resolve(stdout.trim())
     })
     child.on('error', reject)
   })
 }
-
 function registerYoutubeController() {
-  ipcMain.handle(`${moduleName}:checkExecutable`, () => {
+  ipcMain.handle(`${moduleName}:checkExecutable`, async () => {
     const exe = resolveExecutable()
-    return { data: exe, status: existsSync(exe) }
+    const exists = existsSync(exe)
+    let isValid = false
+    if (exists) {
+      isValid = await verifyExecutable(exe, 'ytDlp')
+    }
+    return { data: exe, status: exists && isValid }
   })
 
-  ipcMain.handle(`${moduleName}:getVersion`, async (event) => {
+  ipcMain.handle(`${moduleName}:getVersion`, async () => {
     try {
       const version = await getVersion()
       return { status: true, data: version }
@@ -304,6 +409,21 @@ function registerYoutubeController() {
   })
 
   ipcMain.handle(`${moduleName}:getStatus`, () => taskManager.getStatus())
+  ipcMain.handle(`${moduleName}:getTasks`, () => {
+    return taskManager.tasks.map((task, idx) => {
+      const status = taskManager.taskStatus[idx] || 'waiting'
+      const progress = status === 'completed' ? 100 : 0
+      return {
+        key: idx,
+        task,
+        status,
+        retry: taskManager.retryCount[idx] || 0,
+        progress,
+        speed: '0',
+        downloaded: ''
+      }
+    })
+  })
 
   ipcMain.handle(`${moduleName}:initTaskManager`, (event, args) => initTaskManager(event, args))
 
@@ -321,8 +441,8 @@ function registerYoutubeController() {
     return taskManager.getStatus()
   })
 
-  ipcMain.handle(`${moduleName}:stopTask`, (event, idx) => {
-    taskManager.stopTask(idx)
+  ipcMain.handle(`${moduleName}:stopTask`, async (event, idx) => {
+    await taskManager.stopTask(idx)
     send(event, `${moduleName}:stoppedTask`, true)
     return taskManager.getStatus()
   })
@@ -380,20 +500,27 @@ function registerYoutubeController() {
   })
 
   ipcMain.handle(`${moduleName}:listHistory`, (event, limit) => sqlite.listHistory(limit))
+  ipcMain.handle(`${moduleName}:listHistoryCursor`, (event, { cursor, limit } = {}) => sqlite.listHistoryCursor(cursor, limit))
   ipcMain.handle(`${moduleName}:deleteHistory`, () => {
     sqlite.deleteHistory()
     return { status: true }
   })
+
+  app.on('will-quit', () => {
+    taskManager.stop().catch(() => {})
+  })
 }
 
-module.exports = { registerYoutubeController, youtubeEvents: {
-  managerInitialized: `${moduleName}:managerInitialized`,
-  beforeRunTask: `${moduleName}:beforeRunTask`,
-  progressTask: `${moduleName}:progressTask`,
-  allTasksDone: `${moduleName}:allTasksDone`,
-  stoppedTask: `${moduleName}:stoppedTask`,
-  stoppedTasks: `${moduleName}:stoppedTasks`,
-  errorTask: `${moduleName}:errorTask`,
-  taskRetry: `${moduleName}:taskRetry`,
-  taskTimeout: `${moduleName}:taskTimeout`
-} }
+module.exports = {
+  registerYoutubeController, youtubeEvents: {
+    managerInitialized: `${moduleName}:managerInitialized`,
+    beforeRunTask: `${moduleName}:beforeRunTask`,
+    progressTask: `${moduleName}:progressTask`,
+    allTasksDone: `${moduleName}:allTasksDone`,
+    stoppedTask: `${moduleName}:stoppedTask`,
+    stoppedTasks: `${moduleName}:stoppedTasks`,
+    errorTask: `${moduleName}:errorTask`,
+    taskRetry: `${moduleName}:taskRetry`,
+    taskTimeout: `${moduleName}:taskTimeout`
+  }
+}

@@ -14,6 +14,6 @@ export default defineEventHandler(async (event) => {
     console.error('[Login Error]', err.message)
     console.error('[Login Error Stack]', err.stack?.split('\n').slice(0, 6).join('\n'))
     if (err.statusCode) throw err
-    throw createError({ statusCode: 500, statusMessage: err.message || 'Server Error' })
+    throw createError({ statusCode: 500, statusMessage: 'error.serverError', message: err.message || 'Server Error' })
   }
 })

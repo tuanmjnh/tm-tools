@@ -383,6 +383,122 @@ export class SupabaseAdapter implements DatabaseAdapter {
     this.checkError(error, 'saveSystemConfig')
   }
 
+  async addPushSubscription(userId: string, subscription: unknown, deviceType?: string): Promise<void> {
+    const sub = subscription as any
+    if (sub.fcmToken) {
+      await (this.getClient().from('user_push_subscriptions') as any).delete().eq('fcm_token', sub.fcmToken)
+    } else if (sub.endpoint) {
+      await (this.getClient().from('user_push_subscriptions') as any).delete().eq('endpoint', sub.endpoint)
+    }
+
+    const { error } = await (this.getClient().from('user_push_subscriptions') as any).insert({
+      user_id: userId,
+      fcm_token: sub.fcmToken || null,
+      endpoint: sub.endpoint || null,
+      keys: sub.keys || null,
+      device_type: deviceType || null
+    })
+    if (error) console.error('[Supabase] addPushSubscription failed:', error.message)
+  }
+
+  async removePushSubscription(userId: string, identifier: string): Promise<void> {
+    await (this.getClient().from('user_push_subscriptions') as any).delete()
+      .eq('user_id', userId)
+      .or(`endpoint.eq.${identifier},fcm_token.eq.${identifier}`)
+  }
+
+  async getPushSubscriptions(userId: string): Promise<unknown[]> {
+    const { data, error } = await (this.getClient().from('user_push_subscriptions') as any).select('*').eq('user_id', userId)
+    if (error) {
+      console.error('[Supabase] getPushSubscriptions failed:', error.message)
+      return []
+    }
+    return (data || []).map((row: any) => ({
+      userId: row.user_id,
+      fcmToken: row.fcm_token,
+      endpoint: row.endpoint,
+      keys: row.keys,
+      deviceType: row.device_type,
+      createdAt: row.created_at
+    }))
+  }
+
+  async saveNotification(notification: Record<string, unknown>): Promise<unknown> {
+    const { data, error } = await (this.getClient().from('notifications') as any).insert({
+      recipient_id: notification.recipientId,
+      sender: notification.sender || null,
+      body: notification.body || notification.message || '',
+      is_read: false
+    }).select().single()
+    if (error) {
+      console.error('[Supabase] saveNotification failed:', error.message)
+      throw new Error(error.message)
+    }
+    return {
+      id: data.id,
+      unread: !data.is_read,
+      sender: data.sender || { name: 'System' },
+      body: data.body,
+      date: data.created_at
+    }
+  }
+
+  async getUserNotifications(userId: string, options?: { limit?: number, unreadOnly?: boolean }): Promise<unknown[]> {
+    let query = (this.getClient().from('notifications') as any).select('*').eq('recipient_id', userId)
+    if (options?.unreadOnly) {
+      query = query.eq('is_read', false)
+    }
+    const limit = options?.limit || 20
+    const { data, error } = await query.order('created_at', { ascending: false }).limit(limit)
+    if (error) {
+      console.error('[Supabase] getUserNotifications failed:', error.message)
+      return []
+    }
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      unread: !row.is_read,
+      sender: row.sender || { name: 'System' },
+      body: row.body,
+      date: row.created_at
+    }))
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<boolean> {
+    const { data, error } = await (this.getClient().from('notifications') as any).update({
+      is_read: true,
+      read_at: new Date().toISOString()
+    }).eq('id', notificationId).eq('recipient_id', userId).select()
+    if (error) {
+      console.error('[Supabase] markNotificationAsRead failed:', error.message)
+      return false
+    }
+    return (data || []).length > 0
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<number> {
+    const { data, error } = await (this.getClient().from('notifications') as any).update({
+      is_read: true,
+      read_at: new Date().toISOString()
+    }).eq('recipient_id', userId).eq('is_read', false).select()
+    if (error) {
+      console.error('[Supabase] markAllNotificationsAsRead failed:', error.message)
+      return 0
+    }
+    return (data || []).length
+  }
+
+  async deleteNotifications(userId: string, ids: string[]): Promise<number> {
+    const { data, error } = await (this.getClient().from('notifications') as any).delete()
+      .eq('recipient_id', userId)
+      .in('id', ids)
+      .select()
+    if (error) {
+      console.error('[Supabase] deleteNotifications failed:', error.message)
+      return 0
+    }
+    return (data || []).length
+  }
+
   async seed(options?: { reset?: boolean }): Promise<void> {
     const { seedAuth } = await import('../auth/seed')
     await seedAuth(this as any, options)

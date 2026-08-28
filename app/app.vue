@@ -22,7 +22,7 @@ useHead({
   }
 })
 
-const title = 'Electron Nuxt Dashboard'
+const title = 'TM Tools'
 const description = 'A professional dashboard template with authentication, RBAC, and multi-service integrations.'
 
 useSeoMeta({

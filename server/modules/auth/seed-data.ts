@@ -57,11 +57,18 @@ export const seedRoutes: SeedRouteDef[] = [
     sort: 3
   },
   {
+    path: '/media',
+    name: 'media',
+    label: 'nav.media',
+    icon: 'i-lucide-images',
+    sort: 4
+  },
+  {
     path: '/tools',
     name: 'tools',
     label: 'nav.tools',
     icon: 'i-lucide-wrench',
-    sort: 4,
+    sort: 5,
     children: [
       { path: '/tools/download', name: 'tools-download', label: 'nav.download', icon: 'i-lucide-download', sort: 0 },
       { path: '/tools/video', name: 'tools-video', label: 'nav.video', icon: 'i-lucide-video', sort: 1 }
@@ -72,7 +79,7 @@ export const seedRoutes: SeedRouteDef[] = [
     name: 'administration',
     label: 'nav.administration',
     icon: 'i-lucide-shield',
-    sort: 5,
+    sort: 6,
     children: [
       { path: '/admin/users', name: 'admin-users', label: 'nav.users', icon: 'i-lucide-user-cog', sort: 0 },
       { path: '/admin/roles', name: 'admin-roles', label: 'nav.roles', icon: 'i-lucide-shield', sort: 1 }
@@ -83,7 +90,7 @@ export const seedRoutes: SeedRouteDef[] = [
     name: 'settings',
     label: 'nav.settings',
     icon: 'i-lucide-settings',
-    sort: 6,
+    sort: 7,
     children: [
       { path: '/settings', name: 'settings-general', label: 'nav.general', icon: 'i-lucide-user', sort: 0 },
       { path: '/settings/members', name: 'settings-members', label: 'nav.members', icon: 'i-lucide-users', sort: 1 },
@@ -96,7 +103,7 @@ export const seedRoutes: SeedRouteDef[] = [
     name: 'system',
     label: 'nav.system',
     icon: 'i-lucide-server',
-    sort: 7,
+    sort: 8,
     children: [
       { path: '/system/config', name: 'system-config', label: 'nav.config', icon: 'i-lucide-plug', sort: 0 },
       { path: '/system/seed', name: 'system-seed', label: 'nav.seedData', icon: 'i-lucide-database-backup', sort: 1 }
@@ -122,6 +129,7 @@ export const seedRoles: SeedRoleDef[] = [
       { module: 'inbox', actions: ['read', 'write'] },
       { module: 'customers', actions: ['read', 'write', 'delete'] },
       { module: 'chat', actions: ['read', 'write'] },
+      { module: 'media', actions: ['read', 'write', 'delete'] },
       { module: 'settings', actions: ['read', 'write'] },
       { module: 'users', actions: ['read', 'write', 'delete'] },
       { module: 'rbac', actions: ['read', 'write'] }

@@ -34,6 +34,7 @@ export interface ToolTaskMeta {
 }
 
 export interface FfmpegLabel {
+  id?: string
   text: string
   size: number
   color: string
@@ -41,6 +42,32 @@ export interface FfmpegLabel {
   y: number
   w?: number
   h?: number
+  path?: string
+  box?: number
+  boxColor?: string
+  boxOpacity?: number
+  boxBorderW?: number
+  family?: string
+  monospace?: boolean
+  weight?: string | number
+  style?: string
+  italic?: boolean
+  width?: number
+  scaleX?: number
+  scaleY?: number
+  resizeMode?: 'scale' | 'box'
+  hidden?: boolean
+}
+
+export interface FfmpegSubFile {
+  id?: string
+  path: string
+  type: 'image' | 'video'
+  x: number
+  y: number
+  w: number
+  h: number
+  hidden?: boolean
 }
 
 export interface ToolTask {
@@ -106,6 +133,12 @@ export interface YoutubeConfig {
   updated_at: string | null
 }
 
+export interface CursorPage<T> {
+  items: T[]
+  nextCursor: { ts: string, rowid: number } | null
+  hasMore: boolean
+}
+
 export interface YoutubeHistory {
   id: string
   url: string
@@ -158,7 +191,7 @@ export interface FfmpegConfig {
   scale_w: number
   scale_h: number
   labels: string | FfmpegLabel[]
-  files: string | string[]
+  files: string | FfmpegSubFile[]
   subtitle: string | null
   render_code: string | null
   flag: number
@@ -312,6 +345,7 @@ type EventUnsubscriber = () => void
 export interface ToolsNamespace {
   checkExecutable(): Promise<ExecutableCheck>
   getStatus(): Promise<TaskStatus>
+  getTasks?(): Promise<any[]>
   initTaskManager(args: { threads?: number, delay?: number, delayUI?: number, maxRetry?: number, timeout?: number }): Promise<void>
   setTasks(tasks: ToolTask[]): Promise<void>
   setGroupTasks?(groups: ToolTask[][]): Promise<void>
@@ -321,6 +355,7 @@ export interface ToolsNamespace {
   stopTask(idx: number): Promise<TaskStatus>
   stopTasks(): Promise<TaskStatus>
   getMediaInfo?(args: string[]): Promise<{ pid: number, code: number | null, signal: string | null, stdout: string, stderr: string }>
+  getData?(): Promise<any>
   crawlPlaylist(url: string): Promise<{ status: boolean, data?: PlaylistVideo[], message?: string }>
   getFormats(url: string): Promise<{ status: boolean, data?: { title: string, duration: number, formats: YoutubeFormat[] }, message?: string }>
   getVersion(): Promise<{ status: boolean, data?: string, message?: string }>
@@ -333,6 +368,7 @@ export interface ToolsNamespace {
   updateConfig(data: { id: string, data: Partial<YoutubeConfig> }): Promise<{ status: boolean }>
   deleteConfig(id: string): Promise<{ status: boolean }>
   listHistory(limit?: number): Promise<YoutubeHistory[]>
+  listHistoryCursor(options: { cursor: { ts: string, rowid: number } | null, limit?: number }): Promise<CursorPage<YoutubeHistory>>
   deleteHistory(): Promise<{ status: boolean }>
 
   // FFmpeg SQLite and helper operations
@@ -346,7 +382,7 @@ export interface ToolsNamespace {
   deleteFfmpegBatchConfig(id: string): Promise<{ status: boolean }>
   listFfmpegHistory(limit?: number): Promise<FfmpegHistory[]>
   deleteFfmpegHistory(id: string): Promise<{ status: boolean }>
-  detectGpuSupport(): Promise<{ nvenc: boolean, amf: boolean, qsv: boolean }>
+  detectGpuSupport(): Promise<{ nvenc: boolean, amf: boolean, qsv: boolean, gpus: string[] }>
   globFiles(pattern: string): Promise<string[]>
   onBeforeRunTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
   onProgressTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
@@ -369,6 +405,7 @@ export interface ElectronAPI {
   isElectron: boolean
   getConfig(): Promise<Record<string, string>>
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
+  verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
   showItemInFolder(fullPath: string): Promise<boolean>
   send(channel: string, data?: unknown): void

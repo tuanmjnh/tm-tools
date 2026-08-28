@@ -12,6 +12,19 @@ export function useFileSystem() {
   const isElectron = computed(() => !!window.electronAPI?.isElectron)
 
   // ===== Dialog (file/folder pickers) =====
+  function saveLastDir(pickedPath: string, isFolder = false) {
+    let dir = pickedPath.replace(/\\/g, '/')
+    if (!isFolder) {
+      const lastSlash = dir.lastIndexOf('/')
+      if (lastSlash > -1) {
+        dir = dir.substring(0, lastSlash)
+      }
+    }
+    if (dir) {
+      localStorage.setItem('last_selected_dir', dir)
+    }
+  }
+
   async function selectFiles(args?: DialogArgs): Promise<string[] | null> {
     return dialogApi()?.openFile(args) ?? null
   }
@@ -21,18 +34,51 @@ export function useFileSystem() {
   }
 
   async function selectSaveFile(args?: DialogArgs): Promise<string | null> {
-    return dialogApi()?.saveFile(args) ?? null
+    let defaultPath = args?.defaultPath
+    if (defaultPath) {
+      const lastSlash = defaultPath.replace(/\\/g, '/').lastIndexOf('/')
+      if (lastSlash > -1 && defaultPath.includes('.')) {
+        defaultPath = defaultPath.substring(0, lastSlash)
+      }
+    }
+    if (!defaultPath) {
+      defaultPath = localStorage.getItem('last_selected_dir') || undefined
+    }
+    const picked = await dialogApi()?.saveFile({ ...args, defaultPath }) ?? null
+    if (picked) {
+      saveLastDir(picked, false)
+    }
+    return picked
   }
 
   async function pickFile(options: { title?: string, filters?: DialogArgs['filters'], multiSelections?: boolean, defaultPath?: string } = {}) {
-    const paths = await selectFiles({ title: options.title, filters: options.filters, multiSelections: options.multiSelections, defaultPath: options.defaultPath })
+    let defaultPath = options.defaultPath
+    if (defaultPath) {
+      const lastSlash = defaultPath.replace(/\\/g, '/').lastIndexOf('/')
+      if (lastSlash > -1 && defaultPath.includes('.')) {
+        defaultPath = defaultPath.substring(0, lastSlash)
+      }
+    }
+    if (!defaultPath) {
+      defaultPath = localStorage.getItem('last_selected_dir') || undefined
+    }
+    const paths = await selectFiles({ title: options.title, filters: options.filters, multiSelections: options.multiSelections, defaultPath })
+    const picked = paths?.length ? paths[0] : ''
+    if (picked) {
+      saveLastDir(picked, false)
+    }
     if (options.multiSelections) return paths ?? []
-    return paths?.length ? paths[0] : ''
+    return picked
   }
 
   async function pickFolder(options: { title?: string, defaultPath?: string } = {}) {
-    const paths = await selectFolder({ title: options.title, defaultPath: options.defaultPath })
-    return paths?.length ? paths[0] : ''
+    let defaultPath = options.defaultPath || localStorage.getItem('last_selected_dir') || undefined
+    const paths = await selectFolder({ title: options.title, defaultPath })
+    const picked = paths?.length ? paths[0] : ''
+    if (picked) {
+      saveLastDir(picked, true)
+    }
+    return picked
   }
 
   // ===== File read/write =====

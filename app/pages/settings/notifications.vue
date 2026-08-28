@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const { isSubscribed, registerDevice, unregisterDevice } = useWebPush()
 
 const state = reactive<{ [key: string]: boolean }>({
   email: true,
@@ -8,6 +9,11 @@ const state = reactive<{ [key: string]: boolean }>({
   weekly_digest: false,
   important_updates: true
 })
+
+// Sync desktop switch state with push registration status
+watch(isSubscribed, (subscribed) => {
+  state.desktop = subscribed
+}, { immediate: true })
 
 const sections = computed(() => [{
   title: t('settings.notificationChannels'),
@@ -39,8 +45,17 @@ const sections = computed(() => [{
   }]
 }])
 
-async function onChange() {
-  console.log(state)
+async function onChange(name: string) {
+  if (name === 'desktop') {
+    if (state.desktop) {
+      const success = await registerDevice()
+      if (!success) {
+        state.desktop = false
+      }
+    } else {
+      await unregisterDevice()
+    }
+  }
 }
 </script>
 
@@ -49,7 +64,7 @@ async function onChange() {
     <UPageCard :title="section.title" :description="section.description" variant="naked" class="mb-4" />
     <UPageCard variant="subtle" :ui="{ container: 'divide-y divide-default' }">
       <UFormField v-for="field in section.fields" :key="field.name" :name="field.name" :label="field.label" :description="field.description" class="flex items-center justify-between not-last:pb-4 gap-2">
-        <USwitch v-model="state[field.name]" @update:model-value="onChange" />
+        <USwitch v-model="state[field.name]" @update:model-value="onChange(field.name)" />
       </UFormField>
     </UPageCard>
   </div>

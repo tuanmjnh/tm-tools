@@ -1,10 +1,15 @@
-const { ipcMain } = require('electron')
+const { ipcMain, app } = require('electron')
 const { existsSync, mkdirSync, statSync } = require('fs')
 const { spawn, execSync } = require('child_process')
 const path = require('path')
-const { getToolsBinaries } = require('./paths.cjs')
+const { getToolsBinaries, verifyExecutable } = require('./paths.cjs')
 const { TaskProcessManager } = require('./task-manager.cjs')
 const sqlite = require('./sqlite.cjs')
+
+const isImageFile = (filePath) => {
+  if (!filePath) return false
+  return /\.(gif|jpg|jpe?g|tiff|png|img|ico|jfif|webp|bmp|svg)$/i.test(filePath)
+}
 
 const moduleName = 'tools:ffmpeg'
 let taskManager = new TaskProcessManager(1, 200, 2, 30 * 60 * 1000)
@@ -52,14 +57,25 @@ function initTaskManager(event, args) {
 function detectGpuSupport() {
   try {
     const ffmpegExe = resolveExecutable().ffmpeg
-    const output = execSync(`"${ffmpegExe}" -encoders`, { encoding: 'utf8' })
+    const output = execSync(`"${ffmpegExe}" -hide_banner -encoders`, { encoding: 'utf8', stdio: 'pipe' })
+
+    let gpus = []
+    try {
+      const cmd = 'powershell -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"'
+      const gpuOutput = execSync(cmd, { encoding: 'utf8', stdio: 'pipe' })
+      gpus = gpuOutput.split('\n').map(line => line.trim()).filter(Boolean)
+    } catch {
+      // ignore
+    }
+
     return {
       nvenc: output.includes('h264_nvenc'),
       amf: output.includes('h264_amf'),
-      qsv: output.includes('h264_qsv')
+      qsv: output.includes('h264_qsv'),
+      gpus
     }
   } catch {
-    return { nvenc: false, amf: false, qsv: false }
+    return { nvenc: false, amf: false, qsv: false, gpus: [] }
   }
 }
 
@@ -98,17 +114,54 @@ function substituteVariables(pattern, inputFile, configTitle, idx) {
   return path.resolve(result)
 }
 
-function buildFfmpegArgs(input, output, config, gpuSupport) {
+function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
   const args = ['-y']
+
+  // Parse sub-files first
+  let subFiles = []
+  if (config) {
+    if (typeof config.files === 'string') {
+      try {
+        subFiles = JSON.parse(config.files)
+      } catch {
+        // ignore
+      }
+    } else if (Array.isArray(config.files)) {
+      subFiles = config.files
+    }
+  }
+  subFiles = subFiles.filter(f => f.hidden !== true)
 
   // Inputs
   args.push('-i', input)
 
-  // If background file is used, add it as second input
+  let inputCount = 1
+  let bgInputIndex = -1
   let hasBgFile = false
   if (config && config.background_type === 'file' && config.background_file) {
+    if (isImageFile(config.background_file)) {
+      args.push('-loop', '1')
+    } else {
+      args.push('-stream_loop', '-1')
+    }
     args.push('-i', config.background_file)
+    bgInputIndex = inputCount
+    inputCount++
     hasBgFile = true
+  }
+
+  const subFileInputIndices = []
+  if (subFiles && subFiles.length > 0) {
+    subFiles.forEach((file) => {
+      if (isImageFile(file.path)) {
+        args.push('-loop', '1')
+      } else {
+        args.push('-stream_loop', '-1')
+      }
+      args.push('-i', file.path)
+      subFileInputIndices.push(inputCount)
+      inputCount++
+    })
   }
 
   // Video filter construction
@@ -175,9 +228,9 @@ function buildFfmpegArgs(input, output, config, gpuSupport) {
         filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[vbgoverlay];`
         currentTag = '[vbgoverlay]'
       } else if (config.background_type === 'file' && hasBgFile) {
-        filterComplex += `[1:v]scale=${tw}:${th}[vbg];`
+        filterComplex += `[${bgInputIndex}:v]scale=${tw}:${th}[vbg];`
         filterComplex += `${currentTag}scale=${tw}:${th}:force_original_aspect_ratio=decrease[vfg];`
-        filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[vbgoverlay];`
+        filterComplex += `[vbg][vfg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2:shortest=1[vbgoverlay];`
         currentTag = '[vbgoverlay]'
       }
     }
@@ -186,6 +239,23 @@ function buildFfmpegArgs(input, output, config, gpuSupport) {
     if (config.scale_w > 0 && config.scale_h > 0) {
       filterComplex += `${currentTag}scale=${config.scale_w}:${config.scale_h}[vscale];`
       currentTag = '[vscale]'
+    }
+
+    // 4.5. Sub-files (Image & Video overlays)
+    if (subFiles && subFiles.length > 0) {
+      subFiles.forEach((file, idx) => {
+        const inputIdx = subFileInputIndices[idx]
+        const w = file.w || 100
+        const h = file.h || 100
+        const x = file.x || 0
+        const y = file.y || 0
+        const subTag = `vsubfile${idx}`
+        const overlayTag = `vsuboverlay${idx}`
+
+        filterComplex += `[${inputIdx}:v]scale=${w}:${h}[${subTag}];`
+        filterComplex += `${currentTag}[${subTag}]overlay=${x}:${y}:shortest=1[${overlayTag}];`
+        currentTag = `[${overlayTag}]`
+      })
     }
 
     // 5. Labels (Text overlay)
@@ -199,16 +269,28 @@ function buildFfmpegArgs(input, output, config, gpuSupport) {
     } else if (Array.isArray(config.labels)) {
       labels = config.labels
     }
+    labels = labels.filter(l => l.hidden !== true)
 
     if (labels && labels.length > 0) {
       labels.forEach((lbl, idx) => {
         const text = (lbl.text || '').replace(/'/g, '\'\\\\\'\'')
         const color = lbl.color || 'white'
-        const size = lbl.size || 24
+        const resizeMode = lbl.resizeMode || 'scale'
+        const scaleX = resizeMode === 'scale' ? (lbl.scaleX ?? 1) : 1
+        const size = Math.round((lbl.size || 24) * scaleX)
         const x = lbl.x || 0
         const y = lbl.y || 0
+
+        let boxBorder = ''
+        if (lbl.box) {
+          const bColor = lbl.boxColor || '#A3A3A3'
+          const bOpacity = lbl.boxOpacity ?? 0.5
+          const bBorderW = Math.round((lbl.boxBorderW || 10) * scaleX)
+          boxBorder = `:box=1:boxcolor=${bColor}@${bOpacity}:boxborderw=${bBorderW}`
+        }
+
         const tag = `vlabel${idx}`
-        filterComplex += `${currentTag}drawtext=font='Arial':text='${text}':fontcolor=${color}:fontsize=${size}:x=${x}:y=${y}[${tag}];`
+        filterComplex += `${currentTag}drawtext=font='Arial':text='${text}':fontcolor=${color}:fontsize=${size}:x=${x}:y=${y}${boxBorder}[${tag}];`
         currentTag = `[${tag}]`
       })
     }
@@ -263,7 +345,11 @@ function buildFfmpegArgs(input, output, config, gpuSupport) {
 
   // Video and Audio Encoders
   let vEncoder = 'libx264'
-  if (gpuSupport) {
+  if (chosenEncoder) {
+    if (chosenEncoder === 'nvenc' && gpuSupport.nvenc) vEncoder = 'h264_nvenc'
+    else if (chosenEncoder === 'amf' && gpuSupport.amf) vEncoder = 'h264_amf'
+    else if (chosenEncoder === 'qsv' && gpuSupport.qsv) vEncoder = 'h264_qsv'
+  } else if (gpuSupport) {
     if (gpuSupport.nvenc) vEncoder = 'h264_nvenc'
     else if (gpuSupport.amf) vEncoder = 'h264_amf'
     else if (gpuSupport.qsv) vEncoder = 'h264_qsv'
@@ -292,7 +378,7 @@ function resolveTasks(args) {
 
     const config = meta.config || (meta.configId ? sqlite.getFfmpegConfig(meta.configId) : null)
     if (config) {
-      finalArgs = buildFfmpegArgs(meta.input, meta.output, config, gpuSupport)
+      finalArgs = buildFfmpegArgs(meta.input, meta.output, config, gpuSupport, task.options?.encoder)
     }
 
     if (meta.output) {
@@ -422,7 +508,7 @@ function startTasks(event) {
     send(event, `${moduleName}:taskTimeout`, { taskKey: idx })
   }
 
-  taskManager.start().catch(() => {})
+  taskManager.start().catch(() => { })
 }
 
 function parseTimeToSeconds(time) {
@@ -480,16 +566,37 @@ function globFiles(event, pattern) {
 
 function registerFfmpegController() {
   ipcMain.handle(`${moduleName}:globFiles`, (event, pattern) => globFiles(event, pattern))
-  ipcMain.handle(`${moduleName}:checkExecutable`, () => {
+  ipcMain.handle(`${moduleName}:checkExecutable`, async () => {
     const exe = resolveExecutable()
     const rs = {}
     for (const [key, value] of Object.entries(exe)) {
-      rs[key] = { path: value, exists: existsSync(value) }
+      if (key === 'ytDlp') continue
+      const exists = existsSync(value)
+      let isValid = false
+      if (exists) {
+        isValid = await verifyExecutable(value, key)
+      }
+      rs[key] = { path: value, exists, isValid }
     }
-    return { data: rs, status: Object.values(rs).every(v => v.exists) }
+    return { data: rs, status: Object.values(rs).every(v => v.exists && v.isValid) }
   })
 
   ipcMain.handle(`${moduleName}:getStatus`, () => taskManager.getStatus())
+  ipcMain.handle(`${moduleName}:getTasks`, () => {
+    return taskManager.tasks.map((task, idx) => {
+      const status = taskManager.taskStatus[idx] || 'waiting'
+      const progress = status === 'completed' ? 100 : 0
+      return {
+        key: idx,
+        task,
+        status,
+        retry: taskManager.retryCount[idx] || 0,
+        progress,
+        speed: '0',
+        downloaded: ''
+      }
+    })
+  })
 
   ipcMain.handle(`${moduleName}:initTaskManager`, (event, args) => initTaskManager(event, args))
 
@@ -509,8 +616,8 @@ function registerFfmpegController() {
     return taskManager.getStatus()
   })
 
-  ipcMain.handle(`${moduleName}:stopTask`, (event, idx) => {
-    taskManager.stopTask(idx)
+  ipcMain.handle(`${moduleName}:stopTask`, async (event, idx) => {
+    await taskManager.stopTask(idx)
     send(event, `${moduleName}:stoppedTask`, true)
     return taskManager.getStatus()
   })
@@ -558,16 +665,22 @@ function registerFfmpegController() {
     return { status: true }
   })
   ipcMain.handle(`${moduleName}:detectGpuSupport`, () => detectGpuSupport())
+
+  app.on('will-quit', () => {
+    taskManager.stop().catch(() => {})
+  })
 }
 
-module.exports = { registerFfmpegController, ffmpegEvents: {
-  managerInitialized: `${moduleName}:managerInitialized`,
-  beforeRunTask: `${moduleName}:beforeRunTask`,
-  progressTask: `${moduleName}:progressTask`,
-  allTasksDone: `${moduleName}:allTasksDone`,
-  stoppedTask: `${moduleName}:stoppedTask`,
-  stoppedTasks: `${moduleName}:stoppedTasks`,
-  errorTask: `${moduleName}:errorTask`,
-  taskRetry: `${moduleName}:taskRetry`,
-  taskTimeout: `${moduleName}:taskTimeout`
-} }
+module.exports = {
+  registerFfmpegController, ffmpegEvents: {
+    managerInitialized: `${moduleName}:managerInitialized`,
+    beforeRunTask: `${moduleName}:beforeRunTask`,
+    progressTask: `${moduleName}:progressTask`,
+    allTasksDone: `${moduleName}:allTasksDone`,
+    stoppedTask: `${moduleName}:stoppedTask`,
+    stoppedTasks: `${moduleName}:stoppedTasks`,
+    errorTask: `${moduleName}:errorTask`,
+    taskRetry: `${moduleName}:taskRetry`,
+    taskTimeout: `${moduleName}:taskTimeout`
+  }
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "id": "libx264",
+    "name": "H.264 / AVC (CPU)",
+    "codec": "libx264",
+    "extension": "mp4",
+    "hardware_acceleration": null,
+    "description_en": "Most compatible software encoder. Balanced quality and file size.",
+    "description_vi": "Bộ mã hóa phần mềm tương thích nhất. Cân bằng chất lượng và dung lượng.",
+    "presets": ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+  },
+  {
+    "id": "h264_nvenc",
+    "name": "H.264 / AVC (NVIDIA GPU)",
+    "codec": "h264_nvenc",
+    "extension": "mp4",
+    "hardware_acceleration": "nvenc",
+    "description_en": "NVIDIA hardware accelerated H.264 encoder. Extremely fast.",
+    "description_vi": "Bộ mã hóa H.264 tăng tốc phần cứng NVIDIA. Tốc độ cực nhanh.",
+    "presets": ["p1", "p2", "p3", "p4", "p5", "p6", "p7"]
+  },
+  {
+    "id": "h264_amf",
+    "name": "H.264 / AVC (AMD GPU)",
+    "codec": "h264_amf",
+    "extension": "mp4",
+    "hardware_acceleration": "amf",
+    "description_en": "AMD hardware accelerated H.264 encoder.",
+    "description_vi": "Bộ mã hóa H.264 tăng tốc phần cứng AMD.",
+    "presets": ["speed", "balanced", "quality"]
+  },
+  {
+    "id": "h264_qsv",
+    "name": "H.264 / AVC (Intel QSV)",
+    "codec": "h264_qsv",
+    "extension": "mp4",
+    "hardware_acceleration": "qsv",
+    "description_en": "Intel Quick Sync accelerated H.264 encoder.",
+    "description_vi": "Bộ mã hóa H.264 tăng tốc phần cứng Intel Quick Sync.",
+    "presets": ["speed", "balanced", "quality"]
+  },
+  {
+    "id": "libx265",
+    "name": "H.265 / HEVC (CPU)",
+    "codec": "libx265",
+    "extension": "mp4",
+    "hardware_acceleration": null,
+    "description_en": "High efficiency software encoder. Smaller file size at equivalent quality, slower speed.",
+    "description_vi": "Bộ mã hóa hiệu năng cao. Dung lượng nhỏ hơn ở cùng chất lượng, tốc độ chậm.",
+    "presets": ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]
+  },
+  {
+    "id": "hevc_nvenc",
+    "name": "H.265 / HEVC (NVIDIA GPU)",
+    "codec": "hevc_nvenc",
+    "extension": "mp4",
+    "hardware_acceleration": "nvenc",
+    "description_en": "NVIDIA hardware accelerated H.265/HEVC encoder.",
+    "description_vi": "Bộ mã hóa H.265/HEVC tăng tốc phần cứng NVIDIA.",
+    "presets": ["p1", "p2", "p3", "p4", "p5", "p6", "p7"]
+  },
+  {
+    "id": "libvpx-vp9",
+    "name": "VP9 (WebM CPU)",
+    "codec": "libvpx-vp9",
+    "extension": "webm",
+    "hardware_acceleration": null,
+    "description_en": "Google WebM open source codec, great for browser compatibility.",
+    "description_vi": "Mã nguồn mở Google WebM, tương thích tốt trên trình duyệt.",
+    "presets": []
+  },
+  {
+    "id": "prores_ks",
+    "name": "Apple ProRes (CPU)",
+    "codec": "prores_ks",
+    "extension": "mov",
+    "hardware_acceleration": null,
+    "description_en": "Broadcast standard intermediate codec. Large size, extremely high quality.",
+    "description_vi": "Bộ mã hóa trung gian tiêu chuẩn phát thanh. Dung lượng lớn, chất lượng cực cao.",
+    "presets": ["proxy", "lt", "standard", "hq", "4444", "4444xq"]
+  }
+]

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AuthUser } from '~/types/auth'
 import { z } from 'zod'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({
   middleware: () => {
@@ -93,8 +94,7 @@ async function onSubmit() {
     showModal.value = false
     fetchUsers(true)
   } catch (err: unknown) {
-    const error = err as { data?: { message?: string }, message?: string }
-    toast.add({ title: error?.data?.message || error?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -126,8 +126,7 @@ async function doDelete() {
     showDeleteModal.value = false
     fetchUsers(true)
   } catch (err: unknown) {
-    const error = err as { data?: { message?: string }, message?: string }
-    toast.add({ title: error?.data?.message || error?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     deleting.value = false
   }
@@ -145,8 +144,7 @@ async function doBatchDelete() {
     showBatchDeleteModal.value = false
     fetchUsers(true)
   } catch (err: unknown) {
-    const error = err as { data?: { message?: string }, message?: string }
-    toast.add({ title: error?.data?.message || error?.message || t('global.error'), color: 'error' })
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
     batchDeleting.value = false
   }
@@ -189,36 +187,21 @@ function formatDateString(str: string) {
   <BasePage id="admin-users" :title="$t('admin.usersTitle')">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton
-          v-if="selected.length"
-          :label="t('global.delete')"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-trash"
-          @click="showBatchDeleteModal = true"
-        >
+        <UButton v-if="selected.length" :label="t('global.delete')" color="error" variant="subtle" icon="i-lucide-trash"
+          @click="showBatchDeleteModal = true">
           <template #trailing>
             <UKbd>{{ selected.length }}</UKbd>
           </template>
         </UButton>
-        <UButton :label="$t('admin.addUser')" icon="i-lucide-plus" @click="openAdd" />
+        <UButton :label="$t('admin.addUser')" icon="i-lucide-plus" variant="soft" @click="openAdd" />
       </div>
     </template>
 
     <template #default>
       <div class="flex-1 min-h-0 relative h-full">
-        <LazyGridList
-          v-model:selected="selected"
-          :items="users"
-          :columns="columns"
-          :loading="loading"
-          item-key="id"
-          selectable
-          :can-load-more="canLoadMore"
-          :action-options="getActionOptions"
-          @load-more="onLoadMore"
-          @refresh="fetchUsers(true)"
-        >
+        <LazyGridList v-model:selected="selected" :items="users" :columns="columns" :loading="loading" item-key="id"
+          selectable :can-load-more="canLoadMore" :action-options="getActionOptions" @load-more="onLoadMore"
+          @refresh="fetchUsers(true)">
           <template #createdAt="{ item }">
             <span class="text-xs text-gray-500 dark:text-gray-400">
               {{ formatDateString(item.createdAt) }}
@@ -236,25 +219,15 @@ function formatDateString(str: string) {
                       <span class="text-sm font-bold text-gray-900 dark:text-white truncate">
                         {{ item.name }}
                       </span>
-                      <UBadge
-                        color="primary"
-                        variant="subtle"
-                        size="xs"
-                        class="capitalize"
-                      >
+                      <UBadge color="primary" variant="subtle" size="xs" class="capitalize">
                         {{ item.role }}
                       </UBadge>
                     </div>
-                    <span class="text-[10px] text-gray-400">@{{ item.username || item.name.toLowerCase().replace(/\s+/g, '') }}</span>
+                    <span class="text-[10px] text-gray-400">@{{ item.username || item.name.toLowerCase().replace(/\s+/g,
+                      '') }}</span>
                   </div>
                 </div>
-                <UBadge
-                  v-if="item.platform"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  class="uppercase"
-                >
+                <UBadge v-if="item.platform" color="neutral" variant="soft" size="xs" class="uppercase">
                   {{ item.platform }}
                 </UBadge>
               </div>
@@ -283,14 +256,8 @@ function formatDateString(str: string) {
         </LazyGridList>
       </div>
 
-      <BaseFormModal
-        v-model:open="showModal"
-        :title="editingUser ? t('admin.editUser') : t('admin.addUser')"
-        :schema="schema"
-        :state="form"
-        :loading="saving"
-        @submit="onSubmit"
-      >
+      <BaseFormModal v-model:open="showModal" :title="editingUser ? t('admin.editUser') : t('admin.addUser')"
+        :schema="schema" :state="form" :loading="saving" @submit="onSubmit">
         <UFormField :label="t('auth.email')" name="email" required>
           <UInput v-model="form.email" type="email" class="w-full" />
         </UFormField>
@@ -300,11 +267,8 @@ function formatDateString(str: string) {
         <UFormField :label="t('auth.name')" name="name" required>
           <UInput v-model="form.name" class="w-full" />
         </UFormField>
-        <UFormField
-          :label="editingUser ? t('admin.newPassword') : t('admin.password')"
-          name="password"
-          :required="!editingUser"
-        >
+        <UFormField :label="editingUser ? t('admin.newPassword') : t('admin.password')" name="password"
+          :required="!editingUser">
           <BasePasswordInput v-model="form.password" class="w-full" />
         </UFormField>
         <UFormField :label="t('admin.role')" name="role" required>
@@ -312,21 +276,13 @@ function formatDateString(str: string) {
         </UFormField>
       </BaseFormModal>
 
-      <LazyBaseConfirmModal
-        v-model:open="showDeleteModal"
-        :title="t('admin.deleteUserConfirm')"
-        :description="t('admin.deleteUserConfirmDesc', { name: deleteTarget?.name || '' })"
-        :loading="deleting"
-        @confirm="doDelete"
-      />
+      <LazyBaseConfirmModal v-model:open="showDeleteModal" :title="t('admin.deleteUserConfirm')"
+        :description="t('admin.deleteUserConfirmDesc', { name: deleteTarget?.name || '' })" :loading="deleting"
+        @confirm="doDelete" />
 
-      <LazyBaseConfirmModal
-        v-model:open="showBatchDeleteModal"
-        :title="t('admin.deleteUserConfirm')"
+      <LazyBaseConfirmModal v-model:open="showBatchDeleteModal" :title="t('admin.deleteUserConfirm')"
         :description="t('admin.deleteUserConfirmDesc', { name: selected.filter(u => u.id !== currentUser?.id).map(u => u.name).join(', ') })"
-        :loading="batchDeleting"
-        @confirm="doBatchDelete"
-      />
+        :loading="batchDeleting" @confirm="doBatchDelete" />
     </template>
   </BasePage>
 </template>

@@ -284,8 +284,7 @@ const showActions = computed(() => {
       </div>
 
       <!-- List Items (Separated Cards) -->
-      <div v-else ref="dragEl"
-        :class="viewMode === 'list' ? 'space-y-2 pb-4 pr-1' : `grid ${gridCols} gap-4 pb-4 pr-1`">
+      <div v-else ref="dragEl" :class="viewMode === 'list' ? 'space-y-2 pb-4' : `grid ${gridCols} gap-4 pb-4`">
         <slot name="first-item" />
         <div v-for="(item, index) in items" :key="item[itemKey || '_id']">
           <LazyGridListSwipeCard :id="item[itemKey || '_id']" :item="item" :open-id="openCardId" :disabled="false"

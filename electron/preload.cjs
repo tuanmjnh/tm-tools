@@ -21,10 +21,10 @@ function capitalize(str) {
 
 const youtube = exposeNamespace('tools:youtube', {
   invoke: [
-    'checkExecutable', 'getStatus', 'initTaskManager', 'setTasks', 'startTasks',
+    'checkExecutable', 'getStatus', 'getTasks', 'initTaskManager', 'setTasks', 'startTasks',
     'pauseTasks', 'continueTasks', 'stopTask', 'stopTasks',
     'crawlPlaylist', 'getFormats', 'listFormats', 'createFormat', 'updateFormat', 'deleteFormat',
-    'listConfigs', 'createConfig', 'updateConfig', 'deleteConfig', 'listHistory', 'getVersion', 'deleteHistory'
+    'listConfigs', 'createConfig', 'updateConfig', 'deleteConfig', 'listHistory', 'listHistoryCursor', 'getVersion', 'deleteHistory'
   ],
   on: [
     'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
@@ -34,7 +34,7 @@ const youtube = exposeNamespace('tools:youtube', {
 
 const ffmpeg = exposeNamespace('tools:ffmpeg', {
   invoke: [
-    'checkExecutable', 'getStatus', 'initTaskManager', 'setTasks', 'setGroupTasks',
+    'checkExecutable', 'getStatus', 'getTasks', 'initTaskManager', 'setTasks', 'setGroupTasks',
     'startTasks', 'pauseTasks', 'continueTasks', 'stopTask', 'stopTasks', 'getMediaInfo',
     'listFfmpegConfigs', 'createFfmpegConfig', 'updateFfmpegConfig', 'deleteFfmpegConfig',
     'listFfmpegBatchConfigs', 'createFfmpegBatchConfig', 'updateFfmpegBatchConfig', 'deleteFfmpegBatchConfig',
@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: (values) => ipcRenderer.invoke('set-config', values),
+  verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: (fullPath) => ipcRenderer.invoke('open-path', fullPath),
   showItemInFolder: (fullPath) => ipcRenderer.invoke('show-item-in-folder', fullPath),
   send: (channel, data) => ipcRenderer.send(channel, data),

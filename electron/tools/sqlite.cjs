@@ -1,13 +1,126 @@
 const Database = require('better-sqlite3')
 const { app } = require('electron')
-const { resolve } = require('path')
+const { resolve, join } = require('path')
 const fs = require('fs')
 const { getResourcePath } = require('./paths.cjs')
+
+const MEDIA_EXT = ['mp4', 'm4a', 'm4v', 'webm', 'mkv', 'mov', 'mp3', 'aac', 'flac', 'wav', 'ogg', 'opus', 'ts', 'flv', '3gp']
+
+function normalizeMatch(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function lcsLen(a, b) {
+  const m = a.length
+  const n = b.length
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+  return dp[m][n]
+}
+
+function repairHistoryFileNames() {
+  try {
+    const rows = db.prepare('SELECT id, out_path, file_name, title FROM youtube_history WHERE status=\'completed\'').all()
+    const extSet = new Set(MEDIA_EXT)
+    for (const row of rows) {
+      if (!row.out_path || !row.file_name) continue
+      if (fs.existsSync(join(row.out_path, row.file_name))) continue
+      let files = []
+      try {
+        files = fs.readdirSync(row.out_path)
+      } catch {
+        continue
+      }
+      let cands = []
+      for (const f of files) {
+        try {
+          if (fs.statSync(join(row.out_path, f)).isDirectory()) continue
+          const ext = f.split('.').pop().toLowerCase()
+          if (extSet.has(ext)) cands.push(f)
+        } catch {
+          // skip unreadable entries
+        }
+      }
+      if (!cands.length) continue
+      let chosen = null
+      if (cands.length === 1) {
+        chosen = cands[0]
+      } else {
+        const key = normalizeMatch(row.title || row.file_name)
+        let bestScore = -1
+        for (const c of cands) {
+          const cb = normalizeMatch(c.split('.').slice(0, -1).join('.'))
+          const score = lcsLen(key, cb)
+          if (score > bestScore) {
+            bestScore = score
+            chosen = c
+          }
+        }
+        if (chosen && bestScore <= 0 && row.file_name && row.file_name.indexOf('\uFFFD') === -1) {
+          chosen = null
+        }
+      }
+      if (chosen) {
+        db.prepare('UPDATE youtube_history SET file_name=? WHERE id=?').run(chosen, row.id)
+        console.log('[SQLite] Repaired history file_name ->', chosen)
+      }
+    }
+  } catch (e) {
+    console.error('[SQLite] Failed to repair history file names:', e)
+  }
+}
 
 const dbPath = resolve(app.getPath('userData'), 'tools.sqlite')
 const db = new Database(dbPath)
 
 function init() {
+  const tableCheck = db.prepare('SELECT sql FROM sqlite_master WHERE type=\'table\' AND name=\'youtube_configs\'').get()
+  if (tableCheck) {
+    const sql = tableCheck.sql
+    if (sql.includes('REFERENCES youtube_formats')) {
+      console.log('[SQLite] Migrating youtube_configs to remove foreign key constraint...')
+      try {
+        db.transaction(() => {
+          db.prepare('PRAGMA foreign_keys = OFF').run()
+          db.prepare('ALTER TABLE youtube_configs RENAME TO youtube_configs_old').run()
+          db.prepare(`
+            CREATE TABLE youtube_configs (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL,
+              format_id TEXT,
+              out_path TEXT,
+              file_name TEXT DEFAULT '%(title)s.%(ext)s',
+              threads INTEGER DEFAULT 2,
+              restrict INTEGER DEFAULT 0,
+              overwrite INTEGER DEFAULT 1,
+              encoding TEXT DEFAULT 'utf-8',
+              flag INTEGER DEFAULT 1,
+              created_at TEXT DEFAULT (datetime('now')),
+              updated_at TEXT
+            )
+          `).run()
+          db.prepare(`
+            INSERT INTO youtube_configs (id, title, format_id, out_path, file_name, threads, restrict, overwrite, encoding, flag, created_at, updated_at)
+            SELECT id, title, format_id, out_path, file_name, threads, restrict, overwrite, encoding, flag, created_at, updated_at FROM youtube_configs_old
+          `).run()
+          db.prepare('DROP TABLE youtube_configs_old').run()
+          db.prepare('PRAGMA foreign_keys = ON').run()
+        })()
+        console.log('[SQLite] Migration completed successfully.')
+      } catch (err) {
+        console.error('[SQLite] Migration failed:', err)
+      }
+    }
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS youtube_formats (
       id TEXT PRIMARY KEY,
@@ -24,7 +137,7 @@ function init() {
     CREATE TABLE IF NOT EXISTS youtube_configs (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
-      format_id TEXT REFERENCES youtube_formats(id),
+      format_id TEXT,
       out_path TEXT,
       file_name TEXT DEFAULT '%(title)s.%(ext)s',
       threads INTEGER DEFAULT 2,
@@ -124,6 +237,16 @@ function init() {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `)
+
+  // Repair any broken flags from previous updates
+  try {
+    db.prepare('UPDATE youtube_configs SET flag = 1 WHERE flag IS NULL').run()
+    db.prepare('UPDATE youtube_formats SET flag = 1 WHERE flag IS NULL').run()
+  } catch (e) {
+    console.error('[SQLite] Failed to repair flags:', e)
+  }
+
+  // repairHistoryFileNames()
 }
 
 init()
@@ -142,6 +265,32 @@ function safeBind(val) {
   if (val === undefined || val === null) return null
   if (typeof val === 'boolean') return val ? 1 : 0
   return val
+}
+
+/**
+ * Reusable cursor-based pagination for rowid tables having a `created_at` column.
+ * Ordering: created_at DESC, rowid DESC. Cursor is `{ ts, rowid }` from the last item.
+ * Returns `{ items, nextCursor, hasMore }`.
+ */
+function cursorPage(table, cursor, limit = 30, columns = '*') {
+  const safeTable = /^[a-zA-Z0-9_]+$/.test(String(table)) ? table : null
+  if (!safeTable) throw new Error('Invalid table name')
+  const size = Math.max(1, Number(limit) || 30)
+  const colStar = columns === '*' ? '*' : columns.split(',').map(c => c.trim()).filter(Boolean).join(',')
+  const select = colStar === '*' ? '* , rowid AS __r' : `${colStar}, rowid AS __r`
+  const rows = cursor && typeof cursor.ts === 'string'
+    ? db.prepare(`SELECT ${select} FROM ${safeTable} WHERE (created_at < ?) OR (created_at = ? AND rowid < ?) ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+        .all(cursor.ts, cursor.ts, cursor.rowid, size + 1)
+    : db.prepare(`SELECT ${select} FROM ${safeTable} ORDER BY created_at DESC, rowid DESC LIMIT ?`).all(size + 1)
+  const hasMore = rows.length > size
+  const items = rows.slice(0, size).map((r) => {
+    const o = { ...r }
+    delete o.__r
+    return o
+  })
+  const last = rows[size - 1]
+  const nextCursor = last ? { ts: last.created_at, rowid: last.__r } : null
+  return { items, nextCursor, hasMore }
 }
 
 // Load static formats
@@ -167,6 +316,7 @@ try {
 
 module.exports = {
   db,
+  cursorPage,
   // youtube_formats
   listFormats: () => staticFormats,
   getFormat: id => staticFormats.find(f => f.id === id) || null,
@@ -177,8 +327,8 @@ module.exports = {
     return id
   },
   updateFormat: (id, data) => {
-    db.prepare(`UPDATE youtube_formats SET title=?,code=?,opt=?,w=?,h=?,sort=?,flag=?,updated_at=? WHERE id=?`)
-      .run(safeBind(data.title), safeBind(data.code), JSON.stringify(data.opt), safeBind(data.w), safeBind(data.h), safeBind(data.sort), safeBind(data.flag), now(), safeBind(id))
+    db.prepare(`UPDATE youtube_formats SET title=?,code=?,opt=?,w=?,h=?,sort=?,updated_at=? WHERE id=?`)
+      .run(safeBind(data.title), safeBind(data.code), JSON.stringify(data.opt), safeBind(data.w), safeBind(data.h), safeBind(data.sort), now(), safeBind(id))
   },
   deleteFormat: id => db.prepare('UPDATE youtube_formats SET flag=0 WHERE id=?').run(safeBind(id)),
 
@@ -205,7 +355,7 @@ module.exports = {
     return id
   },
   updateConfig: (id, data) => {
-    db.prepare(`UPDATE youtube_configs SET title=?,format_id=?,out_path=?,file_name=?,threads=?,restrict=?,overwrite=?,encoding=?,flag=?,updated_at=? WHERE id=?`)
+    db.prepare(`UPDATE youtube_configs SET title=?,format_id=?,out_path=?,file_name=?,threads=?,restrict=?,overwrite=?,encoding=?,updated_at=? WHERE id=?`)
       .run(
         safeBind(data.title),
         safeBind(data.format_id),
@@ -215,12 +365,11 @@ module.exports = {
         safeBind(data.restrict),
         safeBind(data.overwrite),
         safeBind(data.encoding),
-        safeBind(data.flag),
         now(),
         safeBind(id)
       )
   },
-  deleteConfig: id => db.prepare('UPDATE youtube_configs SET flag=0 WHERE id=?').run(safeBind(id)),
+  deleteConfig: id => db.prepare('DELETE FROM youtube_configs WHERE id=?').run(safeBind(id)),
 
   // youtube_history
   addHistory: (data) => {
@@ -258,6 +407,7 @@ module.exports = {
     db.prepare(`UPDATE youtube_history SET ${sets.join(',')} WHERE id=?`).run(...params)
   },
   listHistory: (limit = 100) => db.prepare('SELECT * FROM youtube_history ORDER BY created_at DESC LIMIT ?').all(limit),
+  listHistoryCursor: (cursor, limit = 30) => cursorPage('youtube_history', cursor, limit),
   deleteHistory: () => db.prepare('DELETE FROM youtube_history').run(),
 
   // ffmpeg_configs
@@ -270,8 +420,8 @@ module.exports = {
     return id
   },
   updateFfmpegConfig: (id, data) => {
-    db.prepare(`UPDATE ffmpeg_configs SET user_id=?,title=?,aspect_ratio=?,background_type=?,background_color=?,background_boxblur=?,background_file=?,center=?,speed=?,volume=?,zoom_enable=?,zoom_ratio=?,zoom_time_start=?,zoom_time_duration=?,zoom_time_loop=?,hflip_enable=?,hflip_all=?,hflip_time_start=?,hflip_time_duration=?,hflip_time_loop=?,vflip_enable=?,vflip_all=?,vflip_time_start=?,vflip_time_duration=?,vflip_time_loop=?,scale_x=?,scale_y=?,scale_w=?,scale_h=?,labels=?,files=?,subtitle=?,render_code=?,flag=?,updated_at=? WHERE id=?`)
-      .run(data.user_id, data.title, data.aspect_ratio, data.background_type, data.background_color, data.background_boxblur, data.background_file, data.center, data.speed, data.volume, data.zoom_enable, data.zoom_ratio, data.zoom_time_start, data.zoom_time_duration, data.zoom_time_loop, data.hflip_enable, data.hflip_all, data.hflip_time_start, data.hflip_time_duration, data.hflip_time_loop, data.vflip_enable, data.vflip_all, data.vflip_time_start, data.vflip_time_duration, data.vflip_time_loop, data.scale_x, data.scale_y, data.scale_w, data.scale_h, typeof data.labels === 'string' ? data.labels : JSON.stringify(data.labels || []), typeof data.files === 'string' ? data.files : JSON.stringify(data.files || []), data.subtitle, typeof data.render_code === 'string' ? data.render_code : JSON.stringify(data.render_code || null), data.flag, now(), id)
+    db.prepare(`UPDATE ffmpeg_configs SET user_id=?,title=?,aspect_ratio=?,background_type=?,background_color=?,background_boxblur=?,background_file=?,center=?,speed=?,volume=?,zoom_enable=?,zoom_ratio=?,zoom_time_start=?,zoom_time_duration=?,zoom_time_loop=?,hflip_enable=?,hflip_all=?,hflip_time_start=?,hflip_time_duration=?,hflip_time_loop=?,vflip_enable=?,vflip_all=?,vflip_time_start=?,vflip_time_duration=?,vflip_time_loop=?,scale_x=?,scale_y=?,scale_w=?,scale_h=?,labels=?,files=?,subtitle=?,render_code=?,updated_at=? WHERE id=?`)
+      .run(data.user_id, data.title, data.aspect_ratio, data.background_type, data.background_color, data.background_boxblur, data.background_file, data.center, data.speed, data.volume, data.zoom_enable, data.zoom_ratio, data.zoom_time_start, data.zoom_time_duration, data.zoom_time_loop, data.hflip_enable, data.hflip_all, data.hflip_time_start, data.hflip_time_duration, data.hflip_time_loop, data.vflip_enable, data.vflip_all, data.vflip_time_start, data.vflip_time_duration, data.vflip_time_loop, data.scale_x, data.scale_y, data.scale_w, data.scale_h, typeof data.labels === 'string' ? data.labels : JSON.stringify(data.labels || []), typeof data.files === 'string' ? data.files : JSON.stringify(data.files || []), data.subtitle, typeof data.render_code === 'string' ? data.render_code : JSON.stringify(data.render_code || null), now(), id)
   },
   deleteFfmpegConfig: id => db.prepare('UPDATE ffmpeg_configs SET flag=0 WHERE id=?').run(id),
 
@@ -284,8 +434,8 @@ module.exports = {
     return id
   },
   updateFfmpegBatchConfig: (id, data) => {
-    db.prepare(`UPDATE ffmpeg_batch_configs SET title=?,items=?,threads=?,output_path=?,flag=?,updated_at=? WHERE id=?`)
-      .run(data.title, typeof data.items === 'string' ? data.items : JSON.stringify(data.items || []), data.threads, data.output_path, data.flag, now(), id)
+    db.prepare(`UPDATE ffmpeg_batch_configs SET title=?,items=?,threads=?,output_path=?,updated_at=? WHERE id=?`)
+      .run(data.title, typeof data.items === 'string' ? data.items : JSON.stringify(data.items || []), data.threads, data.output_path, now(), id)
   },
   deleteFfmpegBatchConfig: id => db.prepare('UPDATE ffmpeg_batch_configs SET flag=0 WHERE id=?').run(id),
 
