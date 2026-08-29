@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { FfmpegHistory } from '~/types'
+import type { FfmpegHistory, ToolsNamespace } from '~/types'
 
 defineOptions({ name: 'ToolsVideoHistorySlideover' })
 
 const open = defineModel<boolean>({ default: false })
 
 const props = defineProps<{
-  api: any
+  api?: ToolsNamespace | null
 }>()
 
 const { t } = useI18n()
@@ -17,14 +17,13 @@ const history = ref<FfmpegHistory[]>([])
 const loading = ref(false)
 
 const columns = computed(() => [
-  { key: 'created_at', label: t('tools.date') },
-  { key: 'input_file', label: t('tools.input') },
-  { key: 'output_file', label: t('tools.output') },
-  { key: 'config_title', label: t('tools.configPreset') },
-  { key: 'file_size', label: t('tools.size') },
-  { key: 'duration', label: t('tools.duration') },
-  { key: 'status', label: t('tools.status') },
-  { key: 'actions', label: '#' }
+  { key: 'created_at', label: t('tools.date'), class: 'w-44 shrink-0' },
+  { key: 'input_file', label: t('tools.input'), class: 'flex-1 min-w-32' },
+  { key: 'output_file', label: t('tools.output'), class: 'flex-1 min-w-32' },
+  { key: 'config_title', label: t('tools.configPreset'), class: 'w-28 shrink-0' },
+  { key: 'file_size', label: t('tools.size'), class: 'w-24 shrink-0' },
+  { key: 'duration', label: t('tools.duration'), class: 'w-20 shrink-0' },
+  { key: 'status', label: t('tools.status'), class: 'w-24 shrink-0' }
 ])
 
 async function loadHistory() {
@@ -62,10 +61,10 @@ async function doDelete() {
   try {
     const rs = await props.api.deleteFfmpegHistory(deleteTarget.value.id)
     if (rs?.status) {
-      toast.add({ title: t('tools.configDeleted'), color: 'success' })
+      toast.add({ title: t('tools.historyDeleted'), color: 'success' })
       await loadHistory()
     } else {
-      toast.add({ title: t('global.error'), color: 'error' })
+      toast.add({ title: t('tools.deleteHistoryFailed'), color: 'error' })
     }
   } catch (e) {
     console.error(e)
@@ -111,7 +110,7 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
 
 <template>
   <BaseResponsiveSlideover v-model:open="open" :title="t('tools.history')" icon="i-lucide-history" side="right"
-    :ui="{ content: 'w-screen max-w-3xl' }">
+    :ui="{ content: 'w-screen max-w-5xl' }">
     <template #body>
       <div class="h-[75vh]">
         <LazyGridList :items="history" :columns="columns" item-key="id" :loading="loading" :can-load-more="false"
@@ -155,13 +154,13 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           </template>
 
           <template #input_file="{ item: h }">
-            <p class="truncate text-xs max-w-30" :title="h.input_file || ''">
+            <p class="truncate text-xs w-full" :title="h.input_file || ''">
               {{ h.input_file ? h.input_file.split('/').pop() : '-' }}
             </p>
           </template>
 
           <template #output_file="{ item: h }">
-            <p class="truncate text-xs max-w-30" :title="h.output_file || ''">
+            <p class="truncate text-xs w-full" :title="h.output_file || ''">
               {{ h.output_file ? h.output_file.split('/').pop() : '-' }}
             </p>
           </template>
@@ -185,12 +184,13 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           </template>
 
           <template #actions="{ item: h }">
-            <div class="flex items-center justify-center gap-1 pr-3">
+            <div class="flex items-center justify-end gap-1 shrink-0 w-12">
               <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
                 color="primary" :title="t('tools.openFile')" @click="openFileLocation(h.output_file)" />
               <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
                 :title="t('tools.openFolder')" @click="showInFolder(h.output_file)" />
-              <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" @click="confirmDelete(h)" />
+              <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
+                @click="confirmDelete(h)" />
             </div>
           </template>
         </LazyGridList>

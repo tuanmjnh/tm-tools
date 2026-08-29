@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, protocol, net } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
@@ -7,6 +7,20 @@ const { registerYoutubeController } = require('./tools/youtube.controller.cjs')
 const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
 const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'media',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true,
+      corsEnabled: true
+    }
+  }
+])
 
 const isDev = !app.isPackaged
 const PORT = process.env.APP_PORT || 3456
@@ -198,6 +212,37 @@ ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
 })
 
 app.whenReady().then(() => {
+  protocol.handle('media', async (request) => {
+    try {
+      let filePath = ''
+      try {
+        const parsedUrl = new URL(request.url)
+        filePath = parsedUrl.searchParams.get('file') || ''
+      } catch (_) { }
+
+      if (!filePath) {
+        filePath = decodeURIComponent(request.url.replace(/^media:\/\//i, ''))
+        if (process.platform === 'win32') {
+          filePath = filePath.replace(/^\/+([a-zA-Z]:)/, '$1')
+        }
+      }
+
+      if (!filePath || !fs.existsSync(filePath)) {
+        return new Response('File not found: ' + (filePath || 'empty path'), { status: 404 })
+      }
+      const stat = fs.statSync(filePath)
+      if (stat.size === 0) {
+        return new Response(new Uint8Array(0), {
+          status: 200,
+          headers: { 'Content-Type': 'video/mp4', 'Content-Length': '0' }
+        })
+      }
+      return await net.fetch(pathToFileURL(filePath).toString())
+    } catch (err) {
+      return new Response(String(err), { status: 500 })
+    }
+  })
+
   registerYoutubeController()
   registerFfmpegController()
   registerDialogController()

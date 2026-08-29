@@ -132,18 +132,19 @@ export { isImageFile, isVideoFile }
 
 export function toURL(path: string | null | undefined): string {
   if (!path) return ''
-  if (/^(file:|https?:|data:)/.test(path)) return path
-  let urlPath = path.replace(/\\/g, '/')
-  if (/^[a-zA-Z]:\//.test(urlPath)) {
-    urlPath = '/' + urlPath
+  if (/^(media:|https?:|data:|blob:)/.test(path)) return path
+  if (/^file:\/\//.test(path)) {
+    const raw = path.replace(/^file:\/\//, '')
+    try {
+      const decoded = decodeURIComponent(raw)
+      const normalized = decoded.replace(/^\/+([a-zA-Z]:)/, '$1')
+      return `media://local?file=${encodeURIComponent(normalized)}`
+    } catch {
+      return path
+    }
   }
-  const parts = urlPath.split('/')
-  const encodedParts = parts.map((part) => encodeURIComponent(part))
-  const restoredParts = encodedParts.map((part) => {
-    if (/^[a-zA-Z]%3A$/i.test(part)) return part.replace('%3A', ':').replace('%3a', ':')
-    return part
-  })
-  return 'file://' + restoredParts.join('/')
+  const normalized = path.replace(/\\/g, '/')
+  return `media://local?file=${encodeURIComponent(normalized)}`
 }
 
 export function hexToRgba(hex: string, opacity: number): string {
@@ -161,19 +162,19 @@ export function getMediaSize(filePath: string): Promise<{ w: number, h: number }
     try {
       if (isImageFile(filePath)) {
         const img = new Image()
-        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
-        img.onerror = () => resolve({ w: 100, h: 100 })
+        img.onload = () => resolve({ w: img.naturalWidth || 0, h: img.naturalHeight || 0 })
+        img.onerror = () => resolve({ w: 0, h: 0 })
         img.src = toURL(filePath)
       } else if (isVideoFile(filePath)) {
         const video = document.createElement('video')
-        video.onloadedmetadata = () => resolve({ w: video.videoWidth, h: video.videoHeight })
-        video.onerror = () => resolve({ w: 100, h: 100 })
+        video.onloadedmetadata = () => resolve({ w: video.videoWidth || 0, h: video.videoHeight || 0 })
+        video.onerror = () => resolve({ w: 0, h: 0 })
         video.src = toURL(filePath)
       } else {
-        resolve({ w: 100, h: 100 })
+        resolve({ w: 0, h: 0 })
       }
     } catch {
-      resolve({ w: 100, h: 100 })
+      resolve({ w: 0, h: 0 })
     }
   })
 }

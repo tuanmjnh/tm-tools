@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { DialogTitle, DialogDescription } from 'reka-ui'
-
 interface ConfirmFileDisplay {
   name?: string
   display_name?: string | null
@@ -64,17 +62,16 @@ const onCancel = () => {
             :class="[color === 'error' ? 'text-red-500 dark:text-red-400' : 'text-primary-500']"
           />
           <div class="flex flex-col">
-            <DialogTitle class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+            <h2 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
               {{ $t('confirm.delete_title', 'Confirm Delete') }}
-            </DialogTitle>
-            <DialogDescription class="text-sm text-gray-500 dark:text-gray-400">
+            </h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
               {{ $t('confirm.delete_desc_name', [file?.display_name || file?.public_id], `Are you sure you want to
               permanently delete
               ${file?.display_name || file?.public_id}? This action cannot be undone.`) }}
-            </DialogDescription>
+            </p>
           </div>
         </div>
-        <!-- <UButton color="neutral" variant="ghost" icon="i-lucide-x" class="-my-1" @click="onCancel" /> -->
       </div>
     </template>
     <template #body>

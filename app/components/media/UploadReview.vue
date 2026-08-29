@@ -155,36 +155,20 @@ const handleUpload = async () => {
 </script>
 
 <template>
-  <LazyBaseResponsiveModal
-    v-model:open="isOpen"
-    :disabled="uploading"
+  <LazyBaseResponsiveModal v-model:open="isOpen" :disabled="uploading"
     :title="`${$t('media.upload_review_title', 'Review Upload')} (${fileList.length})`"
-    :description="$t('media.upload_review_desc')"
-    :ui="{ body: 'p-0 sm:p-0', width: 'sm:max-w-xl' }"
-  >
+    :description="$t('media.upload_review_desc')" :ui="{ body: 'p-0 sm:p-0', width: 'sm:max-w-xl' }">
     <template #body>
       <div class="p-3">
         <div class="space-y-2 max-h-[80vh] sm:max-h-[60vh] overflow-y-auto pr-2">
-          <div
-            v-for="(file, index) in fileList"
-            :key="index"
-            class="flex items-center gap-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50"
-          >
+          <div v-for="(file, index) in fileList" :key="index"
+            class="flex items-center gap-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
             <!-- File Icon/Preview -->
             <div class="shrink-0 w-12 h-12 rounded overflow-hidden bg-gray-100 flex items-center justify-center">
               <template v-if="previews[file.name]">
-                <img
-                  v-if="isSpecialImage(file.name)"
-                  :src="previews[file.name]"
-                  class="w-full h-full object-cover"
-                  alt="Preview"
-                >
-                <NuxtImg
-                  v-else
-                  :src="previews[file.name]"
-                  class="w-full h-full object-cover"
-                  alt="Preview"
-                />
+                <img v-if="isSpecialImage(file.name)" :src="previews[file.name]" class="w-full h-full object-cover"
+                  alt="Preview">
+                <NuxtImg v-else :src="previews[file.name]" class="w-full h-full object-cover" alt="Preview" />
               </template>
               <UIcon v-else name="i-lucide-file-image" class="w-8 h-8 text-gray-400" />
             </div>
@@ -199,7 +183,7 @@ const handleUpload = async () => {
               </div>
               <!-- Progress Bar -->
               <div v-if="uploading && uploadStatus[file.name] !== 'error' && uploadStatus[file.name] !== 'success'">
-                <UProgress :value="uploadProgress[file.name]" size="xs" color="primary" />
+                <UProgress :model-value="uploadProgress[file.name]" :max="100" size="xs" color="primary" />
                 <p class="text-xs text-gray-500 mt-1 text-right">
                   {{ Math.round(uploadProgress[file.name] || 0) }}%
                 </p>
@@ -208,14 +192,8 @@ const handleUpload = async () => {
                 {{ $t('media.upload_error') }}
               </div>
             </div>
-            <UButton
-              v-if="!uploading && uploadStatus[file.name] !== 'success'"
-              color="error"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              size="sm"
-              @click="removeFile(index)"
-            />
+            <UButton v-if="!uploading && uploadStatus[file.name] !== 'success'" color="error" variant="ghost"
+              icon="i-lucide-trash-2" size="sm" @click="removeFile(index)" />
             <div v-else-if="uploadStatus[file.name] === 'success'" class="text-green-500">
               <UIcon name="i-lucide-check-circle" class="w-5 h-5" />
             </div>
@@ -232,13 +210,8 @@ const handleUpload = async () => {
           <!-- <UButton color="neutral" variant="ghost" :disabled="uploading" @click="isOpen = false">
             {{ $t('common.cancel', 'Cancel') }}
           </UButton> -->
-          <UButton
-            color="primary"
-            variant="soft"
-            :loading="uploading"
-            :disabled="fileList.length === 0 || uploading"
-            @click="handleUpload"
-          >
+          <UButton color="primary" variant="soft" :loading="uploading" :disabled="fileList.length === 0 || uploading"
+            @click="handleUpload">
             {{ uploading ? $t('media.uploading_text', 'Uploading...') : $t('media.confirm_upload', 'Confirm Upload') }}
           </UButton>
         </div>

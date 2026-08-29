@@ -93,8 +93,8 @@ function getFileSizeSync(filePath) {
 function substituteVariables(pattern, inputFile, configTitle, idx) {
   const ext = path.extname(inputFile).slice(1)
   const name = path.basename(inputFile, path.extname(inputFile))
-  const fulldir = path.dirname(inputFile)
-  const dirname = path.basename(fulldir)
+  const fulldir = path.dirname(inputFile).replace(/\\/g, '/')
+  const folder = path.basename(fulldir)
 
   const now = new Date()
   const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
@@ -104,14 +104,15 @@ function substituteVariables(pattern, inputFile, configTitle, idx) {
   let result = pattern
     .replace(/{name}/g, name)
     .replace(/{ext}/g, ext)
-    .replace(/{dirname}/g, dirname)
+    .replace(/{dirname}/g, fulldir)
     .replace(/{fulldir}/g, fulldir)
+    .replace(/{folder}/g, folder)
     .replace(/{date}/g, dateStr)
     .replace(/{datetime}/g, datetimeStr)
     .replace(/{config}/g, configTitle || 'default')
     .replace(/{idx}/g, String(idx + 1))
 
-  return path.resolve(result)
+  return path.resolve(result).replace(/\\/g, '/')
 }
 
 function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
@@ -237,7 +238,9 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
 
     // 4. Scale
     if (config.scale_w > 0 && config.scale_h > 0) {
-      filterComplex += `${currentTag}scale=${config.scale_w}:${config.scale_h}[vscale];`
+      const sw = Math.max(2, Math.floor(config.scale_w / 2) * 2)
+      const sh = Math.max(2, Math.floor(config.scale_h / 2) * 2)
+      filterComplex += `${currentTag}scale=${sw}:${sh}[vscale];`
       currentTag = '[vscale]'
     }
 
@@ -245,10 +248,10 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
     if (subFiles && subFiles.length > 0) {
       subFiles.forEach((file, idx) => {
         const inputIdx = subFileInputIndices[idx]
-        const w = file.w || 100
-        const h = file.h || 100
-        const x = file.x || 0
-        const y = file.y || 0
+        const w = Math.max(2, Math.floor((file.w || 100) / 2) * 2)
+        const h = Math.max(2, Math.floor((file.h || 100) / 2) * 2)
+        const x = Math.round(file.x || 0)
+        const y = Math.round(file.y || 0)
         const subTag = `vsubfile${idx}`
         const overlayTag = `vsuboverlay${idx}`
 
@@ -272,14 +275,15 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
     labels = labels.filter(l => l.hidden !== true)
 
     if (labels && labels.length > 0) {
+      const isWin = process.platform === 'win32'
       labels.forEach((lbl, idx) => {
         const text = (lbl.text || '').replace(/'/g, '\'\\\\\'\'')
         const color = lbl.color || 'white'
         const resizeMode = lbl.resizeMode || 'scale'
         const scaleX = resizeMode === 'scale' ? (lbl.scaleX ?? 1) : 1
-        const size = Math.round((lbl.size || 24) * scaleX)
-        const x = lbl.x || 0
-        const y = lbl.y || 0
+        const size = Math.max(8, Math.round((lbl.size || 24) * scaleX))
+        const x = Math.round(lbl.x || 0)
+        const y = Math.round(lbl.y || 0)
 
         let boxBorder = ''
         if (lbl.box) {
@@ -289,8 +293,9 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
           boxBorder = `:box=1:boxcolor=${bColor}@${bOpacity}:boxborderw=${bBorderW}`
         }
 
+        const fontParam = isWin ? 'fontfile=\'C\\:/Windows/Fonts/arial.ttf\'' : 'font=\'Arial\''
         const tag = `vlabel${idx}`
-        filterComplex += `${currentTag}drawtext=font='Arial':text='${text}':fontcolor=${color}:fontsize=${size}:x=${x}:y=${y}${boxBorder}[${tag}];`
+        filterComplex += `${currentTag}drawtext=${fontParam}:text='${text}':fontcolor=${color}:fontsize=${size}:x=${x}:y=${y}${boxBorder}[${tag}];`
         currentTag = `[${tag}]`
       })
     }
@@ -309,11 +314,17 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
     }
   }
 
+  // Ensure final output dimensions are always even numbers (divisible by 2) for H.264/H.265
   if (filterComplex) {
+    filterComplex += `${currentTag}scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1[vout];`
+    currentTag = '[vout]'
+
     if (filterComplex.endsWith(';')) {
       filterComplex = filterComplex.slice(0, -1)
     }
     args.push('-filter_complex', filterComplex, '-map', currentTag)
+  } else {
+    args.push('-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1')
   }
 
   // Audio filters
@@ -355,9 +366,20 @@ function buildFfmpegArgs(input, output, config, gpuSupport, chosenEncoder) {
     else if (gpuSupport.qsv) vEncoder = 'h264_qsv'
   }
 
-  args.push('-c:v', vEncoder, '-preset', 'medium', '-crf', '23')
+  if (vEncoder === 'libx264') {
+    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '23', '-pix_fmt', 'yuv420p')
+  } else if (vEncoder === 'h264_nvenc') {
+    args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', '23', '-pix_fmt', 'yuv420p')
+  } else if (vEncoder === 'h264_amf') {
+    args.push('-c:v', 'h264_amf', '-quality', 'balanced', '-pix_fmt', 'yuv420p')
+  } else if (vEncoder === 'h264_qsv') {
+    args.push('-c:v', 'h264_qsv', '-global_quality', '23', '-pix_fmt', 'nv12')
+  } else {
+    args.push('-c:v', vEncoder, '-pix_fmt', 'yuv420p')
+  }
+
   args.push('-c:a', 'aac', '-b:a', '128k')
-  args.push(output)
+  args.push('-y', output)
 
   return args
 }
@@ -445,22 +467,40 @@ function startTasks(event) {
 
   taskManager.onTaskStderr = (thread, idx, task, data) => {
     const line = data.toString()
-    const regex = /frame=\s*(?<frame>\d+)\s+fps=\s*(?<fps>[\d.NA]+)\s+q=\s*(?<q>[\d.-NA]+)\s+size=\s*(?<size>\d+)(?<size_unit>\w+)\s+time=(?<time>\d+:\d+:\d+\.\d+)\s+bitrate=\s*(?<bitrate>[\d.NA]+)\s*(?<bitrate_unit>[kKmMbB]+bits\/s)\s+speed=\s*(?<speed>[\d.]+)x\s+elapsed=(?<elapsed>\d+:\d+:\d+\.\d+)/
-    const match = line.match(regex)
-    if (!match || !task.meta?.duration) return
+
+    // Extract duration from FFmpeg header if missing
+    if (!task.meta) task.meta = {}
+    if (!task.meta.duration) {
+      const durMatch = line.match(/Duration:\s*(\d+:\d+:\d+(?:\.\d+)?)/)
+      if (durMatch) {
+        task.meta.duration = parseTimeToSeconds(durMatch[1])
+      }
+    }
+
+    // Match current encoding time and speed
+    const timeMatch = line.match(/time=(\d+:\d+:\d+(?:\.\d+)?)/)
+    if (!timeMatch) return
+
+    const currentSec = parseTimeToSeconds(timeMatch[1])
+    const duration = task.meta.duration || 0
+    const speedMatch = line.match(/speed=\s*([\d.]+)x/)
+
+    let percent = 0
+    if (duration > 0) {
+      percent = Math.min(99, Math.round((currentSec / duration) * 100))
+    }
+
     const now = Date.now()
     if (now - updateUI.lastSend < updateUI.delay) return
     updateUI.lastSend = now
-    const currentSec = parseTimeToSeconds(match.groups?.time || '00:00:00')
-    const percent = Math.round(Math.min(100, (currentSec / task.meta.duration) * 100))
+
     const response = {
       ...buildResponse(task),
       taskKey: idx,
       thread,
       percent,
-      speed: match.groups?.speed + 'x',
-      done: false,
-      stderr: match.groups
+      speed: speedMatch ? `${speedMatch[1]}x` : undefined,
+      done: false
     }
     send(event, `${moduleName}:progressTask`, response)
   }
@@ -667,7 +707,7 @@ function registerFfmpegController() {
   ipcMain.handle(`${moduleName}:detectGpuSupport`, () => detectGpuSupport())
 
   app.on('will-quit', () => {
-    taskManager.stop().catch(() => {})
+    taskManager.stop().catch(() => { })
   })
 }
 

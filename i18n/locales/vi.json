@@ -22,7 +22,8 @@
     "copied": "Đã sao chép",
     "showingCount": "Hiển thị {count} trên {total} mục",
     "clear": "Xóa",
-    "reset": "Đặt lại"
+    "reset": "Đặt lại",
+    "fullscreen": "Xem toàn màn hình"
   },
   "error": {
     "unauthorized": "Chưa xác thực",
@@ -113,6 +114,7 @@
     "running": "Đang chạy",
     "done": "Hoàn thành",
     "failed": "Thất bại",
+    "completed": "Hoàn tất",
     "paused": "Tạm dừng",
     "processing": "Đang xử lý",
     "idle": "Rảnh",
@@ -207,6 +209,11 @@
     "confirmDeleteHistoryDesc": "Bạn có chắc chắn muốn xóa bản ghi lịch sử này? Hành động này không thể hoàn tác.",
     "historyCleared": "Đã xóa toàn bộ lịch sử",
     "clearHistoryFailed": "Xóa lịch sử thất bại",
+    "historyDeleted": "Đã xóa bản ghi lịch sử",
+    "deleteHistoryFailed": "Xóa bản ghi lịch sử thất bại",
+    "invalidMediaFile": "Tệp tin bị lỗi",
+    "invalidMediaDesc": "Không thể tải hoặc giải mã tệp này. Tệp có thể bị hỏng hoặc không đúng định dạng.",
+    "corruptedMedia": "Tệp bị lỗi không mở được",
     "date": "Ngày",
     "url": "URL",
     "title": "Tiêu đề",
@@ -338,7 +345,10 @@
     "funcSlideshow": "Ghép ảnh thành video (Slideshow)",
     "errorNumberFileSlideshow": "Bạn cần chọn ít nhất 2 ảnh để thực hiện ghép ảnh.",
     "invalidExecutable": "File thực thi không đúng loại hoặc không thể chạy thử.",
-    "verified": "Đã xác thực"
+    "verified": "Đã xác thực",
+    "renderStarted": "Đã bắt đầu xử lý",
+    "renderFailed": "Không thể bắt đầu xử lý",
+    "noTasksToRun": "Không có tác vụ nào để chạy"
   },
   "auth": {
     "welcomeBack": "Chào mừng trở lại",

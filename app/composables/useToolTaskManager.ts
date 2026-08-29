@@ -167,12 +167,12 @@ export function useToolTaskManager(kind: ToolKind) {
     status.value = await api.getStatus()
     if (api.getTasks) {
       try {
-        const list = await api.getTasks()
+        const list = await api.getTasks() as ToolTaskItem[] | undefined
         if (list && list.length > 0) {
-          const hasActive = list.some((t: any) => t.status === 'running' || t.status === 'waiting' || t.status === 'retrying')
+          const hasActive = list.some(t => t.status === 'running' || t.status === 'waiting' || t.status === 'retrying')
           if (hasActive) {
             state.tasks.value = {}
-            list.forEach((item: any) => {
+            list.forEach((item) => {
               state.tasks.value[item.key] = item
             })
           }
@@ -185,19 +185,21 @@ export function useToolTaskManager(kind: ToolKind) {
 
   async function initManager(args: { threads?: number, delay?: number, delayUI?: number, maxRetry?: number, timeout?: number } = {}) {
     if (!api) return
-    await api.initTaskManager(args)
+    const plainArgs = JSON.parse(JSON.stringify(args))
+    await api.initTaskManager(plainArgs)
   }
 
   async function setTasks(items: ToolTask[]) {
     if (!api) return
     state.tasks.value = {}
     state.allDone.value = 0
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
+    const plainItems = JSON.parse(JSON.stringify(items)) as ToolTask[]
+    for (let i = 0; i < plainItems.length; i++) {
+      const item = plainItems[i]
       if (!item) continue
       state.tasks.value[i] = { key: i, task: item, status: 'waiting', retry: 0, progress: 0, speed: '0', downloaded: '' }
     }
-    await api.setTasks(items)
+    await api.setTasks(plainItems)
   }
 
   async function clearTasks() {

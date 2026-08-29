@@ -38,7 +38,16 @@ const inputMediaSize = ref<{ w: number, h: number }>({ w: 1920, h: 1080 })
 watch(inputPath, async (newVal) => {
   if (newVal) {
     const size = await getMediaSize(newVal)
-    inputMediaSize.value = size
+    if (size.w === 0 && size.h === 0) {
+      toast.add({
+        title: t('tools.invalidMediaFile'),
+        description: t('tools.invalidMediaDesc'),
+        color: 'error'
+      })
+      inputMediaSize.value = { w: 1920, h: 1080 }
+    } else {
+      inputMediaSize.value = size
+    }
   } else {
     inputMediaSize.value = { w: 1920, h: 1080 }
   }
@@ -101,7 +110,7 @@ const deletingPreset = ref(false)
 // GPU Acceleration Status
 const gpuSupport = ref({ nvenc: false, amf: false, qsv: false, gpus: [] as string[] })
 const selectedEncoder = ref<'cpu' | 'nvenc' | 'amf' | 'qsv'>(
-  (import.meta.client ? localStorage.getItem('selected_encoder') : null) as any || 'cpu'
+  ((import.meta.client ? localStorage.getItem('selected_encoder') : null) as 'cpu' | 'nvenc' | 'amf' | 'qsv') || 'cpu'
 )
 const gpuLoading = ref(false)
 
@@ -148,7 +157,7 @@ async function checkGpu() {
         if (savedEncoder === 'nvenc' && !rs.nvenc) selectedEncoder.value = 'cpu'
         else if (savedEncoder === 'qsv' && !rs.qsv) selectedEncoder.value = 'cpu'
         else if (savedEncoder === 'amf' && !rs.amf) selectedEncoder.value = 'cpu'
-        else selectedEncoder.value = savedEncoder as any
+        else selectedEncoder.value = savedEncoder as 'cpu' | 'nvenc' | 'amf' | 'qsv'
       }
     }
   } catch (e) {
@@ -271,7 +280,14 @@ async function doDeletePreset() {
 
 function applyPreset(preset: FfmpegConfig) {
   selectedPresetId.value = preset.id
-  config.value = { ...preset }
+  config.value = {
+    ...preset,
+    aspect_ratio: Number(preset.aspect_ratio ?? 0),
+    scale_x: Number(preset.scale_x ?? 0),
+    scale_y: Number(preset.scale_y ?? 0),
+    scale_w: Number(preset.scale_w ?? 0),
+    scale_h: Number(preset.scale_h ?? 0)
+  }
   if (typeof preset.labels === 'string') {
     try {
       config.value.labels = JSON.parse(preset.labels)
@@ -288,8 +304,18 @@ function applyPreset(preset: FfmpegConfig) {
       console.error(e)
     }
   }
-  // toast.add({ title: t('tools.configApplied'), color: 'success' })
 }
+
+watch(selectedPresetId, (newId) => {
+  if (newId) {
+    const preset = presets.value.find(p => p.id === newId)
+    if (preset && config.value.id !== newId) {
+      applyPreset(preset)
+    }
+  } else {
+    resetConfig()
+  }
+})
 
 function resetConfig() {
   config.value = {
@@ -330,14 +356,33 @@ function resetConfig() {
 
 async function probeInput() {
   if (!inputPath.value) return
-  const rs = await taskManager.api?.getMediaInfo?.(['-v', 'quiet', '-print_format', 'json', '-show_format', inputPath.value])
+  const rs = await taskManager.api?.getMediaInfo?.(['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', inputPath.value])
   if (rs && rs.code === 0) {
     try {
       const info = JSON.parse(rs.stdout)
       duration.value = parseFloat(info?.format?.duration || '0')
+      if (!info?.streams || info.streams.length === 0) {
+        toast.add({
+          title: t('tools.invalidMediaFile'),
+          description: t('tools.invalidMediaDesc'),
+          color: 'error'
+        })
+      }
     } catch {
       duration.value = 0
+      toast.add({
+        title: t('tools.invalidMediaFile'),
+        description: t('tools.invalidMediaDesc'),
+        color: 'error'
+      })
     }
+  } else if (rs && rs.code !== 0) {
+    duration.value = 0
+    toast.add({
+      title: t('tools.invalidMediaFile'),
+      description: t('tools.invalidMediaDesc'),
+      color: 'error'
+    })
   }
 }
 
@@ -354,17 +399,23 @@ const aspectSizes: Record<number, { w: number, h: number }> = {
 }
 
 const baseSize = computed(() => {
-  if ((config.value.aspect_ratio ?? 0) === 0) {
+  const ar = Number(config.value.aspect_ratio ?? 0)
+  if (ar === 0) {
     return { w: inputMediaSize.value.w, h: inputMediaSize.value.h }
   }
-  const size = aspectSizes[config.value.aspect_ratio ?? 0] ?? { w: 1920, h: 1080 }
+  const size = aspectSizes[ar] ?? { w: 1920, h: 1080 }
   return { w: size.w, h: size.h }
 })
 
+const previewContainer = ref<HTMLElement | null>(null)
+const { width: containerWidth } = useElementSize(previewContainer)
+
 const frameSize = computed(() => {
   const { w, h } = baseSize.value
-  const scale = Math.min(360 / w, 270 / h)
-  return { w: Math.round(w * scale), h: Math.round(h * scale) }
+  const maxW = containerWidth.value > 0 ? Math.max(containerWidth.value - 24, 120) : 340
+  const maxH = 380
+  const scale = Math.min(maxW / w, maxH / h)
+  return { w: Math.max(Math.round(w * scale), 80), h: Math.max(Math.round(h * scale), 80) }
 })
 
 const previewFile = computed(() => {
@@ -417,62 +468,28 @@ watch(selectedPresetId, (val) => {
   }
 })
 
-// Form state mirrored from refs so UForm can validate with zod.
 const state = reactive({
-  get inputPath() { return inputPath.value },
-  set inputPath(value: string) { inputPath.value = value },
-  get batchPattern() { return batchPattern.value },
-  set batchPattern(value: string) { batchPattern.value = value },
-  get batchOutputPattern() { return batchOutputPattern.value },
-  set batchOutputPattern(value: string) { batchOutputPattern.value = value },
-  get batchThreads() { return batchThreads.value },
-  set batchThreads(value: number) { batchThreads.value = value },
-  get configPreset() { return selectedPresetId.value || '' },
-  set configPreset(value: string | null) { selectedPresetId.value = value || '' }
+  inputPath,
+  outputPath,
+  batchPattern,
+  batchOutputPattern,
+  batchThreads,
+  configPreset: selectedPresetId
 })
 
-function hasMeaningfulConfig(): boolean {
-  const c = config.value
-  if (!c) return false
-  return !!(c.title || '').trim()
-    || (c.aspect_ratio || 0) > 0
-    || (c.zoom_enable || 0) === 1
-    || (c.hflip_enable || 0) === 1
-    || (c.vflip_enable || 0) === 1
-    || ((c.scale_w || 0) > 0 && (c.scale_h || 0) > 0)
-    || (Array.isArray(c.labels) && c.labels.length > 0)
-    || (Array.isArray(c.files) && c.files.length > 0)
-    || !!(c.subtitle || '').trim()
-    || (c.speed || 1) !== 1
-    || (c.volume || 1) !== 1
-}
-
 const schema = computed(() => {
-  const base: Record<string, ReturnType<typeof z.string>> = {
-    configPreset: z.string().superRefine((val, ctx) => {
-      if (!val && !hasMeaningfulConfig()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('tools.configRequired') })
-      }
-    })
-  }
   if (runMode.value === 'single') {
     return z.object({
-      ...base,
       inputPath: z.string().min(1, t('tools.pleaseSelectInput')),
-      outputPath: z.string().min(1, t('tools.pleaseSelectOutput'))
+      outputPath: z.string().optional(),
+      configPreset: z.string().nullable().optional()
     })
   }
   return z.object({
-    ...base,
-    batchPattern: z.string().superRefine((val, ctx) => {
-      if (!val.trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('tools.inputPatternRequired') })
-      } else if (batchMatchedFiles.value.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('tools.noBatchItems') })
-      }
-    }),
+    batchPattern: z.string().min(1, t('tools.inputPatternRequired')),
     batchOutputPattern: z.string().min(1, t('tools.outputPatternRequired')),
-    batchThreads: z.number().int().min(1).max(8)
+    batchThreads: z.number().int().min(1).max(8),
+    configPreset: z.string().nullable().optional()
   })
 })
 
@@ -480,6 +497,7 @@ const controlsDisabled = computed(() => exeState.value === 'missing' || taskMana
 
 function getSingleTasks(): ToolTask[] {
   const out = outputPath.value || inputPath.value.replace(/\.\w+$/, '_rendered.mp4')
+  const plainConfig = config.value ? (JSON.parse(JSON.stringify(config.value)) as FfmpegConfig) : undefined
   return [{
     args: [],
     options: {
@@ -492,7 +510,7 @@ function getSingleTasks(): ToolTask[] {
       duration: duration.value,
       configId: selectedPresetId.value || undefined,
       configTitle: selectedPresetTitle.value,
-      config: selectedPresetId.value ? undefined : config.value,
+      config: selectedPresetId.value ? undefined : plainConfig,
       operation: 'render',
       threads: 1,
       startedAt: new Date().toISOString()
@@ -501,6 +519,7 @@ function getSingleTasks(): ToolTask[] {
 }
 
 function getBatchTasks(): ToolTask[] {
+  const plainConfig = config.value ? (JSON.parse(JSON.stringify(config.value)) as FfmpegConfig) : undefined
   return batchMatchedFiles.value.map((file, i) => {
     return {
       args: [],
@@ -514,7 +533,7 @@ function getBatchTasks(): ToolTask[] {
         duration: 0, // Probe synchronously during render or leave it to be tracked
         configId: selectedPresetId.value || undefined,
         configTitle: selectedPresetTitle.value,
-        config: selectedPresetId.value ? undefined : config.value,
+        config: selectedPresetId.value ? undefined : plainConfig,
         operation: 'render',
         threads: batchThreads.value,
         startedAt: new Date().toISOString()
@@ -534,8 +553,7 @@ async function onSubmit() {
       return
     }
     if (!outputPath.value) {
-      toast.add({ title: t('tools.pleaseSelectOutput'), color: 'error' })
-      return
+      outputPath.value = inputPath.value.replace(/\.([^.]+)$/, '_rendered.$1')
     }
   } else {
     if (!batchPattern.value || !batchPattern.value.trim()) {
@@ -563,6 +581,11 @@ async function onSubmit() {
       tasks = getBatchTasks()
     }
 
+    if (tasks.length === 0) {
+      toast.add({ title: t('tools.noTasksToRun'), color: 'warning' })
+      return
+    }
+
     await taskManager.initManager({
       threads: runMode.value === 'single' ? 1 : batchThreads.value,
       maxRetry: 2,
@@ -572,6 +595,18 @@ async function onSubmit() {
     await taskManager.setTasks(tasks)
     await taskManager.start()
     await taskManager.refreshStatus()
+    toast.add({
+      title: t('tools.renderStarted'),
+      description: runMode.value === 'single' ? inputPath.value : `${tasks.length} tệp`,
+      color: 'success'
+    })
+  } catch (err: unknown) {
+    console.error('Failed to start render tasks:', err)
+    toast.add({
+      title: t('tools.renderFailed'),
+      description: err instanceof Error ? err.message : String(err),
+      color: 'error'
+    })
   } finally {
     starting.value = false
   }
@@ -583,8 +618,10 @@ function showInFolder(fullPath: string) {
   }
 }
 
-function updateLabels(labels: FfmpegLabel[]) {
-  config.value.labels = labels
+async function openFileLocation(filePath: string) {
+  if (window.electronAPI?.openPath && filePath) {
+    await window.electronAPI.openPath(filePath)
+  }
 }
 
 function openHistory() {
@@ -703,7 +740,8 @@ onMounted(async () => {
                   <!-- Action buttons -->
                   <div class="flex justify-end gap-2 w-full">
                     <UButton icon="i-lucide-play" :label="t('tools.start')" color="primary" type="submit" variant="soft"
-                      :loading="starting" :disabled="!taskManager.isElectron.value || controlsDisabled" />
+                      :loading="starting" :disabled="!taskManager.isElectron.value || controlsDisabled"
+                      @click="onSubmit" />
                     <UButton v-if="taskManager.processing.value && !taskManager.paused.value" icon="i-lucide-pause"
                       :label="t('tools.pause')" color="warning" variant="soft" @click="taskManager.pause()" />
                     <UButton v-if="taskManager.paused.value" icon="i-lucide-play" :label="t('tools.resume')"
@@ -720,7 +758,8 @@ onMounted(async () => {
                 :processing="taskManager.processing.value" :paused="taskManager.paused.value"
                 :retries="taskManager.globalRetryCount.value" :can-start="false" @refresh="taskManager.refreshStatus()"
                 @pause="taskManager.pause()" @resume="taskManager.resume()" @stop-all="taskManager.stopAll()"
-                @stop-task="(key) => taskManager.stopTask(key)" @open-item="showInFolder" />
+                @stop-task="(key) => taskManager.stopTask(key)" @open-file="openFileLocation"
+                @open-item="showInFolder" />
             </div>
           </UScrollArea>
         </div>
@@ -739,7 +778,8 @@ onMounted(async () => {
                     </p>
                   </div>
                 </template>
-                <div class="flex justify-center p-2 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg">
+                <div ref="previewContainer"
+                  class="flex justify-center items-center p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg min-h-75 overflow-hidden">
                   <ToolsVideoFramePreview :preview-file="previewFile" :background="{
                     type: config.background_type || 'color',
                     color: config.background_color || '#000000',

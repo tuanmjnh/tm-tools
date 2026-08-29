@@ -236,9 +236,9 @@ const showActions = computed(() => {
   <div class="flex flex-col h-full min-h-0 bg-transparent">
     <!-- Table Header (Visible only on Desktop List Mode) -->
     <div v-if="viewMode === 'list' && !hideHeader"
-      class="hidden lg:flex items-center px-4.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent">
+      class="hidden lg:flex items-center pl-1 pr-4 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent">
       <!-- Drag Handle Placeholder (Aligned with SwipeCard pl-2 + w-6 = 32px) -->
-      <div v-if="isDraggable" class="w-8 shrink-0"></div>
+      <div v-if="isDraggable" class="w-8 shrink-0" />
 
       <!-- Checkbox Column -->
       <div v-if="selectable" class="w-0 shrink-0 flex items-center justify-center pr-6">
@@ -262,14 +262,15 @@ const showActions = computed(() => {
       </div>
 
       <!-- Actions Placeholder (Right) -->
-      <div v-if="showActions && (actionOptions || $slots.actions)" class="w-12 shrink-0 text-center"></div>
+      <div v-if="showActions && (actionOptions || $slots.actions)" class="w-24 shrink-0 text-right pr-2" />
     </div>
 
     <!-- Scrollable Content -->
     <UScrollArea ref="scrollEl" :ui="mergedUi">
       <!-- Loading State -->
       <div v-if="loading && items.length === 0"
-        :class="currentViewMode === 'list' ? 'space-y-3' : `grid ${gridCols} gap-4 pb-4 pr-1`" class="w-full h-full">
+        :class="currentViewMode === 'list' ? 'space-y-3 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`"
+        class="w-full h-full">
         <USkeleton v-for="i in skeletonCount" :key="i"
           :class="[currentViewMode === 'list' ? 'h-20' : 'h-48', 'w-full rounded-xl bg-gray-100 dark:bg-gray-800/50']" />
       </div>
@@ -284,17 +285,17 @@ const showActions = computed(() => {
       </div>
 
       <!-- List Items (Separated Cards) -->
-      <div v-else ref="dragEl" :class="viewMode === 'list' ? 'space-y-2 pb-4' : `grid ${gridCols} gap-4 pb-4`">
+      <div v-else ref="dragEl"
+        :class="viewMode === 'list' ? 'space-y-2 pb-4 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`">
         <slot name="first-item" />
-        <div v-for="(item, index) in items" :key="item[itemKey || '_id']">
+        <div v-for="item in items" :key="item[itemKey || '_id']">
           <LazyGridListSwipeCard :id="item[itemKey || '_id']" :item="item" :open-id="openCardId" :disabled="false"
-            :mobile-mode="mobileActionMode" :draggable="isDraggable" @update:open-id="openCardId = $event"
-            @click="emit('click', item)" @long-press="handleLongPress"
-            @contextmenu.prevent="(e: any) => handleContextMenu(item, e)"
-            :class="['h-full transition-all duration-200', { 'bg-blue-50/50! dark:bg-sky-300/20! border-sky-500/50 dark:border-sky-800/50': isSelected(item) }]">
+            :mobile-mode="mobileActionMode" :draggable="isDraggable"
+            :class="['h-full transition-all duration-200', { 'bg-blue-50/50! dark:bg-sky-300/20! border-sky-500/50 dark:border-sky-800/50': isSelected(item) }]"
+            @update:open-id="openCardId = $event" @click="emit('click', item)" @long-press="handleLongPress"
+            @contextmenu.prevent="(e: any) => handleContextMenu(item, e)">
             <!-- Left Slot: Drag Handle Only -->
-            <template v-if="isDraggable" #left>
-            </template>
+            <template v-if="isDraggable" #left />
             <!-- Center (Default) Slot -->
             <template #default>
               <div class="w-full h-full">
@@ -302,7 +303,7 @@ const showActions = computed(() => {
                 <!-- Mobile Content (Custom Slot) -->
                 <div v-if="$slots['mobile-content']"
                   :class="[viewMode === 'grid' ? 'block' : 'block lg:hidden', 'p-4 relative group/mobile']">
-                  <slot name="mobile-content" :item="item"></slot>
+                  <slot name="mobile-content" :item="item" />
 
                   <!-- Mobile Dropdown Mode -->
                   <div v-if="showActions && mobileActionMode === 'dropdown' && actionOptions"
@@ -342,7 +343,7 @@ const showActions = computed(() => {
             <!-- Right Slot: Actions -->
             <template #right>
               <div v-if="showActions && (actionOptions || $slots.actions)"
-                class="hidden lg:flex items-center justify-center w-12 h-full" @click.stop>
+                class="hidden lg:flex items-center justify-end min-w-12 px-2 h-full shrink-0" @click.stop>
                 <slot name="actions" :item="item">
                   <UDropdownMenu v-if="actionOptions" :items="actionOptions(item)"
                     :popper="{ placement: 'bottom-end' }">
@@ -379,7 +380,7 @@ const showActions = computed(() => {
         <div v-if="contextMenu.isOpen" class="fixed w-1 h-1 z-9999 pointer-events-none"
           :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
           <UDropdownMenu :items="contextMenu.items" :open="true" :popper="{ placement: 'bottom-start' }"
-            @update:open="(val) => !val && (contextMenu.isOpen = false)" class="pointer-events-auto">
+            class="pointer-events-auto" @update:open="(val) => !val && (contextMenu.isOpen = false)">
             <div />
           </UDropdownMenu>
         </div>

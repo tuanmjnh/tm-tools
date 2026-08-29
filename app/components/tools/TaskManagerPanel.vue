@@ -84,8 +84,6 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-
-
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="sm"
             :aria-label="t('tools.refreshStatus')" @click="emit('refresh')" />
           <UButton v-if="!processing && !paused && canStart && total > 0" icon="i-lucide-play" :label="t('tools.start')"
@@ -132,7 +130,7 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
 
         <div class="mt-2 flex items-center gap-3">
           <div class="flex-1">
-            <UProgress :value="item.progress" size="sm"
+            <UProgress :model-value="item.progress" :max="100" size="sm"
               :color="item.status === 'failed' || item.status === 'timeout' ? 'error' : 'primary'" />
           </div>
           <span class="text-xs text-muted tabular-nums w-12 text-right">

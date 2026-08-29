@@ -22,7 +22,8 @@
     "copied": "Copied to clipboard",
     "showingCount": "Showing {count} of {total} items",
     "clear": "Clear",
-    "reset": "Reset"
+    "reset": "Reset",
+    "fullscreen": "Fullscreen Preview"
   },
   "error": {
     "unauthorized": "Unauthorized",
@@ -113,6 +114,7 @@
     "running": "Running",
     "done": "Done",
     "failed": "Failed",
+    "completed": "Completed",
     "paused": "Paused",
     "processing": "Processing",
     "idle": "Idle",
@@ -207,6 +209,11 @@
     "confirmDeleteHistoryDesc": "Are you sure you want to delete this history entry? This action cannot be undone.",
     "historyCleared": "History cleared successfully",
     "clearHistoryFailed": "Failed to clear history",
+    "historyDeleted": "History entry deleted successfully",
+    "deleteHistoryFailed": "Failed to delete history entry",
+    "invalidMediaFile": "Corrupted or Invalid File",
+    "invalidMediaDesc": "Unable to load or decode this media file. It may be corrupted or in an invalid format.",
+    "corruptedMedia": "Corrupted or unreadable media",
     "date": "Date",
     "url": "URL",
     "title": "Title",
@@ -338,7 +345,10 @@
     "funcSlideshow": "Image Slideshow",
     "errorNumberFileSlideshow": "You need at least 2 images for a slideshow.",
     "invalidExecutable": "Invalid executable type or unable to execute test run.",
-    "verified": "Verified"
+    "verified": "Verified",
+    "renderStarted": "Render started",
+    "renderFailed": "Failed to start render",
+    "noTasksToRun": "No tasks to run"
   },
   "auth": {
     "welcomeBack": "Welcome back",

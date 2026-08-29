@@ -129,7 +129,7 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
         </UInput>
 
         <!-- Progress Bar -->
-        <UProgress v-if="uploadingFile" :value="uploadProgress" class="h-1" />
+        <UProgress v-if="uploadingFile" :model-value="uploadProgress" :max="100" class="h-1" />
 
         <!-- Image Preview -->
         <div v-if="state.screenshot"

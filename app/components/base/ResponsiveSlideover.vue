@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { DialogTitle, DialogDescription } from 'reka-ui'
-
 defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(defineProps<{
@@ -14,7 +12,11 @@ const props = withDefaults(defineProps<{
   close?: boolean
   side?: 'top' | 'right' | 'bottom' | 'left'
   icon?: string
-  ui?: any
+  ui?: {
+    title?: string
+    description?: string
+    [key: string]: unknown
+  }
 }>(), {
   modelValue: undefined,
   open: undefined,
@@ -30,8 +32,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'update:open', value: boolean): void
+  (e: 'update:modelValue' | 'update:open', value: boolean): void
   (e: 'close'): void
 }>()
 
@@ -47,8 +48,15 @@ const isOpen = computed({
 const isLoading = computed(() => props.loading)
 const isDisabled = computed(() => props.disabled)
 
+const sideTransitions: Record<string, string> = {
+  right: 'data-[state=open]:animate-[slide-in-right_0.3s_cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:animate-[slide-out-right_0.2s_ease-in]',
+  left: 'data-[state=open]:animate-[slide-in-left_0.3s_cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:animate-[slide-out-left_0.2s_ease-in]',
+  top: 'data-[state=open]:animate-[slide-in-top_0.3s_cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:animate-[slide-out-top_0.2s_ease-in]',
+  bottom: 'data-[state=open]:animate-[slide-in-bottom_0.3s_cubic-bezier(0.16,1,0.3,1)] data-[state=closed]:animate-[slide-out-bottom_0.2s_ease-in]'
+}
+
 // Default UI configuration for slideover
-const defaultUi = {
+const defaultUi: Record<string, unknown> = {
   header: 'flex items-center gap-2 justify-between w-full border-b border-gray-200 dark:border-gray-800 px-4 py-3',
   body: 'flex-1 overflow-y-auto p-4 sm:p-6',
   content: 'w-screen max-w-xl flex flex-col',
@@ -56,60 +64,55 @@ const defaultUi = {
 }
 
 const uiConfig = computed(() => {
-  const ui: any = { ...defaultUi }
+  const ui: Record<string, unknown> = { ...defaultUi }
   if (props.ui) {
     for (const key in props.ui) {
-      if (typeof props.ui[key] === 'object' && props.ui[key] !== null && ui[key]) {
-        ui[key] = { ...ui[key], ...props.ui[key] }
+      const propVal = props.ui[key]
+      const currentVal = ui[key]
+      if (typeof propVal === 'object' && propVal !== null && typeof currentVal === 'object' && currentVal !== null) {
+        ui[key] = { ...(currentVal as Record<string, unknown>), ...(propVal as Record<string, unknown>) }
       } else {
-        ui[key] = props.ui[key]
+        ui[key] = propVal
       }
     }
   }
+
+  // Merge side-based slide animation onto content
+  const sideAnim = sideTransitions[props.side || 'right'] || sideTransitions.right
+  if (ui.content && typeof ui.content === 'string') {
+    ui.content = `${ui.content} ${sideAnim}`
+  } else {
+    ui.content = sideAnim
+  }
+
   return ui
 })
 </script>
 
 <template>
   <USlideover v-model:open="isOpen" :title="title" :description="description" :ui="uiConfig"
-    :dismissible="isDisabled || isLoading ? false : dismissible" :side="side" v-bind="$attrs">
-    <template #header>
-      <slot v-if="$slots.header" name="header" />
-      <div v-else class="flex items-center gap-2 justify-between w-full min-w-0">
-        <div class="flex items-center justify-center gap-2 min-w-0">
-          <!-- Mobile Back Button -->
-          <UButton color="neutral" variant="ghost" icon="i-lucide-arrow-left" class="inline-flex sm:hidden"
-            @click="isOpen = false" :disabled="isDisabled" :loading="isLoading" />
+    :dismissible="isDisabled || isLoading ? false : dismissible" :side="side" :close="close" v-bind="$attrs">
+    <template v-if="$slots.header" #header="slotProps">
+      <slot name="header" v-bind="slotProps" />
+    </template>
 
-          <!-- Icon Slot/Prop -->
-          <slot name="icon">
-            <UIcon v-if="icon" :name="icon" class="size-5 text-primary shrink-0" />
-          </slot>
+    <template v-if="$slots['header-left'] || $slots.icon || icon" #title>
+      <div class="flex items-center gap-2 min-w-0">
+        <!-- Mobile Back Button -->
+        <UButton color="neutral" variant="ghost" icon="i-lucide-arrow-left" class="inline-flex sm:hidden"
+          :disabled="isDisabled" :loading="isLoading" @click="isOpen = false" />
 
-          <div class="flex flex-col min-w-0">
-            <DialogTitle class="text-base font-bold leading-6 text-gray-900 dark:text-white truncate"
-              :class="ui?.title">
-              {{ title }}
-              <slot name="header-left" />
-            </DialogTitle>
-            <DialogDescription v-if="description" class="text-sm text-gray-500 font-normal truncate"
-              :class="ui?.description">
-              {{ description }}
-            </DialogDescription>
-            <DialogDescription v-else class="sr-only">
-              Slideover Description
-            </DialogDescription>
-          </div>
-        </div>
-        <!-- Desktop Close Button -->
-        <div class="flex items-center gap-2">
-          <slot name="header-right" />
-          <!-- <UTooltip v-if="close" :text="$t('common.close')"> -->
-          <UButton v-if="close" color="neutral" variant="ghost" icon="i-lucide-x" class="hidden sm:inline-flex"
-            @click="isOpen = false" :disabled="isDisabled" :loading="isLoading" />
-          <!-- </UTooltip> -->
-        </div>
+        <slot name="icon">
+          <UIcon v-if="icon" :name="icon" class="size-5 text-primary shrink-0" />
+        </slot>
+
+        <span class="truncate">{{ title }}</span>
+        <slot name="header-left" />
       </div>
+    </template>
+
+    <template v-if="$slots['header-right']" #actions>
+      <slot name="header-right" />
     </template>
 
     <template v-if="$slots.content" #content>

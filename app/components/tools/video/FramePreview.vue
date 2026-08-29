@@ -19,12 +19,14 @@ const props = withDefaults(defineProps<{
   baseSize: { w: number, h: number }
   frameSize: { w: number, h: number }
   readonly?: boolean
+  allowFullscreen?: boolean
 }>(), {
   previewFile: null,
   background: () => ({ type: 'color', color: '#000000', boxblur: 10, file: null }),
   texts: () => [],
   subs: () => [],
-  readonly: false
+  readonly: false,
+  allowFullscreen: true
 })
 
 const emit = defineEmits<{
@@ -33,11 +35,27 @@ const emit = defineEmits<{
   (e: 'update:subs', value: FfmpegSubFile[]): void
   (e: 'edit-label', value: FfmpegLabel): void
   (e: 'edit-sub-file', value: FfmpegSubFile): void
-  (e: 'delete-label', id: string): void
-  (e: 'delete-sub-file', id: string): void
+  (e: 'delete-label' | 'delete-sub-file', id: string): void
 }>()
 
 const { t } = useI18n()
+
+const openFullscreenModal = ref(false)
+const fullscreenContainerEl = ref<HTMLElement | null>(null)
+const { width: fWidth, height: fHeight } = useElementSize(fullscreenContainerEl)
+
+const fullscreenFrameSize = computed(() => {
+  const { w, h } = props.baseSize
+  const maxW = fWidth.value > 0 ? Math.max(fWidth.value - 32, 200) : 800
+  const maxH = fHeight.value > 0 ? Math.max(fHeight.value - 32, 200) : 580
+  const scale = Math.min(maxW / w, maxH / h, 1)
+  return { w: Math.round(w * scale), h: Math.round(h * scale) }
+})
+
+const hasMainError = ref(false)
+watch(() => props.previewFile?.path, () => {
+  hasMainError.value = false
+})
 
 const sx = computed(() => props.frameSize.w / props.baseSize.w)
 const sy = computed(() => props.frameSize.h / props.baseSize.h)
@@ -161,7 +179,8 @@ const contextOptions = computed(() => [
 </script>
 
 <template>
-  <div class="relative bg-black/80 border border-gray-300 dark:border-gray-800 rounded-lg overflow-hidden select-none"
+  <div
+    class="relative group bg-black/80 border border-gray-300 dark:border-gray-800 rounded-lg overflow-hidden select-none"
     :style="{ width: `${frameSize.w}px`, height: `${frameSize.h}px` }">
     <!-- Background layer -->
     <template v-if="background.type === 'file' && background.file">
@@ -180,7 +199,7 @@ const contextOptions = computed(() => [
     <div v-else class="absolute inset-0" :style="{ backgroundColor: background.color }" />
 
     <!-- Main file -->
-    <VueDraggableResizable v-if="previewFile && previewFile.path" :x="toDisplay(previewFile.x, sx)"
+    <VueDraggableResizable v-if="previewFile && previewFile.path && !hasMainError" :x="toDisplay(previewFile.x, sx)"
       :y="toDisplay(previewFile.y, sy)" :w="Math.max(toDisplay(previewFile.w, sx), 20)"
       :h="Math.max(toDisplay(previewFile.h, sy), 20)" :parent="false" :lock-aspect-ratio="false" :draggable="!readonly"
       :resizable="!readonly" :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
@@ -189,16 +208,29 @@ const contextOptions = computed(() => [
       <div
         :class="readonly ? 'w-full h-full overflow-hidden' : 'drag-handle w-full h-full bg-white/10 overflow-hidden'">
         <video v-if="isVideoFile(previewFile.path)" :src="toURL(previewFile.path)" autoplay loop muted playsinline
-          class="w-full h-full object-fill" @loadedmetadata="($event.target as HTMLVideoElement).play()" />
-        <img v-else :src="toURL(previewFile.path)" class="w-full h-full object-fill">
+          class="w-full h-full object-fill" @loadedmetadata="($event.target as HTMLVideoElement).play()"
+          @error="hasMainError = true" />
+        <img v-else :src="toURL(previewFile.path)" class="w-full h-full object-fill" @error="hasMainError = true">
       </div>
     </VueDraggableResizable>
 
+    <!-- Corrupted / Error overlay -->
+    <div v-if="hasMainError"
+      class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-red-950/70 backdrop-blur-xs border rounded-lg border-red-500/50 p-4 text-center select-none">
+      <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400 mb-2 shrink-0 animate-pulse" />
+      <p class="text-xs font-semibold text-red-200 mb-0.5">
+        {{ t('tools.invalidMediaFile') }}
+      </p>
+      <p class="text-[11px] text-red-300/80 leading-relaxed max-w-[85%]">
+        {{ t('tools.corruptedMedia') }}
+      </p>
+    </div>
+
     <!-- Sub files -->
-    <VueDraggableResizable v-for="sub in subs.filter(s => !s.hidden)" :key="sub.id || sub.path" :x="toDisplay(sub.x, sx)"
-      :y="toDisplay(sub.y, sy)" :w="Math.max(toDisplay(sub.w, sx), 20)" :h="Math.max(toDisplay(sub.h, sy), 20)"
-      :parent="false" :lock-aspect-ratio="false" :draggable="!readonly" :resizable="!readonly"
-      :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
+    <VueDraggableResizable v-for="sub in subs.filter(s => !s.hidden)" :key="sub.id || sub.path"
+      :x="toDisplay(sub.x, sx)" :y="toDisplay(sub.y, sy)" :w="Math.max(toDisplay(sub.w, sx), 20)"
+      :h="Math.max(toDisplay(sub.h, sy), 20)" :parent="false" :lock-aspect-ratio="false" :draggable="!readonly"
+      :resizable="!readonly" :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
       :drag-handle="readonly ? '' : '.drag-handle'"
       :class="[!readonly && selectedItem?.key === 'file' && selectedItem?.value === sub ? 'ring-2 ring-primary' : '']"
       class="z-20" tabindex="0" @contextmenu.prevent="handleContextMenu($event, sub, 'file')"
@@ -213,8 +245,9 @@ const contextOptions = computed(() => [
     </VueDraggableResizable>
 
     <!-- Text labels -->
-    <VueDraggableResizable v-for="txt in texts.filter(t => !t.hidden)" :key="txt.id || txt.text" :x="toDisplay(txt.x, sx)"
-      :y="toDisplay(txt.y, sy)" :w="Math.max(toDisplay(getTextRenderTransform(txt).width, sx), 20)"
+    <VueDraggableResizable v-for="txt in texts.filter(t => !t.hidden)" :key="txt.id || txt.text"
+      :x="toDisplay(txt.x, sx)" :y="toDisplay(txt.y, sy)"
+      :w="Math.max(toDisplay(getTextRenderTransform(txt).width, sx), 20)"
       :h="Math.max(toDisplay(getTextRenderTransform(txt).height, sy), 20)" :parent="false"
       :lock-aspect-ratio="(txt.resizeMode || 'scale') === 'scale'" :draggable="!readonly" :resizable="!readonly"
       :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
@@ -225,10 +258,10 @@ const contextOptions = computed(() => [
       @resize-stop="(x: number, y: number, w: number, h: number) => onResizeStop(txt, x, y, w, h)">
       <div
         :class="readonly ? 'w-full h-full flex items-center justify-center' : 'drag-handle w-full h-full flex items-center justify-center cursor-move'">
-        <div class="text-center leading-tight px-1"
-          :class="txt.resizeMode === 'box' ? 'whitespace-pre-wrap' : 'whitespace-pre'" :style="{
+        <div class="text-center leading-tight flex items-center justify-center h-full w-full"
+          :class="txt.resizeMode === 'box' ? 'whitespace-pre-wrap' : 'whitespace-nowrap'" :style="{
             color: txt.color,
-            fontSize: `${Math.max(toDisplay(getTextRenderTransform(txt).fontSize, sx), 6)}px`,
+            fontSize: `${(getTextRenderTransform(txt).fontSize * sx).toFixed(2)}px`,
             backgroundColor: txt.box ? hexToRgba(txt.boxColor || '#A3A3A3', txt.boxOpacity || 0.5) : 'transparent',
             padding: txt.box ? `${Math.max(toDisplay(getTextRenderTransform(txt).boxBorderW, sx), 1)}px` : '0',
             ...fontToStyle(txt)
@@ -245,6 +278,14 @@ const contextOptions = computed(() => [
       </p>
     </div>
 
+    <!-- Hover Fullscreen Action Button -->
+    <div v-if="allowFullscreen && !hasMainError && (previewFile || texts.length || subs.length)"
+      class="absolute top-2 right-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto">
+      <UButton icon="i-lucide-maximize-2" size="xs" color="neutral" variant="solid" :title="t('global.fullscreen')"
+        class="bg-black/60 hover:bg-black/90 text-white backdrop-blur-xs rounded shadow cursor-pointer"
+        @click.stop="openFullscreenModal = true" />
+    </div>
+
     <!-- Context menu -->
     <div v-if="isContextmenu" class="fixed z-50 min-w-3.75 rounded-lg border border-default bg-elevated shadow-lg p-1"
       :style="{ left: `${xContextmenu}px`, top: `${yContextmenu}px` }" @click.stop>
@@ -255,6 +296,16 @@ const contextOptions = computed(() => [
     <div v-if="isContextmenu" class="fixed inset-0 z-40" @click="isContextmenu = false"
       @contextmenu.prevent="isContextmenu = false" />
   </div>
+
+  <!-- Fullscreen Preview Modal -->
+  <BaseResponsiveModal v-if="allowFullscreen" v-model:open="openFullscreenModal" v-model="openFullscreenModal"
+    :title="t('tools.previewVideo')" :ui="{ content: 'sm:max-w-4xl' }">
+    <div ref="fullscreenContainerEl"
+      class="w-full flex items-center justify-center p-4 bg-neutral-950/90 dark:bg-black/90 rounded-xl min-h-[60vh] max-h-[75vh] overflow-hidden">
+      <ToolsVideoFramePreview :preview-file="previewFile" :background="background" :texts="texts" :subs="subs"
+        :base-size="baseSize" :frame-size="fullscreenFrameSize" :readonly="true" :allow-fullscreen="false" />
+    </div>
+  </BaseResponsiveModal>
 </template>
 
 <style scoped></style>
