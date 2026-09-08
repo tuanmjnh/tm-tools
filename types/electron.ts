@@ -30,7 +30,31 @@ export interface ToolTaskMeta {
   threads?: number
   startedAt?: string
   config?: unknown
-  operation?: string
+  operation?: 'render' | 'split' | 'join' | 'split_render' | 'join_render' | 'image2video' | 'audio_tool' | string
+  outputPattern?: string
+  images?: string[]
+  settings?: Record<string, unknown>
+  joinFiles?: string[]
+  splitStartTime?: number
+  splitDuration?: number
+  splitSegmentName?: string
+  audioMode?: 'extract' | 'mute' | 'replace_bgm' | 'mix_bgm' | string
+  audioOptions?: Record<string, unknown>
+}
+
+export interface MediaProbeResult {
+  duration: number
+  width: number
+  height: number
+  fps: number
+  bitrate?: string
+}
+
+export interface JoinFolderItem {
+  name: string
+  path: string
+  count: number
+  files: string[]
 }
 
 export interface FfmpegLabel {
@@ -345,7 +369,7 @@ type EventUnsubscriber = () => void
 export interface ToolsNamespace {
   checkExecutable(): Promise<ExecutableCheck>
   getStatus(): Promise<TaskStatus>
-  getTasks?(): Promise<any[]>
+  getTasks?(): Promise<ToolTask[]>
   initTaskManager(args: { threads?: number, delay?: number, delayUI?: number, maxRetry?: number, timeout?: number }): Promise<void>
   setTasks(tasks: ToolTask[]): Promise<void>
   setGroupTasks?(groups: ToolTask[][]): Promise<void>
@@ -355,7 +379,7 @@ export interface ToolsNamespace {
   stopTask(idx: number): Promise<TaskStatus>
   stopTasks(): Promise<TaskStatus>
   getMediaInfo?(args: string[]): Promise<{ pid: number, code: number | null, signal: string | null, stdout: string, stderr: string }>
-  getData?(): Promise<any>
+  getData?(): Promise<Record<string, unknown>>
   crawlPlaylist(url: string): Promise<{ status: boolean, data?: PlaylistVideo[], message?: string }>
   getFormats(url: string): Promise<{ status: boolean, data?: { title: string, duration: number, formats: YoutubeFormat[] }, message?: string }>
   getVersion(): Promise<{ status: boolean, data?: string, message?: string }>
@@ -381,9 +405,12 @@ export interface ToolsNamespace {
   updateFfmpegBatchConfig(data: { id: string, data: Partial<FfmpegBatchConfig> }): Promise<{ status: boolean }>
   deleteFfmpegBatchConfig(id: string): Promise<{ status: boolean }>
   listFfmpegHistory(limit?: number): Promise<FfmpegHistory[]>
-  deleteFfmpegHistory(id: string): Promise<{ status: boolean }>
+  deleteFfmpegHistory(id: string | string[]): Promise<{ status: boolean }>
   detectGpuSupport(): Promise<{ nvenc: boolean, amf: boolean, qsv: boolean, gpus: string[] }>
   globFiles(pattern: string): Promise<string[]>
+  scanImageSubfolders(inputDir: string, extensions?: string[], mode?: 'root' | 'subfolder'): Promise<Array<{ name: string, path: string, count: number, images: string[] }>>
+  probeMedia(filePath: string): Promise<MediaProbeResult>
+  scanJoinFolders(rootPath: string, mode: 'root' | 'subfolder', extensions?: string[]): Promise<JoinFolderItem[]>
   onBeforeRunTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
   onProgressTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
   onAllTasksDone(cb: (data: { total: number }) => void): EventUnsubscriber

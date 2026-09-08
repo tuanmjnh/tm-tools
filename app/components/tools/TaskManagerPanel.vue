@@ -10,8 +10,14 @@ const props = withDefaults(defineProps<{
   paused: boolean
   retries: number
   canStart?: boolean
+  canPause?: boolean
+  canStop?: boolean
+  showActions?: boolean
 }>(), {
-  canStart: true
+  canStart: true,
+  canPause: true,
+  canStop: true,
+  showActions: true
 })
 
 const emit = defineEmits<{
@@ -86,14 +92,16 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
         <div class="flex flex-wrap items-center gap-2">
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="sm"
             :aria-label="t('tools.refreshStatus')" @click="emit('refresh')" />
-          <UButton v-if="!processing && !paused && canStart && total > 0" icon="i-lucide-play" :label="t('tools.start')"
-            size="sm" variant="soft" @click="emit('start')" />
-          <UButton v-if="processing && !paused" icon="i-lucide-pause" :label="t('tools.pause')" color="warning"
-            variant="soft" size="sm" @click="emit('pause')" />
-          <UButton v-if="paused" icon="i-lucide-play" :label="t('tools.resume')" color="success" size="sm"
-            variant="soft" @click="emit('resume')" />
-          <UButton v-if="processing || paused" icon="i-lucide-square" :label="t('tools.stopAll')" color="error"
-            variant="soft" size="sm" @click="emit('stopAll')" />
+          <template v-if="showActions">
+            <UButton v-if="!processing && !paused && canStart && total > 0" icon="i-lucide-play"
+              :label="t('tools.start')" size="sm" variant="soft" @click="emit('start')" />
+            <UButton v-if="processing && !paused && canPause" icon="i-lucide-pause" :label="t('tools.pause')"
+              color="warning" variant="soft" size="sm" @click="emit('pause')" />
+            <UButton v-if="paused && canPause" icon="i-lucide-play" :label="t('tools.resume')" color="success" size="sm"
+              variant="soft" @click="emit('resume')" />
+            <UButton v-if="(processing || paused) && canStop" icon="i-lucide-square" :label="t('tools.stopAll')"
+              color="error" variant="soft" size="sm" @click="emit('stopAll')" />
+          </template>
         </div>
       </div>
     </template>
@@ -117,8 +125,8 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
           <div class="flex items-center gap-2">
             <UBadge :color="statusColor(item.status)" variant="subtle" :label="statusLabel(item.status)" size="sm" />
             <span v-if="item.retry > 0" class="text-xs text-warning">{{ item.retry }}</span>
-            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-play" color="primary"
-              variant="ghost" size="xs" :aria-label="t('tools.openFile')" :title="t('tools.openFile')"
+            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-eye" color="primary" variant="ghost"
+              size="xs" :aria-label="t('tools.previewResult')" :title="t('tools.previewResult')"
               @click="emit('openFile', itemPath(item))" />
             <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-folder-search" color="primary"
               variant="ghost" size="xs" :aria-label="t('tools.showInFolder')" :title="t('tools.showInFolder')"

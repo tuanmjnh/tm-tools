@@ -26,6 +26,7 @@ function lcsLen(a, b) {
   return dp[m][n]
 }
 
+// eslint-disable-next-line no-unused-vars
 function repairHistoryFileNames() {
   try {
     const rows = db.prepare('SELECT id, out_path, file_name, title FROM youtube_history WHERE status=\'completed\'').all()
@@ -447,5 +448,18 @@ module.exports = {
     return id
   },
   listFfmpegHistory: (limit = 100) => db.prepare('SELECT * FROM ffmpeg_history ORDER BY created_at DESC LIMIT ?').all(limit),
-  deleteFfmpegHistory: id => db.prepare('DELETE FROM ffmpeg_history WHERE id=?').run(id)
+  deleteFfmpegHistory: (idOrIds) => {
+    if (Array.isArray(idOrIds)) {
+      if (idOrIds.length === 0) return { changes: 0 }
+      const placeholders = idOrIds.map(() => '?').join(',')
+      return db.prepare(`DELETE FROM ffmpeg_history WHERE id IN (${placeholders})`).run(...idOrIds)
+    }
+    if (typeof idOrIds === 'string' && idOrIds.includes(',')) {
+      const ids = idOrIds.split(',').map(s => s.trim()).filter(Boolean)
+      if (ids.length === 0) return { changes: 0 }
+      const placeholders = ids.map(() => '?').join(',')
+      return db.prepare(`DELETE FROM ffmpeg_history WHERE id IN (${placeholders})`).run(...ids)
+    }
+    return db.prepare('DELETE FROM ffmpeg_history WHERE id=?').run(idOrIds)
+  }
 }

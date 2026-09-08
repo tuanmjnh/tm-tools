@@ -1,113 +1,137 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, watch } from 'vue'
-import { z } from 'zod'
-import type { ToolTask, FfmpegConfig, FfmpegLabel, FfmpegSubFile } from '~/types'
-import { getMediaSize } from '~/utils/ffmpegHelper'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useElementSize } from '@vueuse/core'
+import type { ToolTask, FfmpegLabel, FfmpegSubFile } from '~/types'
 
 const { t } = useI18n()
 const toast = useToast()
-
-function onPickBatchFolder(folder: string) {
-  batchPattern.value = `${folder}/*.mp4`
-}
-
 const taskManager = useToolTaskManager('ffmpeg')
 
-// Unified states
-const batchPattern = ref('')
-const batchOutputPattern = ref('{dirname}/{name}_rendered.{ext}')
-const batchThreads = ref(4)
-const batchMatchedFiles = ref<string[]>([])
-const loadingGlob = ref(false)
-const starting = ref(false)
+// Preset management composable
+const {
+  presets,
+  selectedPresetId,
+  selectedPresetTitle,
+  presetOptions,
+  config,
+  editingConfig,
+  savingConfig,
+  deletingPreset,
+  deletePresetTarget,
+  showConfigSlideover,
+  showDeletePresetModal,
+  loadPresets,
+  resetConfig,
+  openCreateConfig,
+  onEditPresetClick,
+  onSaveConfig,
+  openDeletePreset,
+  doDeletePreset
+} = useFfmpegPresets()
 
-const runMode = ref<'single' | 'batch'>('single')
+type RunMode
+  = | 'single'
+  | 'batch'
+  | 'join_root'
+  | 'join_subfolder'
+  | 'join_files'
+  | 'split'
+  | 'images_root'
+  | 'images_subfolder'
+  | 'audio'
 
-const modeTabs = computed(() => [{
-  label: t('tools.singleRender'),
-  value: 'single',
-  disabled: controlsDisabled.value
-}, {
-  label: t('tools.batchRender'),
-  value: 'batch',
-  disabled: controlsDisabled.value
-}])
-const inputPath = ref('')
-const inputMediaSize = ref<{ w: number, h: number }>({ w: 1920, h: 1080 })
+const runMode = ref<RunMode>('single')
 
-watch(inputPath, async (newVal) => {
-  if (newVal) {
-    const size = await getMediaSize(newVal)
-    if (size.w === 0 && size.h === 0) {
-      toast.add({
-        title: t('tools.invalidMediaFile'),
-        description: t('tools.invalidMediaDesc'),
-        color: 'error'
-      })
-      inputMediaSize.value = { w: 1920, h: 1080 }
-    } else {
-      inputMediaSize.value = size
+interface ModeOption {
+  label: string
+  value: RunMode
+  icon: string
+  description?: string
+}
+
+const modeOptions = computed<ModeOption[][]>(() => [
+  [
+    {
+      label: t('tools.singleRender'),
+      value: 'single',
+      icon: 'i-lucide-play-square',
+      description: t('tools.singleRenderDesc')
+    },
+    {
+      label: t('tools.batchRender'),
+      value: 'batch',
+      icon: 'i-lucide-layers',
+      description: t('tools.batchRenderDesc')
     }
-  } else {
-    inputMediaSize.value = { w: 1920, h: 1080 }
+  ],
+  [
+    {
+      label: t('tools.joinRoot'),
+      value: 'join_root',
+      icon: 'i-lucide-folder-root',
+      description: t('tools.joinRootDesc')
+    },
+    {
+      label: t('tools.joinSubfolder'),
+      value: 'join_subfolder',
+      icon: 'i-lucide-folder-tree',
+      description: t('tools.joinSubfolderDesc')
+    },
+    {
+      label: t('tools.joinFiles'),
+      value: 'join_files',
+      icon: 'i-lucide-merge',
+      description: t('tools.joinFilesDesc')
+    }
+  ],
+  [
+    {
+      label: t('tools.splitVideo'),
+      value: 'split',
+      icon: 'i-lucide-scissors',
+      description: t('tools.splitVideoDesc')
+    }
+  ],
+  [
+    {
+      label: t('tools.imagesRoot'),
+      value: 'images_root',
+      icon: 'i-lucide-image',
+      description: t('tools.imagesRootDesc')
+    },
+    {
+      label: t('tools.imagesSubfolder'),
+      value: 'images_subfolder',
+      icon: 'i-lucide-images',
+      description: t('tools.imagesSubfolderDesc')
+    }
+  ],
+  [
+    {
+      label: t('tools.audioTool'),
+      value: 'audio',
+      icon: 'i-lucide-music',
+      description: t('tools.audioToolDesc')
+    }
+  ]
+])
+
+const currentModeItem = computed(() => {
+  for (const group of modeOptions.value) {
+    const found = group.find(item => item.value === runMode.value)
+    if (found) return found
   }
+  return modeOptions.value[0]?.[0]
 })
 
-const outputPath = ref('')
-const duration = ref(0)
-
-const config = ref<Partial<FfmpegConfig>>({
-  title: '',
-  aspect_ratio: 0,
-  background_type: 'color',
-  background_color: '#000000',
-  background_boxblur: 10,
-  background_file: '',
-  center: 1,
-  speed: 1,
-  volume: 1,
-  zoom_enable: 0,
-  zoom_ratio: 1.1,
-  zoom_time_start: 0,
-  zoom_time_duration: 0,
-  zoom_time_loop: 0,
-  hflip_enable: 0,
-  hflip_all: 1,
-  hflip_time_start: 0,
-  hflip_time_duration: 0,
-  hflip_time_loop: 0,
-  vflip_enable: 0,
-  vflip_all: 1,
-  vflip_time_start: 0,
-  vflip_time_duration: 0,
-  vflip_time_loop: 0,
-  scale_x: 0,
-  scale_y: 0,
-  scale_w: 0,
-  scale_h: 0,
-  labels: [],
-  files: [],
-  subtitle: '',
-  render_code: ''
-})
-
-// Data Lists
-const presets = ref<FfmpegConfig[]>([])
-const selectedPresetId = ref<string | null>('')
-const showHistorySlideover = ref(false)
+// General system and state
+const starting = ref(false)
 const exeState = ref<'unknown' | 'ok' | 'missing'>('unknown')
+const showHistorySlideover = ref(false)
+const showPreviewModal = ref(false)
+const previewTargetFile = ref('')
 
-// Config slideover
-const showConfigSlideover = ref(false)
-const editingConfig = ref<FfmpegConfig | null>(null)
-const savingConfig = ref(false)
-
-// Confirm modals
-const showDeletePresetModal = ref(false)
-const deletePresetTarget = ref<FfmpegConfig | null>(null)
-const deletingPreset = ref(false)
-
-// GPU Acceleration Status
+// GPU Support
 const gpuSupport = ref({ nvenc: false, amf: false, qsv: false, gpus: [] as string[] })
 const selectedEncoder = ref<'cpu' | 'nvenc' | 'amf' | 'qsv'>(
   ((import.meta.client ? localStorage.getItem('selected_encoder') : null) as 'cpu' | 'nvenc' | 'amf' | 'qsv') || 'cpu'
@@ -128,267 +152,18 @@ const detectedGpuString = computed(() => {
   return active.length > 0 ? active.join(', ') : ''
 })
 
-const encoderOptions = computed(() => {
-  return [
-    { label: 'CPU (Software - libx264)', value: 'cpu' },
-    { label: `NVIDIA NVENC (h264_nvenc)${gpuSupport.value.nvenc ? '' : ' - ' + t('tools.notSupported')}`, value: 'nvenc', disabled: !gpuSupport.value.nvenc },
-    { label: `Intel QSV (h264_qsv)${gpuSupport.value.qsv ? '' : ' - ' + t('tools.notSupported')}`, value: 'qsv', disabled: !gpuSupport.value.qsv },
-    { label: `AMD AMF (h264_amf)${gpuSupport.value.amf ? '' : ' - ' + t('tools.notSupported')}`, value: 'amf', disabled: !gpuSupport.value.amf }
-  ]
-})
+const encoderOptions = computed(() => [
+  { label: 'CPU (Software - libx264)', value: 'cpu' },
+  { label: `NVIDIA NVENC (h264_nvenc)${gpuSupport.value.nvenc ? '' : ' - ' + t('tools.notSupported')}`, value: 'nvenc', disabled: !gpuSupport.value.nvenc },
+  { label: `Intel QSV (h264_qsv)${gpuSupport.value.qsv ? '' : ' - ' + t('tools.notSupported')}`, value: 'qsv', disabled: !gpuSupport.value.qsv },
+  { label: `AMD AMF (h264_amf)${gpuSupport.value.amf ? '' : ' - ' + t('tools.notSupported')}`, value: 'amf', disabled: !gpuSupport.value.amf }
+])
 
-async function refreshExe() {
-  const rs = await taskManager.checkExecutable()
-  exeState.value = rs?.status ? 'ok' : 'missing'
-}
-async function checkGpu() {
-  gpuLoading.value = true
-  try {
-    const rs = await taskManager.api!.detectGpuSupport?.()
-    if (rs) {
-      gpuSupport.value = rs
-      const savedEncoder = import.meta.client ? localStorage.getItem('selected_encoder') : null
-      if (!savedEncoder) {
-        if (rs.nvenc) selectedEncoder.value = 'nvenc'
-        else if (rs.qsv) selectedEncoder.value = 'qsv'
-        else if (rs.amf) selectedEncoder.value = 'amf'
-        else selectedEncoder.value = 'cpu'
-      } else {
-        if (savedEncoder === 'nvenc' && !rs.nvenc) selectedEncoder.value = 'cpu'
-        else if (savedEncoder === 'qsv' && !rs.qsv) selectedEncoder.value = 'cpu'
-        else if (savedEncoder === 'amf' && !rs.amf) selectedEncoder.value = 'cpu'
-        else selectedEncoder.value = savedEncoder as 'cpu' | 'nvenc' | 'amf' | 'qsv'
-      }
-    }
-  } catch (e) {
-    console.error(e)
-  } finally {
-    gpuLoading.value = false
-  }
-}
+const controlsDisabled = computed(() => exeState.value === 'missing' || taskManager.processing.value || taskManager.paused.value)
 
-async function loadPresets() {
-  presets.value = await taskManager.api!.listFfmpegConfigs?.() || []
-}
-
-async function triggerGlob() {
-  if (!batchPattern.value) {
-    batchMatchedFiles.value = []
-    return
-  }
-  loadingGlob.value = true
-  try {
-    const matched = await taskManager.api!.globFiles?.(batchPattern.value)
-    batchMatchedFiles.value = matched || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loadingGlob.value = false
-  }
-}
-
-watch(batchPattern, () => {
-  triggerGlob()
-})
-
-async function savePreset(data: Partial<FfmpegConfig>) {
-  savingConfig.value = true
-  try {
-    const payload = JSON.parse(JSON.stringify({ ...data, flag: 1 }))
-    const rs = await taskManager.api!.createFfmpegConfig?.(payload)
-    if (rs?.status) {
-      toast.add({ title: t('tools.configSaved'), color: 'success' })
-      await loadPresets()
-      selectedPresetId.value = rs.data?.id || ''
-    } else {
-      toast.add({ title: t('tools.configSaveFailed'), color: 'error' })
-    }
-  } finally {
-    savingConfig.value = false
-    showConfigSlideover.value = false
-  }
-}
-
-async function updatePreset(data: Partial<FfmpegConfig>) {
-  if (!editingConfig.value?.id) return
-  savingConfig.value = true
-  try {
-    const payload = JSON.parse(JSON.stringify(data))
-    const rs = await taskManager.api!.updateFfmpegConfig?.({ id: editingConfig.value.id, data: payload })
-    if (rs?.status) {
-      toast.add({ title: t('tools.configSaved'), color: 'success' })
-      await loadPresets()
-      const updated = presets.value.find(p => p.id === editingConfig.value?.id)
-      if (updated) {
-        applyPreset(updated)
-      }
-    } else {
-      toast.add({ title: t('tools.configSaveFailed'), color: 'error' })
-    }
-  } finally {
-    savingConfig.value = false
-    showConfigSlideover.value = false
-  }
-}
-
-function openCreateConfig() {
-  editingConfig.value = null
-  showConfigSlideover.value = true
-}
-
-function openEditConfig(preset: FfmpegConfig) {
-  editingConfig.value = preset
-  showConfigSlideover.value = true
-}
-
-function onEditPresetClick() {
-  const preset = presets.value.find(p => p.id === selectedPresetId.value)
-  if (preset) openEditConfig(preset)
-}
-
-function onSaveConfig(data: Partial<FfmpegConfig>) {
-  if (editingConfig.value?.id) updatePreset(data)
-  else savePreset(data)
-}
-
-function openDeletePreset(preset: FfmpegConfig) {
-  deletePresetTarget.value = preset
-  showConfigSlideover.value = false
-  showDeletePresetModal.value = true
-}
-
-async function doDeletePreset() {
-  if (!deletePresetTarget.value) return
-  const id = deletePresetTarget.value.id
-  deletingPreset.value = true
-  try {
-    const rs = await taskManager.api!.deleteFfmpegConfig?.(id)
-    if (rs?.status) {
-      toast.add({ title: t('tools.configDeleted'), color: 'success' })
-      await loadPresets()
-      if (selectedPresetId.value === id) {
-        selectedPresetId.value = ''
-        resetConfig()
-      }
-    }
-  } finally {
-    deletingPreset.value = false
-    showDeletePresetModal.value = false
-    deletePresetTarget.value = null
-  }
-}
-
-function applyPreset(preset: FfmpegConfig) {
-  selectedPresetId.value = preset.id
-  config.value = {
-    ...preset,
-    aspect_ratio: Number(preset.aspect_ratio ?? 0),
-    scale_x: Number(preset.scale_x ?? 0),
-    scale_y: Number(preset.scale_y ?? 0),
-    scale_w: Number(preset.scale_w ?? 0),
-    scale_h: Number(preset.scale_h ?? 0)
-  }
-  if (typeof preset.labels === 'string') {
-    try {
-      config.value.labels = JSON.parse(preset.labels)
-    } catch (e) {
-      config.value.labels = []
-      console.error(e)
-    }
-  }
-  if (typeof preset.files === 'string') {
-    try {
-      config.value.files = JSON.parse(preset.files)
-    } catch (e) {
-      config.value.files = []
-      console.error(e)
-    }
-  }
-}
-
-watch(selectedPresetId, (newId) => {
-  if (newId) {
-    const preset = presets.value.find(p => p.id === newId)
-    if (preset && config.value.id !== newId) {
-      applyPreset(preset)
-    }
-  } else {
-    resetConfig()
-  }
-})
-
-function resetConfig() {
-  config.value = {
-    title: '',
-    aspect_ratio: 0,
-    background_type: 'color',
-    background_color: '#000000',
-    background_boxblur: 10,
-    background_file: '',
-    center: 1,
-    speed: 1,
-    volume: 1,
-    zoom_enable: 0,
-    zoom_ratio: 1.1,
-    zoom_time_start: 0,
-    zoom_time_duration: 0,
-    zoom_time_loop: 0,
-    hflip_enable: 0,
-    hflip_all: 1,
-    hflip_time_start: 0,
-    hflip_time_duration: 0,
-    hflip_time_loop: 0,
-    vflip_enable: 0,
-    vflip_all: 1,
-    vflip_time_start: 0,
-    vflip_time_duration: 0,
-    vflip_time_loop: 0,
-    scale_x: 0,
-    scale_y: 0,
-    scale_w: 0,
-    scale_h: 0,
-    labels: [],
-    files: [],
-    subtitle: '',
-    render_code: ''
-  }
-}
-
-async function probeInput() {
-  if (!inputPath.value) return
-  const rs = await taskManager.api?.getMediaInfo?.(['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', inputPath.value])
-  if (rs && rs.code === 0) {
-    try {
-      const info = JSON.parse(rs.stdout)
-      duration.value = parseFloat(info?.format?.duration || '0')
-      if (!info?.streams || info.streams.length === 0) {
-        toast.add({
-          title: t('tools.invalidMediaFile'),
-          description: t('tools.invalidMediaDesc'),
-          color: 'error'
-        })
-      }
-    } catch {
-      duration.value = 0
-      toast.add({
-        title: t('tools.invalidMediaFile'),
-        description: t('tools.invalidMediaDesc'),
-        color: 'error'
-      })
-    }
-  } else if (rs && rs.code !== 0) {
-    duration.value = 0
-    toast.add({
-      title: t('tools.invalidMediaFile'),
-      description: t('tools.invalidMediaDesc'),
-      color: 'error'
-    })
-  }
-}
-
-const selectedPresetTitle = computed(() => {
-  return presets.value.find((p: FfmpegConfig) => p.id === selectedPresetId.value)?.title || ''
-})
+// Media size & Visual preview
+const singleInputPath = ref('')
+const inputMediaSize = ref<{ w: number, h: number }>({ w: 1920, h: 1080 })
 
 const aspectSizes: Record<number, { w: number, h: number }> = {
   0: { w: 1920, h: 1080 },
@@ -419,9 +194,9 @@ const frameSize = computed(() => {
 })
 
 const previewFile = computed(() => {
-  if (!inputPath.value) return null
+  if (!singleInputPath.value) return null
   return {
-    path: inputPath.value,
+    path: singleInputPath.value,
     x: config.value.scale_x ?? 0,
     y: config.value.scale_y ?? 0,
     w: config.value.scale_w || baseSize.value.w,
@@ -455,139 +230,54 @@ const previewFiles = computed(() => {
   return []
 })
 
-const presetOptions = computed(() => {
-  return presets.value.map((p: FfmpegConfig) => ({ label: p.title, value: p.id }))
-})
-
-watch(selectedPresetId, (val) => {
-  if (val) {
-    const preset = presets.value.find((p: FfmpegConfig) => p.id === val)
-    if (preset) applyPreset(preset)
-  } else {
-    resetConfig()
-  }
-})
-
-const state = reactive({
-  inputPath,
-  outputPath,
-  batchPattern,
-  batchOutputPattern,
-  batchThreads,
-  configPreset: selectedPresetId
-})
-
-const schema = computed(() => {
-  if (runMode.value === 'single') {
-    return z.object({
-      inputPath: z.string().min(1, t('tools.pleaseSelectInput')),
-      outputPath: z.string().optional(),
-      configPreset: z.string().nullable().optional()
-    })
-  }
-  return z.object({
-    batchPattern: z.string().min(1, t('tools.inputPatternRequired')),
-    batchOutputPattern: z.string().min(1, t('tools.outputPatternRequired')),
-    batchThreads: z.number().int().min(1).max(8),
-    configPreset: z.string().nullable().optional()
-  })
-})
-
-const controlsDisabled = computed(() => exeState.value === 'missing' || taskManager.processing.value || taskManager.paused.value)
-
-function getSingleTasks(): ToolTask[] {
-  const out = outputPath.value || inputPath.value.replace(/\.\w+$/, '_rendered.mp4')
-  const plainConfig = config.value ? (JSON.parse(JSON.stringify(config.value)) as FfmpegConfig) : undefined
-  return [{
-    args: [],
-    options: {
-      encoder: selectedEncoder.value
-    },
-    meta: {
-      taskId: `ff-single-${Date.now()}`,
-      input: inputPath.value,
-      output: out,
-      duration: duration.value,
-      configId: selectedPresetId.value || undefined,
-      configTitle: selectedPresetTitle.value,
-      config: selectedPresetId.value ? undefined : plainConfig,
-      operation: 'render',
-      threads: 1,
-      startedAt: new Date().toISOString()
-    }
-  }]
+// Execution & System actions
+async function refreshExe() {
+  const rs = await taskManager.checkExecutable()
+  exeState.value = rs?.status ? 'ok' : 'missing'
 }
 
-function getBatchTasks(): ToolTask[] {
-  const plainConfig = config.value ? (JSON.parse(JSON.stringify(config.value)) as FfmpegConfig) : undefined
-  return batchMatchedFiles.value.map((file, i) => {
-    return {
-      args: [],
-      options: {
-        encoder: selectedEncoder.value
-      },
-      meta: {
-        taskId: `ff-batch-${Date.now()}-${i}`,
-        input: file,
-        outputPattern: batchOutputPattern.value,
-        duration: 0, // Probe synchronously during render or leave it to be tracked
-        configId: selectedPresetId.value || undefined,
-        configTitle: selectedPresetTitle.value,
-        config: selectedPresetId.value ? undefined : plainConfig,
-        operation: 'render',
-        threads: batchThreads.value,
-        startedAt: new Date().toISOString()
+async function checkGpu() {
+  gpuLoading.value = true
+  try {
+    const rs = await taskManager.api!.detectGpuSupport?.()
+    if (rs) {
+      gpuSupport.value = rs
+      const savedEncoder = import.meta.client ? localStorage.getItem('selected_encoder') : null
+      if (!savedEncoder) {
+        if (rs.nvenc) selectedEncoder.value = 'nvenc'
+        else if (rs.qsv) selectedEncoder.value = 'qsv'
+        else if (rs.amf) selectedEncoder.value = 'amf'
+        else selectedEncoder.value = 'cpu'
+      } else {
+        if (savedEncoder === 'nvenc' && !rs.nvenc) selectedEncoder.value = 'cpu'
+        else if (savedEncoder === 'qsv' && !rs.qsv) selectedEncoder.value = 'cpu'
+        else if (savedEncoder === 'amf' && !rs.amf) selectedEncoder.value = 'cpu'
+        else selectedEncoder.value = savedEncoder as 'cpu' | 'nvenc' | 'amf' | 'qsv'
       }
     }
-  })
+  } catch (e) {
+    console.error(e)
+  } finally {
+    gpuLoading.value = false
+  }
 }
 
-async function onSubmit() {
+async function onTasksSubmit(tasks: ToolTask[]) {
   if (exeState.value === 'missing') {
     toast.add({ title: t('tools.executableMissing'), color: 'error' })
     return
   }
-  if (runMode.value === 'single') {
-    if (!inputPath.value) {
-      toast.add({ title: t('tools.pleaseSelectInput'), color: 'error' })
-      return
-    }
-    if (!outputPath.value) {
-      outputPath.value = inputPath.value.replace(/\.([^.]+)$/, '_rendered.$1')
-    }
-  } else {
-    if (!batchPattern.value || !batchPattern.value.trim()) {
-      toast.add({ title: t('tools.inputPatternRequired'), color: 'error' })
-      return
-    }
-    if (batchMatchedFiles.value.length === 0) {
-      toast.add({ title: t('tools.noBatchItems'), color: 'error' })
-      return
-    }
-    if (!batchOutputPattern.value || !batchOutputPattern.value.trim()) {
-      toast.add({ title: t('tools.outputPatternRequired'), color: 'error' })
-      return
-    }
+  if (starting.value || taskManager.processing.value || taskManager.paused.value) return
+  if (!tasks || tasks.length === 0) {
+    toast.add({ title: t('tools.noTasksToRun'), color: 'warning' })
+    return
   }
-  if (starting.value) return
-  if (taskManager.processing.value || taskManager.paused.value) return
+
   starting.value = true
   try {
-    let tasks: ToolTask[] = []
-    if (runMode.value === 'single') {
-      await probeInput()
-      tasks = getSingleTasks()
-    } else {
-      tasks = getBatchTasks()
-    }
-
-    if (tasks.length === 0) {
-      toast.add({ title: t('tools.noTasksToRun'), color: 'warning' })
-      return
-    }
-
+    const threadsCount = tasks[0]?.meta?.threads || 1
     await taskManager.initManager({
-      threads: runMode.value === 'single' ? 1 : batchThreads.value,
+      threads: threadsCount,
       maxRetry: 2,
       timeout: 30 * 60 * 1000,
       delayUI: 500
@@ -597,7 +287,7 @@ async function onSubmit() {
     await taskManager.refreshStatus()
     toast.add({
       title: t('tools.renderStarted'),
-      description: runMode.value === 'single' ? inputPath.value : `${tasks.length} tệp`,
+      description: `${tasks.length} ${t('tools.taskKey')}`,
       color: 'success'
     })
   } catch (err: unknown) {
@@ -618,10 +308,10 @@ function showInFolder(fullPath: string) {
   }
 }
 
-async function openFileLocation(filePath: string) {
-  if (window.electronAPI?.openPath && filePath) {
-    await window.electronAPI.openPath(filePath)
-  }
+function onPreviewResult(filePath: string) {
+  if (!filePath) return
+  previewTargetFile.value = filePath
+  showPreviewModal.value = true
 }
 
 function openHistory() {
@@ -660,262 +350,261 @@ onMounted(async () => {
       :title="t('tools.noElectron')" class="mb-4" />
 
     <!-- Main Columns -->
-    <UForm id="video-form" :schema="schema" :state="state" @submit="onSubmit">
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full pb-4">
-        <!-- Left Column: Forms, Tasks -->
-        <div class="lg:col-span-2 lg:h-full lg:min-h-0 flex flex-col">
-          <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
-            <div class="space-y-6">
-              <!-- Card 1: Main Video Form -->
-              <UCard>
-                <template #header>
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <UIcon name="i-lucide-list-todo" class="text-primary size-5" />
-                      <p class="font-semibold text-sm">
-                        {{ t('tools.videoForm') }}
-                      </p>
-                    </div>
-                    <div class="flex gap-1">
-                      <UButton icon="i-lucide-history" color="warning" variant="ghost" size="sm"
-                        :title="t('tools.history')" @click="openHistory" />
-                    </div>
-                  </div>
-                </template>
-
-                <!-- Modes Tabs: Single vs Batch -->
-                <UTabs v-model="runMode" :items="modeTabs" :content="false" class="mb-6" variant="link" />
-
-                <!-- Single Video Form -->
-                <div v-if="runMode === 'single'" class="space-y-4">
-                  <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-4"> -->
-                  <UFormField name="inputPath" :label="t('tools.input')">
-                    <BaseFilePicker v-model="inputPath" mode="file" placeholder="D:/videos/input.mp4"
-                      :disabled="controlsDisabled"
-                      :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]"
-                      @change="probeInput" />
-                  </UFormField>
-                  <UFormField :label="t('tools.output')">
-                    <BaseFilePicker v-model="outputPath" mode="save" placeholder="D:/videos/output.mp4"
-                      :disabled="controlsDisabled" :filters="[{ name: 'Videos', extensions: ['mp4'] }]" />
-                  </UFormField>
-                  <!-- </div> -->
-                </div>
-
-                <!-- Batch Videos Form -->
-                <div v-else class="space-y-4">
-                  <!-- <div class="grid grid-cols-1 md:grid-cols-2 gap-4"> -->
-                  <UFormField name="batchPattern" :label="t('tools.inputPattern')">
-                    <BaseFilePicker v-model="batchPattern" mode="folder" placeholder="D:/videos/*.mp4"
-                      :title="t('tools.inputPattern')" :disabled="controlsDisabled" @select="onPickBatchFolder" />
-                  </UFormField>
-                  <UFormField name="batchOutputPattern" :label="t('tools.outputPattern')">
-                    <UInput v-model="batchOutputPattern" placeholder="{dirname}/{name}_rendered.{ext}" class="w-full"
-                      :disabled="controlsDisabled" :ui="{ trailing: 'pe-0.5' }" />
-                  </UFormField>
-                  <!-- </div> -->
-
-                  <!-- Threads configuration (only shown for batch mode) -->
-                  <div>
-                    <UFormField name="batchThreads" :label="t('tools.threads')">
-                      <UInput v-model.number="batchThreads" type="number" min="1" max="8" class="w-full"
-                        :disabled="controlsDisabled" />
-                    </UFormField>
-                  </div>
-
-                  <div v-if="batchMatchedFiles.length" class="p-4 border rounded-lg bg-muted/50">
-                    <p class="font-medium text-sm mb-2">
-                      {{ t('tools.batchItems') }} ({{ batchMatchedFiles.length }})
-                    </p>
-                    <div class="max-h-48 overflow-y-auto space-y-1">
-                      <div v-for="file in batchMatchedFiles" :key="file"
-                        class="text-xs font-mono p-1 hover:bg-muted truncate">
-                        {{ file }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <template #footer>
-                  <!-- Action buttons -->
-                  <div class="flex justify-end gap-2 w-full">
-                    <UButton icon="i-lucide-play" :label="t('tools.start')" color="primary" type="submit" variant="soft"
-                      :loading="starting" :disabled="!taskManager.isElectron.value || controlsDisabled"
-                      @click="onSubmit" />
-                    <UButton v-if="taskManager.processing.value && !taskManager.paused.value" icon="i-lucide-pause"
-                      :label="t('tools.pause')" color="warning" variant="soft" @click="taskManager.pause()" />
-                    <UButton v-if="taskManager.paused.value" icon="i-lucide-play" :label="t('tools.resume')"
-                      color="success" variant="soft" @click="taskManager.resume()" />
-                    <UButton v-if="taskManager.processing.value || taskManager.paused.value" icon="i-lucide-square"
-                      :label="t('tools.stopAll')" color="error" variant="soft" @click="taskManager.stopAll()" />
-                  </div>
-                </template>
-              </UCard>
-
-              <!-- Task Manager Panel -->
-              <ToolsTaskManagerPanel :items="taskManager.taskList.value" :total="taskManager.total.value"
-                :done="taskManager.done.value" :running="taskManager.running.value"
-                :processing="taskManager.processing.value" :paused="taskManager.paused.value"
-                :retries="taskManager.globalRetryCount.value" :can-start="false" @refresh="taskManager.refreshStatus()"
-                @pause="taskManager.pause()" @resume="taskManager.resume()" @stop-all="taskManager.stopAll()"
-                @stop-task="(key) => taskManager.stopTask(key)" @open-file="openFileLocation"
-                @open-item="showInFolder" />
-            </div>
-          </UScrollArea>
-        </div>
-
-        <!-- Right Column: Visual Preview & Settings -->
-        <div class="lg:h-full lg:min-h-0 flex flex-col">
-          <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
-            <div class="space-y-6">
-              <!-- Video Preview Card Component -->
-              <UCard>
-                <template #header>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full pb-4">
+      <!-- Left Column: Forms, Tasks -->
+      <div class="lg:col-span-2 lg:h-full lg:min-h-0 flex flex-col">
+        <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
+          <div class="space-y-6">
+            <!-- Card 1: Main Video Operations -->
+            <UCard>
+              <template #header>
+                <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-eye" class="text-primary size-5" />
+                    <UIcon name="i-lucide-list-todo" class="text-primary size-5" />
                     <p class="font-semibold text-sm">
-                      {{ t('tools.previewVideo') }}
+                      {{ t('tools.videoForm') }}
                     </p>
                   </div>
-                </template>
-                <div ref="previewContainer"
-                  class="flex justify-center items-center p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg min-h-75 overflow-hidden">
-                  <ToolsVideoFramePreview :preview-file="previewFile" :background="{
-                    type: config.background_type || 'color',
-                    color: config.background_color || '#000000',
-                    boxblur: config.background_boxblur || 10,
-                    file: config.background_file || null
-                  }" :texts="previewLabels" :subs="previewFiles" :base-size="baseSize" :frame-size="frameSize"
-                    :readonly="true" />
+                  <div class="flex gap-1">
+                    <UButton icon="i-lucide-history" color="warning" variant="ghost" size="sm"
+                      :title="t('tools.history')" @click="openHistory" />
+                  </div>
                 </div>
-              </UCard>
+              </template>
 
-              <!-- Settings Card -->
-              <UCard>
-                <template #header>
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <UIcon name="i-lucide-settings" class="text-primary size-5" />
-                      <p class="font-semibold text-sm">
-                        {{ t('settings.title') }}
+              <!-- Mode Selector via USelectMenu -->
+              <div
+                class="mb-6 p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    {{ t('tools.operationMode') }}
+                  </label>
+                  <span v-if="currentModeItem?.description"
+                    class="text-xs text-neutral-400 dark:text-neutral-500 hidden sm:inline">
+                    {{ currentModeItem.description }}
+                  </span>
+                </div>
+                <USelectMenu v-model="runMode" :items="modeOptions" value-key="value" label-key="label" class="w-full"
+                  size="lg" :disabled="controlsDisabled">
+                  <template #leading>
+                    <UIcon :name="currentModeItem?.icon || 'i-lucide-video'" class="size-5 text-primary shrink-0" />
+                  </template>
+                </USelectMenu>
+              </div>
+
+              <!-- Dynamic Panels based on Mode -->
+              <!-- 1. Single Video Panel -->
+              <ToolsVideoSinglePanel v-if="runMode === 'single'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :selected-preset-id="selectedPresetId || undefined"
+                :selected-preset-title="selectedPresetTitle" :config="config" :loading="starting"
+                @update:input-path="(path) => singleInputPath = path"
+                @update:input-media-size="(size) => inputMediaSize = size" @submit="onTasksSubmit" />
+
+              <!-- 2. Batch Videos Panel -->
+              <ToolsVideoBatchPanel v-else-if="runMode === 'batch'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :selected-preset-id="selectedPresetId || undefined"
+                :selected-preset-title="selectedPresetTitle" :config="config" :loading="starting"
+                @submit="onTasksSubmit" />
+
+              <!-- 3. Join Videos Panels -->
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_root'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" mode="root" @submit="onTasksSubmit" />
+
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_subfolder'" :presets="presets"
+                :disabled="controlsDisabled" :selected-encoder="selectedEncoder" mode="subfolder"
+                @submit="onTasksSubmit" />
+
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_files'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" mode="files" @submit="onTasksSubmit" />
+
+              <!-- 4. Split Videos Panel -->
+              <ToolsVideoSplitPanel v-else-if="runMode === 'split'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" @submit="onTasksSubmit" />
+
+              <!-- 5. Image2Video Panels -->
+              <ToolsVideoCreatorPanel v-else-if="runMode === 'images_root'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :loading="starting" mode="root" @submit="onTasksSubmit" />
+
+              <ToolsVideoCreatorPanel v-else-if="runMode === 'images_subfolder'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :loading="starting" mode="subfolder" @submit="onTasksSubmit" />
+
+              <!-- 6. Audio Tool Panel -->
+              <ToolsVideoAudioToolPanel v-else-if="runMode === 'audio'" :disabled="controlsDisabled" :loading="starting"
+                @submit="onTasksSubmit" />
+
+              <template v-if="taskManager.processing.value || taskManager.paused.value" #footer>
+                <div class="flex justify-end gap-2 w-full">
+                  <UButton v-if="taskManager.processing.value && !taskManager.paused.value" icon="i-lucide-pause"
+                    :label="t('tools.pause')" color="warning" variant="soft" @click="taskManager.pause()" />
+                  <UButton v-if="taskManager.paused.value" icon="i-lucide-play" :label="t('tools.resume')"
+                    color="success" variant="soft" @click="taskManager.resume()" />
+                  <UButton icon="i-lucide-square" :label="t('tools.stopAll')" color="error" variant="soft"
+                    @click="taskManager.stopAll()" />
+                </div>
+              </template>
+            </UCard>
+
+            <!-- Task Manager Panel -->
+            <ToolsTaskManagerPanel :items="taskManager.taskList.value" :total="taskManager.total.value"
+              :done="taskManager.done.value" :running="taskManager.running.value"
+              :processing="taskManager.processing.value" :paused="taskManager.paused.value"
+              :retries="taskManager.globalRetryCount.value" :show-actions="false" @refresh="taskManager.refreshStatus()"
+              @stop-task="(key) => taskManager.stopTask(key)" @open-file="onPreviewResult" @open-item="showInFolder" />
+          </div>
+        </UScrollArea>
+      </div>
+
+      <!-- Right Column: Visual Preview & Settings -->
+      <div class="lg:h-full lg:min-h-0 flex flex-col">
+        <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
+          <div class="space-y-6">
+            <!-- Video Preview Card Component -->
+            <UCard>
+              <template #header>
+                <div class="flex items-center gap-2">
+                  <UIcon name="i-lucide-eye" class="text-primary size-5" />
+                  <p class="font-semibold text-sm">
+                    {{ t('tools.previewVideo') }}
+                  </p>
+                </div>
+              </template>
+              <div ref="previewContainer"
+                class="flex justify-center items-center p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg min-h-75 overflow-hidden">
+                <ToolsVideoFramePreview :preview-file="previewFile" :background="{
+                  type: config.background_type || 'color',
+                  color: config.background_color || '#000000',
+                  boxblur: config.background_boxblur || 10,
+                  file: config.background_file || null
+                }" :texts="previewLabels" :subs="previewFiles" :base-size="baseSize" :frame-size="frameSize"
+                  :readonly="true" />
+              </div>
+            </UCard>
+
+            <!-- Settings Card -->
+            <UCard>
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-settings" class="text-primary size-5" />
+                    <p class="font-semibold text-sm">
+                      {{ t('settings.title') }}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <UTooltip :text="t('tools.refresh')">
+                      <UButton icon="i-lucide-rotate-ccw" size="xs" color="neutral" variant="soft"
+                        :disabled="controlsDisabled" @click="resetConfig" />
+                    </UTooltip>
+                  </div>
+                </div>
+              </template>
+
+              <div class="space-y-5">
+                <!-- GPU Acceleration details -->
+                <div v-if="taskManager.isElectron.value"
+                  class="p-3 border border-default bg-neutral-50/50 dark:bg-neutral-900/30 rounded-lg flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <UIcon name="i-lucide-cpu" class="text-primary text-xl shrink-0" />
+                    <div class="text-xs">
+                      <p class="font-semibold text-default">
+                        {{ t('tools.gpuSupport') }}
+                      </p>
+                      <p v-if="detectedGpuString" class="text-[10px] text-success font-medium mt-0.5">
+                        {{ t('tools.gpuDetected', { gpus: detectedGpuString }) }}
+                      </p>
+                      <p v-else class="text-[10px] text-muted mt-0.5">
+                        {{ t('tools.noGpu') }}
                       </p>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <UTooltip :text="t('tools.refresh')">
-                        <UButton icon="i-lucide-rotate-ccw" size="xs" color="neutral" variant="soft"
-                          :disabled="controlsDisabled" @click="resetConfig" />
+                  </div>
+                  <UButton size="xs" variant="soft" :loading="gpuLoading" @click="checkGpu">
+                    {{ t('tools.refresh') }}
+                  </UButton>
+                </div>
+
+                <!-- Encoder/GPU selection -->
+                <UFormField v-if="taskManager.isElectron.value" :label="t('tools.encoder')" name="selectedEncoder">
+                  <USelect v-model="selectedEncoder" :items="encoderOptions" class="w-full"
+                    :disabled="controlsDisabled" />
+                </UFormField>
+
+                <!-- Preset select configuration -->
+                <div class="space-y-2">
+                  <p class="text-xs text-muted leading-relaxed">
+                    {{ t('tools.choosePresetDesc') }}
+                  </p>
+
+                  <UFormField name="configPreset" :label="t('tools.configPreset')">
+                    <div class="flex gap-2 w-full">
+                      <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value"
+                        :placeholder="t('tools.selectPreset')" clear
+                        :search-input="{ placeholder: t('tools.searchPreset') }" :disabled="controlsDisabled"
+                        class="flex-1">
+                        <template #empty>
+                          {{ t('tools.noPresets') }}
+                        </template>
+                      </USelectMenu>
+                      <UTooltip :text="t('tools.addConfig')">
+                        <UButton icon="i-lucide-plus" size="md" color="primary" variant="soft"
+                          :disabled="controlsDisabled" @click="openCreateConfig" />
+                      </UTooltip>
+                      <UTooltip :text="t('tools.editConfig')">
+                        <UButton icon="i-lucide-pencil" size="md" color="neutral" variant="soft"
+                          :disabled="controlsDisabled || !selectedPresetId" @click="onEditPresetClick" />
                       </UTooltip>
                     </div>
-                  </div>
-                </template>
-
-                <div class="space-y-5">
-                  <!-- GPU Acceleration details -->
-                  <div v-if="taskManager.isElectron.value"
-                    class="p-3 border border-default bg-neutral-50/50 dark:bg-neutral-900/30 rounded-lg flex items-center justify-between">
-                    <div class="flex items-center gap-2.5">
-                      <UIcon name="i-lucide-cpu" class="text-primary text-xl shrink-0" />
-                      <div class="text-xs">
-                        <p class="font-semibold text-default">
-                          {{ t('tools.gpuSupport') }}
-                        </p>
-                        <p v-if="detectedGpuString" class="text-[10px] text-success font-medium mt-0.5">
-                          {{ t('tools.gpuDetected', { gpus: detectedGpuString }) }}
-                        </p>
-                        <p v-else class="text-[10px] text-muted mt-0.5">
-                          {{ t('tools.noGpu') }}
-                        </p>
-                      </div>
-                    </div>
-                    <UButton size="xs" variant="soft" :loading="gpuLoading" @click="checkGpu">
-                      {{ t('tools.refresh') }}
-                    </UButton>
-                  </div>
-
-                  <!-- Encoder/GPU selection -->
-                  <UFormField v-if="taskManager.isElectron.value" :label="t('tools.encoder')" name="selectedEncoder">
-                    <USelect v-model="selectedEncoder" :items="encoderOptions" class="w-full"
-                      :disabled="controlsDisabled" />
                   </UFormField>
+                </div>
+              </div>
+            </UCard>
 
-                  <!-- Preset select configuration -->
-                  <div class="space-y-2">
-                    <p class="text-xs text-muted leading-relaxed">
-                      {{ t('tools.choosePresetDesc') }}
+            <!-- Variables substitution explanation (Batch Mode only) -->
+            <UCard v-if="runMode === 'batch'">
+              <template #header>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-help-circle" class="text-primary size-4" />
+                    <p class="font-semibold text-xs">
+                      {{ t('tools.variables') }}
                     </p>
-
-                    <UFormField name="configPreset" :label="t('tools.configPreset')">
-                      <div class="flex gap-2 w-full">
-                        <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value"
-                          :placeholder="t('tools.selectPreset')" clear
-                          :search-input="{ placeholder: t('tools.searchPreset') }" :disabled="controlsDisabled"
-                          class="flex-1">
-                          <template #empty>
-                            {{ t('tools.noPresets') }}
-                          </template>
-                        </USelectMenu>
-                        <UTooltip :text="t('tools.addConfig')">
-                          <UButton icon="i-lucide-plus" size="md" color="primary" variant="soft"
-                            :disabled="controlsDisabled" @click="openCreateConfig" />
-                        </UTooltip>
-                        <UTooltip :text="t('tools.editConfig')">
-                          <UButton icon="i-lucide-pencil" size="md" color="neutral" variant="soft"
-                            :disabled="controlsDisabled || !selectedPresetId" @click="onEditPresetClick" />
-                        </UTooltip>
-                      </div>
-                    </UFormField>
                   </div>
                 </div>
-              </UCard>
-
-              <!-- Variables substitution explanation (Batch Mode only) -->
-              <UCard v-if="runMode === 'batch'">
-                <template #header>
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                      <UIcon name="i-lucide-help-circle" class="text-primary size-4" />
-                      <p class="font-semibold text-xs">
-                        {{ t('tools.variables') }}
-                      </p>
-                    </div>
-                  </div>
-                </template>
-                <div class="grid grid-cols-2 gap-1 text-[10px]">
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{name}</strong>: File name
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{ext}</strong>: Extension
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{dirname}</strong>: Parent dir
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{fulldir}</strong>: Full dir path
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{date}</strong>: YYYYMMDD
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{datetime}</strong>: YYYYMMDD_HHMMSS
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{config}</strong>: Preset name
-                  </div>
-                  <div class="p-1.5 border rounded bg-gray-50/50 dark:bg-gray-800/30 truncate">
-                    <strong>{idx}</strong>: Task Index
-                  </div>
+              </template>
+              <div class="grid grid-cols-2 gap-1 text-[10px]">
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{name}</strong>: File name
                 </div>
-              </UCard>
-            </div>
-          </UScrollArea>
-        </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{ext}</strong>: Extension
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{dirname}</strong>: Parent dir
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{fulldir}</strong>: Full dir path
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{date}</strong>: YYYYMMDD
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{datetime}</strong>: YYYYMMDD_HHMMSS
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{config}</strong>: Preset name
+                </div>
+                <div class="p-1.5 border rounded bg-neutral-50/50 dark:bg-neutral-800/30 truncate">
+                  <strong>{idx}</strong>: Task Index
+                </div>
+              </div>
+            </UCard>
+          </div>
+        </UScrollArea>
       </div>
-    </UForm>
+    </div>
 
     <!-- Configuration Editor Modal -->
     <ToolsConfigModal v-model:open="showConfigSlideover" :preset="editingConfig" :loading="savingConfig"
-      :preview-file="inputPath" @save="onSaveConfig" @delete="openDeletePreset" />
+      :preview-file="singleInputPath" @save="onSaveConfig" @delete="openDeletePreset" />
 
     <!-- Confirm deletion preset modal -->
     <LazyBaseConfirmModal v-model:open="showDeletePresetModal" :title="t('tools.confirmDeleteConfigTitle')"
@@ -924,5 +613,8 @@ onMounted(async () => {
 
     <!-- History Drawer Slideover -->
     <ToolsVideoHistorySlideover v-model="showHistorySlideover" :api="taskManager.api!" />
+
+    <!-- In-App Media Preview Modal -->
+    <ToolsVideoPreviewModal v-model:open="showPreviewModal" :file-path="previewTargetFile" />
   </BasePage>
 </template>

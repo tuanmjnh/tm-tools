@@ -25,7 +25,9 @@ export type {
   DialogFileFilter,
   DialogArgs,
   DialogNamespace,
-  FileManagerNamespace
+  FileManagerNamespace,
+  MediaProbeResult,
+  JoinFolderItem
 } from './electron'
 
 export type UserStatus = 'subscribed' | 'unsubscribed' | 'bounced'

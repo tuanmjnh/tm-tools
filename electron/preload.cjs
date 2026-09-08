@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 function exposeNamespace(namespace, channels) {
   const api = {}
   for (const method of channels.invoke) {
-    api[method] = (payload) => ipcRenderer.invoke(`${namespace}:${method}`, payload)
+    api[method] = (...args) => ipcRenderer.invoke(`${namespace}:${method}`, ...args)
   }
   for (const method of channels.on) {
     api[`on${capitalize(method)}`] = (callback) => {
@@ -38,7 +38,8 @@ const ffmpeg = exposeNamespace('tools:ffmpeg', {
     'startTasks', 'pauseTasks', 'continueTasks', 'stopTask', 'stopTasks', 'getMediaInfo',
     'listFfmpegConfigs', 'createFfmpegConfig', 'updateFfmpegConfig', 'deleteFfmpegConfig',
     'listFfmpegBatchConfigs', 'createFfmpegBatchConfig', 'updateFfmpegBatchConfig', 'deleteFfmpegBatchConfig',
-    'listFfmpegHistory', 'deleteFfmpegHistory', 'detectGpuSupport', 'globFiles'
+    'listFfmpegHistory', 'deleteFfmpegHistory', 'detectGpuSupport', 'globFiles', 'scanImageSubfolders',
+    'probeMedia', 'scanJoinFolders'
   ],
   on: [
     'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
@@ -76,10 +77,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   isElectron: true,
   getConfig: () => ipcRenderer.invoke('get-config'),
-  setConfig: (values) => ipcRenderer.invoke('set-config', values),
+  setConfig: values => ipcRenderer.invoke('set-config', values),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
-  openPath: (fullPath) => ipcRenderer.invoke('open-path', fullPath),
-  showItemInFolder: (fullPath) => ipcRenderer.invoke('show-item-in-folder', fullPath),
+  openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
+  showItemInFolder: fullPath => ipcRenderer.invoke('show-item-in-folder', fullPath),
   send: (channel, data) => ipcRenderer.send(channel, data),
   on: (channel, callback) => {
     ipcRenderer.on(channel, (event, ...args) => callback(...args))
