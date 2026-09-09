@@ -1,10 +1,11 @@
 const { ipcMain, app } = require('electron')
 const { existsSync, mkdirSync, statSync } = require('fs')
-const { spawn, execSync } = require('child_process')
+const { spawn, execSync, execFile } = require('child_process')
 const path = require('path')
 const { getToolsBinaries, verifyExecutable } = require('./paths.cjs')
 const { TaskProcessManager } = require('./task-manager.cjs')
 const sqlite = require('./sqlite.cjs')
+const { checkFfmpegUpdate, installFfmpeg } = require('./updater.cjs')
 
 const isImageFile = (filePath) => {
   if (!filePath) return false
@@ -79,6 +80,36 @@ function detectGpuSupport() {
   }
 }
 
+function getToolVersion(exePath) {
+  return new Promise((resolve) => {
+    if (!exePath || !existsSync(exePath)) {
+      return resolve('Not found')
+    }
+    execFile(exePath, ['-version'], { timeout: 3000 }, (error, stdout, stderr) => {
+      if (error && !stdout) {
+        return resolve(error.message || 'Error')
+      }
+      const output = stdout || stderr || ''
+      const firstLine = output.split(/\r?\n/)[0]?.trim()
+      resolve(firstLine || 'Unknown version')
+    })
+  })
+}
+
+async function getVersions() {
+  const exe = resolveExecutable()
+  const [ffmpegVer, ffprobeVer, ffplayVer] = await Promise.all([
+    getToolVersion(exe.ffmpeg),
+    getToolVersion(exe.ffprobe),
+    getToolVersion(exe.ffplay)
+  ])
+  return {
+    ffmpeg: ffmpegVer,
+    ffprobe: ffprobeVer,
+    ffplay: ffplayVer
+  }
+}
+
 function getFileSizeSync(filePath) {
   try {
     if (filePath && existsSync(filePath)) {
@@ -90,11 +121,12 @@ function getFileSizeSync(filePath) {
   return 0
 }
 
-function substituteVariables(pattern, inputFile, configTitle, idx) {
+function substituteVariables(pattern, inputFile, configTitle, idx, outputDir) {
   const ext = path.extname(inputFile).slice(1)
   const name = path.basename(inputFile, path.extname(inputFile))
   const fulldir = path.dirname(inputFile).replace(/\\/g, '/')
   const folder = path.basename(fulldir)
+  const outdir = outputDir ? outputDir.replace(/\\/g, '/') : fulldir
 
   const now = new Date()
   const dateStr = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
@@ -104,13 +136,18 @@ function substituteVariables(pattern, inputFile, configTitle, idx) {
   let result = pattern
     .replace(/{name}/g, name)
     .replace(/{ext}/g, ext)
-    .replace(/{dirname}/g, fulldir)
+    .replace(/{dirname}/g, outputDir ? outdir : fulldir)
     .replace(/{fulldir}/g, fulldir)
+    .replace(/{outdir}/g, outdir)
     .replace(/{folder}/g, folder)
     .replace(/{date}/g, dateStr)
     .replace(/{datetime}/g, datetimeStr)
     .replace(/{config}/g, configTitle || 'default')
     .replace(/{idx}/g, String(idx + 1))
+
+  if (outputDir && !path.isAbsolute(result)) {
+    result = path.join(outdir, result)
+  }
 
   return path.resolve(result).replace(/\\/g, '/')
 }
@@ -904,7 +941,7 @@ function resolveTasks(args) {
 
     // Resolve output via variables substitution
     if (meta.outputPattern) {
-      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, i)
+      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, i, meta.outputDir)
       meta.output = substitutedOutput
     }
 
@@ -954,7 +991,7 @@ function setGroupTasks(event, args) {
     let finalArgs = task.args
 
     if (meta.outputPattern) {
-      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, g)
+      const substitutedOutput = substituteVariables(meta.outputPattern, meta.input, meta.configTitle, g, meta.outputDir)
       meta.output = substitutedOutput
     }
 
@@ -1417,6 +1454,39 @@ function registerFfmpegController() {
     return { status: true }
   })
   ipcMain.handle(`${moduleName}:detectGpuSupport`, () => detectGpuSupport())
+  ipcMain.handle(`${moduleName}:getVersion`, async () => {
+    try {
+      const versions = await getVersions()
+      return { status: true, data: versions }
+    } catch (e) {
+      return { status: false, message: e.message }
+    }
+  })
+  ipcMain.handle(`${moduleName}:checkUpdate`, async (_event, options) => {
+    try {
+      let currentVersion = ''
+      try {
+        const vers = await getVersions()
+        currentVersion = vers.ffmpeg || ''
+      } catch {
+        // ignore
+      }
+      return await checkFfmpegUpdate(currentVersion, options)
+    } catch (e) {
+      return { status: false, message: e.message }
+    }
+  })
+  ipcMain.handle(`${moduleName}:performUpdate`, async (event, options) => {
+    try {
+      const result = await installFfmpeg(options, (progress) => {
+        send(event, `${moduleName}:updateProgress`, progress)
+      })
+      binaries = getToolsBinaries()
+      return result
+    } catch (e) {
+      return { status: false, message: e.message }
+    }
+  })
 
   app.on('will-quit', () => {
     taskManager.stop().catch(() => { })

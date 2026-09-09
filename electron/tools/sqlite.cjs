@@ -409,7 +409,23 @@ module.exports = {
   },
   listHistory: (limit = 100) => db.prepare('SELECT * FROM youtube_history ORDER BY created_at DESC LIMIT ?').all(limit),
   listHistoryCursor: (cursor, limit = 30) => cursorPage('youtube_history', cursor, limit),
-  deleteHistory: () => db.prepare('DELETE FROM youtube_history').run(),
+  deleteHistory: (idOrIds) => {
+    if (!idOrIds) {
+      return db.prepare('DELETE FROM youtube_history').run()
+    }
+    if (Array.isArray(idOrIds)) {
+      if (idOrIds.length === 0) return { changes: 0 }
+      const placeholders = idOrIds.map(() => '?').join(',')
+      return db.prepare(`DELETE FROM youtube_history WHERE id IN (${placeholders})`).run(...idOrIds)
+    }
+    if (typeof idOrIds === 'string' && idOrIds.includes(',')) {
+      const ids = idOrIds.split(',').map(s => s.trim()).filter(Boolean)
+      if (ids.length === 0) return { changes: 0 }
+      const placeholders = ids.map(() => '?').join(',')
+      return db.prepare(`DELETE FROM youtube_history WHERE id IN (${placeholders})`).run(...ids)
+    }
+    return db.prepare('DELETE FROM youtube_history WHERE id=?').run(idOrIds)
+  },
 
   // ffmpeg_configs
   listFfmpegConfigs: () => db.prepare('SELECT * FROM ffmpeg_configs WHERE flag=1 ORDER BY created_at DESC').all(),

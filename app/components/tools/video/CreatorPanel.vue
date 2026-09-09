@@ -28,7 +28,7 @@ watch(() => props.mode, () => {
 
 const subfolderInput = ref('')
 const subfolderOutput = ref('')
-const subfolderThreads = ref(4)
+const subfolderThreads = useLocalStorage('tools:video:threads', 3)
 const subfoldersList = ref<Array<{ name: string, path: string, count: number, images: string[] }>>([])
 const scanningSubfolders = ref(false)
 const subfolderResolution = ref('1080x1920')
@@ -315,7 +315,9 @@ function onSubmit() {
     <!-- Extension Filters -->
     <UFormField :label="t('tools.supportedExtensions')">
       <USelectMenu v-model="subfolderExtensions" :items="availableExtensions" multiple
-        :placeholder="t('tools.supportedExtensions')" class="w-full" :disabled="disabled" />
+        :placeholder="t('tools.supportedExtensions')"
+        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full"
+        :disabled="disabled" />
     </UFormField>
 
     <!-- Images / Subfolders List Preview -->

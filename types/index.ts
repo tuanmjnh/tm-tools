@@ -17,6 +17,7 @@ export type {
   FfmpegConfig,
   FfmpegBatchConfig,
   FfmpegHistory,
+  FfmpegVersions,
   FfmpegLabel,
   FfmpegSubFile,
   FileStat,
@@ -27,7 +28,9 @@ export type {
   DialogNamespace,
   FileManagerNamespace,
   MediaProbeResult,
-  JoinFolderItem
+  JoinFolderItem,
+  ToolUpdateInfo,
+  ToolUpdateProgress
 } from './electron'
 
 export type UserStatus = 'subscribed' | 'unsubscribed' | 'bounced'

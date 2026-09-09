@@ -25,7 +25,7 @@ const taskManager = useToolTaskManager('ffmpeg')
 const inputPath = ref('')
 const outputPath = ref('')
 const duration = ref(0)
-const inputMediaSize = ref<{ w: number, h: number }>({ w: 1920, h: 1080 })
+const inputMediaSize = ref<{ w: number, h: number }>({ w: 1080, h: 1920 })
 
 watch(inputPath, async (newVal) => {
   emit('update:inputPath', newVal)
@@ -37,14 +37,14 @@ watch(inputPath, async (newVal) => {
         description: t('tools.invalidMediaDesc'),
         color: 'error'
       })
-      inputMediaSize.value = { w: 1920, h: 1080 }
+      inputMediaSize.value = { w: 1080, h: 1920 }
     } else {
       inputMediaSize.value = size
     }
     emit('update:inputMediaSize', inputMediaSize.value)
     await probeDuration()
   } else {
-    inputMediaSize.value = { w: 1920, h: 1080 }
+    inputMediaSize.value = { w: 1080, h: 1920 }
     emit('update:inputMediaSize', inputMediaSize.value)
   }
 })
@@ -65,6 +65,10 @@ async function probeDuration() {
 function onSubmit() {
   if (!inputPath.value) {
     toast.add({ title: t('tools.pleaseSelectInput'), color: 'error' })
+    return
+  }
+  if (!props.selectedPresetId) {
+    toast.add({ title: t('tools.pleaseSelectConfig'), color: 'error' })
     return
   }
   const out = outputPath.value || inputPath.value.replace(/\.\w+$/, '_rendered.mp4')

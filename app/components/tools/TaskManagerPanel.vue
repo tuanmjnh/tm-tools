@@ -125,8 +125,8 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
           <div class="flex items-center gap-2">
             <UBadge :color="statusColor(item.status)" variant="subtle" :label="statusLabel(item.status)" size="sm" />
             <span v-if="item.retry > 0" class="text-xs text-warning">{{ item.retry }}</span>
-            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-eye" color="primary" variant="ghost"
-              size="xs" :aria-label="t('tools.previewResult')" :title="t('tools.previewResult')"
+            <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-play" color="primary"
+              variant="ghost" size="xs" :aria-label="t('tools.openFile')" :title="t('tools.openFile')"
               @click="emit('openFile', itemPath(item))" />
             <UButton v-if="item.status === 'done' && itemPath(item)" icon="i-lucide-folder-search" color="primary"
               variant="ghost" size="xs" :aria-label="t('tools.showInFolder')" :title="t('tools.showInFolder')"

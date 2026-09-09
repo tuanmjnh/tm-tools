@@ -67,6 +67,7 @@
     "cloudinary": "^2.10.0",
     "date-fns": "^4.4.0",
     "easyqrcodejs": "^4.6.2",
+    "electron-updater": "^6.8.9",
     "firebase": "^12.17.0",
     "firebase-admin": "^14.2.0",
     "jose": "^6.2.4",

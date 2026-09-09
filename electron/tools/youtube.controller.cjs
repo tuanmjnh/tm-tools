@@ -6,6 +6,7 @@ const { getToolsBinaries, verifyExecutable } = require('./paths.cjs')
 const { TaskProcessManager } = require('./task-manager.cjs')
 const { decodeBuffer } = require('./encoding.cjs')
 const sqlite = require('./sqlite.cjs')
+const { checkYtDlpUpdate, installYtDlp } = require('./updater.cjs')
 
 const MEDIA_EXT = ['mp4', 'm4a', 'm4v', 'webm', 'mkv', 'mov', 'mp3', 'aac', 'flac', 'wav', 'ogg', 'opus', 'ts', 'flv', '3gp']
 
@@ -408,6 +409,32 @@ function registerYoutubeController() {
     }
   })
 
+  ipcMain.handle(`${moduleName}:checkUpdate`, async () => {
+    try {
+      let currentVersion = ''
+      try {
+        currentVersion = await getVersion()
+      } catch {
+        // Ignore if getting current version fails
+      }
+      return await checkYtDlpUpdate(currentVersion)
+    } catch (e) {
+      return { status: false, message: e.message }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:performUpdate`, async (event, options) => {
+    try {
+      const result = await installYtDlp(options, (progress) => {
+        send(event, `${moduleName}:updateProgress`, progress)
+      })
+      binaries = getToolsBinaries()
+      return result
+    } catch (e) {
+      return { status: false, message: e.message }
+    }
+  })
+
   ipcMain.handle(`${moduleName}:getStatus`, () => taskManager.getStatus())
   ipcMain.handle(`${moduleName}:getTasks`, () => {
     return taskManager.tasks.map((task, idx) => {
@@ -501,13 +528,13 @@ function registerYoutubeController() {
 
   ipcMain.handle(`${moduleName}:listHistory`, (event, limit) => sqlite.listHistory(limit))
   ipcMain.handle(`${moduleName}:listHistoryCursor`, (event, { cursor, limit } = {}) => sqlite.listHistoryCursor(cursor, limit))
-  ipcMain.handle(`${moduleName}:deleteHistory`, () => {
-    sqlite.deleteHistory()
+  ipcMain.handle(`${moduleName}:deleteHistory`, (event, idOrIds) => {
+    sqlite.deleteHistory(idOrIds)
     return { status: true }
   })
 
   app.on('will-quit', () => {
-    taskManager.stop().catch(() => {})
+    taskManager.stop().catch(() => { })
   })
 }
 

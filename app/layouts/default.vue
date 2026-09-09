@@ -6,7 +6,14 @@ const { t } = useI18n()
 const auth = useAuth()
 const nav = useNavMenu()
 const appConfig = useAppConfig()
+const appUpdater = useAppUpdater()
 const open = ref(false)
+
+onMounted(() => {
+  if (appUpdater.isElectron.value) {
+    appUpdater.checkForUpdates(true)
+  }
+})
 
 watch(() => auth.isAuthenticated.value, async (val) => {
   if (val) await nav.fetchRoutes()
@@ -49,15 +56,7 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
       </template>
 
       <template #footer="{ collapsed }">
-        <!-- <div
-          :class="collapsed ? 'flex flex-col gap-2 w-full items-center justify-center' : 'flex items-center justify-between w-full'"> -->
-        <div class="flex flex-col gap-2 w-full items-center justify-center">
-          <LazyDashboardUserMenu :collapsed="collapsed" />
-          <div class="flex items-center justify-between w-full px-3 text-xs">
-            <span>Version: <b>{{ appConfig.system.app_version }}</b></span>
-            <LazyDashboardNetworkStatus icon-only class="flex justify-center" />
-          </div>
-        </div>
+        <LazyDashboardUserMenu :collapsed="collapsed" />
       </template>
     </UDashboardSidebar>
 
@@ -67,5 +66,6 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
     <LazyDashboardNotificationsSlideover />
     <LazyDashboardSettingsSlideover />
+    <LazyDashboardAppUpdateModal />
   </UDashboardGroup>
 </template>

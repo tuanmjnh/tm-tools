@@ -1,13 +1,17 @@
 import { ref, computed, watch } from 'vue'
 import type { FfmpegConfig } from '~/types'
 
+const PRESET_STORAGE_KEY = 'tools:video:last_preset_id'
+
 export function useFfmpegPresets() {
   const taskManager = useToolTaskManager('ffmpeg')
   const toast = useToast()
   const { t } = useI18n()
 
   const presets = ref<FfmpegConfig[]>([])
-  const selectedPresetId = ref<string>('')
+  const selectedPresetId = ref<string>(
+    import.meta.client ? (localStorage.getItem(PRESET_STORAGE_KEY) || '') : ''
+  )
   const editingConfig = ref<FfmpegConfig | null>(null)
   const savingConfig = ref(false)
   const deletingPreset = ref(false)
@@ -62,6 +66,19 @@ export function useFfmpegPresets() {
 
   async function loadPresets() {
     presets.value = await taskManager.api!.listFfmpegConfigs?.() || []
+    const savedId = selectedPresetId.value || (import.meta.client ? (localStorage.getItem(PRESET_STORAGE_KEY) || '') : '')
+    if (savedId) {
+      const matched = presets.value.find((p: FfmpegConfig) => p.id === savedId)
+      if (matched) {
+        selectedPresetId.value = savedId
+        applyPreset(matched)
+      } else {
+        selectedPresetId.value = ''
+        if (import.meta.client) {
+          localStorage.removeItem(PRESET_STORAGE_KEY)
+        }
+      }
+    }
   }
 
   function applyPreset(preset: FfmpegConfig) {
@@ -93,6 +110,13 @@ export function useFfmpegPresets() {
   }
 
   watch(selectedPresetId, (newId) => {
+    if (import.meta.client) {
+      if (newId) {
+        localStorage.setItem(PRESET_STORAGE_KEY, newId)
+      } else {
+        localStorage.removeItem(PRESET_STORAGE_KEY)
+      }
+    }
     if (newId) {
       const preset = presets.value.find(p => p.id === newId)
       if (preset && config.value.id !== newId) {
@@ -104,6 +128,9 @@ export function useFfmpegPresets() {
   })
 
   function resetConfig() {
+    if (selectedPresetId.value) {
+      selectedPresetId.value = ''
+    }
     config.value = {
       title: '',
       aspect_ratio: 0,

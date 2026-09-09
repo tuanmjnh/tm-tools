@@ -3,6 +3,11 @@ productName: TM Tools
 directories:
   output: release
   buildResources: public
+publish:
+  provider: github
+  owner: tuanmjnh
+  repo: tm-tools-public
+  releaseType: release
 files:
   - electron/**/*
   - .output/**/*

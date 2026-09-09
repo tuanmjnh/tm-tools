@@ -2,14 +2,22 @@
 import { ref, computed, watch } from 'vue'
 import type { FfmpegConfig, ToolTask, MediaProbeResult } from '~/types'
 
-const props = defineProps<{
-  presets: FfmpegConfig[]
+const props = withDefaults(defineProps<{
+  presets?: FfmpegConfig[]
   disabled?: boolean
   selectedEncoder?: string
-}>()
+  usePreset?: boolean
+  selectedPresetId?: string
+  selectedPresetTitle?: string
+  config?: Partial<FfmpegConfig>
+}>(), {
+  presets: () => [],
+  usePreset: false
+})
 
 const emit = defineEmits<{
   (e: 'submit', tasks: ToolTask[]): void
+  (e: 'update:inputPath', path: string): void
 }>()
 
 const { t } = useI18n()
@@ -31,19 +39,13 @@ const partsCount = ref(3)
 const customStart = ref(0)
 const customDuration = ref(30)
 
-const usePreset = ref(false)
-const selectedPresetId = ref<string>('')
-const threads = ref(2)
+const threads = useLocalStorage('tools:video:threads', 2)
 
 const modeOptions = computed(() => [
   { label: t('tools.splitModeDuration'), value: 'duration', icon: 'i-lucide-clock' },
   { label: t('tools.splitModeParts'), value: 'parts', icon: 'i-lucide-divide' },
   { label: t('tools.splitModeCustom'), value: 'custom', icon: 'i-lucide-scissors' }
 ])
-
-const presetOptions = computed(() => {
-  return props.presets.map(p => ({ label: p.title, value: p.id }))
-})
 
 function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds))
@@ -68,6 +70,7 @@ async function onInputSelected(file: string) {
 }
 
 watch(inputFile, async (file) => {
+  emit('update:inputPath', file)
   if (file) {
     const lastSlash = file.replace(/\\/g, '/').lastIndexOf('/')
     if (lastSlash > -1 && !outputDir.value) {
@@ -158,16 +161,17 @@ const calculatedSegments = computed<SegmentItem[]>(() => {
 
 const canSubmit = computed(() => {
   if (props.disabled) return false
+  if (props.usePreset && !props.selectedPresetId) return false
   return !!inputFile.value && !!outputDir.value && calculatedSegments.value.length > 0
 })
 
 function buildTasks(): ToolTask[] {
   const now = new Date().toISOString()
-  const chosenConfig = usePreset.value && selectedPresetId.value
-    ? props.presets.find(p => p.id === selectedPresetId.value)
+  const chosenConfig = props.usePreset && props.selectedPresetId
+    ? props.presets?.find(p => p.id === props.selectedPresetId) || props.config
     : undefined
 
-  const op = usePreset.value ? 'split_render' : 'split'
+  const op = props.usePreset ? 'split_render' : 'split'
   const baseName = inputFile.value.replace(/\\/g, '/').split('/').pop()?.replace(/\.[^.]+$/, '') || 'split'
 
   return calculatedSegments.value.map((seg, i) => {
@@ -194,6 +198,10 @@ function buildTasks(): ToolTask[] {
 }
 
 function onSubmit() {
+  if (props.usePreset && !props.selectedPresetId) {
+    toast.add({ title: t('tools.pleaseSelectConfig'), color: 'error' })
+    return
+  }
   const tasks = buildTasks()
   if (tasks.length === 0) {
     toast.add({ title: t('tools.noTasksToRun'), color: 'error' })
@@ -317,30 +325,6 @@ function onSubmit() {
             {{ seg.duration.toFixed(1) }}s
           </UBadge>
         </div>
-      </div>
-    </div>
-
-    <!-- Preset Selection (Optional Render) -->
-    <div
-      class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30 space-y-3">
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-            {{ t('tools.applyPreset') }}
-          </div>
-          <div class="text-xs text-neutral-500 dark:text-neutral-400">
-            {{ usePreset ? t('tools.applyPresetHelp') : t('tools.fastSplitHelp') }}
-          </div>
-        </div>
-        <USwitch v-model="usePreset" :disabled="disabled" />
-      </div>
-
-      <div v-if="usePreset" class="pt-2">
-        <label class="text-xs font-medium text-neutral-500 dark:text-neutral-400 block mb-1.5">
-          {{ t('tools.configRequired') }}
-        </label>
-        <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value" label-key="label"
-          placeholder="-- Chọn Preset --" class="w-full" :disabled="disabled" />
       </div>
     </div>
 

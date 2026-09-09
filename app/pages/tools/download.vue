@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { z } from 'zod'
-import type { ToolTask, PlaylistVideo, YoutubeFormat, YoutubeConfig, YoutubeHistory } from '~/types'
+import type { ToolTask, PlaylistVideo, YoutubeFormat, YoutubeConfig, YoutubeHistory, ToolUpdateInfo, ToolUpdateProgress } from '~/types'
 import type { GridColumn } from '~/components/gridList/Index.vue'
 
 const { t } = useI18n()
@@ -96,14 +96,14 @@ function formatHistorySize(h: YoutubeHistory): string {
   return '-'
 }
 
-const historyColumns: GridColumn[] = [
+const historyColumns = computed<GridColumn[]>(() => [
   { key: 'title', label: t('tools.title') },
   { key: 'url', label: t('tools.url') },
   { key: 'format', label: t('tools.format') },
   { key: 'size', label: t('tools.size') },
   { key: 'status', label: t('tools.status') }
   // { key: 'actions', label: '#' }
-]
+])
 const exeState = ref<'unknown' | 'ok' | 'missing'>('unknown')
 const showVersionSlideover = ref(false)
 const ytdlpVersion = ref('')
@@ -227,8 +227,86 @@ async function loadConfigs() {
   applyConfig(configs.value.find(c => c.id === state.selectedConfigId))
 }
 
+// History selection state
+const selectedHistory = ref<YoutubeHistory[]>([])
+
+function isHistorySelected(item: YoutubeHistory): boolean {
+  return selectedHistory.value.some(i => i.id === item.id)
+}
+
+function toggleHistorySelect(item: YoutubeHistory, val: boolean | 'indeterminate') {
+  if (val === true) {
+    if (!isHistorySelected(item)) {
+      selectedHistory.value = [...selectedHistory.value, item]
+    }
+  } else {
+    selectedHistory.value = selectedHistory.value.filter(i => i.id !== item.id)
+  }
+}
+
+function toggleSelectAllHistory() {
+  if (selectedHistory.value.length === history.value.length) {
+    selectedHistory.value = []
+  } else {
+    selectedHistory.value = [...history.value]
+  }
+}
+
+// History deletion state
+const showDeleteHistoryConfirm = ref(false)
+const deleteHistoryTargets = ref<YoutubeHistory[]>([])
+const deletingHistory = ref(false)
+
+const confirmHistoryTitle = computed(() => {
+  return deleteHistoryTargets.value.length > 1
+    ? t('tools.confirmBatchDeleteHistoryTitle')
+    : t('tools.confirmDeleteHistoryTitle')
+})
+
+const confirmHistoryDesc = computed(() => {
+  return deleteHistoryTargets.value.length > 1
+    ? t('tools.confirmBatchDeleteHistoryDesc', { count: deleteHistoryTargets.value.length })
+    : t('tools.confirmDeleteHistoryDesc')
+})
+
+function confirmDeleteHistory(item: YoutubeHistory) {
+  deleteHistoryTargets.value = [item]
+  showDeleteHistoryConfirm.value = true
+}
+
+function confirmBatchDeleteHistory() {
+  if (!selectedHistory.value.length) return
+  deleteHistoryTargets.value = [...selectedHistory.value]
+  showDeleteHistoryConfirm.value = true
+}
+
+async function doDeleteHistory() {
+  if (!deleteHistoryTargets.value.length) return
+  deletingHistory.value = true
+  try {
+    const ids = deleteHistoryTargets.value.map(i => i.id)
+    const rs = await taskManager.api!.deleteHistory(ids)
+    if (rs && rs.status) {
+      toast.add({ title: t('global.success'), description: t('tools.historyDeleted'), color: 'success' })
+      selectedHistory.value = selectedHistory.value.filter(s => !ids.includes(s.id))
+      resetHistory()
+      await loadHistory()
+    } else {
+      toast.add({ title: t('global.error'), description: t('tools.deleteHistoryFailed'), color: 'error' })
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    toast.add({ title: t('global.error'), description: msg, color: 'error' })
+  } finally {
+    deletingHistory.value = false
+    showDeleteHistoryConfirm.value = false
+    deleteHistoryTargets.value = []
+  }
+}
+
 async function openHistory() {
   showHistorySlideover.value = true
+  selectedHistory.value = []
   resetHistory()
   await loadHistory()
 }
@@ -239,6 +317,7 @@ async function clearAllHistory() {
     const rs = await taskManager.api!.deleteHistory()
     if (rs && rs.status) {
       toast.add({ title: t('global.success'), description: t('tools.historyCleared'), color: 'success' })
+      selectedHistory.value = []
       resetHistory()
       await loadHistory()
     } else {
@@ -269,10 +348,75 @@ async function fetchVersion() {
   }
 }
 
+const checkingUpdate = ref(false)
+const updating = ref(false)
+const updateInfo = ref<ToolUpdateInfo | null>(null)
+const cleanTemp = ref(true)
+const updateProgress = ref<ToolUpdateProgress>({ percent: 0, message: '', stage: undefined })
+const updateProgressMsg = ref('')
+
+async function checkUpdate() {
+  if (checkingUpdate.value || updating.value || !taskManager.api?.checkUpdate) return
+  checkingUpdate.value = true
+  updateInfo.value = null
+  try {
+    const rs = await taskManager.api.checkUpdate()
+    if (rs && rs.status && rs.data) {
+      updateInfo.value = rs.data
+      if (!rs.data.hasUpdate) {
+        toast.add({ title: t('tools.upToDate'), color: 'success' })
+      }
+    } else {
+      toast.add({ title: rs?.message || t('tools.updateFailed'), color: 'error' })
+    }
+  } catch (err: unknown) {
+    toast.add({ title: err instanceof Error ? err.message : String(err), color: 'error' })
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+async function performUpdate() {
+  if (updating.value || !taskManager.api?.performUpdate) return
+  updating.value = true
+  updateProgress.value = { stage: 'downloading', percent: 0, message: t('tools.startingUpdate') }
+  updateProgressMsg.value = t('tools.startingUpdate')
+  try {
+    const rs = await taskManager.api.performUpdate({
+      cleanTemp: cleanTemp.value,
+      downloadUrl: updateInfo.value?.downloadUrl
+    })
+    if (rs && rs.status) {
+      toast.add({ title: t('tools.updateSuccess'), color: 'success' })
+      updateInfo.value = null
+      await fetchVersion()
+      await checkUpdate()
+    } else {
+      toast.add({ title: rs?.message || t('tools.updateFailed'), color: 'error' })
+    }
+  } catch (err: unknown) {
+    toast.add({ title: err instanceof Error ? err.message : String(err), color: 'error' })
+  } finally {
+    updating.value = false
+    updateProgressMsg.value = ''
+  }
+}
+
 async function openVersionInfo() {
   showVersionSlideover.value = true
+  if (updating.value) return
+  updateInfo.value = null
   await fetchVersion()
 }
+
+onMounted(() => {
+  if (taskManager.api?.onUpdateProgress) {
+    taskManager.api.onUpdateProgress((p) => {
+      updateProgress.value = p
+      if (p.message) updateProgressMsg.value = p.message
+    })
+  }
+})
 
 const electronPlatform = computed(() => window.electronAPI?.platform || 'Desktop')
 const electronVersions = computed(() => window.electronAPI?.versions || { node: '', chrome: '', electron: '' })
@@ -652,7 +796,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                       <template #hint>
                         <div class="flex items-center gap-2 text-xs text-muted">
                           <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
-                          }}</span>
+                            }}</span>
                           <UButton v-if="isPlaylist && !loadingPlaylist" size="xs" variant="soft"
                             :loading="loadingPlaylist" :disabled="controlsDisabled" @click="crawlPlaylist">
                             {{ t('tools.getPlaylistInfo') }}
@@ -848,35 +992,64 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
         :description="t('tools.confirmClearHistory')" confirm-icon="i-lucide-trash-2" :loading="clearingHistory"
         @confirm="clearAllHistory" />
 
+      <!-- Confirm delete history (single/batch) modal -->
+      <LazyBaseConfirmModal v-model:open="showDeleteHistoryConfirm" :title="confirmHistoryTitle"
+        confirm-icon="i-lucide-trash-2" color="error" :loading="deletingHistory" @confirm="doDeleteHistory">
+        <template #body>
+          <div class="space-y-3 py-1">
+            <div class="flex items-start gap-3">
+              <UIcon name="i-lucide-alert-triangle" class="text-xl shrink-0 mt-0.5 text-error" />
+              <p class="text-sm text-muted">
+                {{ confirmHistoryDesc }}
+              </p>
+            </div>
+
+            <!-- Targeted items list -->
+            <div v-if="deleteHistoryTargets.length > 0"
+              class="max-h-36 overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 p-2 space-y-1 text-xs font-mono">
+              <div v-for="item in deleteHistoryTargets" :key="item.id"
+                class="flex items-center gap-2 truncate text-neutral-700 dark:text-neutral-300">
+                <UIcon name="i-simple-icons-youtube" class="size-3.5 shrink-0 text-red-600" />
+                <span class="truncate">{{ item.title || item.url }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </LazyBaseConfirmModal>
+
       <!-- History Slideover -->
       <BaseResponsiveSlideover v-model:open="showHistorySlideover" :title="t('tools.history')" icon="i-lucide-history"
-        side="right" :ui="{ content: 'w-screen max-w-3xl' }">
+        side="right" :ui="{ content: 'w-screen max-w-4xl' }">
         <template #body>
           <div class="h-[60vh]">
-            <LazyGridList :items="history" :columns="historyColumns" item-key="id" :loading="loadingHistory"
-              :can-load-more="hasMoreHistory" storage-key="tools-youtube-history" @refresh="loadHistory"
-              @load-more="loadMoreHistory">
+            <LazyGridList v-model:selected="selectedHistory" :items="history" :columns="historyColumns" item-key="id"
+              selectable :loading="loadingHistory" :can-load-more="hasMoreHistory" storage-key="tools-youtube-history"
+              @refresh="loadHistory" @load-more="loadMoreHistory">
               <template #empty>
                 <UEmpty icon="i-lucide-clock" :title="t('tools.noHistory')" :description="t('tools.noHistoryDesc')" />
               </template>
 
               <template #mobile-content="{ item: h }">
                 <div class="flex items-start justify-between gap-2 min-w-0">
-                  <p class="text-sm font-semibold truncate flex-1" :title="h.title || h.url">
-                    {{ h.title || h.url }}
-                  </p>
+                  <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <UCheckbox :model-value="isHistorySelected(h)"
+                      @update:model-value="(val) => toggleHistorySelect(h, val)" @click.stop />
+                    <p class="text-sm font-semibold truncate flex-1" :title="h.title || h.url">
+                      {{ h.title || h.url }}
+                    </p>
+                  </div>
                   <UBadge :color="statusColor(h)" variant="soft" size="sm" class="shrink-0">
                     {{ t(`global.${h.status}`) }}
                   </UBadge>
                 </div>
-                <div class="flex items-center justify-between gap-2 min-w-0">
+                <div class="flex items-center justify-between gap-2 min-w-0 pl-6">
                   <div class="flex flex-col">
                     <p v-if="h.title" class="mt-1 text-xs text-muted truncate min-w-0 font-mono">
                       {{ h.url }}
                     </p>
                     <div class="mt-2 flex items-center gap-3 text-xs text-muted">
                       <span>{{ formatHistoryFormat(h) }}</span>
-                      <span>{{ formatBytes(h.file_size) }}</span>
+                      <span>{{ formatHistorySize(h) }}</span>
                       <span>{{ formatDuration(h.duration) }}</span>
                     </div>
                   </div>
@@ -887,6 +1060,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                     <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
                       variant="ghost" color="neutral" :title="t('tools.openFolder')"
                       @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
+                    <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
+                      @click="confirmDeleteHistory(h)" />
                   </div>
                 </div>
               </template>
@@ -908,7 +1083,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               </template>
 
               <template #size="{ item: h }">
-                <span class="text-xs">{{ formatBytes(h.file_size) }}</span>
+                <span class="text-xs">{{ formatHistorySize(h) }}</span>
               </template>
 
               <template #status="{ item: h }">
@@ -925,16 +1100,31 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
                     variant="ghost" color="neutral" :title="t('tools.openFolder')"
                     @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
+                  <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
+                    @click="confirmDeleteHistory(h)" />
                 </div>
               </template>
             </LazyGridList>
           </div>
         </template>
         <template #footer>
-          <div class="flex justify-between w-full">
-            <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
-              @click="showHistorySlideover = false" />
-            <div class="flex gap-2">
+          <div class="flex items-center justify-between w-full gap-2">
+            <div class="flex items-center gap-2">
+              <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
+                @click="showHistorySlideover = false" />
+              <UButton v-if="selectedHistory.length" icon="i-lucide-trash" color="error" variant="subtle"
+                :loading="deletingHistory" @click="confirmBatchDeleteHistory">
+                {{ t('global.delete') }}
+                <template #trailing>
+                  <UKbd>{{ selectedHistory.length }}</UKbd>
+                </template>
+              </UButton>
+            </div>
+            <div class="flex items-center gap-2">
+              <UButton v-if="history.length > 0" size="xs" variant="ghost" color="neutral"
+                @click="toggleSelectAllHistory">
+                {{ selectedHistory.length === history.length ? t('tools.deselectAll') : t('tools.selectAll') }}
+              </UButton>
               <UButton v-if="history.length > 0" icon="i-lucide-trash-2" :label="t('tools.clearHistory')" color="error"
                 variant="soft" @click="showClearHistoryModal = true" />
               <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loadingHistory"
@@ -946,13 +1136,67 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
       <!-- Version Info Slideover -->
       <BaseResponsiveSlideover v-model:open="showVersionSlideover" :title="t('tools.versionInfo')" icon="i-lucide-info"
-        side="right">
+        side="right" :dismissible="!updating" :close="!updating">
         <template #body>
           <div v-if="loadingVersion" class="flex justify-center py-8">
             <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
           </div>
           <div v-else class="space-y-4">
-            <div class="p-4 border rounded-lg bg-muted/20">
+            <!-- Update Info / Action Card -->
+            <div v-if="updateInfo" class="space-y-3">
+              <div v-if="updateInfo.hasUpdate"
+                class="p-3.5 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <UIcon name="i-lucide-arrow-up-circle" class="size-5 text-primary" />
+                    <span class="font-semibold text-xs text-primary">{{ t('tools.updateAvailable') }}</span>
+                  </div>
+                  <UBadge color="primary" variant="subtle" size="xs">
+                    {{ updateInfo.latestVersion }}
+                  </UBadge>
+                </div>
+                <div class="text-xs text-muted space-y-1">
+                  <p>
+                    {{ t('tools.latestVersion') }}: <span class="font-mono text-default font-semibold">
+                      {{ updateInfo.latestVersion }}
+                    </span>
+                  </p>
+                  <p v-if="updateInfo.downloadUrl" class="truncate text-[11px]">
+                    Link: <span class="font-mono text-muted select-all">{{ updateInfo.downloadUrl }}</span>
+                  </p>
+                </div>
+                <div class="pt-1">
+                  <UCheckbox v-model="cleanTemp" :disabled="updating" :label="t('tools.cleanTemp')" class="text-xs" />
+                </div>
+                <div v-if="updating" class="space-y-1.5 pt-2 border-t border-primary/20">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-primary font-medium flex items-center gap-1.5 truncate max-w-70">
+                      <UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin shrink-0" />
+                      {{ updateProgress.message || updateProgressMsg || t('tools.updating') }}
+                    </span>
+                    <span class="font-mono text-primary font-semibold shrink-0">
+                      {{ updateProgress.percent || 0 }}%
+                    </span>
+                  </div>
+                  <UProgress :model-value="updateProgress.percent || 0" color="primary" size="sm" />
+                </div>
+                <div class="pt-2 flex items-center gap-2">
+                  <UButton icon="i-lucide-download-cloud" color="primary" variant="soft" block class="flex-1"
+                    :loading="updating" :disabled="updating"
+                    :label="updating ? (updateProgressMsg || t('tools.updating')) : t('tools.updateNow')"
+                    @click="performUpdate" />
+                  <!-- <UButton v-if="updating" icon="i-lucide-minimize-2" color="neutral" variant="ghost" size="sm"
+                    :title="t('tools.minimize')" @click="showVersionSlideover = false" /> -->
+                </div>
+              </div>
+              <div v-else
+                class="p-3 rounded-xl border border-success/30 bg-success/5 dark:bg-success/10 flex items-center gap-2 text-xs text-success font-medium">
+                <UIcon name="i-lucide-check-circle" class="size-4 shrink-0" />
+                <span>{{ t('tools.upToDate') }} ({{ updateInfo.latestVersion }})</span>
+              </div>
+            </div>
+
+            <div class="p-4 border border-primary/30 rounded-lg bg-muted/20">
               <div class="flex items-center gap-2 mb-2 font-semibold">
                 <UIcon name="i-simple-icons-youtube" class="text-red-600 size-5" />
                 <span>yt-dlp version</span>
@@ -962,23 +1206,106 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               </p>
             </div>
 
-            <div class="text-xs text-muted leading-relaxed space-y-1">
-              <p>Platform: <span class="font-mono text-default">{{ electronPlatform }}</span></p>
-              <p>Node.js: <span class="font-mono">{{ electronVersions.node || '-' }}</span></p>
-              <p>Chrome: <span class="font-mono">{{ electronVersions.chrome || '-' }}</span></p>
-              <p>Electron: <span class="font-mono">{{ electronVersions.electron || '-' }}</span></p>
+            <!-- Runtime Environment Card -->
+            <div
+              class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                  <UIcon name="i-lucide-cpu" class="size-4 text-primary" />
+                  {{ t('tools.runtimeEnvironment') }}
+                </span>
+                <UBadge color="neutral" variant="subtle" size="xs">
+                  Desktop
+                </UBadge>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <UIcon name="i-lucide-monitor" class="size-3.5 text-primary shrink-0" />
+                    <span class="text-muted text-[11px]">Platform</span>
+                  </div>
+                  <span class="font-mono font-semibold text-default truncate">{{ electronPlatform }}</span>
+                </div>
+                <div
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <UIcon name="i-lucide-atom" class="size-3.5 text-cyan-500 shrink-0" />
+                    <span class="text-muted text-[11px]">Electron</span>
+                  </div>
+                  <span class="font-mono font-semibold text-default truncate">
+                    {{ electronVersions.electron || '-' }}
+                  </span>
+                </div>
+                <div
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <UIcon name="i-lucide-server" class="size-3.5 text-emerald-500 shrink-0" />
+                    <span class="text-muted text-[11px]">Node.js</span>
+                  </div>
+                  <span class="font-mono font-semibold text-default truncate">
+                    {{ electronVersions.node || '-' }}
+                  </span>
+                </div>
+                <div
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <UIcon name="i-lucide-globe" class="size-3.5 text-amber-500 shrink-0" />
+                    <span class="text-muted text-[11px]">Chrome</span>
+                  </div>
+                  <span class="font-mono font-semibold text-default truncate">
+                    {{ electronVersions.chrome || '-' }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </template>
         <template #footer>
-          <div class="flex justify-between w-full">
-            <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
+          <div class="flex items-center justify-between w-full gap-2">
+            <UButton variant="ghost" color="neutral" :disabled="updating" :label="t('global.cancel')"
               @click="showVersionSlideover = false" />
-            <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loadingVersion"
-              @click="fetchVersion" />
+            <div class="flex items-center gap-1.5">
+              <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" color="neutral"
+                :loading="loadingVersion" :disabled="updating || loadingVersion" @click="fetchVersion" />
+              <UButton icon="i-lucide-sparkles" :label="t('tools.checkUpdate')" variant="soft" color="primary"
+                :loading="checkingUpdate" :disabled="updating || checkingUpdate" @click="checkUpdate" />
+            </div>
           </div>
         </template>
       </BaseResponsiveSlideover>
+
+      <!-- Floating Mini Update Progress Widget -->
+      <Transition enter-active-class="transition duration-300 ease-out"
+        enter-from-class="transform translate-y-4 opacity-0 scale-95"
+        enter-to-class="transform translate-y-0 opacity-100 scale-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="transform translate-y-0 opacity-100 scale-100"
+        leave-to-class="transform translate-y-4 opacity-0 scale-95">
+        <div v-if="updating && !showVersionSlideover"
+          class="fixed bottom-5 right-5 z-50 p-3.5 rounded-2xl border border-primary/40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md shadow-2xl w-80 space-y-2.5 cursor-pointer hover:border-primary transition-all duration-200 ring-1 ring-primary/20"
+          @click="showVersionSlideover = true">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <UIcon name="i-simple-icons-youtube" class="size-4 text-red-600 shrink-0" />
+              <span class="font-semibold text-xs text-neutral-800 dark:text-neutral-200 truncate">yt-dlp</span>
+            </div>
+            <UBadge color="primary" variant="subtle" size="xs">
+              {{ updateProgress.percent || 0 }}%
+            </UBadge>
+          </div>
+          <UProgress :model-value="updateProgress.percent || 0" color="primary" size="xs" />
+          <div class="flex items-center justify-between text-[11px] text-muted">
+            <span class="truncate max-w-47.5">
+              {{ updateProgress.message || updateProgressMsg || t('tools.updating') }}
+            </span>
+            <span class="text-primary hover:underline font-medium shrink-0 flex items-center gap-0.5">
+              {{ t('tools.viewDetails') }}
+              <UIcon name="i-lucide-arrow-up-right" class="size-3" />
+            </span>
+          </div>
+        </div>
+      </Transition>
     </UForm>
   </BasePage>
 </template>

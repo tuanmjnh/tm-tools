@@ -32,6 +32,7 @@ export interface ToolTaskMeta {
   config?: unknown
   operation?: 'render' | 'split' | 'join' | 'split_render' | 'join_render' | 'image2video' | 'audio_tool' | string
   outputPattern?: string
+  outputDir?: string
   images?: string[]
   settings?: Record<string, unknown>
   joinFiles?: string[]
@@ -366,6 +367,12 @@ export interface FileManagerNamespace {
 
 type EventUnsubscriber = () => void
 
+export interface FfmpegVersions {
+  ffmpeg?: string
+  ffprobe?: string
+  ffplay?: string
+}
+
 export interface ToolsNamespace {
   checkExecutable(): Promise<ExecutableCheck>
   getStatus(): Promise<TaskStatus>
@@ -382,7 +389,7 @@ export interface ToolsNamespace {
   getData?(): Promise<Record<string, unknown>>
   crawlPlaylist(url: string): Promise<{ status: boolean, data?: PlaylistVideo[], message?: string }>
   getFormats(url: string): Promise<{ status: boolean, data?: { title: string, duration: number, formats: YoutubeFormat[] }, message?: string }>
-  getVersion(): Promise<{ status: boolean, data?: string, message?: string }>
+  getVersion<T = string>(): Promise<{ status: boolean, data?: T, message?: string }>
   listFormats(): Promise<YoutubeFormat[]>
   createFormat(data: Partial<YoutubeFormat>): Promise<{ status: boolean, data?: { id: string } }>
   updateFormat(data: { id: string, data: Partial<YoutubeFormat> }): Promise<{ status: boolean }>
@@ -393,7 +400,7 @@ export interface ToolsNamespace {
   deleteConfig(id: string): Promise<{ status: boolean }>
   listHistory(limit?: number): Promise<YoutubeHistory[]>
   listHistoryCursor(options: { cursor: { ts: string, rowid: number } | null, limit?: number }): Promise<CursorPage<YoutubeHistory>>
-  deleteHistory(): Promise<{ status: boolean }>
+  deleteHistory(id?: string | string[]): Promise<{ status: boolean }>
 
   // FFmpeg SQLite and helper operations
   listFfmpegConfigs(): Promise<FfmpegConfig[]>
@@ -411,6 +418,8 @@ export interface ToolsNamespace {
   scanImageSubfolders(inputDir: string, extensions?: string[], mode?: 'root' | 'subfolder'): Promise<Array<{ name: string, path: string, count: number, images: string[] }>>
   probeMedia(filePath: string): Promise<MediaProbeResult>
   scanJoinFolders(rootPath: string, mode: 'root' | 'subfolder', extensions?: string[]): Promise<JoinFolderItem[]>
+  checkUpdate?(options?: { source?: 'btbn' | 'gyan' }): Promise<{ status: boolean, data?: ToolUpdateInfo, message?: string }>
+  performUpdate?(options?: { cleanTemp?: boolean, downloadUrl?: string, source?: 'btbn' | 'gyan' }): Promise<{ status: boolean, message?: string }>
   onBeforeRunTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
   onProgressTask(cb: (data: YoutubeDownloadResponse | FfmpegRenderResponse) => void): EventUnsubscriber
   onAllTasksDone(cb: (data: { total: number }) => void): EventUnsubscriber
@@ -420,6 +429,48 @@ export interface ToolsNamespace {
   onTaskRetry(cb: (data: { taskKey: number, retryCount: number }) => void): EventUnsubscriber
   onTaskTimeout(cb: (data: { taskKey: number }) => void): EventUnsubscriber
   onManagerInitialized(cb: (data: Record<string, unknown>) => void): EventUnsubscriber
+  onUpdateProgress?(cb: (data: ToolUpdateProgress) => void): EventUnsubscriber
+}
+
+export interface ToolUpdateInfo {
+  hasUpdate: boolean
+  currentVersion: string
+  latestVersion: string
+  downloadUrl?: string
+  releaseUrl?: string
+  publishedAt?: string
+  source?: 'btbn' | 'gyan'
+}
+
+export interface ToolUpdateProgress {
+  stage?: 'downloading' | 'extracting' | 'copying' | 'cleaning' | 'done' | 'error'
+  percent?: number
+  message?: string
+}
+
+export interface AppUpdateStatus {
+  state: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  currentVersion: string
+  updateInfo?: {
+    version: string
+    releaseDate?: string
+    releaseNotes?: string
+  } | null
+  progress: {
+    percent: number
+    bytesPerSecond: number
+    transferred: number
+    total: number
+  }
+  error?: string | null
+}
+
+export interface AppUpdaterNamespace {
+  getStatus(): Promise<{ status: boolean, data: AppUpdateStatus }>
+  checkForUpdates(): Promise<{ status: boolean, data?: unknown, message?: string }>
+  downloadUpdate(): Promise<{ status: boolean, message?: string }>
+  quitAndInstall(): Promise<{ status: boolean, message?: string }>
+  onStatusChanged(callback: (status: AppUpdateStatus) => void): () => void
 }
 
 export interface ElectronAPI {
@@ -443,6 +494,7 @@ export interface ElectronAPI {
   }
   dialog: DialogNamespace
   fileManager: FileManagerNamespace
+  appUpdater?: AppUpdaterNamespace
 }
 
 declare global {

@@ -7,6 +7,7 @@ const { registerYoutubeController } = require('./tools/youtube.controller.cjs')
 const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
 const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
+const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -38,14 +39,14 @@ function loadUserConfig() {
       if (eqIdx === -1) continue
       const key = trimmed.slice(0, eqIdx).trim()
       let value = trimmed.slice(eqIdx + 1).trim()
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
         value = value.slice(1, -1)
       }
       if (!process.env[key]) {
         process.env[key] = value
       }
     }
-  } catch (_) {
+  } catch {
     // No user config yet, defaults in server/config/index.ts will be used
   }
 }
@@ -124,6 +125,8 @@ async function createWindow() {
     win.show()
   })
 
+  registerAppUpdaterController(win)
+
   win.on('closed', () => {
     win = null
   })
@@ -143,12 +146,14 @@ ipcMain.handle('get-config', () => {
       if (eqIdx === -1) continue
       const key = trimmed.slice(0, eqIdx).trim()
       let value = trimmed.slice(eqIdx + 1).trim()
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
         value = value.slice(1, -1)
       }
       result[key] = value
     }
-  } catch (_) { }
+  } catch {
+    // ignore
+  }
   return result
 })
 
@@ -164,7 +169,9 @@ ipcMain.handle('set-config', (_event, values) => {
       if (eqIdx === -1) continue
       existing[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim()
     }
-  } catch (_) { }
+  } catch {
+    // ignore
+  }
   const merged = { ...existing, ...values }
   const lines = Object.entries(merged).map(([k, v]) => `${k}=${v}`)
   fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
@@ -183,8 +190,8 @@ ipcMain.handle('open-path', async (event, fullPath) => {
       const err = await shell.openPath(fullPath)
       // console.log('[open-path] shell.openPath result=' + JSON.stringify(err))
       return err === '' ? true : false
-    } catch (e) {
-      // console.log('[open-path] threw:', e)
+    } catch {
+      // console.log('[open-path] threw')
     }
   }
   return false
@@ -218,7 +225,9 @@ app.whenReady().then(() => {
       try {
         const parsedUrl = new URL(request.url)
         filePath = parsedUrl.searchParams.get('file') || ''
-      } catch (_) { }
+      } catch {
+        // ignore
+      }
 
       if (!filePath) {
         filePath = decodeURIComponent(request.url.replace(/^media:\/\//i, ''))

@@ -9,6 +9,7 @@ const auth = useAuth()
 const router = useRouter()
 const { t, locale, setLocale } = useI18n()
 const { isSettingsSlideoverOpen } = useDashboard()
+const appUpdater = useAppUpdater()
 
 const isFeedbackModalOpen = ref(false)
 const isHelpModalOpen = ref(false)
@@ -128,7 +129,18 @@ const items = computed<DropdownMenuItem[][]>(() => [
     label: t('nav.help'),
     icon: 'i-lucide-info',
     onSelect: () => { isHelpModalOpen.value = true }
-  }],
+  },
+  ...(appUpdater.isElectron.value
+    ? [{
+      label: t('global.update'),
+      icon: 'i-lucide-arrow-up-circle',
+      onSelect: () => {
+        appUpdater.openModal()
+        appUpdater.checkForUpdates(false)
+      }
+    }]
+    : [])
+  ],
   [{
     label: t('common.signOut'),
     icon: 'i-lucide-log-out',

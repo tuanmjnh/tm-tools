@@ -24,11 +24,12 @@ const youtube = exposeNamespace('tools:youtube', {
     'checkExecutable', 'getStatus', 'getTasks', 'initTaskManager', 'setTasks', 'startTasks',
     'pauseTasks', 'continueTasks', 'stopTask', 'stopTasks',
     'crawlPlaylist', 'getFormats', 'listFormats', 'createFormat', 'updateFormat', 'deleteFormat',
-    'listConfigs', 'createConfig', 'updateConfig', 'deleteConfig', 'listHistory', 'listHistoryCursor', 'getVersion', 'deleteHistory'
+    'listConfigs', 'createConfig', 'updateConfig', 'deleteConfig', 'listHistory', 'listHistoryCursor', 'getVersion', 'deleteHistory',
+    'checkUpdate', 'performUpdate'
   ],
   on: [
     'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
-    'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout'
+    'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout', 'updateProgress'
   ]
 })
 
@@ -39,11 +40,11 @@ const ffmpeg = exposeNamespace('tools:ffmpeg', {
     'listFfmpegConfigs', 'createFfmpegConfig', 'updateFfmpegConfig', 'deleteFfmpegConfig',
     'listFfmpegBatchConfigs', 'createFfmpegBatchConfig', 'updateFfmpegBatchConfig', 'deleteFfmpegBatchConfig',
     'listFfmpegHistory', 'deleteFfmpegHistory', 'detectGpuSupport', 'globFiles', 'scanImageSubfolders',
-    'probeMedia', 'scanJoinFolders'
+    'probeMedia', 'scanJoinFolders', 'getVersion', 'checkUpdate', 'performUpdate'
   ],
   on: [
     'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
-    'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout'
+    'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout', 'updateProgress'
   ]
 })
 
@@ -68,6 +69,18 @@ const fileManager = exposeNamespace('tools:file-manager', {
   on: []
 })
 
+const appUpdater = {
+  getStatus: () => ipcRenderer.invoke('app-updater:getStatus'),
+  checkForUpdates: () => ipcRenderer.invoke('app-updater:checkForUpdates'),
+  downloadUpdate: () => ipcRenderer.invoke('app-updater:downloadUpdate'),
+  quitAndInstall: () => ipcRenderer.invoke('app-updater:quitAndInstall'),
+  onStatusChanged: (callback) => {
+    const listener = (_event, status) => callback(status)
+    ipcRenderer.on('app-updater:status-changed', listener)
+    return () => ipcRenderer.removeListener('app-updater:status-changed', listener)
+  }
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   versions: {
@@ -87,5 +100,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   tools: { youtube, ffmpeg },
   dialog,
-  fileManager
+  fileManager,
+  appUpdater
 })

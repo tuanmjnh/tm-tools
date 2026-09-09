@@ -3,16 +3,23 @@ import { ref, computed, watch } from 'vue'
 import type { FfmpegConfig, ToolTask, JoinFolderItem } from '~/types'
 
 const props = withDefaults(defineProps<{
-  presets: FfmpegConfig[]
+  presets?: FfmpegConfig[]
   disabled?: boolean
   selectedEncoder?: string
   mode?: 'files' | 'root' | 'subfolder'
+  usePreset?: boolean
+  selectedPresetId?: string
+  selectedPresetTitle?: string
+  config?: Partial<FfmpegConfig>
 }>(), {
-  mode: 'files'
+  mode: 'files',
+  presets: () => [],
+  usePreset: false
 })
 
 const emit = defineEmits<{
   (e: 'submit', tasks: ToolTask[]): void
+  (e: 'update:inputPath', path: string): void
 }>()
 
 const { t } = useI18n()
@@ -27,10 +34,7 @@ const selectedFiles = ref<string[]>([])
 const rootFolder = ref('')
 const outputPath = ref('')
 const outputDir = ref('')
-const threads = ref(4)
-
-const usePreset = ref(false)
-const selectedPresetId = ref<string>('')
+const threads = useLocalStorage('tools:video:threads', 3)
 
 const availableExtensions = [
   '.mp4', '.mkv', '.mov', '.avi', '.webm', '.ts', '.flv',
@@ -51,9 +55,18 @@ function setExtType(type: 'video' | 'image' | 'mixed') {
 const scannedFolders = ref<JoinFolderItem[]>([])
 const scanning = ref(false)
 
-const presetOptions = computed(() => {
-  return props.presets.map(p => ({ label: p.title, value: p.id }))
-})
+watch(selectedFiles, (files) => {
+  if (files && files[0]) {
+    emit('update:inputPath', files[0])
+  }
+}, { deep: true })
+
+watch(scannedFolders, (folders) => {
+  const firstFile = folders?.[0]?.files?.[0]
+  if (firstFile) {
+    emit('update:inputPath', firstFile)
+  }
+}, { deep: true })
 
 async function onPickFiles() {
   const files = await fs.pickFile({
@@ -147,6 +160,7 @@ watch([rootFolder, joinMode, selectedExtensions], () => {
 
 const canSubmit = computed(() => {
   if (props.disabled) return false
+  if (props.usePreset && !props.selectedPresetId) return false
   if (joinMode.value === 'files') {
     return selectedFiles.value.length >= 2 && !!outputPath.value
   }
@@ -161,11 +175,11 @@ const canSubmit = computed(() => {
 
 function buildTasks(): ToolTask[] {
   const now = new Date().toISOString()
-  const chosenConfig = usePreset.value && selectedPresetId.value
-    ? props.presets.find(p => p.id === selectedPresetId.value)
+  const chosenConfig = props.usePreset && props.selectedPresetId
+    ? props.presets?.find(p => p.id === props.selectedPresetId) || props.config
     : undefined
 
-  const op = usePreset.value ? 'join_render' : 'join'
+  const op = props.usePreset ? 'join_render' : 'join'
 
   if (joinMode.value === 'files') {
     return [{
@@ -226,6 +240,10 @@ function buildTasks(): ToolTask[] {
 }
 
 function onSubmit() {
+  if (props.usePreset && !props.selectedPresetId) {
+    toast.add({ title: t('tools.pleaseSelectConfig'), color: 'error' })
+    return
+  }
   const tasks = buildTasks()
   if (tasks.length === 0) {
     toast.add({ title: t('tools.noTasksToRun'), color: 'error' })
@@ -301,7 +319,8 @@ function onSubmit() {
       <!-- Extensions filter -->
       <div class="flex flex-wrap items-center gap-3">
         <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 shrink-0">Extensions:</span>
-        <USelectMenu v-model="selectedExtensions" :items="availableExtensions" multiple size="sm" class="w-64" />
+        <USelectMenu v-model="selectedExtensions" :items="availableExtensions" multiple size="sm" class="w-64"
+          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" />
         <div class="flex items-center gap-1.5">
           <UButton size="xs" color="neutral" variant="soft" @click="setExtType('video')">
             Video
@@ -349,30 +368,6 @@ function onSubmit() {
       <div v-else-if="rootFolder"
         class="p-4 text-center text-xs text-neutral-400 border border-neutral-200 dark:border-neutral-800 rounded-xl">
         {{ t('tools.noTasks') }}
-      </div>
-    </div>
-
-    <!-- Preset Selection (Optional Render) -->
-    <div
-      class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30 space-y-3">
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-            {{ t('tools.applyPreset') }}
-          </div>
-          <div class="text-xs text-neutral-500 dark:text-neutral-400">
-            {{ usePreset ? t('tools.applyPresetHelp') : t('tools.fastJoinHelp') }}
-          </div>
-        </div>
-        <USwitch v-model="usePreset" :disabled="disabled" />
-      </div>
-
-      <div v-if="usePreset" class="pt-2">
-        <label class="text-xs font-medium text-neutral-500 dark:text-neutral-400 block mb-1.5">
-          {{ t('tools.configRequired') }}
-        </label>
-        <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value" label-key="label"
-          placeholder="-- Chọn Preset --" class="w-full" :disabled="disabled" />
       </div>
     </div>
 

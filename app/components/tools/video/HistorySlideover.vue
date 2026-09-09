@@ -131,18 +131,24 @@ async function doDelete() {
 }
 
 // File opening helpers
-const showPreviewModal = ref(false)
-const previewTargetFile = ref('')
-
-function openPreview(filePath: string | null) {
+function openFile(filePath: string | null) {
   if (!filePath) return
-  previewTargetFile.value = filePath
-  showPreviewModal.value = true
+  if (window.electronAPI?.openPath) {
+    let normalizedPath = filePath
+    if (window.electronAPI.platform === 'win32') {
+      normalizedPath = normalizedPath.replace(/\//g, '\\')
+    }
+    window.electronAPI.openPath(normalizedPath).catch((e: unknown) => console.log('openFile rejected:', e))
+  }
 }
 
 function showInFolder(fullPath: string | null) {
   if (window.electronAPI?.showItemInFolder && fullPath) {
-    window.electronAPI.showItemInFolder(fullPath)
+    let normalizedPath = fullPath
+    if (window.electronAPI.platform === 'win32') {
+      normalizedPath = normalizedPath.replace(/\//g, '\\')
+    }
+    window.electronAPI.showItemInFolder(normalizedPath)
   }
 }
 
@@ -203,8 +209,8 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
                 </div>
               </div>
               <div class="flex items-center justify-center gap-1">
-                <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-eye" size="xs" variant="ghost"
-                  color="primary" :title="t('tools.previewResult')" @click="openPreview(h.output_file)" />
+                <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
+                  color="primary" :title="t('tools.openFile')" @click="openFile(h.output_file)" />
                 <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
                   :title="t('tools.openFolder')" @click="showInFolder(h.output_file)" />
                 <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
@@ -249,8 +255,8 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
 
           <template #actions="{ item: h }">
             <div class="flex items-center justify-end gap-1 shrink-0 w-12">
-              <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-eye" size="xs" variant="ghost"
-                color="primary" :title="t('tools.previewResult')" @click="openPreview(h.output_file)" />
+              <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
+                color="primary" :title="t('tools.openFile')" @click="openFile(h.output_file)" />
               <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
                 :title="t('tools.openFolder')" @click="showInFolder(h.output_file)" />
               <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
@@ -306,7 +312,4 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
       </div>
     </template>
   </BaseConfirmModal>
-
-  <!-- In-App Media Preview Modal -->
-  <ToolsVideoPreviewModal v-model:open="showPreviewModal" :file-path="previewTargetFile" />
 </template>
