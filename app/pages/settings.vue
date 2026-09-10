@@ -7,9 +7,17 @@ const links = computed(() => [[{
   to: '/settings',
   exact: true
 }, {
-  label: t('nav.members'),
-  icon: 'i-lucide-users',
-  to: '/settings/members'
+  label: t('nav.download_presets'),
+  icon: 'i-lucide-download',
+  to: '/settings/downloads'
+}, {
+  label: t('nav.browsers'),
+  icon: 'i-lucide-globe',
+  to: '/settings/browsers'
+}, {
+  label: t('nav.tools_binaries'),
+  icon: 'i-lucide-wrench',
+  to: '/settings/tools'
 }, {
   label: t('nav.notifications'),
   icon: 'i-lucide-bell',
@@ -34,7 +42,7 @@ const links = computed(() => [[{
       </UDashboardToolbar>
     </template>
 
-    <div class="flex flex-col gap-4 sm:gap-6 lg:gap-12 w-full lg:max-w-2xl mx-auto py-6">
+    <div class="p-4 flex flex-col gap-4 sm:gap-6 w-full mx-auto">
       <NuxtPage />
     </div>
   </BasePage>

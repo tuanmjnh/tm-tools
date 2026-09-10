@@ -191,7 +191,7 @@ defineExpose({ reload: loadConfigs })
         <p class="text-sm text-muted">
           {{ t('tools.savedToSettings') }}
         </p>
-        <UButton icon="i-lucide-plus" :label="t('tools.newConfig')" color="primary" variant="subtle" size="sm"
+        <UButton icon="i-lucide-plus" :label="t('tools.newConfig')" color="primary" variant="soft" size="sm"
           @click="addNew" />
       </div>
 
@@ -206,14 +206,14 @@ defineExpose({ reload: loadConfigs })
       </div>
       <div v-else class="mt-4 space-y-3">
         <div v-for="(row, index) in rows" :key="row.id || `new-${index}`" class="rounded-lg border border-dashed p-3">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center justify-between gap-2 cursor-pointer select-none" @click="row.open = !row.open">
             <div class="flex items-center gap-2 min-w-0">
               <UIcon name="i-lucide-sliders-horizontal" class="text-primary size-4 shrink-0" />
               <p class="truncate text-sm font-medium">
                 {{ row.title || (row.isNew ? t('tools.newConfig') : '--') }}
               </p>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
+            <div class="flex items-center gap-1 shrink-0" @click.stop>
               <UButton :icon="row.open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" color="neutral"
                 variant="ghost" size="xs" :aria-label="row.open ? t('tools.hide') : t('tools.show')"
                 @click="row.open = !row.open" />
@@ -223,61 +223,64 @@ defineExpose({ reload: loadConfigs })
           </div>
 
           <UCollapsible v-model:open="row.open" class="mt-1">
-            <UCard :ui="{ body: 'space-y-4 p-4' }">
-              <UForm :schema="schema" :state="row" @submit="row.isNew ? onCreate(row) : onUpdate(row)">
-                <UFormField name="title" :label="t('tools.configTitle')" required>
-                  <UInput v-model="row.title" :placeholder="t('tools.configTitlePrompt')" class="w-full" />
-                </UFormField>
+            <template #content>
+              <UCard :ui="{ body: 'space-y-4 p-4' }" class="mt-2">
+                <UForm :schema="schema" :state="row" @submit="row.isNew ? onCreate(row) : onUpdate(row)">
+                  <UFormField name="title" :label="t('tools.configTitle')" required>
+                    <UInput v-model="row.title" :placeholder="t('tools.configTitlePrompt')" class="w-full" />
+                  </UFormField>
 
-                <UFormField name="format_id" :label="t('tools.format')">
-                  <USelectMenu v-model="row.format_id"
-                    :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
-                    :placeholder="t('tools.selectFormat')" :search-input="{ placeholder: t('global.search') }"
-                    value-key="value" class="w-full">
-                    <template #empty>
-                      {{ t('tools.noFormats') }}
-                    </template>
-                  </USelectMenu>
-                </UFormField>
+                  <UFormField name="format_id" :label="t('tools.format')">
+                    <USelectMenu v-model="row.format_id"
+                      :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
+                      :placeholder="t('tools.selectFormat')"
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
+                      class="w-full">
+                      <template #empty>
+                        {{ t('tools.noFormats') }}
+                      </template>
+                    </USelectMenu>
+                  </UFormField>
 
-                <UFormField name="out_path" :label="t('tools.output')">
-                  <UInput v-model="row.out_path" placeholder="D:/Downloads/YouTube" :ui="{ trailing: 'pe-0.5' }"
-                    class="w-full">
-                    <template #trailing>
-                      <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open"
-                        :title="t('tools.browse')" :aria-label="t('tools.browse')" @click="pickConfigFolder(row)" />
-                    </template>
-                  </UInput>
-                </UFormField>
+                  <UFormField name="out_path" :label="t('tools.output')">
+                    <UInput v-model="row.out_path" placeholder="D:/Downloads/YouTube" :ui="{ trailing: 'pe-0.5' }"
+                      class="w-full">
+                      <template #trailing>
+                        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open"
+                          :title="t('tools.browse')" :aria-label="t('tools.browse')" @click="pickConfigFolder(row)" />
+                      </template>
+                    </UInput>
+                  </UFormField>
 
-                <UFormField name="file_name" :label="t('tools.fileName')">
-                  <UInput v-model="row.file_name" placeholder="%(title)s.%(ext)s" class="w-full" />
-                </UFormField>
+                  <UFormField name="file_name" :label="t('tools.fileName')">
+                    <UInput v-model="row.file_name" placeholder="%(title)s.%(ext)s" class="w-full" />
+                  </UFormField>
 
-                <UFormField name="threads" :label="t('tools.threads')">
-                  <UInput v-model.number="row.threads" type="number" min="1" max="8" class="w-full" />
-                </UFormField>
+                  <UFormField name="threads" :label="t('tools.threads')">
+                    <UInput v-model.number="row.threads" type="number" min="1" max="8" class="w-full" />
+                  </UFormField>
 
-                <UFormField name="encoding" :label="t('tools.encoding')">
-                  <USelectMenu v-model="row.encoding" :items="['utf-8', 'ascii', 'latin-1']"
-                    :placeholder="t('tools.encoding')" :search-input="{ placeholder: t('global.search') }"
-                    class="w-full" />
-                </UFormField>
+                  <UFormField name="encoding" :label="t('tools.encoding')">
+                    <USelectMenu v-model="row.encoding" :items="['utf-8', 'ascii', 'latin-1']"
+                      :placeholder="t('tools.encoding')"
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full" />
+                  </UFormField>
 
-                <div class="space-y-3">
-                  <UCheckbox v-model="row.restrict" :label="t('tools.restrictNames')" />
-                  <UCheckbox v-model="row.overwrite" :label="t('tools.overwriteFiles')" />
+                  <div class="space-y-3">
+                    <UCheckbox v-model="row.restrict" :label="t('tools.restrictNames')" />
+                    <UCheckbox v-model="row.overwrite" :label="t('tools.overwriteFiles')" />
+                  </div>
+                </UForm>
+
+                <div class="flex justify-end gap-2 pt-2">
+                  <UButton v-if="row.isNew" variant="ghost" color="neutral" :label="t('global.cancel')"
+                    :disabled="row.saving" @click="removeRow(row)" />
+                  <UButton icon="i-lucide-save" :label="row.isNew ? t('global.create') : t('global.update')"
+                    color="primary" variant="soft" :loading="row.saving" :disabled="!row.title.trim()"
+                    @click="row.isNew ? onCreate(row) : onUpdate(row)" />
                 </div>
-              </UForm>
-
-              <div class="flex justify-end gap-2 pt-2">
-                <UButton v-if="row.isNew" variant="ghost" color="neutral" :label="t('global.cancel')"
-                  :disabled="row.saving" @click="removeRow(row)" />
-                <UButton icon="i-lucide-save" :label="row.isNew ? t('global.create') : t('global.update')"
-                  color="primary" :loading="row.saving" :disabled="!row.title.trim()"
-                  @click="row.isNew ? onCreate(row) : onUpdate(row)" />
-              </div>
-            </UCard>
+              </UCard>
+            </template>
           </UCollapsible>
         </div>
       </div>

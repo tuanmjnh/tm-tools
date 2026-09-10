@@ -1,3 +1,8 @@
+import type { ApiResponse } from '~~/shared/contracts/common'
+import type { SystemInfoResponse, OpenDirectoryInput, StorageUsage } from '~~/shared/contracts/system.ipc'
+import type { EventBusContracts } from '~~/shared/contracts/events'
+import type { BrowserItem, AddCustomBrowserInput, TestExecutableInput, TestExecutableResult } from '~~/shared/contracts/browser.ipc'
+
 export interface TaskStatus {
   total: number
   running: number
@@ -473,6 +478,147 @@ export interface AppUpdaterNamespace {
   onStatusChanged(callback: (status: AppUpdateStatus) => void): () => void
 }
 
+export interface ProfileGroup {
+  id: string
+  name: string
+  color?: string
+  icon?: string
+  description?: string
+  sort?: number
+  profile_count?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ProfileProxy {
+  id: string
+  name: string
+  type: 'http' | 'socks5' | 'ssh' | string
+  host: string
+  port: number
+  username?: string
+  password?: string
+  status?: 'active' | 'dead' | 'unknown' | 'checking' | string
+  country?: string
+  country_code?: string
+  ip?: string
+  latency_ms?: number
+  last_checked_at?: string
+  profile_count?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ProfileAccount {
+  id: string
+  profile_id: string
+  platform: 'facebook' | 'google' | 'tiktok' | 'x' | 'amazon' | 'other' | string
+  username: string
+  password?: string
+  two_fa_secret?: string
+  recovery_email?: string
+  status?: string
+  notes?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface BrowserProfile {
+  id: string
+  name: string
+  group_id?: string | null
+  group_name?: string
+  group_color?: string
+  group_icon?: string
+  proxy_id?: string | null
+  proxy_name?: string
+  proxy_type?: string
+  proxy_host?: string
+  proxy_port?: number
+  proxy_country?: string
+  proxy_status?: string
+  raw_proxy?: string | null
+  browser_id?: string | null
+  browser_type?: 'chrome' | 'brave' | 'firefox' | 'camoufox' | 'donut' | 'browser_oxide' | 'custom' | string
+  browser_engine?: 'chromium' | 'firefox' | 'camoufox' | 'donut' | 'browser_oxide' | 'custom' | string
+  browser_version?: string
+  custom_exe?: string | null
+  stealth_mode?: boolean
+  stealth_engine?: 'none' | 'playwright_stealth' | 'camoufox_native' | 'custom' | string
+  os?: 'windows' | 'macos' | 'linux' | 'android' | string
+  user_agent?: string | null
+  screen_resolution?: string
+  color_depth?: number
+  hardware_concurrency?: number
+  device_memory?: number
+  languages?: string
+  webrtc_mode?: 'disabled' | 'fake' | 'proxy' | 'real' | string
+  timezone_mode?: 'auto' | 'manual' | string
+  timezone_val?: string
+  geo_mode?: 'auto' | 'manual' | string
+  geo_lat?: number | null
+  geo_lng?: number | null
+  geo_accuracy?: number
+  canvas_mode?: 'noise' | 'off' | 'block' | string
+  webgl_mode?: 'noise' | 'custom' | 'off' | string
+  webgl_vendor?: string
+  webgl_renderer?: string
+  audio_mode?: 'noise' | 'off' | string
+  client_rects_mode?: 'noise' | 'off' | string
+  fonts_mode?: 'system' | 'custom' | 'masked' | string
+  fonts_list?: string[]
+  extensions?: string[]
+  start_url?: string
+  notes?: string | null
+  tags?: string[]
+  sort?: number
+  flag?: number
+  last_launched_at?: string | null
+  created_at?: string
+  updated_at?: string
+  isRunning?: boolean
+  runningPid?: number | null
+  accounts?: ProfileAccount[]
+}
+
+export interface ProfileFilters {
+  groupId?: string
+  search?: string
+  status?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ProfilesListResult {
+  items: BrowserProfile[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ProfilesNamespace {
+  listProfiles(filters?: ProfileFilters): Promise<{ success: boolean, data?: ProfilesListResult, error?: string }>
+  getProfile(id: string): Promise<{ success: boolean, data?: BrowserProfile, error?: string }>
+  createProfile(data: Partial<BrowserProfile>): Promise<{ success: boolean, data?: { id: string }, error?: string }>
+  updateProfile(args: { id: string, data: Partial<BrowserProfile> }): Promise<{ success: boolean, error?: string }>
+  deleteProfiles(idOrIds: string | string[]): Promise<{ success: boolean, data?: { changes: number }, error?: string }>
+  cloneProfile(args: { id: string, newName?: string }): Promise<{ success: boolean, data?: { id: string }, error?: string }>
+  listGroups(): Promise<{ success: boolean, data?: ProfileGroup[], error?: string }>
+  saveGroup(groupData: Partial<ProfileGroup>): Promise<{ success: boolean, data?: { id: string }, error?: string }>
+  deleteGroup(id: string): Promise<{ success: boolean, error?: string }>
+  listProxies(): Promise<{ success: boolean, data?: ProfileProxy[], error?: string }>
+  saveProxy(proxyData: Partial<ProfileProxy>): Promise<{ success: boolean, data?: { id: string }, error?: string }>
+  deleteProxy(id: string): Promise<{ success: boolean, error?: string }>
+  checkProxy(proxy: Partial<ProfileProxy>): Promise<{ success: boolean, data?: { ip?: string, latency_ms?: number, status?: string }, error?: string }>
+  launchBrowser(args: { profileId: string, customExe?: string }): Promise<{ success: boolean, data?: { pid: number, port: number, profileId: string }, error?: string }>
+  stopBrowser(profileId: string): Promise<{ success: boolean, error?: string }>
+  getRunningProfiles(): Promise<{ success: boolean, data?: { id: string, pid: number, port: number, startedAt: string }[] }>
+  openProfileFolder(id: string): Promise<{ success: boolean, data?: { path: string }, error?: string }>
+  clearProfileCache(id: string): Promise<{ success: boolean, error?: string }>
+  detectBrowserExecutable(): Promise<{ success: boolean, data?: { executablePath: string | null }, error?: string }>
+  onStatusChanged?(callback: (status: { profileId: string, isRunning: boolean, pid?: number }) => void): () => void
+}
+
 export interface ElectronAPI {
   platform: string
   versions: {
@@ -491,10 +637,29 @@ export interface ElectronAPI {
   tools: {
     youtube: ToolsNamespace
     ffmpeg: ToolsNamespace
+    profiles: ProfilesNamespace
   }
   dialog: DialogNamespace
   fileManager: FileManagerNamespace
   appUpdater?: AppUpdaterNamespace
+  system: {
+    getInfo(): Promise<ApiResponse<SystemInfoResponse>>
+    openDirectory(input: OpenDirectoryInput): Promise<ApiResponse<void>>
+    getStorageUsage(): Promise<ApiResponse<StorageUsage>>
+  }
+  browser: {
+    list(): Promise<ApiResponse<BrowserItem[]>>
+    detect(): Promise<ApiResponse<BrowserItem[]>>
+    addCustom(input: AddCustomBrowserInput): Promise<ApiResponse<BrowserItem>>
+    remove(id: string): Promise<ApiResponse<void>>
+    testExecutable(input: TestExecutableInput): Promise<ApiResponse<TestExecutableResult>>
+  }
+  events: {
+    on<K extends keyof EventBusContracts>(
+      event: K,
+      callback: (payload: EventBusContracts[K]) => void
+    ): () => void
+  }
 }
 
 declare global {

@@ -1,4 +1,4 @@
-export type PermissionAction = 'read' | 'write' | 'delete' | 'manage'
+export type PermissionAction = 'read' | 'write' | 'delete' | 'manage' | '*'
 
 export interface ModulePermission {
   module: string

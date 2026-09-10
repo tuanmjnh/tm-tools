@@ -38,12 +38,12 @@ async function onUpdatePassword() {
   }
 }
 
-const { data: sessions, refresh } = await useFetch<{ success: boolean; data: UserSession[] }>('/api/auth/sessions', {
+const { data: sessions, refresh } = await useFetch<{ success: boolean, data: UserSession[] }>('/api/auth/sessions', {
   default: () => ({ success: true, data: [] })
 })
 
-type ConfirmAction =
-  | { type: 'session'; session: UserSession }
+type ConfirmAction
+  = | { type: 'session', session: UserSession }
   | { type: 'all' }
 
 const confirmAction = ref<ConfirmAction | null>(null)
@@ -118,56 +118,70 @@ function formatUA(ua: string) {
 </script>
 
 <template>
-  <UPageCard :title="$t('settings.password')" :description="$t('settings.passwordDesc')" variant="subtle">
-    <UForm :schema="passwordSchema" :state="passwordFields" class="flex flex-col gap-4 max-w-xs" @submit="onUpdatePassword">
-      <UFormField name="current" :label="$t('settings.currentPassword')">
-        <BasePasswordInput v-model="passwordFields.current" :placeholder="$t('settings.currentPasswordPlaceholder')" class="w-full" />
-      </UFormField>
-      <UFormField name="new" :label="$t('settings.newPassword')">
-        <BasePasswordInput v-model="passwordFields.new" :placeholder="$t('settings.newPasswordPlaceholder')" class="w-full" />
-      </UFormField>
-      <UButton :label="$t('settings.update')" class="w-fit" type="submit" :loading="passwordSaving" />
-    </UForm>
-  </UPageCard>
+  <div class="space-y-6">
+    <UPageCard :title="$t('settings.password')" :description="$t('settings.passwordDesc')" variant="subtle">
+      <UForm :schema="passwordSchema" :state="passwordFields" class="flex flex-col gap-4 max-w-xs"
+        @submit="onUpdatePassword">
+        <UFormField name="current" :label="$t('settings.currentPassword')">
+          <BasePasswordInput v-model="passwordFields.current" :placeholder="$t('settings.currentPasswordPlaceholder')"
+            class="w-full" />
+        </UFormField>
+        <UFormField name="new" :label="$t('settings.newPassword')">
+          <BasePasswordInput v-model="passwordFields.new" :placeholder="$t('settings.newPasswordPlaceholder')"
+            class="w-full" />
+        </UFormField>
+        <UButton :label="$t('settings.update')" class="w-fit" type="submit" :loading="passwordSaving" />
+      </UForm>
+    </UPageCard>
 
-  <UPageCard :title="$t('settings.activeSessions')" :description="$t('settings.activeSessionsDesc')" variant="subtle" class="mt-4">
-    <template #footer>
-      <div class="space-y-3">
-        <div v-for="s in sessions?.data || []" :key="s.id" class="flex items-center justify-between p-3 rounded-lg border border-default" :class="{ 'ring-1 ring-primary': s.isCurrent }">
-          <div class="flex items-center gap-3 min-w-0">
-            <UIcon :name="s.platform === 'desktop' || s.userAgent.includes('Electron') ? 'i-lucide-monitor' : s.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-globe'" class="text-xl text-muted shrink-0" />
-            <div class="min-w-0">
-              <div class="flex items-center gap-2">
-                <span class="font-medium text-sm">{{ formatUA(s.userAgent) }}</span>
-                <UBadge v-if="s.isCurrent" :label="$t('settings.current')" color="primary" variant="solid" size="sm" />
+    <UPageCard :title="$t('settings.activeSessions')" :description="$t('settings.activeSessionsDesc')" variant="subtle">
+      <template #footer>
+        <div class="space-y-3">
+          <div v-for="s in sessions?.data || []" :key="s.id"
+            class="flex items-center justify-between p-3 rounded-lg border border-default"
+            :class="{ 'ring-1 ring-primary': s.isCurrent }">
+            <div class="flex items-center gap-3 min-w-0">
+              <UIcon
+                :name="s.platform === 'desktop' || s.userAgent.includes('Electron') ? 'i-lucide-monitor' : s.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-globe'"
+                class="text-xl text-muted shrink-0" />
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-sm">{{ formatUA(s.userAgent) }}</span>
+                  <UBadge v-if="s.isCurrent" :label="$t('settings.current')" color="primary" variant="solid"
+                    size="sm" />
+                </div>
+                <p class="text-xs text-muted truncate">
+                  {{ s.platform }} · {{ $t('common.ip') }}: {{ s.lastIp || t('common.unknown') }}
+                </p>
+                <p class="text-xs text-dimmed">
+                  {{ new Date(s.createdAt).toLocaleString() }}
+                </p>
               </div>
-              <p class="text-xs text-muted truncate">{{ s.platform }} · {{ $t('common.ip') }}: {{ s.lastIp || t('common.unknown') }}</p>
-              <p class="text-xs text-dimmed">{{ new Date(s.createdAt).toLocaleString() }}</p>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <UButton :label="$t('settings.copy')" color="neutral" variant="ghost" size="sm" icon="i-lucide-copy"
+                @click="copySession(s)" />
+              <UButton :label="$t('settings.revoke')" color="error" variant="ghost" size="sm" icon="i-lucide-log-out"
+                @click="confirmAction = { type: 'session', session: s }" />
             </div>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
-            <UButton :label="$t('settings.copy')" color="neutral" variant="ghost" size="sm" icon="i-lucide-copy" @click="copySession(s)" />
-            <UButton :label="$t('settings.revoke')" color="error" variant="ghost" size="sm" icon="i-lucide-log-out" @click="confirmAction = { type: 'session', session: s }" />
+          <div v-if="(sessions?.data || []).length === 0" class="text-sm text-muted text-center py-4">
+            {{ $t('settings.noSessions') }}
           </div>
+          <UButton v-if="(sessions?.data || []).length > 0" :label="$t('settings.revokeAll')" color="error"
+            variant="outline" size="sm" icon="i-lucide-log-out" @click="confirmAction = { type: 'all' }" />
         </div>
-        <div v-if="(sessions?.data || []).length === 0" class="text-sm text-muted text-center py-4">{{ $t('settings.noSessions') }}</div>
-        <UButton v-if="(sessions?.data || []).length > 0" :label="$t('settings.revokeAll')" color="error" variant="outline" size="sm" icon="i-lucide-log-out" @click="confirmAction = { type: 'all' }" />
-      </div>
-    </template>
-  </UPageCard>
+      </template>
+    </UPageCard>
 
-  <UPageCard :title="$t('settings.account')" :description="$t('settings.accountDesc')" class="mt-4 bg-linear-to-tl from-error/10 from-5% to-default">
-    <template #footer>
-      <UButton :label="$t('settings.deleteAccount')" color="error" />
-    </template>
-  </UPageCard>
+    <UPageCard :title="$t('settings.account')" :description="$t('settings.accountDesc')"
+      class="bg-linear-to-tl from-error/10 from-5% to-default">
+      <template #footer>
+        <UButton :label="$t('settings.deleteAccount')" color="error" />
+      </template>
+    </UPageCard>
 
-  <LazyBaseConfirmModal
-    v-model:open="confirmModalOpen"
-    :title="confirmTitle"
-    :description="confirmDescription"
-    :loading="processing"
-    @confirm="handleConfirm"
-    @cancel="confirmAction = null"
-  />
+    <LazyBaseConfirmModal v-model:open="confirmModalOpen" :title="confirmTitle" :description="confirmDescription"
+      :loading="processing" @confirm="handleConfirm" @cancel="confirmAction = null" />
+  </div>
 </template>

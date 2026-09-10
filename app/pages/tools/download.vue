@@ -727,7 +727,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 <template>
   <BasePage id="tools-download" :title="t('nav.download')">
     <UForm id="download-form" :schema="schema" :state="state"
-      class="flex flex-col flex-1 min-h-0 p-4 overflow-hidden gap-4 h-full" @submit="onSubmit">
+      class="flex flex-col flex-1 min-h-0 overflow-hidden gap-4 h-full" @submit="onSubmit">
       <!-- Alerts -->
       <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 shrink-0">
         <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle">
@@ -736,8 +736,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
           </template>
           <template #description>
             <div class="mt-2">
-              <UButton size="xs" color="error" variant="soft" to="/system/config?tab=tools">
-                {{ t('nav.goTo') }} {{ t('nav.config') }}
+              <UButton size="xs" color="error" variant="soft" to="/settings/tools">
+                {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
               </UButton>
             </div>
           </template>
@@ -747,7 +747,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
       </div>
 
       <!-- Two-Column Responsive Layout -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full pb-4">
         <!-- Left Column: Source URL Input, Tasks & History -->
         <div class="lg:col-span-2 lg:h-full lg:min-h-0 flex flex-col">
           <UScrollArea class="flex-1 min-h-0" :ui="{ viewport: 'w-full flex-col gap-6 p-1' }">
@@ -796,7 +796,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                       <template #hint>
                         <div class="flex items-center gap-2 text-xs text-muted">
                           <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
-                            }}</span>
+                          }}</span>
                           <UButton v-if="isPlaylist && !loadingPlaylist" size="xs" variant="soft"
                             :loading="loadingPlaylist" :disabled="controlsDisabled" @click="crawlPlaylist">
                             {{ t('tools.getPlaylistInfo') }}
@@ -874,8 +874,9 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                     <div class="flex gap-2 w-full">
                       <USelectMenu v-model="state.selectedConfigId" clear
                         :items="configs.map(c => ({ label: c.title, value: c.id }))"
-                        :placeholder="t('tools.selectPreset')" :search-input="{ placeholder: t('global.search') }"
-                        value-key="value" class="flex-1" :disabled="controlsDisabled">
+                        :placeholder="t('tools.selectPreset')"
+                        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
+                        class="flex-1" :disabled="controlsDisabled">
                         <template #empty>
                           {{ t('tools.noPresets') }}
                         </template>
@@ -920,9 +921,9 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   <UFormField name="selectedFormatId" :label="t('tools.format')">
                     <USelectMenu v-model="state.selectedFormatId"
                       :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
-                      :placeholder="t('tools.selectFormat')" :search-input="{ placeholder: t('global.search') }"
-                      value-key="value" class="w-full" :disabled="controlsDisabled || fetchingFormats"
-                      :loading="fetchingFormats">
+                      :placeholder="t('tools.selectFormat')"
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
+                      class="w-full" :disabled="controlsDisabled || fetchingFormats" :loading="fetchingFormats">
                       <template #empty>
                         {{ t('tools.noFormats') }}
                       </template>
@@ -952,8 +953,9 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
                         <UFormField name="encoding" :label="t('tools.encoding')">
                           <USelectMenu v-model="state.encoding" :items="['utf-8', 'ascii', 'latin-1']"
-                            :placeholder="t('tools.encoding')" :search-input="{ placeholder: t('global.search') }"
-                            class="w-full" :disabled="controlsDisabled" />
+                            :placeholder="t('tools.encoding')"
+                            :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full"
+                            :disabled="controlsDisabled" />
                         </UFormField>
                       </div>
                     </template>

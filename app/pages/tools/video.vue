@@ -542,21 +542,23 @@ onMounted(async () => {
 
 <template>
   <BasePage id="tools-video" :title="t('nav.video')">
-    <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle"
-      class="space-y-2 shrink-0">
-      <template #title>
-        {{ t('tools.executableMissing') }}
-      </template>
-      <template #description>
-        <div class="mt-2">
-          <UButton size="xs" color="error" variant="soft" to="/system/config?tab=tools">
-            {{ t('nav.goTo') }} {{ t('nav.config') }}
-          </UButton>
-        </div>
-      </template>
-    </UAlert>
-    <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
-      :title="t('tools.noElectron')" class="mb-4" />
+    <!-- Alerts -->
+    <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 shrink-0 mb-4">
+      <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle">
+        <template #title>
+          {{ t('tools.executableMissing') }}
+        </template>
+        <template #description>
+          <div class="mt-2">
+            <UButton size="xs" color="error" variant="soft" to="/settings/tools">
+              {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
+            </UButton>
+          </div>
+        </template>
+      </UAlert>
+      <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
+        :title="t('tools.noElectron')" />
+    </div>
 
     <!-- Main Columns -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden w-full pb-4">

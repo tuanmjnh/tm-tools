@@ -17,17 +17,24 @@ export async function seedAuth(db: DatabaseAdapter, options: SeedOptions = {}): 
   const existingRoles = await db.getRoles()
   const roleByName = (name: string) => existingRoles.find((r: any) => r.name === name)
 
-  // Create missing roles only (idempotent)
+  // Create or update roles
   for (const def of seedRoles) {
-    if (!roleByName(def.name)) {
+    const existing = roleByName(def.name)
+    let routeIds: string[] = ['*']
+    try {
+      routeIds = await resolveRouteIds(db, def.allowedRoutes)
+    } catch {
+      // system_routes table may not exist yet; roles still seed
+    }
+    if (!existing) {
       const { allowedRoutes, ...rest } = def
-      let routeIds: string[] = ['*']
-      try {
-        routeIds = await resolveRouteIds(db, allowedRoutes)
-      } catch {
-        // system_routes table may not exist yet; roles still seed
-      }
       await db.createRole({ ...rest, allowedRoutes: routeIds })
+    } else if (existing.isSystem) {
+      await db.updateRole(existing.id, {
+        description: def.description,
+        permissions: def.permissions,
+        allowedRoutes: routeIds
+      })
     }
   }
 
@@ -87,6 +94,15 @@ async function seedSystemRoutes(db: DatabaseAdapter): Promise<void> {
       if (!def.name) return null
       const exists = byName.get(def.name)
       if (exists) {
+        // Update label, icon, sort, isVisible, parentId if changed
+        await db.updateSystemRoute(exists.id, {
+          path: def.path,
+          label: def.label,
+          icon: def.icon || '',
+          sort: def.sort ?? exists.sort,
+          isVisible: def.isVisible ?? exists.isVisible,
+          parentId
+        })
         if (def.children) {
           for (const child of def.children) {
             await ensureRoute(child, exists.id)

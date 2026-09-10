@@ -254,7 +254,7 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           </template>
 
           <template #actions="{ item: h }">
-            <div class="flex items-center justify-end gap-1 shrink-0 w-12">
+            <div class="flex items-center justify-end gap-1 shrink-0">
               <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
                 color="primary" :title="t('tools.openFile')" @click="openFile(h.output_file)" />
               <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"

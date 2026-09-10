@@ -67,15 +67,10 @@ async function pickConfigFolder() {
 </script>
 
 <template>
-  <BaseResponsiveSlideover
-    :open="open"
-    :title="isEditing ? t('global.edit') : t('global.create')"
-    :description="t('tools.configPreset')"
-    icon="i-lucide-sliders-horizontal"
-    side="right"
-    :loading="loading"
-    @update:open="emit('update:open', $event)"
-  >
+  <BaseResponsiveSlideover :open="open" :title="isEditing ? t('global.edit') : t('global.create')"
+    :description="t('tools.configPreset')" icon="i-lucide-sliders-horizontal" side="right" :loading="loading"
+    @update:open="emit('update:open', $event)">
+    >
     <template #body>
       <div class="space-y-4">
         <UFormField :label="t('tools.configTitle')" :required="true">
@@ -83,14 +78,10 @@ async function pickConfigFolder() {
         </UFormField>
 
         <UFormField :label="t('tools.format')">
-          <USelectMenu
-            v-model="form.format_id"
-            :items="formats.map(f => ({ label: f.title, value: f.id }))"
+          <USelectMenu v-model="form.format_id" :items="formats.map(f => ({ label: f.title, value: f.id }))"
             :placeholder="t('tools.selectFormat')"
-            :search-input="{ placeholder: t('global.search') }"
-            value-key="value"
-            class="w-full"
-          >
+            :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
+            class="w-full">
             <template #empty>
               {{ t('tools.noFormats') }}
             </template>
@@ -98,22 +89,11 @@ async function pickConfigFolder() {
         </UFormField>
 
         <UFormField :label="t('tools.output')">
-          <UInput
-            v-model="form.out_path"
-            placeholder="D:/Downloads/YouTube"
-            :ui="{ trailing: 'pe-0.5' }"
-            class="w-full"
-          >
+          <UInput v-model="form.out_path" placeholder="D:/Downloads/YouTube" :ui="{ trailing: 'pe-0.5' }"
+            class="w-full">
             <template #trailing>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                icon="i-lucide-folder-open"
-                :title="t('tools.browse')"
-                :aria-label="t('tools.browse')"
-                @click="pickConfigFolder"
-              />
+              <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open" :title="t('tools.browse')"
+                :aria-label="t('tools.browse')" @click="pickConfigFolder" />
             </template>
           </UInput>
         </UFormField>
@@ -123,13 +103,7 @@ async function pickConfigFolder() {
         </UFormField>
 
         <UFormField :label="t('tools.threads')">
-          <UInput
-            v-model.number="form.threads"
-            type="number"
-            min="1"
-            max="8"
-            class="w-full"
-          />
+          <UInput v-model.number="form.threads" type="number" min="1" max="8" class="w-full" />
         </UFormField>
 
         <div class="space-y-3">
@@ -138,34 +112,17 @@ async function pickConfigFolder() {
         </div>
 
         <UFormField :label="t('tools.encoding')">
-          <USelectMenu
-            v-model="form.encoding"
-            :items="['utf-8', 'ascii', 'latin-1']"
-            :placeholder="t('tools.encoding')"
-            :search-input="{ placeholder: t('global.search') }"
-            class="w-full"
-          />
+          <USelectMenu v-model="form.encoding" :items="['utf-8', 'ascii', 'latin-1']" :placeholder="t('tools.encoding')"
+            :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full" />
         </UFormField>
       </div>
     </template>
 
     <template #footer>
-      <UButton
-        variant="ghost"
-        color="neutral"
-        :label="t('global.cancel')"
-        :disabled="loading"
-        @click="emit('update:open', false)"
-      />
-      <UButton
-        variant="soft"
-        :label="isEditing ? t('global.update') : t('global.create_new')"
-        color="primary"
-        icon="i-lucide-save"
-        :loading="loading"
-        :disabled="isSaveDisabled"
-        @click="onSave"
-      />
+      <UButton variant="ghost" color="neutral" :label="t('global.cancel')" :disabled="loading"
+        @click="emit('update:open', false)" />
+      <UButton variant="soft" :label="isEditing ? t('global.update') : t('global.create_new')" color="primary"
+        icon="i-lucide-save" :loading="loading" :disabled="isSaveDisabled" @click="onSave" />
     </template>
   </BaseResponsiveSlideover>
 </template>

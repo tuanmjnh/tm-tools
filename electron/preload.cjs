@@ -48,6 +48,18 @@ const ffmpeg = exposeNamespace('tools:ffmpeg', {
   ]
 })
 
+const profiles = exposeNamespace('tools:profiles', {
+  invoke: [
+    'listProfiles', 'getProfile', 'createProfile', 'updateProfile', 'deleteProfiles',
+    'cloneProfile', 'listGroups', 'saveGroup', 'deleteGroup', 'listProxies',
+    'saveProxy', 'deleteProxy', 'checkProxy', 'launchBrowser', 'stopBrowser',
+    'getRunningProfiles', 'openProfileFolder', 'clearProfileCache', 'detectBrowserExecutable'
+  ],
+  on: [
+    'statusChanged'
+  ]
+})
+
 const dialog = exposeNamespace('tools:dialog', {
   invoke: ['openFile', 'openFolder', 'saveFile'],
   on: []
@@ -98,8 +110,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
   on: (channel, callback) => {
     ipcRenderer.on(channel, (event, ...args) => callback(...args))
   },
-  tools: { youtube, ffmpeg },
+  tools: { youtube, ffmpeg, profiles },
   dialog,
   fileManager,
-  appUpdater
+  appUpdater,
+  system: {
+    getInfo: () => ipcRenderer.invoke('system:getInfo'),
+    openDirectory: input => ipcRenderer.invoke('system:openDirectory', input),
+    getStorageUsage: () => ipcRenderer.invoke('system:getStorageUsage')
+  },
+  browser: {
+    list: () => ipcRenderer.invoke('browser:list'),
+    detect: () => ipcRenderer.invoke('browser:detect'),
+    addCustom: input => ipcRenderer.invoke('browser:addCustom', input),
+    remove: id => ipcRenderer.invoke('browser:remove', { id }),
+    testExecutable: input => ipcRenderer.invoke('browser:testExecutable', input)
+  },
+  events: {
+    on: (event, callback) => {
+      const listener = (_e, data) => {
+        if (data && data.event === event) {
+          callback(data.payload)
+        }
+      }
+      ipcRenderer.on('eventbus:event', listener)
+      return () => ipcRenderer.removeListener('eventbus:event', listener)
+    }
+  }
 })

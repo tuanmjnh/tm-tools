@@ -1,0 +1,1 @@
+ALTER TABLE `profiles` ADD `stealth_mode` integer DEFAULT false NOT NULL;

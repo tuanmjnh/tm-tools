@@ -224,11 +224,28 @@ const handleLongPress = (payload: { item: any, clientX: number, clientY: number 
   }
 }
 
+const slots = useSlots()
+
 const showActions = computed(() => {
   if (props.actionsButtonVisibility === 'never') return false
   if (props.actionsButtonVisibility === 'list') return currentViewMode.value === 'list'
   if (props.actionsButtonVisibility === 'grid') return currentViewMode.value === 'grid'
   return true
+})
+
+const isActionCol = (key: string) => key === 'actions' || key === 'action'
+const actionsCol = computed(() => props.columns.find(c => isActionCol(c.key)))
+const displayColumns = computed(() => props.columns.filter(c => !isActionCol(c.key)))
+const hasActions = computed(() => showActions.value && (!!props.actionOptions || !!slots.actions || !!slots.action || !!actionsCol.value))
+
+const actionsClass = computed(() => {
+  if (actionsCol.value?.class && actionsCol.value.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('min-w-'))) {
+    return actionsCol.value.class.includes('shrink-0') ? actionsCol.value.class : `${actionsCol.value.class} shrink-0`
+  }
+  if (slots.actions || slots.action) {
+    return 'w-24 shrink-0'
+  }
+  return 'w-14 shrink-0'
 })
 </script>
 
@@ -236,19 +253,20 @@ const showActions = computed(() => {
   <div class="flex flex-col h-full min-h-0 bg-transparent">
     <!-- Table Header (Visible only on Desktop List Mode) -->
     <div v-if="viewMode === 'list' && !hideHeader"
-      class="hidden lg:flex items-center pl-1 pr-4 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent">
+      class="hidden lg:flex items-center pl-0.75 pr-3.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent">
       <!-- Drag Handle Placeholder (Aligned with SwipeCard pl-2 + w-6 = 32px) -->
       <div v-if="isDraggable" class="w-8 shrink-0" />
 
       <!-- Checkbox Column -->
-      <div v-if="selectable" class="w-0 shrink-0 flex items-center justify-center pr-6">
+      <div v-if="selectable" class="w-8 shrink-0 flex items-center justify-center mr-2">
         <UCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate" @update:model-value="toggleAll" />
       </div>
 
       <!-- Columns -->
-      <div v-for="col in columns" :key="col.key" class="flex items-center min-w-0 px-2" :class="[
+      <div v-for="col in displayColumns" :key="col.key" class="flex items-center min-w-0 px-2" :class="[
         (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
-        col.class || ''
+        col.class || '',
+        col.headerClass || ''
       ]">
         <div v-if="col.sortable"
           class="cursor-pointer select-none flex items-center hover:text-primary-500 transition-colors"
@@ -261,8 +279,11 @@ const showActions = computed(() => {
         <span v-else>{{ col.label }}</span>
       </div>
 
-      <!-- Actions Placeholder (Right) -->
-      <div v-if="showActions && (actionOptions || $slots.actions)" class="w-24 shrink-0 text-right pr-2" />
+      <!-- Actions Placeholder / Header (Right) -->
+      <div v-if="hasActions" class="shrink-0 flex items-center justify-end px-2"
+        :class="[actionsClass, actionsCol?.headerClass || '']">
+        <span v-if="actionsCol?.label">{{ actionsCol.label }}</span>
+      </div>
     </div>
 
     <!-- Scrollable Content -->
@@ -322,7 +343,7 @@ const showActions = computed(() => {
                   </div>
 
                   <!-- Columns Loop -->
-                  <div v-for="col in columns" :key="col.key" class="min-w-0 flex items-center px-2" :class="[
+                  <div v-for="col in displayColumns" :key="col.key" class="min-w-0 flex items-center px-2" :class="[
                     (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
                     col.class || '',
                     col.rowClass || ''
@@ -342,13 +363,15 @@ const showActions = computed(() => {
 
             <!-- Right Slot: Actions -->
             <template #right>
-              <div v-if="showActions && (actionOptions || $slots.actions)"
-                class="hidden lg:flex items-center justify-end min-w-12 px-2 h-full shrink-0" @click.stop>
+              <div v-if="hasActions" class="hidden lg:flex items-center justify-end px-2 h-full shrink-0"
+                :class="[actionsClass, actionsCol?.rowClass || '']" @click.stop>
                 <slot name="actions" :item="item">
-                  <UDropdownMenu v-if="actionOptions" :items="actionOptions(item)"
-                    :popper="{ placement: 'bottom-end' }">
-                    <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs" />
-                  </UDropdownMenu>
+                  <slot name="action" :item="item">
+                    <UDropdownMenu v-if="actionOptions" :items="actionOptions(item)"
+                      :popper="{ placement: 'bottom-end' }">
+                      <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs" />
+                    </UDropdownMenu>
+                  </slot>
                 </slot>
               </div>
             </template>

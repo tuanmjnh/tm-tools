@@ -30,8 +30,26 @@ export type {
   MediaProbeResult,
   JoinFolderItem,
   ToolUpdateInfo,
-  ToolUpdateProgress
+  ToolUpdateProgress,
+  BrowserProfile,
+  ProfileGroup,
+  ProfileProxy,
+  ProfileAccount,
+  ProfileFilters,
+  ProfilesListResult,
+  ProfilesNamespace
 } from './electron'
+
+export interface GridColumn {
+  key: string
+  label?: string
+  sortable?: boolean
+  class?: string
+  rowClass?: string
+  slot?: string
+  headerClass?: string
+  sort?: 'asc' | 'desc' | 1 | -1 | null
+}
 
 export type UserStatus = 'subscribed' | 'unsubscribed' | 'bounced'
 export type SaleStatus = 'paid' | 'failed' | 'refunded'

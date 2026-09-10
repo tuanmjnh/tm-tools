@@ -63,7 +63,7 @@ export function loadConfig(): AppConfig {
     },
     mongodb: {
       uri: readEnv('MONGODB_URI', 'mongodb://localhost:27017'),
-      dbName: readEnv('MONGODB_DB_NAME', 'electron_nuxt')
+      dbName: readEnv('MONGODB_DB_NAME', 'tm-tools')
     },
     supabase: {
       url: readEnv('SUPABASE_URL', 'https://zldjdwcrejpputsgxedi.supabase.co'),
@@ -87,7 +87,7 @@ export function loadConfig(): AppConfig {
       subject: readEnv('WEB_PUSH_SUBJECT', 'mailto:tuanmjnhdeveloper@gmail.com')
     },
     app: {
-      name: readEnv('APP_NAME', 'TM Browsers'),
+      name: readEnv('APP_NAME', 'TM Tools'),
       url: readEnv('APP_URL', 'http://127.0.0.1:3456'),
       port: parseInt(readEnv('APP_PORT', '3456'))
     },
@@ -108,6 +108,7 @@ export function loadConfig(): AppConfig {
       { key: 'inbox', label: 'Inbox', description: 'Inbox module', icon: 'i-lucide-inbox' },
       { key: 'customers', label: 'Customers', description: 'Customer management', icon: 'i-lucide-users' },
       { key: 'chat', label: 'AI Chat', description: 'AI chat module', icon: 'i-lucide-message-square' },
+      { key: 'browser_hub', label: 'Browser Hub', description: 'Browser profiles & proxies management', icon: 'i-lucide-globe' },
       { key: 'settings', label: 'Settings', description: 'Settings module', icon: 'i-lucide-settings' },
       { key: 'users', label: 'Users', description: 'User management', icon: 'i-lucide-user-cog' },
       { key: 'rbac', label: 'RBAC', description: 'Role & permission management', icon: 'i-lucide-shield' }

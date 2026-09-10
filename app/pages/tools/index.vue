@@ -4,22 +4,14 @@ const { t } = useI18n()
 
 <template>
   <div>
-    <UPageHeader
-      :title="t('nav.tools')"
-      class="mb-6"
-    />
+    <UPageHeader :title="t('nav.tools')" class="mb-6" />
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <UCard
-        class="cursor-pointer hover:ring-2 hover:ring-primary transition-all"
-        @click="navigateTo('/tools/download')"
-      >
+      <UCard class="cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+        @click="navigateTo('/tools/download')">
         <template #header>
           <div class="flex items-center gap-3">
-            <UIcon
-              name="i-lucide-download"
-              class="text-primary text-xl"
-            />
+            <UIcon name="i-lucide-download" class="text-primary text-xl" />
             <div>
               <h3 class="font-semibold">
                 {{ t('nav.download') }}
@@ -35,16 +27,10 @@ const { t } = useI18n()
         </p>
       </UCard>
 
-      <UCard
-        class="cursor-pointer hover:ring-2 hover:ring-primary transition-all"
-        @click="navigateTo('/tools/video')"
-      >
+      <UCard class="cursor-pointer hover:ring-2 hover:ring-primary transition-all" @click="navigateTo('/tools/video')">
         <template #header>
           <div class="flex items-center gap-3">
-            <UIcon
-              name="i-lucide-video"
-              class="text-primary text-xl"
-            />
+            <UIcon name="i-lucide-video" class="text-primary text-xl" />
             <div>
               <h3 class="font-semibold">
                 {{ t('nav.video') }}

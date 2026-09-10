@@ -8,6 +8,15 @@ const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
 const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
+const { registerProfilesController } = require('./tools/profiles.controller.cjs')
+
+let initializePlatform
+try {
+  initializePlatform = require('./dist/index.cjs').initializePlatform
+} catch {
+  require('tsx/cjs')
+  initializePlatform = require('./src/index.ts').initializePlatform
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -126,6 +135,7 @@ async function createWindow() {
   })
 
   registerAppUpdaterController(win)
+  registerProfilesController(win)
 
   win.on('closed', () => {
     win = null
@@ -256,6 +266,9 @@ app.whenReady().then(() => {
   registerFfmpegController()
   registerDialogController()
   registerFileManagerController()
+  if (typeof initializePlatform === 'function') {
+    initializePlatform()
+  }
   createWindow()
 })
 

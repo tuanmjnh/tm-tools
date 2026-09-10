@@ -60,6 +60,7 @@ Add `app/app.config.ts` if you need global overrides.
 ### UButton
 - `color`: `primary | secondary | success | info | warning | error | neutral`
 - `variant`: `solid | soft | subtle | outline | ghost | link`
+- **Default Variant Rule**: Khi thêm `UButton` nếu không có yêu cầu cụ thể nào khác, **BẮT BUỘC MẶC ĐỊNH SỬ DỤNG `variant="soft"`** (tránh để mặc định `solid` trừ khi có yêu cầu thiết kế riêng; nút Huỷ/Đóng/icon phụ dùng `variant="ghost"`, nút xoá hàng loạt phụ dùng `variant="subtle"` theo AGENTS.md).
 - `size`: `xs | sm | md | lg | xl`
 - `icon`/`trailing-icon`/`loading`/`block`/`square`/`loading-auto` supported.
 
@@ -70,7 +71,7 @@ Add `app/app.config.ts` if you need global overrides.
   - Both components use the **`items`** prop (NOT `options`) to pass selectable items. E.g., `:items="[{ label: 'Option 1', value: 1 }]"` or `:items="['opt1', 'opt2']"`.
   - Pass the **`value-key="value"`** prop (or camelCase `valueKey`) when binding objects so `v-model` binds to the ID/value string rather than the entire object.
   - Set localized placeholders on components: `:placeholder="t('...')"` (avoid hardcoding static strings).
-  - To customize the search input field and placeholder inside `USelectMenu`, pass the object `:search-input="{ placeholder: t('global.search') }"` to provide i18n support.
+  - **USelectMenu Search Input Convention**: `USelectMenu` bắt buộc phải thêm thuộc tính `:search-input="{ icon: 'i-lucide-search', placeholder: t('...') }"` (ví dụ: `:search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"`) để luôn có icon tìm kiếm và hỗ trợ i18n đầy đủ.
   - To handle empty states in `USelectMenu` when no options are loaded, use the `#empty` slot (e.g., `<template #empty>{{ t('...') }}</template>`) or the `empty` prop.
 - **Every `UForm` MUST validate with a zod `:schema`** — see the "Form convention — UForm + UFormField + zod" section below.
 

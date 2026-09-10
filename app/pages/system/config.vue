@@ -13,8 +13,8 @@ const router = useRouter()
 const saving = ref(false)
 const loading = ref(true)
 
-type ConfigKeys =
-  | 'MONGODB_URI'
+type ConfigKeys
+  = | 'MONGODB_URI'
   | 'MONGODB_DB_NAME'
   | 'SUPABASE_URL'
   | 'SUPABASE_PUBLISHABLE_KEY'
@@ -32,10 +32,6 @@ type ConfigKeys =
   | 'APP_NAME'
   | 'APP_URL'
   | 'APP_PORT'
-  | 'TOOLS_YTDLP_PATH'
-  | 'TOOLS_FFMPEG_PATH'
-  | 'TOOLS_FFPROBE_PATH'
-  | 'TOOLS_FFPLAY_PATH'
   | 'AI_PROVIDER'
   | 'AI_API_KEY'
   | 'AI_BASE_URL'
@@ -60,10 +56,6 @@ const config = reactive<Record<ConfigKeys, string>>({
   APP_NAME: '',
   APP_URL: '',
   APP_PORT: '',
-  TOOLS_YTDLP_PATH: '',
-  TOOLS_FFMPEG_PATH: '',
-  TOOLS_FFPROBE_PATH: '',
-  TOOLS_FFPLAY_PATH: '',
   AI_PROVIDER: '',
   AI_API_KEY: '',
   AI_BASE_URL: '',
@@ -78,8 +70,7 @@ const tabs = computed(() => [
   { label: t('settings.storageTab'), value: 'storage', icon: 'i-lucide-hard-drive' },
   { label: t('settings.webPush'), value: 'push', icon: 'i-lucide-bell-ring' },
   { label: t('settings.app'), value: 'app', icon: 'i-lucide-app-window' },
-  { label: t('settings.ai'), value: 'ai', icon: 'i-lucide-bot' },
-  { label: t('tools.taskManager'), value: 'tools', icon: 'i-lucide-folder-cog' }
+  { label: t('settings.ai'), value: 'ai', icon: 'i-lucide-bot' }
 ])
 
 const activeTab = ref(String(route.query.tab || 'database'))
@@ -93,47 +84,6 @@ watch(() => route.query.tab, (newTab) => {
 watch(activeTab, (newTab) => {
   router.replace({ query: { ...route.query, tab: newTab } })
 })
-
-const verificationResults = reactive<{
-  TOOLS_YTDLP_PATH: { status: boolean, checked: boolean }
-  TOOLS_FFMPEG_PATH: { status: boolean, checked: boolean }
-  TOOLS_FFPROBE_PATH: { status: boolean, checked: boolean }
-  TOOLS_FFPLAY_PATH: { status: boolean, checked: boolean }
-}>({
-  TOOLS_YTDLP_PATH: { status: false, checked: false },
-  TOOLS_FFMPEG_PATH: { status: false, checked: false },
-  TOOLS_FFPROBE_PATH: { status: false, checked: false },
-  TOOLS_FFPLAY_PATH: { status: false, checked: false }
-})
-
-async function verifyField(key: 'TOOLS_YTDLP_PATH' | 'TOOLS_FFMPEG_PATH' | 'TOOLS_FFPROBE_PATH' | 'TOOLS_FFPLAY_PATH') {
-  const path = config[key]
-  if (!path) {
-    verificationResults[key] = { status: true, checked: true }
-    return
-  }
-  if (!hasElectron.value) return
-  try {
-    const typeMap = {
-      TOOLS_YTDLP_PATH: 'ytDlp',
-      TOOLS_FFMPEG_PATH: 'ffmpeg',
-      TOOLS_FFPROBE_PATH: 'ffprobe',
-      TOOLS_FFPLAY_PATH: 'ffplay'
-    } as const
-    const res = await window.electronAPI!.verifyPath(path, typeMap[key])
-    // console.log('[verifyField] key:', key, 'path:', path, 'res:', res)
-    verificationResults[key] = { status: res.status, checked: true }
-  } catch (err) {
-    // console.error('[verifyField] error for key:', key, err)
-    verificationResults[key] = { status: false, checked: true }
-  }
-}
-
-watch(() => config.TOOLS_YTDLP_PATH, () => verifyField('TOOLS_YTDLP_PATH'))
-watch(() => config.TOOLS_FFMPEG_PATH, () => verifyField('TOOLS_FFMPEG_PATH'))
-watch(() => config.TOOLS_FFPROBE_PATH, () => verifyField('TOOLS_FFPROBE_PATH'))
-watch(() => config.TOOLS_FFPLAY_PATH, () => verifyField('TOOLS_FFPLAY_PATH'))
-
 
 const schema = computed(() => z.object({
   MONGODB_URI: z.string().refine(v => !v || v.startsWith('mongodb://') || v.startsWith('mongodb+srv://'), t('settings.invalidMongoUri')),
@@ -154,10 +104,6 @@ const schema = computed(() => z.object({
   APP_NAME: z.string().optional(),
   APP_URL: z.string().refine(v => !v || /^https?:\/\//.test(v), t('settings.invalidUrl')).optional(),
   APP_PORT: z.string().refine(v => !v || (parseInt(v, 10) > 0 && parseInt(v, 10) < 65536), t('settings.invalidPort')).optional(),
-  TOOLS_YTDLP_PATH: z.string().optional(),
-  TOOLS_FFMPEG_PATH: z.string().optional(),
-  TOOLS_FFPROBE_PATH: z.string().optional(),
-  TOOLS_FFPLAY_PATH: z.string().optional(),
   AI_PROVIDER: z.string().optional(),
   AI_API_KEY: z.string().optional(),
   AI_BASE_URL: z.string().refine(v => !v || /^https?:\/\//.test(v), t('settings.invalidUrl')).optional(),
@@ -176,14 +122,6 @@ async function loadConfig() {
     for (const key of Object.keys(config) as ConfigKeys[]) {
       if (res.data.values[key]) config[key] = res.data.values[key]
     }
-    if (hasElectron.value) {
-      await Promise.all([
-        verifyField('TOOLS_YTDLP_PATH'),
-        verifyField('TOOLS_FFMPEG_PATH'),
-        verifyField('TOOLS_FFPROBE_PATH'),
-        verifyField('TOOLS_FFPLAY_PATH')
-      ])
-    }
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
@@ -199,13 +137,6 @@ onMounted(async () => {
 })
 
 async function onSubmit() {
-  const hasInvalidPaths = Object.entries(verificationResults).some(([key, res]) => {
-    return config[key as keyof typeof config] && res.checked && !res.status
-  })
-  if (hasInvalidPaths) {
-    toast.add({ title: t('tools.invalidExecutable'), color: 'error' })
-    return
-  }
   if (saving.value) return
   saving.value = true
   try {
@@ -247,15 +178,17 @@ async function onSubmit() {
       <UTabs v-model="activeTab" :items="tabs" :content="false" class="shrink-0" />
 
       <!-- Config Form -->
-      <UForm v-slot v-if="!loading" id="connections" :schema="schema" :state="config"
-        class="space-y-6 flex-1 overflow-y-auto" @submit="onSubmit">
+      <UForm v-if="!loading" id="connections" :schema="schema" :state="config" class="space-y-6 flex-1 overflow-y-auto"
+        @submit="onSubmit">
         <!-- Database Tab -->
         <div v-show="activeTab === 'database'" class="space-y-6">
           <UCard variant="subtle">
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-simple-icons-mongodb" class="text-green-600 dark:text-green-500 size-5" />
-                <p class="font-semibold">MongoDB</p>
+                <p class="font-semibold">
+                  MongoDB
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -272,7 +205,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-simple-icons-supabase" class="text-emerald-500 size-5" />
-                <p class="font-semibold">{{ t('settings.supabase') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.supabase') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -296,7 +231,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-simple-icons-cloudinary" class="text-blue-500 size-5" />
-                <p class="font-semibold">{{ t('settings.cloudinary') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.cloudinary') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -316,7 +253,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-simple-icons-firebase" class="text-amber-500 size-5" />
-                <p class="font-semibold">{{ t('settings.firebase') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.firebase') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -350,7 +289,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-bell-ring" class="text-indigo-500 size-5" />
-                <p class="font-semibold">{{ t('settings.webPush') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.webPush') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -373,7 +314,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-app-window" class="text-teal-500 size-5" />
-                <p class="font-semibold">{{ t('settings.app') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.app') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -396,7 +339,9 @@ async function onSubmit() {
             <template #header>
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-bot" class="text-violet-500 size-5" />
-                <p class="font-semibold">{{ t('settings.ai') }}</p>
+                <p class="font-semibold">
+                  {{ t('settings.ai') }}
+                </p>
               </div>
             </template>
             <div class="flex flex-col gap-4">
@@ -417,72 +362,6 @@ async function onSubmit() {
               </UFormField>
               <UFormField name="AI_MODEL" :label="t('settings.aiModel')" :description="t('settings.aiModelDesc')">
                 <UInput v-model="config.AI_MODEL" class="w-full" placeholder="gemini-2.0-flash" />
-              </UFormField>
-            </div>
-          </UCard>
-        </div>
-
-        <!-- Tools Tab -->
-        <div v-show="activeTab === 'tools'" class="space-y-6">
-          <UCard variant="subtle">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-folder-cog" class="text-gray-500 size-5" />
-                <p class="font-semibold">{{ t('tools.taskManager') }}</p>
-              </div>
-            </template>
-            <div class="flex flex-col gap-4">
-              <UFormField name="TOOLS_YTDLP_PATH" label="yt-dlp Path" :description="t('settings.emptyForDefault')"
-                :error="verificationResults.TOOLS_YTDLP_PATH.checked && !verificationResults.TOOLS_YTDLP_PATH.status ? t('tools.invalidExecutable') : undefined">
-                <BaseFilePicker v-model="config.TOOLS_YTDLP_PATH" mode="file" readonly show-clear
-                  :filters="[{ name: 'Executables', extensions: ['exe'] }]"
-                  placeholder="D:/Applications/tm-tools/resources/yt-dlp.exe" />
-                <template #help>
-                  <p v-if="verificationResults.TOOLS_YTDLP_PATH.checked && verificationResults.TOOLS_YTDLP_PATH.status && config.TOOLS_YTDLP_PATH"
-                    class="text-xs text-green-500 flex items-center gap-1 mt-1">
-                    <UIcon name="i-lucide-check-circle" class="size-3.5" />
-                    {{ t('tools.verified') }} (yt-dlp)
-                  </p>
-                </template>
-              </UFormField>
-              <UFormField name="TOOLS_FFMPEG_PATH" label="FFmpeg Path" :description="t('settings.emptyForDefault')"
-                :error="verificationResults.TOOLS_FFMPEG_PATH.checked && !verificationResults.TOOLS_FFMPEG_PATH.status ? t('tools.invalidExecutable') : undefined">
-                <BaseFilePicker v-model="config.TOOLS_FFMPEG_PATH" mode="file" readonly show-clear
-                  :filters="[{ name: 'Executables', extensions: ['exe'] }]"
-                  placeholder="D:/Applications/tm-tools/resources/ffmpeg.exe" />
-                <template #help>
-                  <p v-if="verificationResults.TOOLS_FFMPEG_PATH.checked && verificationResults.TOOLS_FFMPEG_PATH.status && config.TOOLS_FFMPEG_PATH"
-                    class="text-xs text-green-500 flex items-center gap-1 mt-1">
-                    <UIcon name="i-lucide-check-circle" class="size-3.5" />
-                    {{ t('tools.verified') }} (FFmpeg)
-                  </p>
-                </template>
-              </UFormField>
-              <UFormField name="TOOLS_FFPROBE_PATH" label="FFprobe Path" :description="t('settings.emptyForDefault')"
-                :error="verificationResults.TOOLS_FFPROBE_PATH.checked && !verificationResults.TOOLS_FFPROBE_PATH.status ? t('tools.invalidExecutable') : undefined">
-                <BaseFilePicker v-model="config.TOOLS_FFPROBE_PATH" mode="file" readonly show-clear
-                  :filters="[{ name: 'Executables', extensions: ['exe'] }]"
-                  placeholder="D:/Applications/tm-tools/resources/ffprobe.exe" />
-                <template #help>
-                  <p v-if="verificationResults.TOOLS_FFPROBE_PATH.checked && verificationResults.TOOLS_FFPROBE_PATH.status && config.TOOLS_FFPROBE_PATH"
-                    class="text-xs text-green-500 flex items-center gap-1 mt-1">
-                    <UIcon name="i-lucide-check-circle" class="size-3.5" />
-                    {{ t('tools.verified') }} (FFprobe)
-                  </p>
-                </template>
-              </UFormField>
-              <UFormField name="TOOLS_FFPLAY_PATH" label="FFplay Path" :description="t('settings.emptyForDefault')"
-                :error="verificationResults.TOOLS_FFPLAY_PATH.checked && !verificationResults.TOOLS_FFPLAY_PATH.status ? t('tools.invalidExecutable') : undefined">
-                <BaseFilePicker v-model="config.TOOLS_FFPLAY_PATH" mode="file" readonly show-clear
-                  :filters="[{ name: 'Executables', extensions: ['exe'] }]"
-                  placeholder="D:/Applications/tm-tools/resources/ffplay.exe" />
-                <template #help>
-                  <p v-if="verificationResults.TOOLS_FFPLAY_PATH.checked && verificationResults.TOOLS_FFPLAY_PATH.status && config.TOOLS_FFPLAY_PATH"
-                    class="text-xs text-green-500 flex items-center gap-1 mt-1">
-                    <UIcon name="i-lucide-check-circle" class="size-3.5" />
-                    {{ t('tools.verified') }} (FFplay)
-                  </p>
-                </template>
               </UFormField>
             </div>
           </UCard>
