@@ -24,6 +24,7 @@
     "generate:vapid": "npx tsx -e \"const wp = require('web-push'); const keys = wp.generateVAPIDKeys(); console.log(JSON.stringify(keys, null, 2))\""
   },
   "dependencies": {
+    "tm-hub-client": "workspace:*",
     "@he-tree/vue": "2.10.1",
     "@iconify-json/lucide": "^1.2.120",
     "@iconify-json/simple-icons": "^1.2.92",

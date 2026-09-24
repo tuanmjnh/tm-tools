@@ -51,26 +51,26 @@ export class MongoDBAdapter implements DatabaseAdapter {
   }
 
   async findByEmail(email: string): Promise<AuthUser | null> {
-    return (await this.users().findOne({ email })) as AuthUser | null
+    return (await this.users().findOne({ email, isDeleted: { $ne: true } })) as AuthUser | null
   }
 
   async findByUsername(username: string): Promise<AuthUser | null> {
-    return (await this.users().findOne({ username })) as AuthUser | null
+    return (await this.users().findOne({ username, isDeleted: { $ne: true } })) as AuthUser | null
   }
 
   async findById(id: string): Promise<AuthUser | null> {
-    return (await this.users().findOne({ id })) as AuthUser | null
+    return (await this.users().findOne({ id, isDeleted: { $ne: true } })) as AuthUser | null
   }
 
   async getAllUsers(): Promise<AuthUser[]> {
-    return (await this.users().find().sort({ createdAt: -1 }).toArray()).map((u: any) => {
+    return (await this.users().find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 }).toArray()).map((u: any) => {
       const { password, ...rest } = u
       return rest as AuthUser
     })
   }
 
   async getUsersPaginated(cursor?: string, limit = 20): Promise<{ users: AuthUser[], nextCursor: string | null }> {
-    const query: { createdAt?: { $lt: string } } = {}
+    const query: { createdAt?: { $lt: string }, isDeleted?: { $ne: boolean } } = { isDeleted: { $ne: true } }
     if (cursor) {
       query.createdAt = { $lt: cursor }
     }
@@ -123,9 +123,10 @@ export class MongoDBAdapter implements DatabaseAdapter {
   }
 
   async deleteUser(id: string): Promise<void> {
-    await this.users().deleteOne({ id })
-    await this.userRoles().deleteMany({ userId: id })
-    await this.refreshTokens().deleteMany({ userId: id })
+    const now = new Date().toISOString()
+    await this.users().updateOne({ id }, { $set: { isDeleted: true, deletedAt: now, updatedAt: now } })
+    await this.userRoles().updateMany({ userId: id, isDeleted: { $ne: true } }, { $set: { isDeleted: true, deletedAt: now } })
+    await this.revokeAllUserTokens(id)
   }
 
   async updatePassword(id: string, password: string): Promise<void> {
@@ -194,11 +195,11 @@ export class MongoDBAdapter implements DatabaseAdapter {
   }
 
   async getRoles(): Promise<Role[]> {
-    return (await this.roles().find().sort({ name: 1 }).toArray()) as unknown as Role[]
+    return (await this.roles().find({ isDeleted: { $ne: true } }).sort({ name: 1 }).toArray()) as unknown as Role[]
   }
 
   async getRoleById(id: string): Promise<Role | null> {
-    return (await this.roles().findOne({ id })) as unknown as Role | null
+    return (await this.roles().findOne({ id, isDeleted: { $ne: true } })) as unknown as Role | null
   }
 
   async createRole(role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Role> {
@@ -218,28 +219,32 @@ export class MongoDBAdapter implements DatabaseAdapter {
   }
 
   async deleteRole(id: string): Promise<void> {
-    await this.roles().deleteOne({ id })
-    await this.userRoles().deleteMany({ roleId: id })
+    const now = new Date().toISOString()
+    await this.roles().updateOne({ id }, { $set: { isDeleted: true, deletedAt: now, updatedAt: now } })
+    await this.userRoles().updateMany({ roleId: id, isDeleted: { $ne: true } }, { $set: { isDeleted: true, deletedAt: now } })
   }
 
   async getUserRoles(userId: string): Promise<UserRole[]> {
-    return (await this.userRoles().find({ userId }).toArray()) as unknown as UserRole[]
+    return (await this.userRoles().find({ userId, isDeleted: { $ne: true } }).toArray()) as unknown as UserRole[]
   }
 
   async assignRole(userId: string, roleId: string, assignedBy: string): Promise<void> {
     await this.userRoles().updateOne(
       { userId, roleId },
-      { $set: { userId, roleId, assignedBy, assignedAt: new Date().toISOString() } },
+      { $set: { userId, roleId, assignedBy, assignedAt: new Date().toISOString(), isDeleted: false, deletedAt: null } },
       { upsert: true }
     )
   }
 
   async removeRole(userId: string, roleId: string): Promise<void> {
-    await this.userRoles().deleteOne({ userId, roleId })
+    await this.userRoles().updateOne(
+      { userId, roleId },
+      { $set: { isDeleted: true, deletedAt: new Date().toISOString() } }
+    )
   }
 
   async getSystemRoutes(): Promise<SystemRoute[]> {
-    return (await this.systemRoutes().find().sort({ sort: 1 }).toArray()) as unknown as SystemRoute[]
+    return (await this.systemRoutes().find({ isDeleted: { $ne: true } }).sort({ sort: 1 }).toArray()) as unknown as SystemRoute[]
   }
 
   async createSystemRoute(data: Omit<SystemRoute, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<SystemRoute> {
@@ -259,10 +264,11 @@ export class MongoDBAdapter implements DatabaseAdapter {
   }
 
   async deleteSystemRoute(id: string): Promise<void> {
-    await this.systemRoutes().deleteOne({ id })
+    const now = new Date().toISOString()
+    await this.systemRoutes().updateOne({ id }, { $set: { isDeleted: true, deletedAt: now, updatedAt: now } })
     await this.systemRoutes().updateMany(
       { parentId: id },
-      { $set: { parentId: null, updatedAt: new Date().toISOString() } }
+      { $set: { parentId: null, updatedAt: now } }
     )
   }
 
@@ -284,28 +290,28 @@ export class MongoDBAdapter implements DatabaseAdapter {
     const query = sub.fcmToken
       ? { fcmToken: sub.fcmToken }
       : { endpoint: sub.endpoint }
-    await this.getDb().collection('push_subscriptions').deleteOne(query)
-
-    await this.getDb().collection('push_subscriptions').insertOne({
-      userId,
-      ...sub,
-      deviceType,
-      createdAt: new Date()
-    })
+    await this.getDb().collection('push_subscriptions').updateOne(
+      query,
+      { $set: { userId, ...sub, deviceType, isDeleted: false, deletedAt: null, createdAt: new Date() } },
+      { upsert: true }
+    )
   }
 
   async removePushSubscription(userId: string, identifier: string): Promise<void> {
-    await this.getDb().collection('push_subscriptions').deleteMany({
-      userId,
-      $or: [
-        { endpoint: identifier },
-        { fcmToken: identifier }
-      ]
-    })
+    await this.getDb().collection('push_subscriptions').updateMany(
+      {
+        userId,
+        $or: [
+          { endpoint: identifier },
+          { fcmToken: identifier }
+        ]
+      },
+      { $set: { isDeleted: true, deletedAt: new Date().toISOString() } }
+    )
   }
 
   async getPushSubscriptions(userId: string): Promise<unknown[]> {
-    return await this.getDb().collection('push_subscriptions').find({ userId }).toArray()
+    return await this.getDb().collection('push_subscriptions').find({ userId, isDeleted: { $ne: true } }).toArray()
   }
 
   async saveNotification(notification: Record<string, unknown>): Promise<unknown> {
@@ -325,7 +331,7 @@ export class MongoDBAdapter implements DatabaseAdapter {
     }
     const limit = options?.limit || 20
     const list = await this.getDb().collection('notifications')
-      .find(query)
+      .find({ ...query, isDeleted: { $ne: true } })
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray()
@@ -364,18 +370,21 @@ export class MongoDBAdapter implements DatabaseAdapter {
     const { ObjectId } = await import('mongodb')
     try {
       const objectIds = ids.map(id => new ObjectId(id))
-      const res = await this.getDb().collection('notifications').deleteMany({
-        _id: { $in: objectIds },
-        recipientId: userId
-      })
-      return res.deletedCount
+      const res = await this.getDb().collection('notifications').updateMany(
+        {
+          _id: { $in: objectIds },
+          recipientId: userId,
+          isDeleted: { $ne: true }
+        },
+        { $set: { isDeleted: true, deletedAt: new Date().toISOString() } }
+      )
+      return res.modifiedCount
     } catch {
       return 0
     }
   }
 
-  async seed(options?: { reset?: boolean }): Promise<void> {
-    const { seedAuth } = await import('../auth/seed')
-    await seedAuth(this as any, options)
+  async seed(_options?: { reset?: boolean }): Promise<void> {
+    // Auth and IAM seeding are managed centrally by TM-Hub
   }
 }

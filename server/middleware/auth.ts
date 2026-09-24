@@ -34,5 +34,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid or expired token' })
   }
 
+  // Ràng buộc bảo mật: Token phải khớp appId của tm-tools
+  const currentAppId = process.env.NUXT_PUBLIC_APP_ID || 'tm-tools'
+  if ((payload as any).appId && (payload as any).appId !== currentAppId) {
+    throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: 'Token not issued for this application' })
+  }
+
   event.context.auth = payload
 })

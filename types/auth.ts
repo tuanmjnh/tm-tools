@@ -1,4 +1,4 @@
-export type AuthProvider = 'mongodb' | 'supabase'
+export type AuthProvider = 'hub' | 'mongodb' | 'supabase'
 export type LoginPlatform = 'web' | 'desktop' | 'mobile'
 
 export interface PushSubscriptionData {

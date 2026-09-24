@@ -8,6 +8,7 @@ export const browsers = sqliteTable('browsers', {
   version: text('version').notNull(),
   isDefault: integer('is_default', { mode: 'boolean' }).default(false).notNull(),
   isCustom: integer('is_custom', { mode: 'boolean' }).default(false).notNull(),
+  isDeleted: integer('is_deleted', { mode: 'boolean' }).default(false).notNull(),
   detectedAt: integer('detected_at', { mode: 'timestamp_ms' }),
   status: text('status', { enum: ['available', 'missing'] }).default('available').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

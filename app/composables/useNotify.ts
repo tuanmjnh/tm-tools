@@ -11,8 +11,18 @@ interface NotificationItem {
   type?: string
 }
 
+interface HubNotificationItem {
+  id: string
+  is_read: boolean
+  title?: string
+  body: string
+  icon?: string
+  created_at: string
+}
+
 export const useNotify = () => {
   const auth = useAuth()
+  const { notifications } = useHub()
 
   const getNotifyIcon = (type: string): string => {
     const icons: Record<string, string> = {
@@ -44,8 +54,17 @@ export const useNotify = () => {
     if (!auth.user.value) return []
     isLoading.value = true
     try {
-      const data = await $fetch<NotificationItem[]>('/api/notifications')
-      notify.value = data || []
+      const res = await notifications.list()
+      const list = (res.data || []) as unknown as HubNotificationItem[]
+      notify.value = list.map(n => ({
+        id: n.id,
+        unread: !n.is_read,
+        body: n.body,
+        date: n.created_at,
+        priority: 'normal',
+        type: 'system',
+        sender: { name: n.title, avatar: n.icon }
+      }))
       return notify.value
     } catch (error) {
       console.error('Error fetching notifications:', error)
@@ -57,9 +76,7 @@ export const useNotify = () => {
 
   const markAsRead = async (notifyId: string) => {
     try {
-      const response = await $fetch<{ success: boolean }>(`/api/notifications/${notifyId}/read`, {
-        method: 'PATCH'
-      })
+      const response = await notifications.markRead(notifyId)
 
       if (response.success) {
         const item = notify.value.find(n => n.id === notifyId)
@@ -76,9 +93,7 @@ export const useNotify = () => {
 
   const markAllAsRead = async () => {
     try {
-      const response = await $fetch<{ success: boolean }>('/api/notifications/read-all', {
-        method: 'POST'
-      })
+      const response = await notifications.markReadAll()
 
       if (response.success) {
         notify.value.forEach((n) => {
@@ -94,10 +109,7 @@ export const useNotify = () => {
 
   const deleteNotify = async (ids: string[]) => {
     try {
-      const response = await $fetch<{ success: boolean }>('/api/notifications', {
-        method: 'DELETE',
-        query: { id: ids.join(',') }
-      })
+      const response = await notifications.delete(ids)
 
       if (response.success) {
         notify.value = notify.value.filter(n => !ids.includes(n.id))

@@ -19,12 +19,13 @@ const passwordSchema = computed(() => z.object({
 }))
 
 const passwordSaving = ref(false)
+const { hubFetch, appId } = useHub()
 
 async function onUpdatePassword() {
   if (passwordSaving.value) return
   passwordSaving.value = true
   try {
-    await $fetch(`/api/users?id=${auth.user.value?.id}`, {
+    await hubFetch(`/api/v1/apps/${appId}/users?id=${auth.user.value?.id}`, {
       method: 'PUT',
       body: { password: passwordFields.new }
     })
@@ -38,9 +39,8 @@ async function onUpdatePassword() {
   }
 }
 
-const { data: sessions, refresh } = await useFetch<{ success: boolean, data: UserSession[] }>('/api/auth/sessions', {
-  default: () => ({ success: true, data: [] })
-})
+const sessions = ref<{ success: boolean, data: UserSession[] }>({ success: true, data: [] })
+const refresh = () => {}
 
 type ConfirmAction
   = | { type: 'session', session: UserSession }

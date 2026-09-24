@@ -1,4 +1,5 @@
 export const useWebPush = () => {
+  const { hubFetch, appId } = useHub()
   const isSupported = ref(false)
   const isSubscribed = ref(false)
   const permission = ref<NotificationPermission>('default')
@@ -67,7 +68,7 @@ export const useWebPush = () => {
     error.value = null
 
     try {
-      const resConfig = await $fetch<{ success: boolean, data: { values: Record<string, string> } }>('/api/system/config')
+      const resConfig = await hubFetch<{ success: boolean, data: { values: Record<string, string> } }>(`/api/v1/apps/${appId}/configs/public`)
       const sysConfig = resConfig.data.values
 
       const registration = await navigator.serviceWorker.ready
@@ -127,7 +128,7 @@ export const useWebPush = () => {
         subscription.value = pushSubscription
       }
 
-      await $fetch('/api/notifications/subscribe', {
+      await hubFetch(`/api/v1/apps/${appId}/notifications/subscribe`, {
         method: 'POST',
         body: {
           ...subscriptionData,
@@ -161,7 +162,7 @@ export const useWebPush = () => {
         await pushSub.unsubscribe()
       }
 
-      await $fetch('/api/notifications/unsubscribe', {
+      await hubFetch(`/api/v1/apps/${appId}/notifications/unsubscribe`, {
         method: 'POST',
         body: {
           endpoint: identifier

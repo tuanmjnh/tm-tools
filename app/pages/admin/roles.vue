@@ -17,14 +17,23 @@ const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const toast = useToast()
 const { t } = useI18n()
+const { hubFetch, appId } = useHub()
 
-const { data: rolesRes, status, refresh } = await useFetch<{ success: boolean, data: Role[] }>('/api/rbac/roles', {
+const { data: rolesRes, status, refresh } = await useAsyncData('hub-roles', () =>
+  hubFetch<{ success: boolean, data: Role[] }>(`/api/v1/apps/${appId}/roles`), {
   default: () => ({ success: true, data: [] })
 })
-const { data: modulesRes } = await useFetch<{ success: boolean, data: any[] }>('/api/rbac/permissions', {
-  default: () => ({ success: true, data: [] })
-})
-const { data: routesRes } = await useFetch<{ success: boolean, data: { routes: any[], tree: any[] } }>('/api/system/routes', {
+const defaultModules = [
+  { module: 'users', actions: ['read', 'write', 'delete'] },
+  { module: 'roles', actions: ['read', 'write', 'delete'] },
+  { module: 'media', actions: ['read', 'write', 'delete'] },
+  { module: 'notifications', actions: ['read', 'write', 'delete'] },
+  { module: 'system', actions: ['read', 'write'] },
+  { module: 'chat', actions: ['read', 'write'] }
+]
+const modulesRes = ref({ success: true, data: defaultModules })
+const { data: routesRes } = await useAsyncData('hub-routes', () =>
+  hubFetch<{ success: boolean, data: { routes: any[], tree: any[] } }>(`/api/v1/apps/${appId}/routes`), {
   default: () => ({ success: true, data: { routes: [], tree: [] } })
 })
 
@@ -180,10 +189,10 @@ async function onSubmit() {
       permissions: form.permissions.filter(p => p.actions.length > 0)
     }
     if (editingRole.value) {
-      await $fetch(`/api/rbac/roles?id=${editingRole.value.id}`, { method: 'PUT', body })
+      await hubFetch(`/api/v1/apps/${appId}/roles?id=${editingRole.value.id}`, { method: 'PUT', body })
       toast.add({ title: t('admin.roleUpdated'), icon: 'i-lucide-check', color: 'success' })
     } else {
-      await $fetch('/api/rbac/roles', { method: 'POST', body })
+      await hubFetch(`/api/v1/apps/${appId}/roles`, { method: 'POST', body })
       toast.add({ title: t('admin.roleCreated'), icon: 'i-lucide-check', color: 'success' })
     }
     showModal.value = false
@@ -213,7 +222,7 @@ async function doDelete() {
   if (deleting.value || !deleteTarget.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/rbac/roles?id=${deleteTarget.value.id}`, { method: 'DELETE' })
+    await hubFetch(`/api/v1/apps/${appId}/roles?id=${deleteTarget.value.id}`, { method: 'DELETE' })
     toast.add({ title: t('admin.roleDeleted'), icon: 'i-lucide-check', color: 'success' })
     deleteTarget.value = null
     showDeleteModal.value = false
@@ -231,7 +240,7 @@ async function doBatchDelete() {
   batchDeleting.value = true
   try {
     const ids = targets.map(r => r.id).join(',')
-    await $fetch(`/api/rbac/roles?id=${ids}`, { method: 'DELETE' })
+    await hubFetch(`/api/v1/apps/${appId}/roles?id=${ids}`, { method: 'DELETE' })
     toast.add({ title: t('admin.roleDeleted'), icon: 'i-lucide-check', color: 'success' })
     selected.value = []
     showBatchDeleteModal.value = false

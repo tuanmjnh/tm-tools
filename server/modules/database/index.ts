@@ -64,17 +64,15 @@ let appAdapter: AppDatabase | null = null
 export async function getDatabase(): Promise<DatabaseAdapter> {
   if (authAdapter) return authAdapter
 
-  let adapter: DatabaseAdapter
+  const { MongoDBAdapter } = await import('./mongodb')
+  const adapter = new MongoDBAdapter()
 
-  if (config.auth.provider === 'supabase') {
-    const { SupabaseAdapter } = await import('./supabase')
-    adapter = new SupabaseAdapter()
-  } else {
-    const { MongoDBAdapter } = await import('./mongodb')
-    adapter = new MongoDBAdapter()
+  try {
+    await adapter.connect()
+  } catch (err: any) {
+    console.warn('[Database] Local MongoDB connection skipped or failed:', err.message)
   }
 
-  await adapter.connect()
   authAdapter = adapter
   return authAdapter
 }

@@ -3,6 +3,10 @@ import type { ModuleDefinition } from '../../types/rbac'
 
 export interface AppConfig {
   auth: AuthConfig
+  hub: {
+    url: string
+    appId: string
+  }
   mongodb: {
     uri: string
     dbName: string
@@ -55,11 +59,15 @@ function readEnv(key: string, fallback = ''): string {
 export function loadConfig(): AppConfig {
   return {
     auth: {
-      provider: (readEnv('AUTH_PROVIDER', 'mongodb')) as 'mongodb' | 'supabase',
+      provider: (readEnv('AUTH_PROVIDER', 'hub')) as any,
       accessTokenSecret: readEnv('AUTH_ACCESS_TOKEN_SECRET', 'dbe14a60ba70621b213b2cf535aaa712e2b9c0c9a1b1e471add395f715450fb3'),
       refreshTokenSecret: readEnv('AUTH_REFRESH_TOKEN_SECRET', '60780ac5cd7b755ae1cce5322ac9874763f48a410f4657ee9a74e0019edbda89'),
       accessTokenExpiry: parseInt(readEnv('AUTH_ACCESS_TOKEN_EXPIRY', '900')),
       refreshTokenExpiry: parseInt(readEnv('AUTH_REFRESH_TOKEN_EXPIRY', '604800'))
+    },
+    hub: {
+      url: readEnv('NUXT_PUBLIC_HUB_API_URL', 'http://localhost:4000'),
+      appId: readEnv('NUXT_PUBLIC_APP_ID', 'tm-tools')
     },
     mongodb: {
       uri: readEnv('MONGODB_URI', 'mongodb://localhost:27017'),

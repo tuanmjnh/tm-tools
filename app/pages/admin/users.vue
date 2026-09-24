@@ -13,6 +13,7 @@ definePageMeta({
 })
 
 const { user: currentUser } = useAuth()
+const { hubFetch, appId } = useHub()
 const toast = useToast()
 const { t } = useI18n()
 
@@ -22,7 +23,7 @@ const { users, loading, canLoadMore, fetchUsers } = useUsers()
 const roles = ref<{ id: string, name: string }[]>([])
 async function loadRoles() {
   try {
-    const { data } = await $fetch<{ success: boolean, data: { id: string, name: string }[] }>('/api/rbac/roles')
+    const { data } = await hubFetch<{ success: boolean, data: { id: string, name: string }[] }>(`/api/v1/apps/${appId}/roles`)
     roles.value = data.map(r => ({ id: r.id, name: r.name }))
   } catch {
     // ignore
@@ -85,10 +86,10 @@ async function onSubmit() {
     if (editingUser.value) {
       const body: { email: string, username?: string, name: string, role: string, password?: string } = { email: form.email, username: form.username || undefined, name: form.name, role: form.role }
       if (form.password) body.password = form.password
-      await $fetch(`/api/users?id=${editingUser.value.id}`, { method: 'PUT', body })
+      await hubFetch(`/api/v1/apps/${appId}/users?id=${editingUser.value.id}`, { method: 'PUT', body })
       toast.add({ title: t('admin.userUpdated'), icon: 'i-lucide-check', color: 'success' })
     } else {
-      await $fetch('/api/users', { method: 'POST', body: { email: form.email, username: form.username || undefined, name: form.name, password: form.password, role: form.role } })
+      await hubFetch(`/api/v1/apps/${appId}/users`, { method: 'POST', body: { email: form.email, username: form.username || undefined, name: form.name, password: form.password, role: form.role } })
       toast.add({ title: t('admin.userCreated'), icon: 'i-lucide-check', color: 'success' })
     }
     showModal.value = false
@@ -120,7 +121,7 @@ async function doDelete() {
   if (deleting.value || !deleteTarget.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/users?id=${deleteTarget.value.id}`, { method: 'DELETE' })
+    await hubFetch(`/api/v1/apps/${appId}/users?id=${deleteTarget.value.id}`, { method: 'DELETE' })
     toast.add({ title: t('admin.userDeleted'), icon: 'i-lucide-check', color: 'success' })
     deleteTarget.value = null
     showDeleteModal.value = false
@@ -138,7 +139,7 @@ async function doBatchDelete() {
   batchDeleting.value = true
   try {
     const ids = targets.map(u => u.id).join(',')
-    await $fetch(`/api/users?id=${ids}`, { method: 'DELETE' })
+    await hubFetch(`/api/v1/apps/${appId}/users?id=${ids}`, { method: 'DELETE' })
     toast.add({ title: t('admin.userDeleted'), icon: 'i-lucide-check', color: 'success' })
     selected.value = []
     showBatchDeleteModal.value = false

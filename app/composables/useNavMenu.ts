@@ -1,9 +1,28 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { RouteTreeNode } from '~/types/rbac'
+import type { HubSystemRoute } from 'tm-hub-client'
+
+function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {
+  return {
+    id: hubRoute.id,
+    path: hubRoute.path,
+    name: hubRoute.name,
+    label: hubRoute.label,
+    icon: hubRoute.icon,
+    sort: hubRoute.sort,
+    isVisible: hubRoute.isVisible,
+    parentId: hubRoute.parentId,
+    isDeleted: hubRoute.isDeleted,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    children: hubRoute.children?.map(mapHubRouteToRouteTreeNode),
+  }
+}
 
 export const useNavMenu = () => {
   const { t } = useI18n()
   const auth = useAuth()
+  const { routes } = useHub()
 
   const allowedRoutes = useState<RouteTreeNode[]>('nav:allowedRoutes', () => [])
 
@@ -12,8 +31,8 @@ export const useNavMenu = () => {
     if (!auth.isAuthenticated.value) return []
 
     try {
-      const { data } = await $fetch<{ success: boolean, data: RouteTreeNode[] }>('/api/auth/routes')
-      allowedRoutes.value = data || []
+      const res = await routes.list()
+      allowedRoutes.value = (res.data || []).map(mapHubRouteToRouteTreeNode)
     } catch {
       allowedRoutes.value = []
     }

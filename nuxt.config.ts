@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 export default defineNuxtConfig({
 
   modules: [
@@ -15,8 +17,19 @@ export default defineNuxtConfig({
     ]
   },
 
+  alias: {
+    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url))
+  },
+
   devtools: {
     enabled: false
+  },
+
+  runtimeConfig: {
+    public: {
+      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
+      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
+    }
   },
 
   css: ['~/assets/css/main.css'],
@@ -70,6 +83,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
+        '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
         striptags: 'striptags/src/striptags.js'
       },
       dedupe: [

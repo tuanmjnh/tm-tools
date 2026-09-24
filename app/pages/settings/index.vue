@@ -35,11 +35,13 @@ function onFileClick() {
   fileRef.value?.click()
 }
 
+const { hubFetch, appId } = useHub()
+
 async function onSubmit() {
   if (saving.value) return
   saving.value = true
   try {
-    await $fetch(`/api/users?id=${auth.user.value?.id}`, {
+    await hubFetch(`/api/v1/apps/${appId}/users?id=${auth.user.value?.id}`, {
       method: 'PUT',
       body: { name: profile.name, email: profile.email, username: profile.username || undefined, avatar: profile.avatar }
     })

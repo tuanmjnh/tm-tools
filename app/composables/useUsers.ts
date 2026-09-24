@@ -1,6 +1,15 @@
 import type { AuthUser } from '~/types/auth'
+import type { HubUser, Capability } from 'tm-hub-client'
+
+function mapAuthUserToHubUser(user: Partial<AuthUser>): Partial<HubUser> {
+  return {
+    ...user,
+    permissions: user.permissions as Capability[] | undefined
+  }
+}
 
 export const useUsers = () => {
+  const { users: usersApi } = useHub()
   const users = ref<AuthUser[]>([])
   const cursor = ref<string | null>(null)
   const canLoadMore = ref(true)
@@ -18,23 +27,21 @@ export const useUsers = () => {
     }
 
     try {
-      const res = await $fetch<{ success: boolean, data: AuthUser[], nextCursor: string | null }>('/api/users', {
-        query: {
-          cursor: cursor.value || undefined,
-          limit: 10
-        }
+      const res = await usersApi.list({
+        cursor: cursor.value || undefined,
+        limit: 10
       })
 
       if (res.success && res.data) {
         if (reset) {
-          users.value = res.data
+          users.value = res.data as AuthUser[]
         } else {
           const existingIds = new Set(users.value.map(u => u.id))
-          const newItems = res.data.filter(u => !existingIds.has(u.id))
+          const newItems = res.data.filter(u => !existingIds.has(u.id)) as AuthUser[]
           users.value = [...users.value, ...newItems]
         }
 
-        cursor.value = res.nextCursor
+        cursor.value = (res.nextCursor as string | null) ?? null
         canLoadMore.value = !!res.nextCursor
       }
     } catch (err) {
@@ -44,11 +51,26 @@ export const useUsers = () => {
     }
   }
 
+  const createUser = async (user: Partial<AuthUser>) => {
+    return await usersApi.create(mapAuthUserToHubUser(user))
+  }
+
+  const updateUser = async (id: string, user: Partial<AuthUser>) => {
+    return await usersApi.update(id, mapAuthUserToHubUser(user))
+  }
+
+  const deleteUser = async (id: string) => {
+    return await usersApi.delete(id)
+  }
+
   return {
     users,
     cursor,
     canLoadMore,
     loading,
-    fetchUsers
+    fetchUsers,
+    createUser,
+    updateUser,
+    deleteUser
   }
 }

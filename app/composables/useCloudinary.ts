@@ -1,11 +1,12 @@
 export const useCloudinary = () => {
+  const { hubFetch, appId, media } = useHub()
+
   /**
    * Get signature for Cloudinary upload
    */
   const getSignature = async (folder?: string): Promise<Cloudinary.IResponseSignature> => {
-    return await $fetch<Cloudinary.IResponseSignature>('/api/media/cloudinary/signature', {
-      query: { folder }
-    })
+    const res = await media.getSignature(folder ? { folder } : undefined)
+    return (res.data || res) as Cloudinary.IResponseSignature
   }
 
   /**
@@ -103,76 +104,90 @@ export const useCloudinary = () => {
   }
 
   /**
-   * List folders from Cloudinary
+   * List folders from Cloudinary via TM-Hub
    */
-  const listFolders = async (folder: string = 'root') => {
-    return await $fetch<Cloudinary.IResponseFolders>('/api/media/cloudinary/folders', {
-      query: { folder }
-    })
+  const listFolders = async (folder: string = 'root'): Promise<Cloudinary.IResponseFolders> => {
+    const res = await media.getFolders(folder)
+    const data = res.data as Cloudinary.IResponseFolders | Cloudinary.IFolder[] | undefined
+    if (data && 'folders' in data) return data
+    if (Array.isArray(data)) return { parent: folder, folders: data }
+    return (res as unknown as Cloudinary.IResponseFolders) || { parent: folder, folders: [] }
   }
 
   /**
-   * List files from Cloudinary
+   * List files from Cloudinary via TM-Hub
    */
-  const listFiles = async (folder: string = 'root', options: { max_results?: number, next_cursor?: string } = {}) => {
-    return await $fetch<Cloudinary.IResponseAsset>('/api/media/cloudinary/files', {
-      query: { folder, ...options }
-    })
+  const listFiles = async (folder: string = 'root', options: { max_results?: number, next_cursor?: string } = {}): Promise<Cloudinary.IResponseAsset> => {
+    const res = await media.getResources({ folder, ...options })
+    const data = (res.data ?? res) as unknown as Cloudinary.IResponseAsset | undefined
+    if (data && 'resources' in data) return data
+    return { resources: [], rate_limit_allowed: 0, rate_limit_remaining: 0, rate_limit_reset_at: '' }
   }
 
   /**
-   * Create a new folder
+   * Create a new folder via TM-Hub
    */
   const createFolder = async (path: string) => {
-    return await $fetch('/api/media/cloudinary/folders', {
-      method: 'POST',
-      body: { name: path }
-    })
+    return await media.createFolder(path)
   }
 
   /**
-   * Delete a folder
+   * Delete a folder via TM-Hub
    */
   const deleteFolder = async (path: string) => {
-    return await $fetch(`/api/media/cloudinary/folders/${encodeURIComponent(path)}`, {
-      method: 'DELETE'
-    })
+    return await media.deleteFolder(path)
   }
 
   /**
-   * Delete a file
+   * Delete a file via TM-Hub
    */
   const deleteFile = async (publicId: string) => {
-    return await $fetch(`/api/media/cloudinary/files/${encodeURIComponent(publicId)}`, {
-      method: 'DELETE'
-    })
+    return await media.deleteResources([publicId])
   }
 
   /**
-   * Rename a file
+   * Rename a file via TM-Hub
    */
   const renameFile = async (from: string, to: string): Promise<{ success: boolean, message: string }> => {
-    return await $fetch<{ success: boolean, message: string }>('/api/media/cloudinary/files/rename', {
-      method: 'PUT',
-      body: { from, to }
-    })
+    const res = await media.renameResource(from, to)
+    return { success: !!res.success, message: res.message || 'Resource renamed' }
   }
 
   /**
-   * Get Media & Cloudinary Config Status
+   * Get Media & Cloudinary Config Status from TM-Hub
    */
   const fetchConfig = async () => {
-    return await $fetch<{
-      success: boolean
-      data: {
-        cloudinary: {
-          connected: boolean
-          cloudName: string
-          uploadPreset: string
-          folder: string
+    try {
+      const res = await hubFetch<{ success: boolean, data: { values: Record<string, string> } }>(
+        `/api/v1/apps/${appId}/configs/public`
+      )
+      const values = res.data?.values || {}
+      const cloudName = values['CLOUDINARY_CLOUD_NAME'] || ''
+      const uploadPreset = values['CLOUDINARY_UPLOAD_PRESET'] || ''
+      return {
+        success: true,
+        data: {
+          cloudinary: {
+            connected: !!cloudName,
+            cloudName,
+            uploadPreset,
+            folder: 'tm-tools'
+          }
         }
       }
-    }>('/api/media/config')
+    } catch {
+      return {
+        success: false,
+        data: {
+          cloudinary: {
+            connected: false,
+            cloudName: '',
+            uploadPreset: '',
+            folder: ''
+          }
+        }
+      }
+    }
   }
 
   return {

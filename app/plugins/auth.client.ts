@@ -33,13 +33,18 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   const originalFetch = globalThis.$fetch
 
+  const config = useRuntimeConfig()
+  const appId = (config.public.hubAppId as string) || 'tm-tools'
+
   const customFetch = originalFetch.create({
     onRequest({ options }) {
-      const token = auth.accessToken.value || tokenCookie.value
-      if (!token) return
-
       const headers = new Headers(options.headers)
-      if (!headers.has('Authorization')) {
+      if (!headers.has('X-App-Id')) {
+        headers.set('X-App-Id', appId)
+      }
+
+      const token = auth.accessToken.value || tokenCookie.value
+      if (token && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${token}`)
       }
       options.headers = headers
@@ -48,11 +53,11 @@ export default defineNuxtPlugin((nuxtApp) => {
       if (response.status === 401) {
         const url = typeof request === 'string' ? request : (request as { url?: string })?.url || ''
 
-        if (url.includes('/api/auth/login') || url.includes('/api/auth/register')) {
+        if (url.includes('/auth/login') || url.includes('/auth/register')) {
           return
         }
 
-        if (url.includes('/api/auth/refresh')) {
+        if (url.includes('/auth/refresh')) {
           await handleSessionExpired()
           return
         }

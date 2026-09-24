@@ -166,6 +166,7 @@ function init() {
       threads INTEGER,
       started_at TEXT,
       completed_at TEXT,
+      flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS ffmpeg_configs (
@@ -235,14 +236,23 @@ function init() {
       threads INTEGER,
       started_at TEXT,
       completed_at TEXT,
+      flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
   `)
+
+  const tryAddHistoryCol = (table, colDef) => {
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${colDef};`) } catch { /* ignore */ }
+  }
+  tryAddHistoryCol('youtube_history', 'flag INTEGER DEFAULT 1')
+  tryAddHistoryCol('ffmpeg_history', 'flag INTEGER DEFAULT 1')
 
   // Repair any broken flags from previous updates
   try {
     db.prepare('UPDATE youtube_configs SET flag = 1 WHERE flag IS NULL').run()
     db.prepare('UPDATE youtube_formats SET flag = 1 WHERE flag IS NULL').run()
+    db.prepare('UPDATE youtube_history SET flag = 1 WHERE flag IS NULL').run()
+    db.prepare('UPDATE ffmpeg_history SET flag = 1 WHERE flag IS NULL').run()
   } catch (e) {
     console.error('[SQLite] Failed to repair flags:', e)
   }
@@ -370,7 +380,7 @@ module.exports = {
         safeBind(id)
       )
   },
-  deleteConfig: id => db.prepare('DELETE FROM youtube_configs WHERE id=?').run(safeBind(id)),
+  deleteConfig: id => db.prepare('UPDATE youtube_configs SET flag=0, updated_at=? WHERE id=?').run(now(), safeBind(id)),
 
   // youtube_history
   addHistory: (data) => {
@@ -407,24 +417,40 @@ module.exports = {
     params.push(safeBind(id))
     db.prepare(`UPDATE youtube_history SET ${sets.join(',')} WHERE id=?`).run(...params)
   },
-  listHistory: (limit = 100) => db.prepare('SELECT * FROM youtube_history ORDER BY created_at DESC LIMIT ?').all(limit),
-  listHistoryCursor: (cursor, limit = 30) => cursorPage('youtube_history', cursor, limit),
+  listHistory: (limit = 100) => db.prepare('SELECT * FROM youtube_history WHERE flag=1 ORDER BY created_at DESC LIMIT ?').all(limit),
+  listHistoryCursor: (cursor, limit = 30) => {
+    const size = Math.max(1, Number(limit) || 30)
+    const select = '* , rowid AS __r'
+    const rows = cursor && typeof cursor.ts === 'string'
+      ? db.prepare(`SELECT ${select} FROM youtube_history WHERE flag=1 AND ((created_at < ?) OR (created_at = ? AND rowid < ?)) ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+          .all(cursor.ts, cursor.ts, cursor.rowid, size + 1)
+      : db.prepare(`SELECT ${select} FROM youtube_history WHERE flag=1 ORDER BY created_at DESC, rowid DESC LIMIT ?`).all(size + 1)
+    const hasMore = rows.length > size
+    const items = rows.slice(0, size).map((r) => {
+      const o = { ...r }
+      delete o.__r
+      return o
+    })
+    const last = rows[size - 1]
+    const nextCursor = last ? { ts: last.created_at, rowid: last.__r } : null
+    return { items, nextCursor, hasMore }
+  },
   deleteHistory: (idOrIds) => {
     if (!idOrIds) {
-      return db.prepare('DELETE FROM youtube_history').run()
+      return db.prepare('UPDATE youtube_history SET flag=0 WHERE flag=1').run()
     }
     if (Array.isArray(idOrIds)) {
       if (idOrIds.length === 0) return { changes: 0 }
       const placeholders = idOrIds.map(() => '?').join(',')
-      return db.prepare(`DELETE FROM youtube_history WHERE id IN (${placeholders})`).run(...idOrIds)
+      return db.prepare(`UPDATE youtube_history SET flag=0 WHERE id IN (${placeholders})`).run(...idOrIds)
     }
     if (typeof idOrIds === 'string' && idOrIds.includes(',')) {
       const ids = idOrIds.split(',').map(s => s.trim()).filter(Boolean)
       if (ids.length === 0) return { changes: 0 }
       const placeholders = ids.map(() => '?').join(',')
-      return db.prepare(`DELETE FROM youtube_history WHERE id IN (${placeholders})`).run(...ids)
+      return db.prepare(`UPDATE youtube_history SET flag=0 WHERE id IN (${placeholders})`).run(...ids)
     }
-    return db.prepare('DELETE FROM youtube_history WHERE id=?').run(idOrIds)
+    return db.prepare('UPDATE youtube_history SET flag=0 WHERE id=?').run(idOrIds)
   },
 
   // ffmpeg_configs
@@ -463,19 +489,19 @@ module.exports = {
       .run(id, data.config_id, data.config_title, data.batch_config_id, data.batch_config_title, data.input_file, typeof data.input_files === 'string' ? data.input_files : JSON.stringify(data.input_files || []), data.output_file, data.output_path, data.operation, data.duration, data.file_size, data.status, data.error_message, data.threads, data.started_at, data.completed_at, now())
     return id
   },
-  listFfmpegHistory: (limit = 100) => db.prepare('SELECT * FROM ffmpeg_history ORDER BY created_at DESC LIMIT ?').all(limit),
+  listFfmpegHistory: (limit = 100) => db.prepare('SELECT * FROM ffmpeg_history WHERE flag=1 ORDER BY created_at DESC LIMIT ?').all(limit),
   deleteFfmpegHistory: (idOrIds) => {
     if (Array.isArray(idOrIds)) {
       if (idOrIds.length === 0) return { changes: 0 }
       const placeholders = idOrIds.map(() => '?').join(',')
-      return db.prepare(`DELETE FROM ffmpeg_history WHERE id IN (${placeholders})`).run(...idOrIds)
+      return db.prepare(`UPDATE ffmpeg_history SET flag=0 WHERE id IN (${placeholders})`).run(...idOrIds)
     }
     if (typeof idOrIds === 'string' && idOrIds.includes(',')) {
       const ids = idOrIds.split(',').map(s => s.trim()).filter(Boolean)
       if (ids.length === 0) return { changes: 0 }
       const placeholders = ids.map(() => '?').join(',')
-      return db.prepare(`DELETE FROM ffmpeg_history WHERE id IN (${placeholders})`).run(...ids)
+      return db.prepare(`UPDATE ffmpeg_history SET flag=0 WHERE id IN (${placeholders})`).run(...ids)
     }
-    return db.prepare('DELETE FROM ffmpeg_history WHERE id=?').run(idOrIds)
+    return db.prepare('UPDATE ffmpeg_history SET flag=0 WHERE id=?').run(idOrIds)
   }
 }

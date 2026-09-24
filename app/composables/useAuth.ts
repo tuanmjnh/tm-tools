@@ -1,4 +1,34 @@
-import type { AuthResponse, AuthUser, LoginRequest, RegisterRequest } from '~/types/auth'
+import type { AuthResponse, AuthUser, LoginPlatform, LoginRequest, RegisterRequest } from '~/types/auth'
+
+interface HubUserData {
+  id: string
+  email: string
+  name: string
+  roles?: string[]
+  permissions?: string[]
+  platform?: LoginPlatform
+  createdAt?: string
+  updatedAt?: string
+}
+
+interface HubAuthData {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  user: HubUserData
+}
+
+interface HubMeData {
+  userId: string
+  email: string
+  name: string
+  roles?: string[]
+  permissions?: string[]
+  allowedRoutes?: string[]
+  platform?: LoginPlatform
+  createdAt?: string
+  updatedAt?: string
+}
 
 export const useAuth = () => {
   const user = useState<AuthUser | null>('auth:user', () => null)
@@ -6,23 +36,57 @@ export const useAuth = () => {
   const refreshToken = useState<string | null>('auth:refreshToken', () => null)
   const loading = useState('auth:loading', () => false)
 
+  const config = useRuntimeConfig()
+  const hubUrl = (config.public.hubUrl as string) || 'http://localhost:4000'
+  const appId = (config.public.hubAppId as string) || 'tm-tools'
+
   const isAuthenticated = computed(() => !!user.value)
   const can = (module: string, action: string) => {
     if (!user.value) return false
-    if (user.value.permissions.includes('*')) return true
-    return user.value.permissions.includes(`${module}:${action}`)
+    const perms = user.value.permissions || []
+    if (perms.includes('*')) return true
+    const candidates = new Set<string>([`${module}.${action}`, `${module}:${action}`])
+    if (action === 'write') {
+      for (const a of ['upload', 'create', 'update', 'manage']) {
+        candidates.add(`${module}.${a}`)
+        candidates.add(`${module}:${a}`)
+      }
+    }
+    if (action === 'manage') {
+      for (const a of ['create', 'update', 'delete', 'write']) {
+        candidates.add(`${module}.${a}`)
+        candidates.add(`${module}:${a}`)
+      }
+    }
+    if (module === 'logs' && action === 'read') {
+      candidates.add('apps.logs.read')
+      candidates.add('apps:logs.read')
+    }
+    return perms.some(p => candidates.has(p))
   }
 
   async function login(credentials: LoginRequest): Promise<AuthResponse> {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
-      const { data } = await $fetch<{ success: boolean, data: AuthResponse }>('/api/auth/login', {
+      const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/login`, {
         method: 'POST',
-        body: credentials
+        headers: { 'X-App-Id': appId },
+        body: { ...credentials, appId }
       })
 
-      user.value = data.user
+      const formattedUser: AuthUser = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.roles?.[0] || 'user',
+        permissions: data.user.permissions || [],
+        platform: data.user.platform || 'web',
+        createdAt: data.user.createdAt || new Date().toISOString(),
+        updatedAt: data.user.updatedAt || new Date().toISOString()
+      }
+
+      user.value = formattedUser
       accessToken.value = data.accessToken
       refreshToken.value = data.refreshToken
 
@@ -32,7 +96,12 @@ export const useAuth = () => {
       cookieAccess.value = data.accessToken
       cookieRefresh.value = data.refreshToken
 
-      return data
+      return {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        expiresIn: data.expiresIn,
+        user: formattedUser
+      }
     } finally {
       loading.value = false
     }
@@ -42,12 +111,24 @@ export const useAuth = () => {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
-      const { data } = await $fetch<{ success: boolean, data: AuthResponse }>('/api/auth/register', {
+      const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/register`, {
         method: 'POST',
-        body: input
+        headers: { 'X-App-Id': appId },
+        body: { ...input, appId }
       })
 
-      user.value = data.user
+      const formattedUser: AuthUser = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.roles?.[0] || 'user',
+        permissions: data.user.permissions || [],
+        platform: data.user.platform || 'web',
+        createdAt: data.user.createdAt || new Date().toISOString(),
+        updatedAt: data.user.updatedAt || new Date().toISOString()
+      }
+
+      user.value = formattedUser
       accessToken.value = data.accessToken
       refreshToken.value = data.refreshToken
 
@@ -57,7 +138,12 @@ export const useAuth = () => {
       cookieAccess.value = data.accessToken
       cookieRefresh.value = data.refreshToken
 
-      return data
+      return {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        expiresIn: data.expiresIn,
+        user: formattedUser
+      }
     } finally {
       loading.value = false
     }
@@ -73,10 +159,13 @@ export const useAuth = () => {
       if (!rToken) return false
 
       try {
-        const res = await fetch('/api/auth/refresh', {
+        const res = await fetch(`${hubUrl}/api/v1/auth/refresh`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: rToken })
+          headers: {
+            'Content-Type': 'application/json',
+            'X-App-Id': appId
+          },
+          body: JSON.stringify({ refreshToken: rToken, appId })
         })
 
         if (!res.ok) return false
@@ -84,8 +173,7 @@ export const useAuth = () => {
         const json = await res.json()
         if (!json.success || !json.data) return false
 
-        const data: AuthResponse = json.data
-        user.value = data.user
+        const data = json.data
         accessToken.value = data.accessToken
         refreshToken.value = data.refreshToken
 
@@ -94,6 +182,9 @@ export const useAuth = () => {
 
         cookieAccess.value = data.accessToken
         cookieRefresh.value = data.refreshToken
+
+        // Refresh user info
+        await fetchUser()
 
         return true
       } catch {
@@ -110,9 +201,12 @@ export const useAuth = () => {
     try {
       const rToken = refreshToken.value || useCookie('refreshToken').value
       if (rToken) {
-        await fetch('/api/auth/logout', {
+        await fetch(`${hubUrl}/api/v1/auth/logout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-App-Id': appId
+          },
           body: JSON.stringify({ refreshToken: rToken })
         }).catch(() => { })
       }
@@ -148,11 +242,23 @@ export const useAuth = () => {
       accessToken.value = token
       refreshToken.value = useCookie('refreshToken').value || null
 
-      const { data } = await $fetch<{ success: boolean, data: AuthUser }>('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
+      const { data } = await $fetch<{ success: boolean, data: HubMeData }>(`${hubUrl}/api/v1/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-App-Id': appId
+        }
       })
 
-      user.value = data
+      user.value = {
+        id: data.userId,
+        email: data.email,
+        name: data.name,
+        role: data.roles?.[0] || 'user',
+        permissions: data.permissions || [],
+        platform: data.platform || 'web',
+        createdAt: data.createdAt || new Date().toISOString(),
+        updatedAt: data.updatedAt || new Date().toISOString()
+      }
     } catch {
       const success = await refresh()
       if (!success) {
@@ -164,11 +270,16 @@ export const useAuth = () => {
   }
 
   async function revokeTokens(): Promise<void> {
-    await $fetch('/api/auth/revoke', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken.value}` }
-    })
     await logout()
+  }
+
+  function setTokens(tokens: { accessToken: string, refreshToken: string, expiresIn: number }) {
+    accessToken.value = tokens.accessToken
+    refreshToken.value = tokens.refreshToken
+    const cookieAccess = useCookie('accessToken', { maxAge: tokens.expiresIn, path: '/', sameSite: 'lax' })
+    const cookieRefresh = useCookie('refreshToken', { maxAge: 604800, path: '/', sameSite: 'lax' })
+    cookieAccess.value = tokens.accessToken
+    cookieRefresh.value = tokens.refreshToken
   }
 
   return {
@@ -183,6 +294,7 @@ export const useAuth = () => {
     logout,
     refresh,
     fetchUser,
-    revokeTokens
+    revokeTokens,
+    setTokens
   }
 }

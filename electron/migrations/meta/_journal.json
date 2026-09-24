@@ -15,6 +15,13 @@
       "when": 1789017007860,
       "tag": "0001_sour_lady_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790147531321,
+      "tag": "0002_cute_shadow_king",
+      "breakpoints": true
     }
   ]
 }

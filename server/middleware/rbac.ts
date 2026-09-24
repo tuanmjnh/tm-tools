@@ -1,11 +1,22 @@
-import { checkPermission } from '../modules/rbac/service'
+function checkPermission(userPermissions: string[], module: string, action: string): boolean {
+  if (userPermissions.includes('*')) return true
+  const candidates = [`${module}.${action}`, `${module}:${action}`]
+  if (action === 'write') {
+    candidates.push(`${module}.upload`, `${module}.create`, `${module}.update`, `${module}.manage`)
+    candidates.push(`${module}:upload`, `${module}:create`, `${module}:update`, `${module}:manage`)
+  }
+  if (action === 'manage') {
+    candidates.push(`${module}.create`, `${module}.update`, `${module}.delete`, `${module}.write`)
+    candidates.push(`${module}:create`, `${module}:update`, `${module}:delete`, `${module}:write`)
+  }
+  if (module === 'logs' && action === 'read') {
+    candidates.push('apps.logs.read', 'apps:logs.read')
+  }
+  return candidates.some(c => userPermissions.includes(c))
+}
 
 const permissionMap: Record<string, string> = {
-  '/api/rbac': 'rbac:read',
-  '/api/users': 'users:read',
-  '/api/customers': 'customers:read',
-  '/api/settings': 'settings:read',
-  '/api/media': 'media:read'
+  '/api/customers': 'customers:read'
 }
 
 export default defineEventHandler(async (event) => {

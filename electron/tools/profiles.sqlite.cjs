@@ -25,6 +25,7 @@ function initProfilesDb() {
       icon TEXT DEFAULT 'i-lucide-folder',
       description TEXT,
       sort INTEGER DEFAULT 0,
+      flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT
     );
@@ -43,6 +44,7 @@ function initProfilesDb() {
       ip TEXT,
       latency_ms INTEGER,
       last_checked_at TEXT,
+      flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT
     );
@@ -98,6 +100,7 @@ function initProfilesDb() {
       recovery_email TEXT,
       status TEXT DEFAULT 'active',
       notes TEXT,
+      flag INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT
     );
@@ -112,6 +115,13 @@ function initProfilesDb() {
   tryAddCol('custom_exe TEXT')
   tryAddCol('stealth_mode INTEGER DEFAULT 1')
   tryAddCol('stealth_engine TEXT DEFAULT "playwright_stealth"')
+
+  const tryAddFlag = (table) => {
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN flag INTEGER DEFAULT 1;`) } catch { /* ignore */ }
+  }
+  tryAddFlag('profile_groups')
+  tryAddFlag('profile_proxies')
+  tryAddFlag('profile_accounts')
 
   // Insert default group if none exists
   const groupCount = db.prepare('SELECT COUNT(*) as count FROM profile_groups').get()
@@ -131,13 +141,14 @@ const profilesDb = {
       SELECT g.*, COUNT(p.id) AS profile_count
       FROM profile_groups g
       LEFT JOIN browser_profiles p ON p.group_id = g.id AND p.flag = 1
+      WHERE g.flag = 1
       GROUP BY g.id
       ORDER BY g.sort ASC, g.created_at ASC
     `).all()
   },
 
   getGroup: (id) => {
-    return db.prepare('SELECT * FROM profile_groups WHERE id=?').get(id)
+    return db.prepare('SELECT * FROM profile_groups WHERE id=? AND flag=1').get(id)
   },
 
   createGroup: (data) => {
@@ -181,7 +192,7 @@ const profilesDb = {
     if (ids.length === 0) return { changes: 0 }
     const placeholders = ids.map(() => '?').join(',')
     db.prepare(`UPDATE browser_profiles SET group_id=NULL WHERE group_id IN (${placeholders})`).run(...ids)
-    return db.prepare(`DELETE FROM profile_groups WHERE id IN (${placeholders})`).run(...ids)
+    return db.prepare(`UPDATE profile_groups SET flag=0, updated_at=? WHERE id IN (${placeholders})`).run(now(), ...ids)
   },
 
   // ==================== PROXIES ====================
@@ -190,13 +201,14 @@ const profilesDb = {
       SELECT pr.*, COUNT(p.id) AS profile_count
       FROM profile_proxies pr
       LEFT JOIN browser_profiles p ON p.proxy_id = pr.id AND p.flag = 1
+      WHERE pr.flag = 1
       GROUP BY pr.id
       ORDER BY pr.created_at DESC
     `).all()
   },
 
   getProxy: (id) => {
-    return db.prepare('SELECT * FROM profile_proxies WHERE id=?').get(id)
+    return db.prepare('SELECT * FROM profile_proxies WHERE id=? AND flag=1').get(id)
   },
 
   createProxy: (data) => {
@@ -254,7 +266,7 @@ const profilesDb = {
     if (ids.length === 0) return { changes: 0 }
     const placeholders = ids.map(() => '?').join(',')
     db.prepare(`UPDATE browser_profiles SET proxy_id=NULL WHERE proxy_id IN (${placeholders})`).run(...ids)
-    return db.prepare(`DELETE FROM profile_proxies WHERE id IN (${placeholders})`).run(...ids)
+    return db.prepare(`UPDATE profile_proxies SET flag=0, updated_at=? WHERE id IN (${placeholders})`).run(now(), ...ids)
   },
 
   // ==================== PROFILES ====================
@@ -356,7 +368,7 @@ const profilesDb = {
       if (row.fonts_list) fontsList = JSON.parse(row.fonts_list)
     } catch { }
 
-    const accounts = db.prepare('SELECT * FROM profile_accounts WHERE profile_id=? ORDER BY created_at DESC').all(id)
+    const accounts = db.prepare('SELECT * FROM profile_accounts WHERE profile_id=? AND flag=1 ORDER BY created_at DESC').all(id)
 
     return {
       ...row,
@@ -524,7 +536,7 @@ const profilesDb = {
 
   // ==================== ACCOUNTS ====================
   listAccounts: (profileId) => {
-    return db.prepare('SELECT * FROM profile_accounts WHERE profile_id=? ORDER BY created_at DESC').all(profileId)
+    return db.prepare('SELECT * FROM profile_accounts WHERE profile_id=? AND flag=1 ORDER BY created_at DESC').all(profileId)
   },
 
   addAccount: (data) => {
@@ -549,7 +561,7 @@ const profilesDb = {
   },
 
   deleteAccount: (id) => {
-    return db.prepare('DELETE FROM profile_accounts WHERE id=?').run(id)
+    return db.prepare('UPDATE profile_accounts SET flag=0, updated_at=? WHERE id=?').run(now(), id)
   }
 }
 

@@ -115,12 +115,15 @@ function maskSecret(value: string) {
   return '•'.repeat(16) + value.slice(-4)
 }
 
+const { configs } = useHub()
+
 async function loadConfig() {
   loading.value = true
   try {
-    const res = await $fetch<{ success: boolean, data: { values: Record<string, string> } }>('/api/system/config')
+    const res = await configs.getAll()
+    const values = res.data || {}
     for (const key of Object.keys(config) as ConfigKeys[]) {
-      if (res.data.values[key]) config[key] = res.data.values[key]
+      if (values[key]) config[key] = values[key]
     }
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
@@ -141,23 +144,13 @@ async function onSubmit() {
   saving.value = true
   try {
     const values = { ...config }
-    const res = await $fetch<{ success: boolean, data: { values: Record<string, string>, restartRequired: boolean } }>('/api/system/config', {
-      method: 'PUT',
-      body: { values }
-    })
+    await configs.update(values)
 
     if (hasElectron.value) {
       await window.electronAPI!.setConfig(values)
     }
 
-    for (const key of Object.keys(config) as ConfigKeys[]) {
-      if (res.data.values[key]) config[key] = res.data.values[key]
-    }
-
     toast.add({ title: t('settings.saved'), icon: 'i-lucide-check', color: 'success' })
-    if (res.data.restartRequired) {
-      toast.add({ title: t('settings.restartRequired'), color: 'warning' })
-    }
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {

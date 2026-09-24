@@ -1,12 +1,24 @@
+packages:
+  - packages/*
+  - ../tm-hub-client
+
 allowBuilds:
-  '@firebase/util': true
-  better-sqlite3: false
-  electron-winstaller: true
-  esbuild: true
-  maplibre-gl: true
-  protobufjs: true
-  unrs-resolver: true
-  vue-demi: true
+  '@firebase/util': set this to true or false
+  electron-winstaller: set this to true or false
+  esbuild: set this to true or false
+  maplibre-gl: set this to true or false
+  protobufjs: set this to true or false
+  unrs-resolver: set this to true or false
+  vue-demi: set this to true or false
+
+onlyBuiltDependencies:
+  - '@firebase/util'
+  - electron-winstaller
+  - esbuild
+  - maplibre-gl
+  - protobufjs
+  - unrs-resolver
+  - vue-demi
 
 overrides:
   source-map: 0.6.1

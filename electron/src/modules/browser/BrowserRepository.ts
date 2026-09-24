@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { getDatabase } from '../../infrastructure/database/connection'
 import { browsers, type Browser, type NewBrowser } from '../../infrastructure/database/schema/browsers'
 
@@ -14,27 +14,27 @@ export class BrowserRepository {
 
   public findAll(): Browser[] {
     const db = getDatabase()
-    return db.select().from(browsers).all()
+    return db.select().from(browsers).where(eq(browsers.isDeleted, false)).all()
   }
 
   public findById(id: string): Browser | undefined {
     const db = getDatabase()
-    return db.select().from(browsers).where(eq(browsers.id, id)).get()
+    return db.select().from(browsers).where(and(eq(browsers.id, id), eq(browsers.isDeleted, false))).get()
   }
 
   public findByPath(executablePath: string): Browser | undefined {
     const db = getDatabase()
-    return db.select().from(browsers).where(eq(browsers.executablePath, executablePath)).get()
+    return db.select().from(browsers).where(and(eq(browsers.executablePath, executablePath), eq(browsers.isDeleted, false))).get()
   }
 
   public findByEngine(engine: 'chromium' | 'firefox' | 'custom'): Browser[] {
     const db = getDatabase()
-    return db.select().from(browsers).where(eq(browsers.engine, engine)).all()
+    return db.select().from(browsers).where(and(eq(browsers.engine, engine), eq(browsers.isDeleted, false))).all()
   }
 
   public findDefault(): Browser | undefined {
     const db = getDatabase()
-    return db.select().from(browsers).where(eq(browsers.isDefault, true)).get()
+    return db.select().from(browsers).where(and(eq(browsers.isDefault, true), eq(browsers.isDeleted, false))).get()
   }
 
   public create(data: NewBrowser): Browser {
@@ -61,7 +61,10 @@ export class BrowserRepository {
 
   public delete(id: string): boolean {
     const db = getDatabase()
-    const result = db.delete(browsers).where(eq(browsers.id, id)).run()
+    const result = db.update(browsers)
+      .set({ isDeleted: true, updatedAt: new Date() })
+      .where(eq(browsers.id, id))
+      .run()
     return result.changes > 0
   }
 
