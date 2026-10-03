@@ -90,15 +90,27 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
 </script>
 
 <template>
-  <BaseFormModal v-model:open="open" :title="t('feedback.title')" :description="t('feedback.desc')" :schema="schema"
-    :state="state" :loading="loading" :submit-label="t('feedback.submit')" @submit="onSubmit">
+  <BaseFormModal
+    v-model:open="open"
+    :title="t('feedback.title')"
+    :description="t('feedback.desc')"
+    :schema="schema"
+    :state="state"
+    :loading="loading"
+    :submit-label="t('feedback.submit')"
+    @submit="onSubmit"
+  >
     <UFormField :label="t('feedback.type')" name="type">
-      <USelect v-model="state.type" :items="[
-        { label: t('feedback.type_bug'), value: 'bug' },
-        { label: t('feedback.type_feature'), value: 'feature' },
-        { label: t('feedback.type_question'), value: 'question' },
-        { label: t('feedback.type_other'), value: 'other' }
-      ]" class="w-full" />
+      <USelect
+        v-model="state.type"
+        :items="[
+          { label: t('feedback.type_bug'), value: 'bug' },
+          { label: t('feedback.type_feature'), value: 'feature' },
+          { label: t('feedback.type_question'), value: 'question' },
+          { label: t('feedback.type_other'), value: 'other' }
+        ]"
+        class="w-full"
+      />
     </UFormField>
 
     <UFormField :label="t('feedback.email')" name="email">
@@ -110,8 +122,12 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
     </UFormField>
 
     <UFormField :label="t('feedback.details')" name="description">
-      <UTextarea v-model="state.description" :placeholder="t('feedback.details_placeholder')" :rows="4"
-        class="w-full" />
+      <UTextarea
+        v-model="state.description"
+        :placeholder="t('feedback.details_placeholder')"
+        :rows="4"
+        class="w-full"
+      />
     </UFormField>
 
     <UFormField :label="t('feedback.screenshot')" name="screenshot">
@@ -119,24 +135,47 @@ async function onSubmit(event: FormSubmitEvent<Record<string, unknown>>) {
         <UInput v-model="state.screenshot" placeholder="https://..." class="w-full">
           <template #trailing>
             <div class="relative flex items-center h-full">
-              <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-upload" :loading="uploadingFile"
-                class="relative overflow-hidden cursor-pointer">
-                <input type="file" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  @change="onFileChange">
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                icon="i-lucide-upload"
+                :loading="uploadingFile"
+                class="relative overflow-hidden cursor-pointer"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  @change="onFileChange"
+                >
               </UButton>
             </div>
           </template>
         </UInput>
 
         <!-- Progress Bar -->
-        <UProgress v-if="uploadingFile" :model-value="uploadProgress" :max="100" class="h-1" />
+        <UProgress
+          v-if="uploadingFile"
+          :model-value="uploadProgress"
+          :max="100"
+          class="h-1"
+        />
 
         <!-- Image Preview -->
-        <div v-if="state.screenshot"
-          class="relative w-full max-h-40 rounded-lg overflow-hidden border border-default bg-muted/10 flex items-center justify-center p-1">
+        <div
+          v-if="state.screenshot"
+          class="relative w-full max-h-40 rounded-lg overflow-hidden border border-default bg-muted/10 flex items-center justify-center p-1"
+        >
           <img :src="state.screenshot" class="max-w-full max-h-36 object-contain rounded">
-          <UButton icon="i-lucide-x" size="xs" color="error" variant="solid" class="absolute top-2 right-2 rounded-full"
-            @click="state.screenshot = ''" />
+          <UButton
+            icon="i-lucide-x"
+            size="xs"
+            color="error"
+            variant="solid"
+            class="absolute top-2 right-2 rounded-full"
+            @click="state.screenshot = ''"
+          />
         </div>
       </div>
     </UFormField>

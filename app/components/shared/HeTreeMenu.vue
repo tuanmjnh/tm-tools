@@ -41,8 +41,8 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any[]): void
   (e: 'node:click', node: any): void
-  (e: 'node:toggle', payload: { node: any; isOpen: boolean }): void
-  (e: 'node:select', payload: { node: any; isSelected: boolean }): void
+  (e: 'node:toggle', payload: { node: any, isOpen: boolean }): void
+  (e: 'node:select', payload: { node: any, isSelected: boolean }): void
   (e: 'node:drop', payload: any): void
   (e: 'node:after-drop', payload: any): void
   (e: 'update:expandedIds', value: (string | number)[]): void
@@ -77,7 +77,7 @@ const isAllExpanded = ref(props.defaultExpandAll)
 
 const treeData = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
+  set: val => emit('update:modelValue', val)
 })
 
 // -- Helpers --
@@ -336,17 +336,31 @@ defineExpose({
     </div>
 
     <div v-show="!isLoading">
-      <Draggable ref="treeRef" v-model="treeData" :children-key="fieldNames.children" :node-key="getNodeKey"
-        :default-open="defaultExpandAll" class="he-tree-root" :trigger-class="dragTriggerClass" tree-line @drop="onDrop"
-        @change="onChange" @after-drop="onAfterDrop">
+      <Draggable
+        ref="treeRef"
+        v-model="treeData"
+        :children-key="fieldNames.children"
+        :node-key="getNodeKey"
+        :default-open="defaultExpandAll"
+        class="he-tree-root"
+        :trigger-class="dragTriggerClass"
+        tree-line
+        @drop="onDrop"
+        @change="onChange"
+        @after-drop="onAfterDrop"
+      >
         <template #default="{ node, stat }">
           <div
             class="group flex flex-col mb-2 py-2 px-3 rounded-lg border border-gray-300/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm shadow-xs transition-all hover:bg-white/60 dark:hover:bg-gray-800/60 hover:shadow-md hover:border-primary-500/50"
             :class="[classNode, { 'bg-blue-50/50! dark:bg-sky-300/20! border-sky-500/50 dark:border-sky-800/50': isSelected(node) }]"
-            @contextmenu.prevent="(e: any) => handleContextMenu(node, e)">
+            @contextmenu.prevent="(e: any) => handleContextMenu(node, e)"
+          >
             <div class="flex items-center gap-2">
-              <div v-if="draggable" :class="dragTriggerClass"
-                class="flex cursor-move p-1 text-gray-400 opacity-50 group-hover:opacity-100">
+              <div
+                v-if="draggable"
+                :class="dragTriggerClass"
+                class="flex cursor-move p-1 text-gray-400 opacity-50 group-hover:opacity-100"
+              >
                 <UIcon name="i-lucide-grip-vertical" class="w-4 h-4" />
               </div>
 
@@ -354,9 +368,17 @@ defineExpose({
                 <UCheckbox :model-value="isSelected(node)" @update:model-value="(val: any) => onSelect(node, val)" />
               </div>
 
-              <slot v-if="!hideIcon" name="icon" :node="node" :stat="stat">
-                <UIcon v-if="node.icon || defaultIcon" :name="node.icon || defaultIcon"
-                  class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <slot
+                v-if="!hideIcon"
+                name="icon"
+                :node="node"
+                :stat="stat"
+              >
+                <UIcon
+                  v-if="node.icon || defaultIcon"
+                  :name="node.icon || defaultIcon"
+                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                />
               </slot>
 
               <div class="flex-1 min-w-0 cursor-pointer select-none" @click="onNodeClick(node)">
@@ -366,29 +388,36 @@ defineExpose({
                       {{ node[fieldNames.label] }}
                     </span>
                   </slot>
-                  <slot name="description" :node="node" :stat="stat"></slot>
+                  <slot name="description" :node="node" :stat="stat" />
                 </div>
               </div>
 
               <div class="flex items-center gap-1">
-                <slot name="right-text" :node="node" :stat="stat"></slot>
+                <slot name="right-text" :node="node" :stat="stat" />
 
-                <button type="button"
+                <button
+                  type="button"
                   class="flex items-center justify-center w-5 h-5 mr-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none"
                   :class="{ 'invisible pointer-events-none': !node[fieldNames.children]?.length }"
-                  @click.stop="toggleNode(node, stat)">
-                  <UIcon name="i-lucide-chevron-right" class="text-gray-500 transition-transform duration-200"
-                    :class="{ 'rotate-90': stat.open }" />
+                  @click.stop="toggleNode(node, stat)"
+                >
+                  <UIcon
+                    name="i-lucide-chevron-right"
+                    class="text-gray-500 transition-transform duration-200"
+                    :class="{ 'rotate-90': stat.open }"
+                  />
                 </button>
 
-                <slot name="actions" :node="node" :stat="stat"></slot>
+                <slot name="actions" :node="node" :stat="stat" />
               </div>
             </div>
 
             <!-- Mobile Extra Slot (Visible only on mobile) -->
-            <div v-if="$slots['mobile-extra']"
-              class="block lg:hidden px-3 pb-3 -mt-1 ml-10 sm:ml-12 border-t border-gray-100 dark:border-gray-800/10 pt-2">
-              <slot name="mobile-extra" :node="node" :stat="stat"></slot>
+            <div
+              v-if="$slots['mobile-extra']"
+              class="block lg:hidden px-3 pb-3 -mt-1 ml-10 sm:ml-12 border-t border-gray-100 dark:border-gray-800/10 pt-2"
+            >
+              <slot name="mobile-extra" :node="node" :stat="stat" />
             </div>
           </div>
         </template>
@@ -398,10 +427,18 @@ defineExpose({
       </slot>
     </div>
     <!-- Global Context Menu (Virtual) -->
-    <div v-if="contextMenu.isOpen" class="fixed w-1 h-1 z-9999 pointer-events-none"
-      :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
-      <UDropdownMenu :items="contextMenu.items" :open="true" :popper="{ placement: 'bottom-start' }"
-        @update:open="(val) => !val && (contextMenu.isOpen = false)" class="pointer-events-auto">
+    <div
+      v-if="contextMenu.isOpen"
+      class="fixed w-1 h-1 z-9999 pointer-events-none"
+      :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
+    >
+      <UDropdownMenu
+        :items="contextMenu.items"
+        :open="true"
+        :popper="{ placement: 'bottom-start' }"
+        class="pointer-events-auto"
+        @update:open="(val) => !val && (contextMenu.isOpen = false)"
+      >
         <div />
       </UDropdownMenu>
     </div>

@@ -37,11 +37,11 @@ writeFile('package.json', JSON.stringify({
     '@iconify-json/lucide': '^1.2.120',
     '@nuxt/ui': '^4.11.0',
     '@supabase/supabase-js': '^2.111.0',
-    bcryptjs: '^2.4.3',
-    cloudinary: '^2.5.1',
-    jose: '^5.9.6',
-    nuxt: '^4.3.1',
-    vue: 'latest',
+    'bcryptjs': '^2.4.3',
+    'cloudinary': '^2.5.1',
+    'jose': '^5.9.6',
+    'nuxt': '^4.3.1',
+    'vue': 'latest',
     'vue-router': 'latest',
     'web-push': '^3.6.7'
   },
@@ -49,8 +49,8 @@ writeFile('package.json', JSON.stringify({
     '@types/bcryptjs': '^2.4.6',
     '@types/node': '^22.10.2',
     '@types/web-push': '^3.6.4',
-    tsx: '^4.19.2',
-    typescript: '^5.7.2',
+    'tsx': '^4.19.2',
+    'typescript': '^5.7.2',
     'vue-tsc': '^2.2.0'
   },
   pnpm: {
@@ -1581,7 +1581,6 @@ async function seed() {
   const initialRoutes = [
     { id: 'home', app_id: 'tm-tools', path: '/', name: 'home', label: 'nav.home', icon: 'i-lucide-house', sort: 0 },
     { id: 'inbox', app_id: 'tm-tools', path: '/inbox', name: 'inbox', label: 'nav.inbox', icon: 'i-lucide-inbox', sort: 1 },
-    { id: 'customers', app_id: 'tm-tools', path: '/customers', name: 'customers', label: 'nav.customers', icon: 'i-lucide-users', sort: 2 },
     { id: 'chat', app_id: 'tm-tools', path: '/chat', name: 'chat', label: 'nav.chat', icon: 'i-lucide-message-square', sort: 3 },
     { id: 'media', app_id: 'tm-tools', path: '/media', name: 'media', label: 'nav.media', icon: 'i-lucide-images', sort: 4 }
   ]

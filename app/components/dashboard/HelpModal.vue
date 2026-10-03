@@ -28,7 +28,12 @@ const shortcuts = computed(() => [
 </script>
 
 <template>
-  <BaseResponsiveModal v-model:open="open" :title="t('help.title')" :description="t('help.desc')" class="sm:max-w-xl">
+  <BaseResponsiveModal
+    v-model:open="open"
+    :title="t('help.title')"
+    :description="t('help.desc')"
+    class="sm:max-w-xl"
+  >
     <template #body>
       <div class="space-y-6 overflow-y-auto max-h-[70vh] px-1 custom-scrollbar">
         <!-- FAQ Section -->
@@ -39,10 +44,13 @@ const shortcuts = computed(() => [
           <div class="divide-y divide-default border-y border-default">
             <details v-for="(item, idx) in faqItems" :key="idx" class="group py-3">
               <summary
-                class="flex justify-between items-center cursor-pointer list-none outline-none text-highlighted font-medium hover:text-primary transition-colors duration-150">
+                class="flex justify-between items-center cursor-pointer list-none outline-none text-highlighted font-medium hover:text-primary transition-colors duration-150"
+              >
                 <span>{{ item.q }}</span>
-                <UIcon name="i-lucide-chevron-down"
-                  class="size-4 text-muted group-open:rotate-180 transition-transform duration-200" />
+                <UIcon
+                  name="i-lucide-chevron-down"
+                  class="size-4 text-muted group-open:rotate-180 transition-transform duration-200"
+                />
               </summary>
               <p class="mt-2 text-sm text-muted leading-relaxed pl-1">
                 {{ item.a }}
@@ -57,12 +65,18 @@ const shortcuts = computed(() => [
             {{ t('help.shortcuts') }}
           </h4>
           <div class="grid grid-cols-1 gap-2">
-            <div v-for="(sc, idx) in shortcuts" :key="idx"
-              class="flex items-center justify-between py-1.5 border-b border-default last:border-b-0 text-sm">
+            <div
+              v-for="(sc, idx) in shortcuts"
+              :key="idx"
+              class="flex items-center justify-between py-1.5 border-b border-default last:border-b-0 text-sm"
+            >
               <span class="text-muted">{{ sc.desc }}</span>
               <div class="flex items-center gap-1">
-                <kbd v-for="k in sc.keys" :key="k"
-                  class="px-1.5 py-0.5 text-xs font-mono font-semibold rounded bg-muted text-highlighted border border-default shadow-[0_1px_0_0px_rgba(0,0,0,0.1)]">
+                <kbd
+                  v-for="k in sc.keys"
+                  :key="k"
+                  class="px-1.5 py-0.5 text-xs font-mono font-semibold rounded bg-muted text-highlighted border border-default shadow-[0_1px_0_0px_rgba(0,0,0,0.1)]"
+                >
                   {{ k }}
                 </kbd>
               </div>
@@ -101,8 +115,15 @@ const shortcuts = computed(() => [
 
         <!-- External Link -->
         <div class="pt-2 flex justify-center">
-          <UButton to="https://github.com/nuxt-ui-templates/dashboard" target="_blank" icon="i-lucide-external-link"
-            variant="link" color="neutral" size="sm" :label="t('help.doc_link')" />
+          <UButton
+            to="https://github.com/nuxt-ui-templates/dashboard"
+            target="_blank"
+            icon="i-lucide-external-link"
+            variant="link"
+            color="neutral"
+            size="sm"
+            :label="t('help.doc_link')"
+          />
         </div>
       </div>
     </template>

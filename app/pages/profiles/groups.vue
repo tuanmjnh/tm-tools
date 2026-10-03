@@ -202,19 +202,36 @@ function formatDate(dateStr?: string | null) {
     <template #right>
       <div class="flex items-center gap-2">
         <!-- Batch Delete Button -->
-        <UButton v-if="selected.length" :label="t('profiles.batchDelete')" color="error" variant="subtle"
-          icon="i-lucide-trash" @click="showBatchDeleteConfirm = true">
+        <UButton
+          v-if="selected.length"
+          :label="t('profiles.batchDelete')"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-trash"
+          @click="showBatchDeleteConfirm = true"
+        >
           <template #trailing>
             <UKbd>{{ selected.length }}</UKbd>
           </template>
         </UButton>
 
         <!-- Back to Profiles -->
-        <UButton variant="soft" color="neutral" icon="i-lucide-layers" :label="t('profiles.title')" to="/profiles" />
+        <UButton
+          variant="soft"
+          color="neutral"
+          icon="i-lucide-layers"
+          :label="t('profiles.title')"
+          to="/profiles"
+        />
 
         <!-- Add Group -->
-        <UButton color="primary" variant="soft" icon="i-lucide-plus" :label="t('profiles.addGroup')"
-          @click="openCreate" />
+        <UButton
+          color="primary"
+          variant="soft"
+          icon="i-lucide-plus"
+          :label="t('profiles.addGroup')"
+          @click="openCreate"
+        />
       </div>
     </template>
 
@@ -222,27 +239,44 @@ function formatDate(dateStr?: string | null) {
       <div class="flex flex-col gap-4 h-full">
         <!-- Search Bar -->
         <div class="flex items-center justify-between gap-2">
-          <UInput v-model="searchQuery" class="w-full sm:max-w-xs" icon="i-lucide-search"
-            :placeholder="t('global.searchPlaceholder')" />
+          <UInput
+            v-model="searchQuery"
+            class="w-full sm:max-w-xs"
+            icon="i-lucide-search"
+            :placeholder="t('global.searchPlaceholder')"
+          />
         </div>
 
         <!-- GridList -->
         <div class="flex-1 min-h-0 relative">
-          <LazyGridList v-model:selected="selected" :items="filteredGroups" :columns="columns" :loading="loading"
-            item-key="id" selectable :action-options="getActionOptions" @refresh="fetchGroups">
+          <LazyGridList
+            v-model:selected="selected"
+            :items="filteredGroups"
+            :columns="columns"
+            :loading="loading"
+            item-key="id"
+            selectable
+            :action-options="getActionOptions"
+            @refresh="fetchGroups"
+          >
             <!-- Custom Name Column -->
             <template #name="{ item }">
               <div class="flex items-center gap-2.5 min-w-0">
-                <span class="w-3 h-3 rounded-full shrink-0" :class="{
-                  'bg-primary-500': item.color === 'primary',
-                  'bg-emerald-500': item.color === 'success',
-                  'bg-amber-500': item.color === 'warning',
-                  'bg-rose-500': item.color === 'error',
-                  'bg-gray-400': !item.color || item.color === 'neutral'
-                }" />
+                <span
+                  class="w-3 h-3 rounded-full shrink-0"
+                  :class="{
+                    'bg-primary-500': item.color === 'primary',
+                    'bg-emerald-500': item.color === 'success',
+                    'bg-amber-500': item.color === 'warning',
+                    'bg-rose-500': item.color === 'error',
+                    'bg-gray-400': !item.color || item.color === 'neutral'
+                  }"
+                />
                 <div class="flex flex-col min-w-0">
-                  <span class="font-medium text-gray-900 dark:text-white truncate cursor-pointer hover:underline"
-                    @click="viewGroupProfiles(item)">
+                  <span
+                    class="font-medium text-gray-900 dark:text-white truncate cursor-pointer hover:underline"
+                    @click="viewGroupProfiles(item)"
+                  >
                     {{ item.name }}
                   </span>
                   <span v-if="item.description" class="text-xs text-gray-400 truncate">
@@ -254,8 +288,13 @@ function formatDate(dateStr?: string | null) {
 
             <!-- Custom Profile Count Column -->
             <template #profile_count="{ item }">
-              <UBadge color="neutral" variant="subtle" size="sm"
-                class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800" @click="viewGroupProfiles(item)">
+              <UBadge
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800"
+                @click="viewGroupProfiles(item)"
+              >
                 <UIcon name="i-lucide-layers" class="w-3 h-3 mr-1" />
                 {{ item.profile_count ?? 0 }}
               </UBadge>
@@ -280,13 +319,16 @@ function formatDate(dateStr?: string | null) {
               <div class="flex flex-col gap-3 p-1">
                 <div class="flex items-start justify-between gap-2">
                   <div class="flex items-center gap-2 min-w-0">
-                    <span class="w-3 h-3 rounded-full shrink-0" :class="{
-                      'bg-primary-500': item.color === 'primary',
-                      'bg-emerald-500': item.color === 'success',
-                      'bg-amber-500': item.color === 'warning',
-                      'bg-rose-500': item.color === 'error',
-                      'bg-gray-400': !item.color || item.color === 'neutral'
-                    }" />
+                    <span
+                      class="w-3 h-3 rounded-full shrink-0"
+                      :class="{
+                        'bg-primary-500': item.color === 'primary',
+                        'bg-emerald-500': item.color === 'success',
+                        'bg-amber-500': item.color === 'warning',
+                        'bg-rose-500': item.color === 'error',
+                        'bg-gray-400': !item.color || item.color === 'neutral'
+                      }"
+                    />
                     <span class="font-medium text-sm text-gray-900 dark:text-white truncate">
                       {{ item.name }}
                     </span>
@@ -301,10 +343,17 @@ function formatDate(dateStr?: string | null) {
                 </p>
 
                 <div
-                  class="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
+                  class="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800"
+                >
                   <span>{{ t('common.created_at') || 'Created' }}: {{ formatDate(item.created_at) }}</span>
-                  <UButton size="xs" variant="ghost" color="primary" icon="i-lucide-arrow-right"
-                    :label="t('profiles.quickProfiles')" @click="viewGroupProfiles(item)" />
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="primary"
+                    icon="i-lucide-arrow-right"
+                    :label="t('profiles.quickProfiles')"
+                    @click="viewGroupProfiles(item)"
+                  />
                 </div>
               </div>
             </template>
@@ -319,8 +368,13 @@ function formatDate(dateStr?: string | null) {
                 <p class="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-4">
                   {{ t('profiles.noGroupsDesc') }}
                 </p>
-                <UButton color="primary" variant="soft" icon="i-lucide-plus" :label="t('profiles.addGroup')"
-                  @click="openCreate" />
+                <UButton
+                  color="primary"
+                  variant="soft"
+                  icon="i-lucide-plus"
+                  :label="t('profiles.addGroup')"
+                  @click="openCreate"
+                />
               </div>
             </template>
           </LazyGridList>
@@ -328,13 +382,21 @@ function formatDate(dateStr?: string | null) {
       </div>
 
       <!-- Create / Edit Modal -->
-      <UModal v-model:open="showModal" :title="editingGroup ? t('profiles.editGroup') : t('profiles.addGroup')"
-        :ui="{ content: 'max-w-md' }">
+      <UModal
+        v-model:open="showModal"
+        :title="editingGroup ? t('profiles.editGroup') : t('profiles.addGroup')"
+        :ui="{ content: 'max-w-md' }"
+      >
         <template #body>
           <div class="space-y-4">
             <UFormField :label="t('profiles.groupName')" required>
-              <UInput v-model="form.name" :placeholder="t('profiles.groupName')" class="w-full" autofocus
-                @keydown.enter.prevent="handleSave" />
+              <UInput
+                v-model="form.name"
+                :placeholder="t('profiles.groupName')"
+                class="w-full"
+                autofocus
+                @keydown.enter.prevent="handleSave"
+              />
             </UFormField>
 
             <div class="grid grid-cols-2 gap-3">
@@ -348,28 +410,52 @@ function formatDate(dateStr?: string | null) {
             </div>
 
             <UFormField :label="t('profiles.notes')">
-              <UTextarea v-model="form.description" :rows="3" placeholder="Optional group notes..." class="w-full" />
+              <UTextarea
+                v-model="form.description"
+                :rows="3"
+                placeholder="Optional group notes..."
+                class="w-full"
+              />
             </UFormField>
           </div>
         </template>
 
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton variant="ghost" color="neutral" :label="t('global.cancel')" @click="showModal = false" />
-            <UButton color="primary" variant="soft" :label="t('global.save')" :loading="saving" @click="handleSave" />
+            <UButton
+              variant="ghost"
+              color="neutral"
+              :label="t('global.cancel')"
+              @click="showModal = false"
+            />
+            <UButton
+              color="primary"
+              variant="soft"
+              :label="t('global.save')"
+              :loading="saving"
+              @click="handleSave"
+            />
           </div>
         </template>
       </UModal>
 
       <!-- Single Delete Confirm Modal -->
-      <LazyBaseConfirmModal v-model:open="showDeleteConfirm" :title="t('profiles.deleteGroupConfirm')"
-        :description="t('profiles.deleteGroupConfirmDesc', { name: groupToDelete?.name || '' })" :loading="deleting"
-        @confirm="executeSingleDelete" />
+      <LazyBaseConfirmModal
+        v-model:open="showDeleteConfirm"
+        :title="t('profiles.deleteGroupConfirm')"
+        :description="t('profiles.deleteGroupConfirmDesc', { name: groupToDelete?.name || '' })"
+        :loading="deleting"
+        @confirm="executeSingleDelete"
+      />
 
       <!-- Batch Delete Confirm Modal -->
-      <LazyBaseConfirmModal v-model:open="showBatchDeleteConfirm" :title="t('profiles.batchDeleteGroupsConfirm')"
-        :description="t('profiles.batchDeleteGroupsConfirmDesc', { count: selected.length })" :loading="deleting"
-        @confirm="executeBatchDelete" />
+      <LazyBaseConfirmModal
+        v-model:open="showBatchDeleteConfirm"
+        :title="t('profiles.batchDeleteGroupsConfirm')"
+        :description="t('profiles.batchDeleteGroupsConfirmDesc', { count: selected.length })"
+        :loading="deleting"
+        @confirm="executeBatchDelete"
+      />
     </template>
   </BasePage>
 </template>

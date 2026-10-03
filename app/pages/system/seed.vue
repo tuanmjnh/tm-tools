@@ -43,16 +43,29 @@ async function runSeed(reset: boolean) {
         </template>
         <div class="flex flex-col gap-4">
           <div class="flex flex-wrap gap-3">
-            <UButton icon="i-lucide-database-plus" :label="$t('seed.idempotent')" color="neutral" :loading="running"
-              @click="runSeed(false)" />
-            <UButton icon="i-lucide-database-zap" :label="$t('seed.reset')" color="error" variant="outline"
-              :loading="running" @click="runSeed(true)" />
+            <UButton
+              icon="i-lucide-database-plus"
+              :label="$t('seed.idempotent')"
+              color="neutral"
+              :loading="running"
+              @click="runSeed(false)"
+            />
+            <UButton
+              icon="i-lucide-database-zap"
+              :label="$t('seed.reset')"
+              color="error"
+              variant="outline"
+              :loading="running"
+              @click="runSeed(true)"
+            />
           </div>
           <p class="text-xs text-dimmed">
             {{ $t('seed.resetWarning') }}
           </p>
-          <p v-if="result"
-            class="text-sm text-muted font-mono bg-gray-50 dark:bg-gray-800/50 p-4 rounded border dark:border-gray-800">
+          <p
+            v-if="result"
+            class="text-sm text-muted font-mono bg-gray-50 dark:bg-gray-800/50 p-4 rounded border dark:border-gray-800"
+          >
             {{ result }}
           </p>
         </div>

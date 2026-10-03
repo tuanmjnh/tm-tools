@@ -100,7 +100,7 @@ export const useSystemStorage = () => {
       sessionStorage.clear()
       clearCookiesRaw()
       await clearPwaData()
-      const storage = (navigator.storage as (StorageManager & { clear?: () => Promise<void> }))
+      const storage = navigator.storage as (StorageManager & { clear?: () => Promise<void> })
       if (storage?.clear) {
         await storage.clear()
       }

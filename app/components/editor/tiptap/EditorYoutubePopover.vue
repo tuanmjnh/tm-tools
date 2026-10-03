@@ -50,16 +50,37 @@ function handleKeyDown(event: KeyboardEvent) {
 <template>
   <UPopover v-model:open="open" :ui="{ content: 'p-0.5' }">
     <UTooltip text="YouTube">
-      <UButton icon="i-lucide-youtube" color="neutral" active-color="primary" variant="ghost" active-variant="soft"
-        size="sm" :active="active" />
+      <UButton
+        icon="i-lucide-youtube"
+        color="neutral"
+        active-color="primary"
+        variant="ghost"
+        active-variant="soft"
+        size="sm"
+        :active="active"
+      />
     </UTooltip>
 
     <template #content>
-      <UInput v-model="url" autofocus name="url" type="url" variant="none" placeholder="Paste a YouTube link..."
-        @keydown="handleKeyDown" class="min-w-[320px]">
+      <UInput
+        v-model="url"
+        autofocus
+        name="url"
+        type="url"
+        variant="none"
+        placeholder="Paste a YouTube link..."
+        class="min-w-[320px]"
+        @keydown="handleKeyDown"
+      >
         <div class="flex items-center mr-0.5 gap-1">
-          <UButton icon="i-lucide-check" variant="ghost" size="sm" :disabled="!url" title="Insert Video"
-            @click="setVideo" />
+          <UButton
+            icon="i-lucide-check"
+            variant="ghost"
+            size="sm"
+            :disabled="!url"
+            title="Insert Video"
+            @click="setVideo"
+          />
         </div>
       </UInput>
     </template>

@@ -15,7 +15,7 @@ function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {
     isDeleted: hubRoute.isDeleted,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    children: hubRoute.children?.map(mapHubRouteToRouteTreeNode),
+    children: hubRoute.children?.map(mapHubRouteToRouteTreeNode)
   }
 }
 
@@ -58,7 +58,9 @@ export const useNavMenu = () => {
         icon: node.icon || 'i-lucide-folder',
         defaultOpen: true,
         type: 'trigger',
-        children: node.children.map((child: RouteTreeNode) => mapRouteToNav(child, open))
+        children: node.children
+          .filter((child: RouteTreeNode) => child.isVisible !== false)
+          .map((child: RouteTreeNode) => mapRouteToNav(child, open))
       }
     }
 
@@ -73,7 +75,7 @@ export const useNavMenu = () => {
   function buildNavItems(open: Ref<boolean>): NavigationMenuItem[] {
     const hidden = new Set(['settings'])
     return allowedRoutes.value
-      .filter((node: RouteTreeNode) => !hidden.has(node.name))
+      .filter((node: RouteTreeNode) => !hidden.has(node.name) && node.isVisible !== false)
       .map((node: RouteTreeNode) => mapRouteToNav(node, open))
   }
 

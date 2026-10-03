@@ -88,15 +88,18 @@ const aspectRatiosOptions = computed(() => {
 </script>
 
 <template>
-  <UAccordion :items="[
-    { label: t('tools.aspectRatio'), slot: 'aspect' },
-    { label: t('tools.zoom'), slot: 'zoom' },
-    { label: t('tools.flips'), slot: 'flips' },
-    { label: t('tools.scale'), slot: 'scale' },
-    { label: t('tools.speedVolume'), slot: 'speed' },
-    { label: t('tools.labels'), slot: 'labels' },
-    { label: t('tools.subtitle'), slot: 'subtitle' }
-  ]" class="border rounded-lg p-2 bg-white dark:bg-gray-900 shadow-sm">
+  <UAccordion
+    :items="[
+      { label: t('tools.aspectRatio'), slot: 'aspect' },
+      { label: t('tools.zoom'), slot: 'zoom' },
+      { label: t('tools.flips'), slot: 'flips' },
+      { label: t('tools.scale'), slot: 'scale' },
+      { label: t('tools.speedVolume'), slot: 'speed' },
+      { label: t('tools.labels'), slot: 'labels' },
+      { label: t('tools.subtitle'), slot: 'subtitle' }
+    ]"
+    class="border rounded-lg p-2 bg-white dark:bg-gray-900 shadow-sm"
+  >
     <template #aspect>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
         <UFormField :label="t('tools.aspectRatio')">
@@ -104,11 +107,14 @@ const aspectRatiosOptions = computed(() => {
         </UFormField>
 
         <UFormField v-if="config.aspect_ratio! > 0" :label="t('tools.bgType')">
-          <USelect v-model="config.background_type" :options="[
-            { label: 'Color', value: 'color' },
-            { label: 'Box Blur', value: 'boxblur' },
-            { label: 'Background File', value: 'file' }
-          ]" />
+          <USelect
+            v-model="config.background_type"
+            :options="[
+              { label: 'Color', value: 'color' },
+              { label: 'Box Blur', value: 'boxblur' },
+              { label: 'Background File', value: 'file' }
+            ]"
+          />
         </UFormField>
 
         <UFormField v-if="config.aspect_ratio! > 0 && config.background_type === 'color'" :label="t('tools.bgColor')">
@@ -120,14 +126,23 @@ const aspectRatiosOptions = computed(() => {
 
         <UFormField v-if="config.aspect_ratio! > 0 && config.background_type === 'boxblur'" :label="t('tools.bgBlur')">
           <div class="flex items-center gap-4">
-            <USlider v-model="config.background_boxblur" :min="5" :max="50" class="flex-1" />
+            <USlider
+              v-model="config.background_boxblur"
+              :min="5"
+              :max="50"
+              class="flex-1"
+            />
             <span class="text-sm font-medium w-8 text-right">{{ config.background_boxblur }}</span>
           </div>
         </UFormField>
 
         <UFormField v-if="config.aspect_ratio! > 0 && config.background_type === 'file'" :label="t('tools.bgFile')">
-          <BaseFilePicker v-model="backgroundFileModel" mode="file" placeholder="D:/backgrounds/bg.png"
-            :filters="[{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }, { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }]" />
+          <BaseFilePicker
+            v-model="backgroundFileModel"
+            mode="file"
+            placeholder="D:/backgrounds/bg.png"
+            :filters="[{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }, { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }]"
+          />
         </UFormField>
       </div>
     </template>
@@ -135,11 +150,22 @@ const aspectRatiosOptions = computed(() => {
     <template #zoom>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
         <div class="flex items-center gap-2">
-          <UCheckbox v-model="config.zoom_enable" :value="1" :unchecked-value="0" :label="t('tools.zoomEnable')" />
+          <UCheckbox
+            v-model="config.zoom_enable"
+            :value="1"
+            :unchecked-value="0"
+            :label="t('tools.zoomEnable')"
+          />
         </div>
         <UFormField v-if="config.zoom_enable === 1" :label="t('tools.zoomRatio')">
           <div class="flex items-center gap-4">
-            <USlider v-model="config.zoom_ratio" :min="1.0" :max="2.0" :step="0.05" class="flex-1" />
+            <USlider
+              v-model="config.zoom_ratio"
+              :min="1.0"
+              :max="2.0"
+              :step="0.05"
+              class="flex-1"
+            />
             <span class="text-sm font-medium w-12 text-right">{{ config.zoom_ratio }}x</span>
           </div>
         </UFormField>
@@ -151,10 +177,20 @@ const aspectRatiosOptions = computed(() => {
         <!-- HFLIP -->
         <div class="space-y-4 border-r pr-6">
           <div class="flex items-center gap-2">
-            <UCheckbox v-model="config.hflip_enable" :value="1" :unchecked-value="0" :label="t('tools.hflip')" />
+            <UCheckbox
+              v-model="config.hflip_enable"
+              :value="1"
+              :unchecked-value="0"
+              :label="t('tools.hflip')"
+            />
           </div>
           <div v-if="config.hflip_enable === 1" class="space-y-4">
-            <UCheckbox v-model="config.hflip_all" :value="1" :unchecked-value="0" :label="t('tools.flipAll')" />
+            <UCheckbox
+              v-model="config.hflip_all"
+              :value="1"
+              :unchecked-value="0"
+              :label="t('tools.flipAll')"
+            />
             <div v-if="config.hflip_all === 0" class="grid grid-cols-2 gap-4">
               <UFormField :label="t('tools.zoomStart')">
                 <UInput v-model.number="config.hflip_time_start" type="number" min="0" />
@@ -169,10 +205,20 @@ const aspectRatiosOptions = computed(() => {
         <!-- VFLIP -->
         <div class="space-y-4">
           <div class="flex items-center gap-2">
-            <UCheckbox v-model="config.vflip_enable" :value="1" :unchecked-value="0" :label="t('tools.vflip')" />
+            <UCheckbox
+              v-model="config.vflip_enable"
+              :value="1"
+              :unchecked-value="0"
+              :label="t('tools.vflip')"
+            />
           </div>
           <div v-if="config.vflip_enable === 1" class="space-y-4">
-            <UCheckbox v-model="config.vflip_all" :value="1" :unchecked-value="0" :label="t('tools.flipAll')" />
+            <UCheckbox
+              v-model="config.vflip_all"
+              :value="1"
+              :unchecked-value="0"
+              :label="t('tools.flipAll')"
+            />
             <div v-if="config.vflip_all === 0" class="grid grid-cols-2 gap-4">
               <UFormField :label="t('tools.zoomStart')">
                 <UInput v-model.number="config.vflip_time_start" type="number" min="0" />
@@ -189,10 +235,20 @@ const aspectRatiosOptions = computed(() => {
     <template #scale>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
         <UFormField :label="t('tools.width')">
-          <UInput v-model.number="config.scale_w" type="number" min="0" placeholder="1920" />
+          <UInput
+            v-model.number="config.scale_w"
+            type="number"
+            min="0"
+            placeholder="1920"
+          />
         </UFormField>
         <UFormField :label="t('tools.height')">
-          <UInput v-model.number="config.scale_h" type="number" min="0" placeholder="1080" />
+          <UInput
+            v-model.number="config.scale_h"
+            type="number"
+            min="0"
+            placeholder="1080"
+          />
         </UFormField>
       </div>
     </template>
@@ -201,13 +257,25 @@ const aspectRatiosOptions = computed(() => {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 p-4">
         <UFormField :label="t('tools.speed')">
           <div class="flex items-center gap-4">
-            <USlider v-model="config.speed" :min="0.5" :max="3.0" :step="0.1" class="flex-1" />
+            <USlider
+              v-model="config.speed"
+              :min="0.5"
+              :max="3.0"
+              :step="0.1"
+              class="flex-1"
+            />
             <span class="text-sm font-medium w-12 text-right">{{ config.speed }}x</span>
           </div>
         </UFormField>
         <UFormField :label="t('tools.volume')">
           <div class="flex items-center gap-4">
-            <USlider v-model="config.volume" :min="0.0" :max="3.0" :step="0.1" class="flex-1" />
+            <USlider
+              v-model="config.volume"
+              :min="0.0"
+              :max="3.0"
+              :step="0.1"
+              class="flex-1"
+            />
             <span class="text-sm font-medium w-12 text-right">{{ Math.round(config.volume! * 100) }}%</span>
           </div>
         </UFormField>
@@ -272,7 +340,13 @@ const aspectRatiosOptions = computed(() => {
                   {{ lbl.x }} / {{ lbl.y }}
                 </td>
                 <td class="p-2 text-right">
-                  <UButton icon="i-lucide-trash-2" size="xs" color="error" variant="ghost" @click="removeLabel(idx)" />
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    size="xs"
+                    color="error"
+                    variant="ghost"
+                    @click="removeLabel(idx)"
+                  />
                 </td>
               </tr>
             </tbody>
@@ -284,8 +358,12 @@ const aspectRatiosOptions = computed(() => {
     <template #subtitle>
       <div class="p-4">
         <UFormField :label="t('tools.subtitleFile')">
-          <BaseFilePicker v-model="subtitleModel" mode="file" placeholder="D:/subs/subtitle.srt"
-            :filters="[{ name: 'Subtitles', extensions: ['srt', 'vtt', 'ass', 'ssa'] }]" />
+          <BaseFilePicker
+            v-model="subtitleModel"
+            mode="file"
+            placeholder="D:/subs/subtitle.srt"
+            :filters="[{ name: 'Subtitles', extensions: ['srt', 'vtt', 'ass', 'ssa'] }]"
+          />
         </UFormField>
       </div>
     </template>

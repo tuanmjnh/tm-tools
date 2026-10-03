@@ -726,24 +726,44 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
 <template>
   <BasePage id="tools-download" :title="t('nav.download')">
-    <UForm id="download-form" :schema="schema" :state="state"
-      class="flex flex-col flex-1 min-h-0 overflow-hidden gap-4 h-full" @submit="onSubmit">
+    <UForm
+      id="download-form"
+      :schema="schema"
+      :state="state"
+      class="flex flex-col flex-1 min-h-0 overflow-hidden gap-4 h-full"
+      @submit="onSubmit"
+    >
       <!-- Alerts -->
       <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 shrink-0">
-        <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle">
+        <UAlert
+          v-if="exeState === 'missing'"
+          icon="i-lucide-alert-triangle"
+          color="error"
+          variant="subtle"
+        >
           <template #title>
             {{ t('tools.executableMissing') }}
           </template>
           <template #description>
             <div class="mt-2">
-              <UButton size="xs" color="error" variant="soft" to="/settings/tools">
+              <UButton
+                size="xs"
+                color="error"
+                variant="soft"
+                to="/settings/tools"
+              >
                 {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
               </UButton>
             </div>
           </template>
         </UAlert>
-        <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
-          :title="t('tools.noElectron')" />
+        <UAlert
+          v-if="!taskManager.isElectron.value"
+          icon="i-lucide-monitor"
+          color="warning"
+          variant="subtle"
+          :title="t('tools.noElectron')"
+        />
       </div>
 
       <!-- Two-Column Responsive Layout -->
@@ -762,10 +782,22 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                       </p>
                     </div>
                     <div class="flex gap-1">
-                      <UButton icon="i-lucide-info" color="info" variant="ghost" size="sm"
-                        :title="t('tools.versionInfo')" @click="openVersionInfo" />
-                      <UButton icon="i-lucide-history" color="warning" variant="ghost" size="sm"
-                        :title="t('tools.history')" @click="openHistory" />
+                      <UButton
+                        icon="i-lucide-info"
+                        color="info"
+                        variant="ghost"
+                        size="sm"
+                        :title="t('tools.versionInfo')"
+                        @click="openVersionInfo"
+                      />
+                      <UButton
+                        icon="i-lucide-history"
+                        color="warning"
+                        variant="ghost"
+                        size="sm"
+                        :title="t('tools.history')"
+                        @click="openHistory"
+                      />
                     </div>
                   </div>
                 </template>
@@ -773,32 +805,52 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                 <!-- URL Input Area -->
                 <div class="mb-4 space-y-4 border-b pb-4 border-gray-100 dark:border-gray-800">
                   <UFormField name="downloadMode" :label="t('tools.downloadMode')">
-                    <URadioGroup v-model="state.downloadMode" :items="[
-                      { label: t('tools.singleVideo'), value: 'single' },
-                      { label: t('tools.multipleVideos'), value: 'multiple' }
-                    ]" class="flex gap-4" :disabled="controlsDisabled" />
+                    <URadioGroup
+                      v-model="state.downloadMode"
+                      :items="[
+                        { label: t('tools.singleVideo'), value: 'single' },
+                        { label: t('tools.multipleVideos'), value: 'multiple' }
+                      ]"
+                      class="flex gap-4"
+                      :disabled="controlsDisabled"
+                    />
                   </UFormField>
 
                   <div v-if="state.downloadMode === 'single'">
                     <UFormField name="singleUrl" :label="t('tools.url')">
                       <div class="flex gap-2 w-full">
-                        <UInput v-model="state.singleUrl" placeholder="https://www.youtube.com/watch?v=..."
-                          class="flex-1" :loading="fetchingFormats" :disabled="controlsDisabled || fetchingFormats" />
+                        <UInput
+                          v-model="state.singleUrl"
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          class="flex-1"
+                          :loading="fetchingFormats"
+                          :disabled="controlsDisabled || fetchingFormats"
+                        />
                       </div>
                     </UFormField>
                   </div>
 
                   <div v-else>
                     <UFormField name="urlText" :label="t('tools.urls')">
-                      <UTextarea v-model="state.urlText" :rows="4" class="w-full"
+                      <UTextarea
+                        v-model="state.urlText"
+                        :rows="4"
+                        class="w-full"
                         placeholder="https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=..."
-                        :disabled="controlsDisabled" />
+                        :disabled="controlsDisabled"
+                      />
                       <template #hint>
                         <div class="flex items-center gap-2 text-xs text-muted">
                           <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
                           }}</span>
-                          <UButton v-if="isPlaylist && !loadingPlaylist" size="xs" variant="soft"
-                            :loading="loadingPlaylist" :disabled="controlsDisabled" @click="crawlPlaylist">
+                          <UButton
+                            v-if="isPlaylist && !loadingPlaylist"
+                            size="xs"
+                            variant="soft"
+                            :loading="loadingPlaylist"
+                            :disabled="controlsDisabled"
+                            @click="crawlPlaylist"
+                          >
                             {{ t('tools.getPlaylistInfo') }}
                           </UButton>
                         </div>
@@ -824,8 +876,11 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                     </div>
                   </div>
                   <div class="max-h-64 overflow-y-auto space-y-1">
-                    <div v-for="video in playlistVideos" :key="video.id"
-                      class="flex items-center gap-2 p-1 hover:bg-muted/50 rounded">
+                    <div
+                      v-for="video in playlistVideos"
+                      :key="video.id"
+                      class="flex items-center gap-2 p-1 hover:bg-muted/50 rounded"
+                    >
                       <UCheckbox v-model="selectedVideos" :value="video.id" />
                       <div class="flex-1 min-w-0">
                         <p class="text-sm truncate font-medium">
@@ -842,13 +897,25 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               </UCard>
 
               <!-- Task Manager Panel -->
-              <ToolsTaskManagerPanel v-if="taskManager.taskList.value.length" :items="taskManager.taskList.value"
-                :total="taskManager.total.value" :done="taskManager.done.value" :running="taskManager.running.value"
-                :processing="taskManager.processing.value" :paused="taskManager.paused.value"
-                :retries="taskManager.globalRetryCount.value" :can-start="true" @start="onSubmit"
-                @refresh="taskManager.refreshStatus()" @pause="taskManager.pause()" @resume="taskManager.resume()"
-                @stop-all="taskManager.stopAll()" @stop-task="(key) => taskManager.stopTask(key)"
-                @open-item="showInFolder" @open-file="openFileFullPath" />
+              <ToolsTaskManagerPanel
+                v-if="taskManager.taskList.value.length"
+                :items="taskManager.taskList.value"
+                :total="taskManager.total.value"
+                :done="taskManager.done.value"
+                :running="taskManager.running.value"
+                :processing="taskManager.processing.value"
+                :paused="taskManager.paused.value"
+                :retries="taskManager.globalRetryCount.value"
+                :can-start="true"
+                @start="onSubmit"
+                @refresh="taskManager.refreshStatus()"
+                @pause="taskManager.pause()"
+                @resume="taskManager.resume()"
+                @stop-all="taskManager.stopAll()"
+                @stop-task="(key) => taskManager.stopTask(key)"
+                @open-item="showInFolder"
+                @open-file="openFileFullPath"
+              />
             </div>
           </UScrollArea>
         </div>
@@ -872,40 +939,82 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   <!-- Preset Select Settings -->
                   <UFormField name="selectedConfigId" :label="t('tools.configPreset')">
                     <div class="flex gap-2 w-full">
-                      <USelectMenu v-model="state.selectedConfigId" clear
+                      <USelectMenu
+                        v-model="state.selectedConfigId"
+                        clear
                         :items="configs.map(c => ({ label: c.title, value: c.id }))"
                         :placeholder="t('tools.selectPreset')"
-                        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
-                        class="flex-1" :disabled="controlsDisabled">
+                        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                        value-key="value"
+                        class="flex-1"
+                        :disabled="controlsDisabled"
+                      >
                         <template #empty>
                           {{ t('tools.noPresets') }}
                         </template>
                       </USelectMenu>
-                      <UButton v-if="state.selectedConfigId" icon="i-lucide-pencil" size="md" color="info"
-                        variant="soft" :disabled="controlsDisabled || fetchingFormats" :title="t('global.edit')"
-                        @click="onEditSelectedConfig" />
-                      <UButton v-if="state.selectedConfigId" icon="i-lucide-trash-2" size="md" color="error"
-                        variant="soft" :disabled="controlsDisabled || fetchingFormats" :title="t('global.delete')"
-                        @click="onDeleteSelectedConfig" />
-                      <UButton icon="i-lucide-plus" variant="soft" size="md"
-                        :disabled="controlsDisabled || fetchingFormats" :title="t('global.create')"
-                        @click="openCreateConfig" />
+                      <UButton
+                        v-if="state.selectedConfigId"
+                        icon="i-lucide-pencil"
+                        size="md"
+                        color="info"
+                        variant="soft"
+                        :disabled="controlsDisabled || fetchingFormats"
+                        :title="t('global.edit')"
+                        @click="onEditSelectedConfig"
+                      />
+                      <UButton
+                        v-if="state.selectedConfigId"
+                        icon="i-lucide-trash-2"
+                        size="md"
+                        color="error"
+                        variant="soft"
+                        :disabled="controlsDisabled || fetchingFormats"
+                        :title="t('global.delete')"
+                        @click="onDeleteSelectedConfig"
+                      />
+                      <UButton
+                        icon="i-lucide-plus"
+                        variant="soft"
+                        size="md"
+                        :disabled="controlsDisabled || fetchingFormats"
+                        :title="t('global.create')"
+                        @click="openCreateConfig"
+                      />
                     </div>
                   </UFormField>
 
                   <!-- Output Folder Settings -->
                   <UFormField name="outputPath" :label="t('tools.output')">
-                    <UInput v-model="state.outputPath" placeholder="D:/Downloads/YouTube"
-                      :ui="{ base: 'pr-16.5', trailing: 'pe-0.5' }" class="w-full" :disabled="controlsDisabled">
+                    <UInput
+                      v-model="state.outputPath"
+                      placeholder="D:/Downloads/YouTube"
+                      :ui="{ base: 'pr-16.5', trailing: 'pe-0.5' }"
+                      class="w-full"
+                      :disabled="controlsDisabled"
+                    >
                       <template #trailing>
                         <div class="flex items-center gap-1">
-                          <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-external-link"
-                            :title="t('tools.openFolder')" :aria-label="t('tools.openFolder')"
+                          <UButton
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            icon="i-lucide-external-link"
+                            :title="t('tools.openFolder')"
+                            :aria-label="t('tools.openFolder')"
                             :disabled="!state.outputPath || !taskManager.isElectron.value"
-                            @click="openFolder(state.outputPath)" />
-                          <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open"
-                            :title="t('tools.browse')" :aria-label="t('tools.browse')"
-                            :disabled="!taskManager.isElectron.value || controlsDisabled" @click="pickOutputFolder" />
+                            @click="openFolder(state.outputPath)"
+                          />
+                          <UButton
+                            color="neutral"
+                            variant="ghost"
+                            size="sm"
+                            icon="i-lucide-folder-open"
+                            :title="t('tools.browse')"
+                            :aria-label="t('tools.browse')"
+                            :disabled="!taskManager.isElectron.value || controlsDisabled"
+                            @click="pickOutputFolder"
+                          />
                         </div>
                       </template>
                     </UInput>
@@ -913,49 +1022,84 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
                   <!-- Threads Settings (multiple mode only) -->
                   <UFormField v-if="state.downloadMode === 'multiple'" name="threads" :label="t('tools.threads')">
-                    <UInput v-model.number="state.threads" type="number" min="1" max="8" class="w-full"
-                      :disabled="controlsDisabled" />
+                    <UInput
+                      v-model.number="state.threads"
+                      type="number"
+                      min="1"
+                      max="8"
+                      class="w-full"
+                      :disabled="controlsDisabled"
+                    />
                   </UFormField>
 
                   <!-- Format Settings -->
                   <UFormField name="selectedFormatId" :label="t('tools.format')">
-                    <USelectMenu v-model="state.selectedFormatId"
+                    <USelectMenu
+                      v-model="state.selectedFormatId"
                       :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
                       :placeholder="t('tools.selectFormat')"
-                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
-                      class="w-full" :disabled="controlsDisabled || fetchingFormats" :loading="fetchingFormats">
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                      value-key="value"
+                      class="w-full"
+                      :disabled="controlsDisabled || fetchingFormats"
+                      :loading="fetchingFormats"
+                    >
                       <template #empty>
                         {{ t('tools.noFormats') }}
                       </template>
                     </USelectMenu>
                   </UFormField>
 
-                  <UCheckbox v-if="state.downloadMode === 'single'" v-model="state.autoFetchFormat"
-                    :label="t('tools.autoFetchFormat')" :disabled="controlsDisabled" />
+                  <UCheckbox
+                    v-if="state.downloadMode === 'single'"
+                    v-model="state.autoFetchFormat"
+                    :label="t('tools.autoFetchFormat')"
+                    :disabled="controlsDisabled"
+                  />
 
                   <!-- Advanced Settings -->
                   <UCollapsible v-model:open="state.advancedOpen">
-                    <UButton block :trailing-icon="state.advancedOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-                      color="neutral" variant="ghost" size="sm" :label="t('tools.advanced')" />
+                    <UButton
+                      block
+                      :trailing-icon="state.advancedOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                      color="neutral"
+                      variant="ghost"
+                      size="sm"
+                      :label="t('tools.advanced')"
+                    />
                     <template #content>
                       <div class="mt-3 space-y-4">
                         <UFormField name="fileName" :label="t('tools.fileName')">
-                          <UInput v-model="state.fileName" placeholder="%(title)s.%(ext)s" class="w-full"
-                            :disabled="controlsDisabled" />
+                          <UInput
+                            v-model="state.fileName"
+                            placeholder="%(title)s.%(ext)s"
+                            class="w-full"
+                            :disabled="controlsDisabled"
+                          />
                         </UFormField>
 
                         <div class="space-y-3">
-                          <UCheckbox v-model="state.restrict" :label="t('tools.restrictNames')"
-                            :disabled="controlsDisabled" />
-                          <UCheckbox v-model="state.overwrite" :label="t('tools.overwriteFiles')"
-                            :disabled="controlsDisabled" />
+                          <UCheckbox
+                            v-model="state.restrict"
+                            :label="t('tools.restrictNames')"
+                            :disabled="controlsDisabled"
+                          />
+                          <UCheckbox
+                            v-model="state.overwrite"
+                            :label="t('tools.overwriteFiles')"
+                            :disabled="controlsDisabled"
+                          />
                         </div>
 
                         <UFormField name="encoding" :label="t('tools.encoding')">
-                          <USelectMenu v-model="state.encoding" :items="['utf-8', 'ascii', 'latin-1']"
+                          <USelectMenu
+                            v-model="state.encoding"
+                            :items="['utf-8', 'ascii', 'latin-1']"
                             :placeholder="t('tools.encoding')"
-                            :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full"
-                            :disabled="controlsDisabled" />
+                            :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                            class="w-full"
+                            :disabled="controlsDisabled"
+                          />
                         </UFormField>
                       </div>
                     </template>
@@ -970,9 +1114,15 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                     variant="solid" @click="taskManager.resume()" />
                   <UButton v-if="isProcessing || isPaused" icon="i-lucide-square" :label="t('tools.stopAll')"
                     color="error" variant="subtle" @click="taskManager.stopAll()" /> -->
-                    <UButton icon="i-lucide-download" :label="t('tools.start')" color="primary" variant="soft"
-                      type="submit" :disabled="controlsDisabled || fetchingFormats"
-                      :loading="isProcessing && !isPaused" />
+                    <UButton
+                      icon="i-lucide-download"
+                      :label="t('tools.start')"
+                      color="primary"
+                      variant="soft"
+                      type="submit"
+                      :disabled="controlsDisabled || fetchingFormats"
+                      :loading="isProcessing && !isPaused"
+                    />
                   </div>
                 </template>
               </UCard>
@@ -982,21 +1132,42 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
       </div>
 
       <!-- Config Creation / Edit Slideover -->
-      <ToolsDownloadConfigSlideover v-model:open="showConfigSlideover" :config="editingConfig" :formats="formats"
-        :loading="savingConfig" @save="onSaveConfig" />
+      <ToolsDownloadConfigSlideover
+        v-model:open="showConfigSlideover"
+        :config="editingConfig"
+        :formats="formats"
+        :loading="savingConfig"
+        @save="onSaveConfig"
+      />
 
       <!-- Confirm modals -->
-      <LazyBaseConfirmModal v-model:open="showDeleteConfigModal" :title="t('tools.confirmDeleteConfigTitle')"
+      <LazyBaseConfirmModal
+        v-model:open="showDeleteConfigModal"
+        :title="t('tools.confirmDeleteConfigTitle')"
         :description="t('tools.confirmDeleteConfigDesc', { name: deleteConfigTarget?.title || '' })"
-        confirm-icon="i-lucide-trash-2" :loading="deletingConfig" @confirm="doDeleteConfig" />
+        confirm-icon="i-lucide-trash-2"
+        :loading="deletingConfig"
+        @confirm="doDeleteConfig"
+      />
 
-      <LazyBaseConfirmModal v-model:open="showClearHistoryModal" :title="t('tools.confirmClearHistoryTitle')"
-        :description="t('tools.confirmClearHistory')" confirm-icon="i-lucide-trash-2" :loading="clearingHistory"
-        @confirm="clearAllHistory" />
+      <LazyBaseConfirmModal
+        v-model:open="showClearHistoryModal"
+        :title="t('tools.confirmClearHistoryTitle')"
+        :description="t('tools.confirmClearHistory')"
+        confirm-icon="i-lucide-trash-2"
+        :loading="clearingHistory"
+        @confirm="clearAllHistory"
+      />
 
       <!-- Confirm delete history (single/batch) modal -->
-      <LazyBaseConfirmModal v-model:open="showDeleteHistoryConfirm" :title="confirmHistoryTitle"
-        confirm-icon="i-lucide-trash-2" color="error" :loading="deletingHistory" @confirm="doDeleteHistory">
+      <LazyBaseConfirmModal
+        v-model:open="showDeleteHistoryConfirm"
+        :title="confirmHistoryTitle"
+        confirm-icon="i-lucide-trash-2"
+        color="error"
+        :loading="deletingHistory"
+        @confirm="doDeleteHistory"
+      >
         <template #body>
           <div class="space-y-3 py-1">
             <div class="flex items-start gap-3">
@@ -1007,10 +1178,15 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
             </div>
 
             <!-- Targeted items list -->
-            <div v-if="deleteHistoryTargets.length > 0"
-              class="max-h-36 overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 p-2 space-y-1 text-xs font-mono">
-              <div v-for="item in deleteHistoryTargets" :key="item.id"
-                class="flex items-center gap-2 truncate text-neutral-700 dark:text-neutral-300">
+            <div
+              v-if="deleteHistoryTargets.length > 0"
+              class="max-h-36 overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 p-2 space-y-1 text-xs font-mono"
+            >
+              <div
+                v-for="item in deleteHistoryTargets"
+                :key="item.id"
+                class="flex items-center gap-2 truncate text-neutral-700 dark:text-neutral-300"
+              >
                 <UIcon name="i-simple-icons-youtube" class="size-3.5 shrink-0 text-red-600" />
                 <span class="truncate">{{ item.title || item.url }}</span>
               </div>
@@ -1020,13 +1196,27 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
       </LazyBaseConfirmModal>
 
       <!-- History Slideover -->
-      <BaseResponsiveSlideover v-model:open="showHistorySlideover" :title="t('tools.history')" icon="i-lucide-history"
-        side="right" :ui="{ content: 'w-screen max-w-4xl' }">
+      <BaseResponsiveSlideover
+        v-model:open="showHistorySlideover"
+        :title="t('tools.history')"
+        icon="i-lucide-history"
+        side="right"
+        :ui="{ content: 'w-screen max-w-4xl' }"
+      >
         <template #body>
           <div class="h-[60vh]">
-            <LazyGridList v-model:selected="selectedHistory" :items="history" :columns="historyColumns" item-key="id"
-              selectable :loading="loadingHistory" :can-load-more="hasMoreHistory" storage-key="tools-youtube-history"
-              @refresh="loadHistory" @load-more="loadMoreHistory">
+            <LazyGridList
+              v-model:selected="selectedHistory"
+              :items="history"
+              :columns="historyColumns"
+              item-key="id"
+              selectable
+              :loading="loadingHistory"
+              :can-load-more="hasMoreHistory"
+              storage-key="tools-youtube-history"
+              @refresh="loadHistory"
+              @load-more="loadMoreHistory"
+            >
               <template #empty>
                 <UEmpty icon="i-lucide-clock" :title="t('tools.noHistory')" :description="t('tools.noHistoryDesc')" />
               </template>
@@ -1034,13 +1224,21 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               <template #mobile-content="{ item: h }">
                 <div class="flex items-start justify-between gap-2 min-w-0">
                   <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <UCheckbox :model-value="isHistorySelected(h)"
-                      @update:model-value="(val) => toggleHistorySelect(h, val)" @click.stop />
+                    <UCheckbox
+                      :model-value="isHistorySelected(h)"
+                      @update:model-value="(val) => toggleHistorySelect(h, val)"
+                      @click.stop
+                    />
                     <p class="text-sm font-semibold truncate flex-1" :title="h.title || h.url">
                       {{ h.title || h.url }}
                     </p>
                   </div>
-                  <UBadge :color="statusColor(h)" variant="soft" size="sm" class="shrink-0">
+                  <UBadge
+                    :color="statusColor(h)"
+                    variant="soft"
+                    size="sm"
+                    class="shrink-0"
+                  >
                     {{ t(`global.${h.status}`) }}
                   </UBadge>
                 </div>
@@ -1056,14 +1254,32 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                     </div>
                   </div>
                   <div class="flex items-center justify-center gap-1">
-                    <UButton v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
-                      icon="i-lucide-play" size="xs" variant="ghost" color="primary" :title="t('tools.openFile')"
-                      @click="openFile(h.out_path, h.file_name)" />
-                    <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
-                      variant="ghost" color="neutral" :title="t('tools.openFolder')"
-                      @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
-                    <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
-                      @click="confirmDeleteHistory(h)" />
+                    <UButton
+                      v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
+                      icon="i-lucide-play"
+                      size="xs"
+                      variant="ghost"
+                      color="primary"
+                      :title="t('tools.openFile')"
+                      @click="openFile(h.out_path, h.file_name)"
+                    />
+                    <UButton
+                      v-if="h.out_path && taskManager.isElectron.value"
+                      icon="i-lucide-folder"
+                      size="xs"
+                      variant="ghost"
+                      color="neutral"
+                      :title="t('tools.openFolder')"
+                      @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)"
+                    />
+                    <UButton
+                      icon="i-lucide-trash"
+                      size="xs"
+                      variant="ghost"
+                      color="error"
+                      :title="t('global.delete')"
+                      @click="confirmDeleteHistory(h)"
+                    />
                   </div>
                 </div>
               </template>
@@ -1096,14 +1312,32 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
               <template #actions="{ item: h }">
                 <div class="flex items-center justify-center gap-1 pr-3">
-                  <UButton v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
-                    icon="i-lucide-play" size="xs" variant="ghost" color="primary" :title="t('tools.openFile')"
-                    @click="openFile(h.out_path, h.file_name)" />
-                  <UButton v-if="h.out_path && taskManager.isElectron.value" icon="i-lucide-folder" size="xs"
-                    variant="ghost" color="neutral" :title="t('tools.openFolder')"
-                    @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)" />
-                  <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
-                    @click="confirmDeleteHistory(h)" />
+                  <UButton
+                    v-if="h.status === 'completed' && h.file_name && taskManager.isElectron.value"
+                    icon="i-lucide-play"
+                    size="xs"
+                    variant="ghost"
+                    color="primary"
+                    :title="t('tools.openFile')"
+                    @click="openFile(h.out_path, h.file_name)"
+                  />
+                  <UButton
+                    v-if="h.out_path && taskManager.isElectron.value"
+                    icon="i-lucide-folder"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    :title="t('tools.openFolder')"
+                    @click="h.file_name ? showInFolder(`${h.out_path}/${h.file_name}`) : openFolder(h.out_path)"
+                  />
+                  <UButton
+                    icon="i-lucide-trash"
+                    size="xs"
+                    variant="ghost"
+                    color="error"
+                    :title="t('global.delete')"
+                    @click="confirmDeleteHistory(h)"
+                  />
                 </div>
               </template>
             </LazyGridList>
@@ -1112,10 +1346,20 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
         <template #footer>
           <div class="flex items-center justify-between w-full gap-2">
             <div class="flex items-center gap-2">
-              <UButton variant="ghost" color="neutral" :label="t('global.cancel')"
-                @click="showHistorySlideover = false" />
-              <UButton v-if="selectedHistory.length" icon="i-lucide-trash" color="error" variant="subtle"
-                :loading="deletingHistory" @click="confirmBatchDeleteHistory">
+              <UButton
+                variant="ghost"
+                color="neutral"
+                :label="t('global.cancel')"
+                @click="showHistorySlideover = false"
+              />
+              <UButton
+                v-if="selectedHistory.length"
+                icon="i-lucide-trash"
+                color="error"
+                variant="subtle"
+                :loading="deletingHistory"
+                @click="confirmBatchDeleteHistory"
+              >
                 {{ t('global.delete') }}
                 <template #trailing>
                   <UKbd>{{ selectedHistory.length }}</UKbd>
@@ -1123,22 +1367,44 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               </UButton>
             </div>
             <div class="flex items-center gap-2">
-              <UButton v-if="history.length > 0" size="xs" variant="ghost" color="neutral"
-                @click="toggleSelectAllHistory">
+              <UButton
+                v-if="history.length > 0"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                @click="toggleSelectAllHistory"
+              >
                 {{ selectedHistory.length === history.length ? t('tools.deselectAll') : t('tools.selectAll') }}
               </UButton>
-              <UButton v-if="history.length > 0" icon="i-lucide-trash-2" :label="t('tools.clearHistory')" color="error"
-                variant="soft" @click="showClearHistoryModal = true" />
-              <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loadingHistory"
-                @click="loadHistory" />
+              <UButton
+                v-if="history.length > 0"
+                icon="i-lucide-trash-2"
+                :label="t('tools.clearHistory')"
+                color="error"
+                variant="soft"
+                @click="showClearHistoryModal = true"
+              />
+              <UButton
+                icon="i-lucide-refresh-cw"
+                :label="t('tools.refresh')"
+                variant="soft"
+                :loading="loadingHistory"
+                @click="loadHistory"
+              />
             </div>
           </div>
         </template>
       </BaseResponsiveSlideover>
 
       <!-- Version Info Slideover -->
-      <BaseResponsiveSlideover v-model:open="showVersionSlideover" :title="t('tools.versionInfo')" icon="i-lucide-info"
-        side="right" :dismissible="!updating" :close="!updating">
+      <BaseResponsiveSlideover
+        v-model:open="showVersionSlideover"
+        :title="t('tools.versionInfo')"
+        icon="i-lucide-info"
+        side="right"
+        :dismissible="!updating"
+        :close="!updating"
+      >
         <template #body>
           <div v-if="loadingVersion" class="flex justify-center py-8">
             <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
@@ -1146,8 +1412,10 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
           <div v-else class="space-y-4">
             <!-- Update Info / Action Card -->
             <div v-if="updateInfo" class="space-y-3">
-              <div v-if="updateInfo.hasUpdate"
-                class="p-3.5 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 space-y-2.5">
+              <div
+                v-if="updateInfo.hasUpdate"
+                class="p-3.5 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 space-y-2.5"
+              >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <UIcon name="i-lucide-arrow-up-circle" class="size-5 text-primary" />
@@ -1168,7 +1436,12 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   </p>
                 </div>
                 <div class="pt-1">
-                  <UCheckbox v-model="cleanTemp" :disabled="updating" :label="t('tools.cleanTemp')" class="text-xs" />
+                  <UCheckbox
+                    v-model="cleanTemp"
+                    :disabled="updating"
+                    :label="t('tools.cleanTemp')"
+                    class="text-xs"
+                  />
                 </div>
                 <div v-if="updating" class="space-y-1.5 pt-2 border-t border-primary/20">
                   <div class="flex items-center justify-between text-xs">
@@ -1183,16 +1456,25 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   <UProgress :model-value="updateProgress.percent || 0" color="primary" size="sm" />
                 </div>
                 <div class="pt-2 flex items-center gap-2">
-                  <UButton icon="i-lucide-download-cloud" color="primary" variant="soft" block class="flex-1"
-                    :loading="updating" :disabled="updating"
+                  <UButton
+                    icon="i-lucide-download-cloud"
+                    color="primary"
+                    variant="soft"
+                    block
+                    class="flex-1"
+                    :loading="updating"
+                    :disabled="updating"
                     :label="updating ? (updateProgressMsg || t('tools.updating')) : t('tools.updateNow')"
-                    @click="performUpdate" />
+                    @click="performUpdate"
+                  />
                   <!-- <UButton v-if="updating" icon="i-lucide-minimize-2" color="neutral" variant="ghost" size="sm"
                     :title="t('tools.minimize')" @click="showVersionSlideover = false" /> -->
                 </div>
               </div>
-              <div v-else
-                class="p-3 rounded-xl border border-success/30 bg-success/5 dark:bg-success/10 flex items-center gap-2 text-xs text-success font-medium">
+              <div
+                v-else
+                class="p-3 rounded-xl border border-success/30 bg-success/5 dark:bg-success/10 flex items-center gap-2 text-xs text-success font-medium"
+              >
                 <UIcon name="i-lucide-check-circle" class="size-4 shrink-0" />
                 <span>{{ t('tools.upToDate') }} ({{ updateInfo.latestVersion }})</span>
               </div>
@@ -1210,7 +1492,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 
             <!-- Runtime Environment Card -->
             <div
-              class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-2.5">
+              class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-2.5"
+            >
               <div class="flex items-center justify-between">
                 <span class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
                   <UIcon name="i-lucide-cpu" class="size-4 text-primary" />
@@ -1222,7 +1505,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
               </div>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div
-                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
+                >
                   <div class="flex items-center gap-1.5 min-w-0">
                     <UIcon name="i-lucide-monitor" class="size-3.5 text-primary shrink-0" />
                     <span class="text-muted text-[11px]">Platform</span>
@@ -1230,7 +1514,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   <span class="font-mono font-semibold text-default truncate">{{ electronPlatform }}</span>
                 </div>
                 <div
-                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
+                >
                   <div class="flex items-center gap-1.5 min-w-0">
                     <UIcon name="i-lucide-atom" class="size-3.5 text-cyan-500 shrink-0" />
                     <span class="text-muted text-[11px]">Electron</span>
@@ -1240,7 +1525,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   </span>
                 </div>
                 <div
-                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
+                >
                   <div class="flex items-center gap-1.5 min-w-0">
                     <UIcon name="i-lucide-server" class="size-3.5 text-emerald-500 shrink-0" />
                     <span class="text-muted text-[11px]">Node.js</span>
@@ -1250,7 +1536,8 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                   </span>
                 </div>
                 <div
-                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
+                  class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
+                >
                   <div class="flex items-center gap-1.5 min-w-0">
                     <UIcon name="i-lucide-globe" class="size-3.5 text-amber-500 shrink-0" />
                     <span class="text-muted text-[11px]">Chrome</span>
@@ -1265,28 +1552,51 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
         </template>
         <template #footer>
           <div class="flex items-center justify-between w-full gap-2">
-            <UButton variant="ghost" color="neutral" :disabled="updating" :label="t('global.cancel')"
-              @click="showVersionSlideover = false" />
+            <UButton
+              variant="ghost"
+              color="neutral"
+              :disabled="updating"
+              :label="t('global.cancel')"
+              @click="showVersionSlideover = false"
+            />
             <div class="flex items-center gap-1.5">
-              <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" color="neutral"
-                :loading="loadingVersion" :disabled="updating || loadingVersion" @click="fetchVersion" />
-              <UButton icon="i-lucide-sparkles" :label="t('tools.checkUpdate')" variant="soft" color="primary"
-                :loading="checkingUpdate" :disabled="updating || checkingUpdate" @click="checkUpdate" />
+              <UButton
+                icon="i-lucide-refresh-cw"
+                :label="t('tools.refresh')"
+                variant="soft"
+                color="neutral"
+                :loading="loadingVersion"
+                :disabled="updating || loadingVersion"
+                @click="fetchVersion"
+              />
+              <UButton
+                icon="i-lucide-sparkles"
+                :label="t('tools.checkUpdate')"
+                variant="soft"
+                color="primary"
+                :loading="checkingUpdate"
+                :disabled="updating || checkingUpdate"
+                @click="checkUpdate"
+              />
             </div>
           </div>
         </template>
       </BaseResponsiveSlideover>
 
       <!-- Floating Mini Update Progress Widget -->
-      <Transition enter-active-class="transition duration-300 ease-out"
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
         enter-from-class="transform translate-y-4 opacity-0 scale-95"
         enter-to-class="transform translate-y-0 opacity-100 scale-100"
         leave-active-class="transition duration-200 ease-in"
         leave-from-class="transform translate-y-0 opacity-100 scale-100"
-        leave-to-class="transform translate-y-4 opacity-0 scale-95">
-        <div v-if="updating && !showVersionSlideover"
+        leave-to-class="transform translate-y-4 opacity-0 scale-95"
+      >
+        <div
+          v-if="updating && !showVersionSlideover"
           class="fixed bottom-5 right-5 z-50 p-3.5 rounded-2xl border border-primary/40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md shadow-2xl w-80 space-y-2.5 cursor-pointer hover:border-primary transition-all duration-200 ring-1 ring-primary/20"
-          @click="showVersionSlideover = true">
+          @click="showVersionSlideover = true"
+        >
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2 min-w-0">
               <UIcon name="i-simple-icons-youtube" class="size-4 text-red-600 shrink-0" />

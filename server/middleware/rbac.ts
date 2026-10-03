@@ -15,9 +15,7 @@ function checkPermission(userPermissions: string[], module: string, action: stri
   return candidates.some(c => userPermissions.includes(c))
 }
 
-const permissionMap: Record<string, string> = {
-  '/api/customers': 'customers:read'
-}
+const permissionMap: Record<string, string> = {}
 
 export default defineEventHandler(async (event) => {
   const auth = event.context.auth

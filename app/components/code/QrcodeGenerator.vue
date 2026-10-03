@@ -58,5 +58,5 @@ watch(() => [props.value, props.options, props.size], () => {
 </script>
 
 <template>
-  <div ref="qrcodeRef" class="inline-block"></div>
+  <div ref="qrcodeRef" class="inline-block" />
 </template>

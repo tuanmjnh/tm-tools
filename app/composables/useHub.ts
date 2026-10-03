@@ -69,6 +69,10 @@ export const useHub = () => {
     routes: client.routes,
     permissions: client.permissions,
     capabilities: client.capabilities,
-    logs: client.logs
+    logs: client.logs,
+    connections: client.connections,
+    imports: client.imports,
+    export: client.export,
+    mail: client.mail
   }
 }

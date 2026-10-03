@@ -117,7 +117,7 @@ function getTree(dirPath, options, currentDepth = 1) {
     const items = fs.readdirSync(dirPath)
     node.children = items
       .map(item => getTree(path.join(dirPath, item), options, currentDepth + 1))
-      .filter(child => {
+      .filter((child) => {
         if (!child) return false
         if (child.type === 'file') return matchExtension(child.fullPath, normalizeExtensions(extensions))
         return true
@@ -237,7 +237,7 @@ async function getTreeAsync(dirPath, options, currentDepth = 1) {
     const children = await Promise.all(
       items.map(item => getTreeAsync(path.join(dirPath, item), options, currentDepth + 1))
     )
-    node.children = children.filter(child => {
+    node.children = children.filter((child) => {
       if (!child) return false
       if (child.type === 'file') return matchExtension(child.fullPath, normalizeExtensions(extensions))
       return true

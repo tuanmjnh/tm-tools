@@ -6,7 +6,7 @@ export const BrowserEngineSchema = z.enum([
   'camoufox',
   'donut',
   'browser_oxide',
-  'custom',
+  'custom'
 ])
 export type BrowserEngine = z.infer<typeof BrowserEngineSchema>
 

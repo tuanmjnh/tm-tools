@@ -748,14 +748,26 @@ const getBubbleItems = (editor: Editor) => {
 
 <template>
   <ClientOnly>
-    <div class="custom-tiptap-editor flex justify-center p-0 rounded-b-md rounded-t-md"
-      :class="[{ 'fixed inset-0 z-50 h-screen! w-screen! bg-white dark:bg-gray-900': isFullscreen }]">
-      <LazyUEditor v-if="extensions.length" ref="editorRef" v-slot="{ editor, handlers }" v-model="value"
-        :content-type="'html'" :extensions="extensions" :handlers="customHandlers"
+    <div
+      class="custom-tiptap-editor flex justify-center p-0 rounded-b-md rounded-t-md"
+      :class="[{ 'fixed inset-0 z-50 h-screen! w-screen! bg-white dark:bg-gray-900': isFullscreen }]"
+    >
+      <LazyUEditor
+        v-if="extensions.length"
+        ref="editorRef"
+        v-slot="{ editor, handlers }"
+        v-model="value"
+        :content-type="'html'"
+        :extensions="extensions"
+        :handlers="customHandlers"
         :placeholder="$t('editor.placeholder')"
-        :ui="{ root: isFullscreen ? 'w-screen h-screen flex flex-col' : 'w-full', base: isFullscreen ? 'p-8 sm:px-16 py-13.5 flex-1 overflow-y-auto' : 'p-8 sm:px-16 py-13.5', content: isFullscreen ? 'h-full w-full' : 'w-full' }">
-        <LazyUEditorToolbar :editor="editor" :items="fixedToolbarItems"
-          class="flex-wrap border-b border-muted sticky top-0 inset-x-0 px-8 py-2 z-50 bg-default">
+        :ui="{ root: isFullscreen ? 'w-screen h-screen flex flex-col' : 'w-full', base: isFullscreen ? 'p-8 sm:px-16 py-13.5 flex-1 overflow-y-auto' : 'p-8 sm:px-16 py-13.5', content: isFullscreen ? 'h-full w-full' : 'w-full' }"
+      >
+        <LazyUEditorToolbar
+          :editor="editor"
+          :items="fixedToolbarItems"
+          class="flex-wrap border-b border-muted sticky top-0 inset-x-0 px-8 py-2 z-50 bg-default"
+        >
           <template #link>
             <LazyEditorTiptapLinkPopover :editor="editor" auto-open />
           </template>
@@ -764,7 +776,11 @@ const getBubbleItems = (editor: Editor) => {
           </template>
         </LazyUEditorToolbar>
 
-        <LazyUEditorToolbar v-if="isBubble" :editor="editor" :items="getBubbleItems(editor)" layout="bubble"
+        <LazyUEditorToolbar
+          v-if="isBubble"
+          :editor="editor"
+          :items="getBubbleItems(editor)"
+          layout="bubble"
           :should-show="({ editor, view, state }: any) => {
             if (editor.isActive('mediaGallery') || editor.isActive('image') || editor.isActive('editorImage')) {
               return view.hasFocus()
@@ -774,25 +790,45 @@ const getBubbleItems = (editor: Editor) => {
             }
             const { selection } = state
             return view.hasFocus() && !selection.empty
-          }">
+          }"
+        >
           <template #link>
             <LazyEditorTiptapLinkPopover :editor="editor" />
           </template>
         </LazyUEditorToolbar>
 
         <LazyUEditorDragHandle v-slot="{ ui, onClick }" :editor="editor" @node-change="selectedNode = $event">
-          <UButton icon="i-lucide:plus" color="neutral" variant="ghost" size="sm" :class="ui.handle()" @click="(e) => {
-            e.stopPropagation()
+          <UButton
+            icon="i-lucide:plus"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :class="ui.handle()"
+            @click="(e) => {
+              e.stopPropagation()
 
-            const selected = onClick()
-            handlers.suggestion?.execute(editor, { pos: selected?.pos }).run()
-          }" />
+              const selected = onClick()
+              handlers.suggestion?.execute(editor, { pos: selected?.pos }).run()
+            }"
+          />
 
-          <LazyUDropdownMenu v-slot="{ open }" :modal="false" :items="dragHandleItems(editor)"
-            :content="{ side: 'left' }" :ui="{ content: 'w-48', label: 'text-xs' }"
-            @update:open="editor.chain().setMeta('lockDragHandle', $event).run()">
-            <UButton color="neutral" variant="ghost" active-variant="soft" size="sm" icon="i-lucide:grip-vertical"
-              :active="open" :class="ui.handle()" />
+          <LazyUDropdownMenu
+            v-slot="{ open }"
+            :modal="false"
+            :items="dragHandleItems(editor)"
+            :content="{ side: 'left' }"
+            :ui="{ content: 'w-48', label: 'text-xs' }"
+            @update:open="editor.chain().setMeta('lockDragHandle', $event).run()"
+          >
+            <UButton
+              color="neutral"
+              variant="ghost"
+              active-variant="soft"
+              size="sm"
+              icon="i-lucide:grip-vertical"
+              :active="open"
+              :class="ui.handle()"
+            />
           </LazyUDropdownMenu>
         </LazyUEditorDragHandle>
 

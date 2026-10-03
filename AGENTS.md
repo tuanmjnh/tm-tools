@@ -8,7 +8,7 @@ Electron + Nuxt 4 desktop application using Nuxt UI v4 (Tailwind CSS v4). It is 
 
 - JWT authentication (access + refresh token rotation)
 - Role-based access control (RBAC) with module-level permissions
-- **Dynamic menu system**: the sidebar navigation is generated at runtime from a `system_routes` table (DB-stored route tree) filtered by the user's role `allowedRoutes`
+- **Dynamic menu system**: the sidebar navigation is generated at runtime from a `system_routes` table (DB-stored route tree, fetched from tm-hub API via `GET /api/v1/apps/:appId/routes`) **filtered by the user's `isVisible` flag** (root AND children). Role `allowedRoutes` does **not** affect the tm-tools client menu (it only controls UI display + hub `/auth/routes`). Route labels are i18n keys like `nav.*` — resolved via `t()`.
 - MongoDB (default) or Supabase (Postgres) database backends
 - i18n (EN/VI), Web Push notifications, Tiptap rich text editor, Cloudinary uploads, Unovis charts
 
@@ -31,7 +31,7 @@ pnpm generate:vapid # generate Web Push VAPID keys
 
 ```
 app/                 Nuxt app (pages, layouts, components, composables, middleware)
-app/pages/           Route pages (index, inbox, customers, login, register, settings, system, admin/*)
+app/pages/           Route pages (index, chat, media, login, register, settings, system, administration/*, utilities/*, profiles/*, tools/*)
 app/composables/     useAuth, useNavMenu, etc.
 app/layouts/         default.vue (sidebar + UNavigationMenu)
 app/middleware/      auth.global.ts (client route guard)
@@ -40,7 +40,7 @@ i18n/                Locale files (en.json, vi.json)
 scripts/             seed.ts CLI (tsx)
 server/api/          Nitro API routes
 server/config/       index.ts — environment-driven config (see below)
-server/modules/      auth/, rbac/, routes/, database/
+server/modules/      auth/, rbac/, database/
 supabase/            SQL migrations for Supabase provider
 types/               Shared types (auth.ts, rbac.ts) — imported from both app/ and server/
 ```
@@ -56,22 +56,21 @@ types/               Shared types (auth.ts, rbac.ts) — imported from both app/
 ### Dynamic menu system (important)
 
 - Route tree is stored flat in `system_routes`: `id, path, name, label, icon, sort, isVisible, parentId, isDeleted`.
-- `server/modules/routes/service.ts` handles CRUD, `buildTree` (flat → tree, sorted by `sort`), and `getRoutesForUser` (root or `allowedRoutes` filter).
-- Roles have `allowedRoutes: string[]` (`'*'` = full access). The Roles page (`app/pages/admin/roles.vue`) uses `SharedHeTreeMenu` (ported `@he-tree/vue` component) for tree selection; selecting a node auto-selects its parents and children.
-- Route labels are i18n keys like `nav.home` — `useNavMenu` resolves them via `t()`.
-- `app/composables/useNavMenu.ts` builds `NavigationMenuItem[]` for the sidebar; **`buildNavItems` hard-filters out routes named `settings`** (hidden from sidebar, still reachable by URL).
-- Client guard: `app/middleware/auth.global.ts` fetches `/api/auth/routes` and redirects to the first allowed path when access is denied.
+- Routes are fetched at runtime from tm-hub API (`GET /api/v1/apps/:appId/routes`) → `useHub().routes.list()` → flat tree → `buildTree` (sorted by `sort`).
+- `app/composables/useNavMenu.ts` builds `NavigationMenuItem[]` for the sidebar; **`buildNavItems` hard-filters out routes named `settings`** (hidden from sidebar, still reachable by URL) **and filters `isVisible !== false` at root AND children**.
+- Role `allowedRoutes` does **not** affect the tm-tools client menu — it only controls UI display + hub `/auth/routes`. The Roles page (`app/pages/administration/roles.vue`) uses `SharedHeTreeMenu` (ported `@he-tree/vue` component) for tree selection; selecting a node auto-selects its parents and children.
+- Client guard: `app/middleware/auth.global.ts` fetches all app routes via `nav.fetchRoutes()` and redirects to the first allowed path when access is denied. Root (`/`) bypass is: `user.role === 'root' || user.permissions?.includes('*')`.
 
 ### Auth & RBAC
 
-- `server/modules/auth/` — login/register/refresh logic, JWT via `jose`, bcrypt password hashing.
+- `server/modules/auth/` — login/register/refresh logic, JWT via `jose`, bcrypt password hashing. Login flow goes through hub API (`POST /api/v1/auth/login` with `X-App-Id` header). Credentials: `root@example.com`/`root123` (TOTP root disabled).
 - `server/modules/rbac/service.ts` — `getUserAccess()` builds permissions + allowedRoutes for a user; both auth providers use it.
-- `server/middleware/rbac.ts` — server-side API guard using a `permissionMap` (auth middleware wraps all `/api/*` except `publicRoutes`).
+- `server/middleware/rbac.ts` — server-side API guard using a `permissionMap` (currently `{}` — all `/api/*` except `publicRoutes` are open). Auth middleware wraps all `/api/*` routes.
 - Demo users (from seed): `root@example.com/root123`, `admin@example.com/admin123`, `test@example.com/test123`.
 
 ### Config
 
-- `server/config/index.ts` reads env vars with hardcoded fallbacks (Supabase/Cloudinary/Firebase dev credentials are committed as defaults). Create `.env` from `.env.example` to override. `AUTH_PROVIDER` = `mongodb` or `supabase`.
+- `server/config/index.ts` reads env vars with hardcoded fallbacks (Supabase/Cloudinary/Firebase dev credentials are committed as defaults). Create `.env` from `.env.example` to override. `AUTH_PROVIDER` = `mongodb` or `supabase`. Ports: `HUB_PORT` (tm-hub, default 4000), `TOOLS_PORT` (tm-tools, default 3000). Create `.env` files in each app root to set custom ports.
 
 ### i18n
 
@@ -93,4 +92,3 @@ types/               Shared types (auth.ts, rbac.ts) — imported from both app/
 ## Testing
 
 No test suite is configured. Verification is manual via `pnpm dev` (or `pnpm dev:electron`) + `pnpm typecheck` + `pnpm lint`.
-

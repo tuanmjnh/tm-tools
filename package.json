@@ -15,7 +15,7 @@
     "pnpm-update": "pnpm self-update",
     "lint": "eslint .",
     "typecheck": "nuxt typecheck",
-    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:3000 && electron . --no-sandbox\"",
     "build:electron:main": "esbuild electron/src/index.ts --bundle --platform=node --target=node20 --outfile=electron/dist/index.cjs --external:electron --external:better-sqlite3",
     "build:electron": "pnpm build:electron:main && nuxt build && electron-builder --win --config electron-builder.yml",
     "db:generate": "drizzle-kit generate",
@@ -24,7 +24,7 @@
     "generate:vapid": "npx tsx -e \"const wp = require('web-push'); const keys = wp.generateVAPIDKeys(); console.log(JSON.stringify(keys, null, 2))\""
   },
   "dependencies": {
-    "tm-hub-client": "workspace:*",
+    "tm-hub-client": "^1.0.2",
     "@he-tree/vue": "2.10.1",
     "@iconify-json/lucide": "^1.2.120",
     "@iconify-json/simple-icons": "^1.2.92",

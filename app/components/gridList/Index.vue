@@ -252,8 +252,10 @@ const actionsClass = computed(() => {
 <template>
   <div class="flex flex-col h-full min-h-0 bg-transparent">
     <!-- Table Header (Visible only on Desktop List Mode) -->
-    <div v-if="viewMode === 'list' && !hideHeader"
-      class="hidden lg:flex items-center pl-0.75 pr-3.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent">
+    <div
+      v-if="viewMode === 'list' && !hideHeader"
+      class="hidden lg:flex items-center pl-0.75 pr-3.25 py-3 mb-1 text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-transparent"
+    >
       <!-- Drag Handle Placeholder (Aligned with SwipeCard pl-2 + w-6 = 32px) -->
       <div v-if="isDraggable" class="w-8 shrink-0" />
 
@@ -263,25 +265,37 @@ const actionsClass = computed(() => {
       </div>
 
       <!-- Columns -->
-      <div v-for="col in displayColumns" :key="col.key" class="flex items-center min-w-0 px-2" :class="[
-        (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
-        col.class || '',
-        col.headerClass || ''
-      ]">
-        <div v-if="col.sortable"
+      <div
+        v-for="col in displayColumns"
+        :key="col.key"
+        class="flex items-center min-w-0 px-2"
+        :class="[
+          (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
+          col.class || '',
+          col.headerClass || ''
+        ]"
+      >
+        <div
+          v-if="col.sortable"
           class="cursor-pointer select-none flex items-center hover:text-primary-500 transition-colors"
-          @click="emit('sort', col)">
+          @click="emit('sort', col)"
+        >
           {{ col.label }}
           <UIcon
             :name="(col.sort === 'asc' || col.sort === 1) ? 'i-lucide-arrow-up-narrow-wide' : (col.sort === 'desc' || col.sort === -1) ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-down'"
-            class="w-4 h-4 ml-1" :class="col.sort ? 'text-primary-500' : 'text-gray-400'" />
+            class="w-4 h-4 ml-1"
+            :class="col.sort ? 'text-primary-500' : 'text-gray-400'"
+          />
         </div>
         <span v-else>{{ col.label }}</span>
       </div>
 
       <!-- Actions Placeholder / Header (Right) -->
-      <div v-if="hasActions" class="shrink-0 flex items-center justify-end px-2"
-        :class="[actionsClass, actionsCol?.headerClass || '']">
+      <div
+        v-if="hasActions"
+        class="shrink-0 flex items-center justify-end px-2"
+        :class="[actionsClass, actionsCol?.headerClass || '']"
+      >
         <span v-if="actionsCol?.label">{{ actionsCol.label }}</span>
       </div>
     </div>
@@ -289,32 +303,52 @@ const actionsClass = computed(() => {
     <!-- Scrollable Content -->
     <UScrollArea ref="scrollEl" :ui="mergedUi">
       <!-- Loading State -->
-      <div v-if="loading && items.length === 0"
+      <div
+        v-if="loading && items.length === 0"
         :class="currentViewMode === 'list' ? 'space-y-3 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`"
-        class="w-full h-full">
-        <USkeleton v-for="i in skeletonCount" :key="i"
-          :class="[currentViewMode === 'list' ? 'h-20' : 'h-48', 'w-full rounded-xl bg-gray-100 dark:bg-gray-800/50']" />
+        class="w-full h-full"
+      >
+        <USkeleton
+          v-for="i in skeletonCount"
+          :key="i"
+          :class="[currentViewMode === 'list' ? 'h-20' : 'h-48', 'w-full rounded-xl bg-gray-100 dark:bg-gray-800/50']"
+        />
       </div>
 
       <!-- Empty State -->
       <div v-else-if="items.length === 0" class="flex flex-col items-center justify-center py-20 text-gray-500">
         <slot name="empty">
-          <UEmpty size="xl" icon="i-lucide-package-open" :title="$t('common.no_data')"
+          <UEmpty
+            size="xl"
+            icon="i-lucide-package-open"
+            :title="$t('common.no_data')"
             :description="$t('common.no_data_desc')"
-            :actions="[{ label: $t('common.refresh'), onClick: () => emit('refresh'), variant: 'soft' }]" />
+            :actions="[{ label: $t('common.refresh'), onClick: () => emit('refresh'), variant: 'soft' }]"
+          />
         </slot>
       </div>
 
       <!-- List Items (Separated Cards) -->
-      <div v-else ref="dragEl"
-        :class="viewMode === 'list' ? 'space-y-2 pb-4 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`">
+      <div
+        v-else
+        ref="dragEl"
+        :class="viewMode === 'list' ? 'space-y-2 pb-4 pr-3 pl-0.5' : `grid ${gridCols} gap-4 pb-4 pr-3 pl-0.5`"
+      >
         <slot name="first-item" />
         <div v-for="item in items" :key="item[itemKey || '_id']">
-          <LazyGridListSwipeCard :id="item[itemKey || '_id']" :item="item" :open-id="openCardId" :disabled="false"
-            :mobile-mode="mobileActionMode" :draggable="isDraggable"
+          <LazyGridListSwipeCard
+            :id="item[itemKey || '_id']"
+            :item="item"
+            :open-id="openCardId"
+            :disabled="false"
+            :mobile-mode="mobileActionMode"
+            :draggable="isDraggable"
             :class="['h-full transition-all duration-200', { 'bg-blue-50/50! dark:bg-sky-300/20! border-sky-500/50 dark:border-sky-800/50': isSelected(item) }]"
-            @update:open-id="openCardId = $event" @click="emit('click', item)" @long-press="handleLongPress"
-            @contextmenu.prevent="(e: any) => handleContextMenu(item, e)">
+            @update:open-id="openCardId = $event"
+            @click="emit('click', item)"
+            @long-press="handleLongPress"
+            @contextmenu.prevent="(e: any) => handleContextMenu(item, e)"
+          >
             <!-- Left Slot: Drag Handle Only -->
             <template v-if="isDraggable" #left />
             <!-- Center (Default) Slot -->
@@ -322,15 +356,24 @@ const actionsClass = computed(() => {
               <div class="w-full h-full">
                 <!-- {{ index }} -->
                 <!-- Mobile Content (Custom Slot) -->
-                <div v-if="$slots['mobile-content']"
-                  :class="[viewMode === 'grid' ? 'block' : 'block lg:hidden', 'p-4 relative group/mobile']">
+                <div
+                  v-if="$slots['mobile-content']"
+                  :class="[viewMode === 'grid' ? 'block' : 'block lg:hidden', 'p-4 relative group/mobile']"
+                >
                   <slot name="mobile-content" :item="item" />
 
                   <!-- Mobile Dropdown Mode -->
-                  <div v-if="showActions && mobileActionMode === 'dropdown' && actionOptions"
-                    class="absolute top-2 right-2">
+                  <div
+                    v-if="showActions && mobileActionMode === 'dropdown' && actionOptions"
+                    class="absolute top-2 right-2"
+                  >
                     <UDropdownMenu :items="actionOptions(item)" :popper="{ placement: 'bottom-end' }">
-                      <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis-vertical" size="sm" />
+                      <UButton
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-ellipsis-vertical"
+                        size="sm"
+                      />
                     </UDropdownMenu>
                   </div>
                 </div>
@@ -343,11 +386,16 @@ const actionsClass = computed(() => {
                   </div>
 
                   <!-- Columns Loop -->
-                  <div v-for="col in displayColumns" :key="col.key" class="min-w-0 flex items-center px-2" :class="[
-                    (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
-                    col.class || '',
-                    col.rowClass || ''
-                  ]">
+                  <div
+                    v-for="col in displayColumns"
+                    :key="col.key"
+                    class="min-w-0 flex items-center px-2"
+                    :class="[
+                      (!col.class || !col.class.split(' ').some(c => c.startsWith('w-') || c.startsWith('flex-'))) ? 'flex-1' : '',
+                      col.class || '',
+                      col.rowClass || ''
+                    ]"
+                  >
                     <slot v-if="col.slot || $slots[col.key]" :name="col.slot || col.key" :item="item">
                       <div class="truncate text-xs text-gray-700 dark:text-gray-300">
                         {{ item[col.key] }}
@@ -363,13 +411,25 @@ const actionsClass = computed(() => {
 
             <!-- Right Slot: Actions -->
             <template #right>
-              <div v-if="hasActions" class="hidden lg:flex items-center justify-end px-2 h-full shrink-0"
-                :class="[actionsClass, actionsCol?.rowClass || '']" @click.stop>
+              <div
+                v-if="hasActions"
+                class="hidden lg:flex items-center justify-end px-2 h-full shrink-0"
+                :class="[actionsClass, actionsCol?.rowClass || '']"
+                @click.stop
+              >
                 <slot name="actions" :item="item">
                   <slot name="action" :item="item">
-                    <UDropdownMenu v-if="actionOptions" :items="actionOptions(item)"
-                      :popper="{ placement: 'bottom-end' }">
-                      <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs" />
+                    <UDropdownMenu
+                      v-if="actionOptions"
+                      :items="actionOptions(item)"
+                      :popper="{ placement: 'bottom-end' }"
+                    >
+                      <UButton
+                        icon="i-lucide-ellipsis-vertical"
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                      />
                     </UDropdownMenu>
                   </slot>
                 </slot>
@@ -382,9 +442,16 @@ const actionsClass = computed(() => {
                 <slot name="swipe-actions" :item="item" :close="close">
                   <!-- Fallback if prop provided -->
                   <template v-if="swipeRightActions">
-                    <UButton v-for="(action, idx) in swipeRightActions(item)" :key="idx"
-                      :color="action.color || 'primary'" :icon="action.icon" variant="solid" square
-                      class="h-full rounded-none" @click="() => { action.click?.(item); close() }" />
+                    <UButton
+                      v-for="(action, idx) in swipeRightActions(item)"
+                      :key="idx"
+                      :color="action.color || 'primary'"
+                      :icon="action.icon"
+                      variant="solid"
+                      square
+                      class="h-full rounded-none"
+                      @click="() => { action.click?.(item); close() }"
+                    />
                   </template>
                 </slot>
               </div>
@@ -400,10 +467,18 @@ const actionsClass = computed(() => {
 
       <!-- Global Context Menu (Virtual) -->
       <Teleport to="body">
-        <div v-if="contextMenu.isOpen" class="fixed w-1 h-1 z-9999 pointer-events-none"
-          :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
-          <UDropdownMenu :items="contextMenu.items" :open="true" :popper="{ placement: 'bottom-start' }"
-            class="pointer-events-auto" @update:open="(val) => !val && (contextMenu.isOpen = false)">
+        <div
+          v-if="contextMenu.isOpen"
+          class="fixed w-1 h-1 z-9999 pointer-events-none"
+          :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
+        >
+          <UDropdownMenu
+            :items="contextMenu.items"
+            :open="true"
+            :popper="{ placement: 'bottom-start' }"
+            class="pointer-events-auto"
+            @update:open="(val) => !val && (contextMenu.isOpen = false)"
+          >
             <div />
           </UDropdownMenu>
         </div>

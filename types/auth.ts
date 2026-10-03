@@ -77,6 +77,21 @@ export interface AuthResponse {
   expiresIn: number
 }
 
+/** Login tra ve khi user da bat 2FA - can xac minh TOTP tiep. */
+export interface TotpChallenge {
+  totpRequired: true
+  pendingTotpToken: string
+  user: {
+    id: string
+    email: string
+    name: string
+  }
+}
+
+export function isTotpChallenge(result: AuthResponse | TotpChallenge): result is TotpChallenge {
+  return (result as TotpChallenge).totpRequired === true
+}
+
 export interface TokenPayload {
   userId: string
   email: string

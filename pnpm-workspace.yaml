@@ -1,15 +1,17 @@
 packages:
   - packages/*
-  - ../tm-hub-client
 
 allowBuilds:
-  '@firebase/util': set this to true or false
-  electron-winstaller: set this to true or false
-  esbuild: set this to true or false
-  maplibre-gl: set this to true or false
-  protobufjs: set this to true or false
-  unrs-resolver: set this to true or false
-  vue-demi: set this to true or false
+  '@firebase/util': true
+  electron-winstaller: true
+  esbuild: true
+  maplibre-gl: true
+  protobufjs: true
+  unrs-resolver: true
+  vue-demi: true
+
+minimumReleaseAgeExclude:
+  - tm-hub-client@1.0.1 || 1.0.2
 
 onlyBuiltDependencies:
   - '@firebase/util'

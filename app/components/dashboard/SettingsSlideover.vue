@@ -27,8 +27,13 @@ function navigateAndClose(to: string) {
 </script>
 
 <template>
-  <BaseResponsiveSlideover v-model:open="isSettingsSlideoverOpen" :title="$t('settings.title')"
-    :description="$t('settings.slideoverDesc')" icon="i-lucide-settings" side="right">
+  <BaseResponsiveSlideover
+    v-model:open="isSettingsSlideoverOpen"
+    :title="$t('settings.title')"
+    :description="$t('settings.slideoverDesc')"
+    icon="i-lucide-settings"
+    side="right"
+  >
     <template #body>
       <div class="space-y-6">
         <!-- Editor Type -->
@@ -55,12 +60,24 @@ function navigateAndClose(to: string) {
             {{ $t('settings.appSettings') }}
           </div>
           <div class="space-y-2">
-            <UButton icon="i-lucide-globe" variant="outline" color="neutral" block
-              class="justify-start text-xs rounded-xl" @click="navigateAndClose('/settings/browsers')">
+            <UButton
+              icon="i-lucide-globe"
+              variant="outline"
+              color="neutral"
+              block
+              class="justify-start text-xs rounded-xl"
+              @click="navigateAndClose('/settings/browsers')"
+            >
               {{ $t('settings.openBrowserSettings') }}
             </UButton>
-            <UButton icon="i-lucide-wrench" variant="outline" color="neutral" block
-              class="justify-start text-xs rounded-xl" @click="navigateAndClose('/settings/tools')">
+            <UButton
+              icon="i-lucide-wrench"
+              variant="outline"
+              color="neutral"
+              block
+              class="justify-start text-xs rounded-xl"
+              @click="navigateAndClose('/settings/tools')"
+            >
               {{ $t('settings.openToolsSettings') }}
             </UButton>
           </div>
@@ -71,16 +88,28 @@ function navigateAndClose(to: string) {
           <div class="text-sm font-medium text-highlighted">
             {{ $t('settings.storage.storage_management') }}
           </div>
-          <UButton icon="i-lucide-database" variant="outline" color="neutral" block
-            class="justify-start text-xs rounded-xl" @click="isStorageModalOpen = true">
+          <UButton
+            icon="i-lucide-database"
+            variant="outline"
+            color="neutral"
+            block
+            class="justify-start text-xs rounded-xl"
+            @click="isStorageModalOpen = true"
+          >
             {{ $t('settings.storage.storage_management') }}
           </UButton>
         </div>
 
         <!-- Full Settings Link -->
         <div class="pt-2 border-t border-gray-200 dark:border-gray-800">
-          <UButton icon="i-lucide-external-link" variant="subtle" color="primary" block
-            class="justify-start text-xs rounded-xl" @click="navigateAndClose('/settings')">
+          <UButton
+            icon="i-lucide-external-link"
+            variant="subtle"
+            color="primary"
+            block
+            class="justify-start text-xs rounded-xl"
+            @click="navigateAndClose('/settings')"
+          >
             {{ $t('settings.openFullSettings') }}
           </UButton>
         </div>

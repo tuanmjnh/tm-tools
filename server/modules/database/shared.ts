@@ -1,10 +1,11 @@
-import { MongoClient, Db } from 'mongodb'
+import type { Db } from 'mongodb'
+import { MongoClient } from 'mongodb'
 import { config } from '../../config/index'
 
 let client: MongoClient | null = null
 let db: Db | null = null
 
-export async function getSharedConnection(): Promise<{ client: MongoClient; db: Db }> {
+export async function getSharedConnection(): Promise<{ client: MongoClient, db: Db }> {
   if (client && db) return { client, db }
 
   client = new MongoClient(config.mongodb.uri)

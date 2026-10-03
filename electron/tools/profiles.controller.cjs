@@ -448,17 +448,17 @@ function registerProfilesController(win) {
 
     const args = isFirefoxFamily
       ? [
-        `-profile`, profileDir,
-        `-no-remote`
-      ]
+          `-profile`, profileDir,
+          `-no-remote`
+        ]
       : [
-        `--user-data-dir=${profileDir}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--password-store=basic',
-        '--disable-blink-features=AutomationControlled',
-        `--remote-debugging-port=${remotePort}`
-      ]
+          `--user-data-dir=${profileDir}`,
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--password-store=basic',
+          '--disable-blink-features=AutomationControlled',
+          `--remote-debugging-port=${remotePort}`
+        ]
 
     // Window size
     if (profile.screen_resolution) {

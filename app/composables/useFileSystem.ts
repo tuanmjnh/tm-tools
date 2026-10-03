@@ -72,7 +72,7 @@ export function useFileSystem() {
   }
 
   async function pickFolder(options: { title?: string, defaultPath?: string } = {}) {
-    let defaultPath = options.defaultPath || localStorage.getItem('last_selected_dir') || undefined
+    const defaultPath = options.defaultPath || localStorage.getItem('last_selected_dir') || undefined
     const paths = await selectFolder({ title: options.title, defaultPath })
     const picked = paths?.length ? paths[0] : ''
     if (picked) {

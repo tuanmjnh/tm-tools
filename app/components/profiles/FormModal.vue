@@ -441,20 +441,47 @@ async function onSave() {
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :title="profile ? t('profiles.editProfile') : t('profiles.addProfile')"
-    :ui="{ content: 'max-w-3xl' }">
+  <UModal
+    v-model:open="isOpen"
+    :title="profile ? t('profiles.editProfile') : t('profiles.addProfile')"
+    :ui="{ content: 'max-w-3xl' }"
+  >
     <template #body>
       <div class="space-y-4">
         <!-- Tabs Header -->
         <div class="flex border-b border-gray-200 dark:border-gray-800 gap-2">
-          <UButton :variant="activeTab === 'general' ? 'solid' : 'ghost'" color="neutral" size="sm" icon="i-lucide-info"
-            :label="t('profiles.tabGeneral')" @click="activeTab = 'general'" />
-          <UButton :variant="activeTab === 'proxy' ? 'solid' : 'ghost'" color="neutral" size="sm"
-            icon="i-lucide-network" :label="t('profiles.tabProxy')" @click="activeTab = 'proxy'" />
-          <UButton :variant="activeTab === 'fingerprint' ? 'solid' : 'ghost'" color="neutral" size="sm"
-            icon="i-lucide-fingerprint" :label="t('profiles.tabFingerprint')" @click="activeTab = 'fingerprint'" />
-          <UButton :variant="activeTab === 'accounts' ? 'solid' : 'ghost'" color="neutral" size="sm"
-            icon="i-lucide-users" :label="t('profiles.tabAccounts')" @click="activeTab = 'accounts'" />
+          <UButton
+            :variant="activeTab === 'general' ? 'solid' : 'ghost'"
+            color="neutral"
+            size="sm"
+            icon="i-lucide-info"
+            :label="t('profiles.tabGeneral')"
+            @click="activeTab = 'general'"
+          />
+          <UButton
+            :variant="activeTab === 'proxy' ? 'solid' : 'ghost'"
+            color="neutral"
+            size="sm"
+            icon="i-lucide-network"
+            :label="t('profiles.tabProxy')"
+            @click="activeTab = 'proxy'"
+          />
+          <UButton
+            :variant="activeTab === 'fingerprint' ? 'solid' : 'ghost'"
+            color="neutral"
+            size="sm"
+            icon="i-lucide-fingerprint"
+            :label="t('profiles.tabFingerprint')"
+            @click="activeTab = 'fingerprint'"
+          />
+          <UButton
+            :variant="activeTab === 'accounts' ? 'solid' : 'ghost'"
+            color="neutral"
+            size="sm"
+            icon="i-lucide-users"
+            :label="t('profiles.tabAccounts')"
+            @click="activeTab = 'accounts'"
+          />
         </div>
 
         <!-- TAB 1: GENERAL -->
@@ -465,42 +492,72 @@ async function onSave() {
             </UFormField>
 
             <UFormField :label="t('profiles.groups')">
-              <USelect v-model="form.group_id" class="w-full"
+              <USelect
+                v-model="form.group_id"
+                class="w-full"
                 :items="groups.filter(g => Boolean(g.id)).map(g => ({ label: g.name, value: g.id }))"
-                placeholder="Select group..." />
+                placeholder="Select group..."
+              />
             </UFormField>
           </div>
 
           <!-- Browser Runtime Configuration -->
           <div
-            class="p-3.5 border rounded-lg border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-3">
+            class="p-3.5 border rounded-lg border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 space-y-3"
+          >
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-1.5 font-medium text-sm text-gray-800 dark:text-gray-200">
                 <UIcon name="i-lucide-cpu" class="size-4 text-primary" />
                 <span>{{ t('profiles.browserAdapter') }}</span>
               </div>
               <div class="flex gap-1">
-                <UButton size="xs" :variant="browserCategory === 'basic' ? 'solid' : 'ghost'" color="neutral"
-                  :label="t('profiles.browserBasic')" @click="onSelectCategory('basic')" />
-                <UButton size="xs" :variant="browserCategory === 'specialized' ? 'solid' : 'ghost'" color="neutral"
-                  :label="t('profiles.browserSpecialized')" @click="onSelectCategory('specialized')" />
+                <UButton
+                  size="xs"
+                  :variant="browserCategory === 'basic' ? 'solid' : 'ghost'"
+                  color="neutral"
+                  :label="t('profiles.browserBasic')"
+                  @click="onSelectCategory('basic')"
+                />
+                <UButton
+                  size="xs"
+                  :variant="browserCategory === 'specialized' ? 'solid' : 'ghost'"
+                  color="neutral"
+                  :label="t('profiles.browserSpecialized')"
+                  @click="onSelectCategory('specialized')"
+                />
               </div>
             </div>
 
             <!-- Standard Browsers -->
             <div v-if="browserCategory === 'basic'" class="space-y-2">
               <UFormField :label="t('profiles.detectedBrowsers')">
-                <USelect v-model="form.browser_id" class="w-full" :items="standardBrowserItems"
-                  placeholder="Select installed browser..." @update:model-value="onStandardBrowserChange" />
+                <USelect
+                  v-model="form.browser_id"
+                  class="w-full"
+                  :items="standardBrowserItems"
+                  placeholder="Select installed browser..."
+                  @update:model-value="onStandardBrowserChange"
+                />
               </UFormField>
               <div class="flex items-center justify-between text-xs text-gray-500">
                 <span>Auto-detected from local system</span>
                 <div class="flex items-center gap-2">
-                  <UButton size="xs" variant="link" icon="i-lucide-refresh-cw" :loading="loadingBrowsers"
-                    label="Re-scan" @click="loadBrowsers" />
+                  <UButton
+                    size="xs"
+                    variant="link"
+                    icon="i-lucide-refresh-cw"
+                    :loading="loadingBrowsers"
+                    label="Re-scan"
+                    @click="loadBrowsers"
+                  />
                   <span class="text-gray-300 dark:text-gray-700">|</span>
-                  <UButton size="xs" variant="link" icon="i-lucide-settings" :label="t('profiles.openBrowserSettings')"
-                    @click="goToBrowserSettings" />
+                  <UButton
+                    size="xs"
+                    variant="link"
+                    icon="i-lucide-settings"
+                    :label="t('profiles.openBrowserSettings')"
+                    @click="goToBrowserSettings"
+                  />
                 </div>
               </div>
             </div>
@@ -508,18 +565,24 @@ async function onSave() {
             <!-- Specialized Browsers (Camoufox, Donut, Browser Oxide) -->
             <div v-else class="space-y-2.5">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div v-for="item in specializedBrowsers" :key="item.id"
+                <div
+                  v-for="item in specializedBrowsers"
+                  :key="item.id"
                   class="p-2.5 rounded-md border cursor-pointer transition-all flex flex-col justify-between"
                   :class="form.browser_type === item.id ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary/30' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'"
-                  @click="onSelectSpecialized(item.id)">
+                  @click="onSelectSpecialized(item.id)"
+                >
                   <div>
                     <div class="flex items-center justify-between gap-1">
                       <div class="flex items-center gap-1.5 font-medium text-xs truncate">
                         <UIcon :name="item.icon" class="size-4 shrink-0" />
                         <span class="truncate">{{ item.name }}</span>
                       </div>
-                      <UBadge size="xs" :color="isSpecializedDetected(item.engine) ? 'success' : 'neutral'"
-                        variant="subtle">
+                      <UBadge
+                        size="xs"
+                        :color="isSpecializedDetected(item.engine) ? 'success' : 'neutral'"
+                        variant="subtle"
+                      >
                         {{ isSpecializedDetected(item.engine) ? t('profiles.configured') : t('profiles.notConfigured')
                         }}
                       </UBadge>
@@ -529,7 +592,8 @@ async function onSave() {
                     </p>
                   </div>
                   <div
-                    class="mt-2 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-gray-400">
+                    class="mt-2 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-gray-400"
+                  >
                     <span>Engine: {{ item.engine }}</span>
                     <span v-if="isSpecializedDetected(item.engine)" class="text-success font-semibold">
                       v{{ isSpecializedDetected(item.engine)?.version || 'Ready' }}
@@ -539,42 +603,75 @@ async function onSave() {
               </div>
 
               <!-- Alert if current selected specialized engine is not detected -->
-              <div v-if="!isSpecializedDetected(form.browser_engine)"
-                class="flex items-center justify-between p-2 rounded bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400">
+              <div
+                v-if="!isSpecializedDetected(form.browser_engine)"
+                class="flex items-center justify-between p-2 rounded bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400"
+              >
                 <div class="flex items-center gap-1.5">
                   <UIcon name="i-lucide-alert-triangle" class="size-4 shrink-0" />
                   <span>Trình duyệt này chưa được cấu hình đường dẫn runtime.</span>
                 </div>
-                <UButton size="xs" color="warning" variant="subtle" icon="i-lucide-external-link"
-                  :label="t('profiles.openBrowserSettings')" @click="goToBrowserSettings" />
+                <UButton
+                  size="xs"
+                  color="warning"
+                  variant="subtle"
+                  icon="i-lucide-external-link"
+                  :label="t('profiles.openBrowserSettings')"
+                  @click="goToBrowserSettings"
+                />
               </div>
             </div>
           </div>
 
           <UFormField :label="t('profiles.startUrl')">
-            <UInput v-model="form.start_url" class="w-full" icon="i-lucide-globe" placeholder="https://whoer.net" />
+            <UInput
+              v-model="form.start_url"
+              class="w-full"
+              icon="i-lucide-globe"
+              placeholder="https://whoer.net"
+            />
           </UFormField>
 
           <UFormField :label="t('profiles.tags')">
             <div class="space-y-2">
               <div class="flex flex-wrap gap-1.5">
-                <UBadge v-for="tag in form.tags" :key="tag" color="neutral" variant="subtle"
-                  class="gap-1 cursor-pointer" @click="removeTag(tag)">
+                <UBadge
+                  v-for="tag in form.tags"
+                  :key="tag"
+                  color="neutral"
+                  variant="subtle"
+                  class="gap-1 cursor-pointer"
+                  @click="removeTag(tag)"
+                >
                   {{ tag }}
                   <UIcon name="i-lucide-x" class="size-3" />
                 </UBadge>
               </div>
               <div class="flex gap-2">
-                <UInput v-model="newTag" placeholder="Add tag and press Enter" size="sm" class="flex-1"
-                  @keydown.enter.prevent="addTag" />
-                <UButton size="sm" variant="outline" icon="i-lucide-plus" @click="addTag" />
+                <UInput
+                  v-model="newTag"
+                  placeholder="Add tag and press Enter"
+                  size="sm"
+                  class="flex-1"
+                  @keydown.enter.prevent="addTag"
+                />
+                <UButton
+                  size="sm"
+                  variant="outline"
+                  icon="i-lucide-plus"
+                  @click="addTag"
+                />
               </div>
             </div>
           </UFormField>
 
           <UFormField :label="t('profiles.notes')">
-            <UTextarea v-model="form.notes" class="w-full" :rows="3"
-              placeholder="Notes, account credentials, or recovery details..." />
+            <UTextarea
+              v-model="form.notes"
+              class="w-full"
+              :rows="3"
+              placeholder="Notes, account credentials, or recovery details..."
+            />
           </UFormField>
         </div>
 
@@ -582,19 +679,37 @@ async function onSave() {
         <div v-show="activeTab === 'proxy'" class="space-y-4 py-2">
           <UFormField :label="t('profiles.proxies')">
             <div class="grid grid-cols-3 gap-2 mb-3">
-              <UButton :variant="proxyMode === 'direct' ? 'solid' : 'outline'" color="neutral" size="sm"
-                :label="t('profiles.directProxy')" @click="proxyMode = 'direct'" />
-              <UButton :variant="proxyMode === 'saved' ? 'solid' : 'outline'" color="neutral" size="sm"
-                :label="t('profiles.savedProxy')" @click="proxyMode = 'saved'" />
-              <UButton :variant="proxyMode === 'custom' ? 'solid' : 'outline'" color="neutral" size="sm"
-                :label="t('profiles.customProxy')" @click="proxyMode = 'custom'" />
+              <UButton
+                :variant="proxyMode === 'direct' ? 'solid' : 'outline'"
+                color="neutral"
+                size="sm"
+                :label="t('profiles.directProxy')"
+                @click="proxyMode = 'direct'"
+              />
+              <UButton
+                :variant="proxyMode === 'saved' ? 'solid' : 'outline'"
+                color="neutral"
+                size="sm"
+                :label="t('profiles.savedProxy')"
+                @click="proxyMode = 'saved'"
+              />
+              <UButton
+                :variant="proxyMode === 'custom' ? 'solid' : 'outline'"
+                color="neutral"
+                size="sm"
+                :label="t('profiles.customProxy')"
+                @click="proxyMode = 'custom'"
+              />
             </div>
 
             <!-- Saved Proxy Selection -->
             <div v-if="proxyMode === 'saved'" class="space-y-2">
-              <USelect v-model="form.proxy_id" class="w-full"
+              <USelect
+                v-model="form.proxy_id"
+                class="w-full"
                 :items="proxies.filter(p => Boolean(p.id)).map(p => ({ label: `${p.name} (${p.host}:${p.port})`, value: p.id }))"
-                placeholder="Choose from proxy pool..." />
+                placeholder="Choose from proxy pool..."
+              />
             </div>
 
             <!-- Custom Proxy String -->
@@ -606,10 +721,18 @@ async function onSave() {
             </div>
 
             <!-- Test Proxy Section -->
-            <div v-if="proxyMode !== 'direct'"
-              class="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-              <UButton size="sm" variant="outline" icon="i-lucide-activity" :loading="testingProxy"
-                :label="t('profiles.checkProxy')" @click="testCurrentProxy" />
+            <div
+              v-if="proxyMode !== 'direct'"
+              class="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800"
+            >
+              <UButton
+                size="sm"
+                variant="outline"
+                icon="i-lucide-activity"
+                :loading="testingProxy"
+                :label="t('profiles.checkProxy')"
+                @click="testCurrentProxy"
+              />
 
               <div v-if="proxyTestResult" class="flex items-center gap-2 text-sm">
                 <UBadge :color="proxyTestResult.status === 'active' ? 'success' : 'error'" variant="subtle">
@@ -623,18 +746,26 @@ async function onSave() {
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <UFormField :label="t('profiles.webrtc')">
-              <USelect v-model="form.webrtc_mode" class="w-full" :items="[
-                { label: 'Follow Proxy / Default', value: 'proxy' },
-                { label: 'Disable WebRTC UDP (Leak Protection)', value: 'disabled' },
-                { label: 'Real IP', value: 'real' }
-              ]" />
+              <USelect
+                v-model="form.webrtc_mode"
+                class="w-full"
+                :items="[
+                  { label: 'Follow Proxy / Default', value: 'proxy' },
+                  { label: 'Disable WebRTC UDP (Leak Protection)', value: 'disabled' },
+                  { label: 'Real IP', value: 'real' }
+                ]"
+              />
             </UFormField>
 
             <UFormField :label="t('profiles.timezone')">
-              <USelect v-model="form.timezone_mode" class="w-full" :items="[
-                { label: 'Auto (Based on Proxy / System)', value: 'auto' },
-                { label: 'Manual', value: 'manual' }
-              ]" />
+              <USelect
+                v-model="form.timezone_mode"
+                class="w-full"
+                :items="[
+                  { label: 'Auto (Based on Proxy / System)', value: 'auto' },
+                  { label: 'Manual', value: 'manual' }
+                ]"
+              />
             </UFormField>
           </div>
         </div>
@@ -645,17 +776,41 @@ async function onSave() {
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium">{{ t('profiles.os') }}:</span>
               <div class="flex gap-1">
-                <UButton size="xs" :variant="form.os === 'windows' ? 'solid' : 'ghost'" color="neutral"
-                  icon="i-lucide-monitor" label="Windows" @click="onOsChange('windows')" />
-                <UButton size="xs" :variant="form.os === 'macos' ? 'solid' : 'ghost'" color="neutral"
-                  icon="i-lucide-apple" label="macOS" @click="onOsChange('macos')" />
-                <UButton size="xs" :variant="form.os === 'linux' ? 'solid' : 'ghost'" color="neutral"
-                  icon="i-lucide-terminal" label="Linux" @click="onOsChange('linux')" />
+                <UButton
+                  size="xs"
+                  :variant="form.os === 'windows' ? 'solid' : 'ghost'"
+                  color="neutral"
+                  icon="i-lucide-monitor"
+                  label="Windows"
+                  @click="onOsChange('windows')"
+                />
+                <UButton
+                  size="xs"
+                  :variant="form.os === 'macos' ? 'solid' : 'ghost'"
+                  color="neutral"
+                  icon="i-lucide-apple"
+                  label="macOS"
+                  @click="onOsChange('macos')"
+                />
+                <UButton
+                  size="xs"
+                  :variant="form.os === 'linux' ? 'solid' : 'ghost'"
+                  color="neutral"
+                  icon="i-lucide-terminal"
+                  label="Linux"
+                  @click="onOsChange('linux')"
+                />
               </div>
             </div>
 
-            <UButton size="sm" color="primary" variant="soft" icon="i-lucide-dice-5"
-              :label="t('profiles.randomizeFingerprint')" @click="onRandomize" />
+            <UButton
+              size="sm"
+              color="primary"
+              variant="soft"
+              icon="i-lucide-dice-5"
+              :label="t('profiles.randomizeFingerprint')"
+              @click="onRandomize"
+            />
           </div>
 
           <UFormField :label="t('profiles.userAgent')">
@@ -678,18 +833,26 @@ async function onSave() {
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <UFormField :label="t('profiles.canvas')">
-              <USelect v-model="form.canvas_mode" class="w-full" :items="[
-                { label: t('profiles.noise'), value: 'noise' },
-                { label: t('profiles.off'), value: 'off' },
-                { label: t('profiles.block'), value: 'block' }
-              ]" />
+              <USelect
+                v-model="form.canvas_mode"
+                class="w-full"
+                :items="[
+                  { label: t('profiles.noise'), value: 'noise' },
+                  { label: t('profiles.off'), value: 'off' },
+                  { label: t('profiles.block'), value: 'block' }
+                ]"
+              />
             </UFormField>
 
             <UFormField :label="t('profiles.audio')">
-              <USelect v-model="form.audio_mode" class="w-full" :items="[
-                { label: t('profiles.noise'), value: 'noise' },
-                { label: t('profiles.off'), value: 'off' }
-              ]" />
+              <USelect
+                v-model="form.audio_mode"
+                class="w-full"
+                :items="[
+                  { label: t('profiles.noise'), value: 'noise' },
+                  { label: t('profiles.off'), value: 'off' }
+                ]"
+              />
             </UFormField>
           </div>
 
@@ -702,7 +865,8 @@ async function onSave() {
 
           <!-- Playwright Stealth Injection Toggle -->
           <div
-            class="p-3.5 border rounded-lg border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 flex items-center justify-between">
+            class="p-3.5 border rounded-lg border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 flex items-center justify-between"
+          >
             <div class="space-y-0.5">
               <div class="flex items-center gap-1.5 font-medium text-sm text-gray-800 dark:text-gray-200">
                 <UIcon name="i-lucide-shield-check" class="size-4 text-primary" />
@@ -722,28 +886,61 @@ async function onSave() {
             <p class="text-sm text-gray-500">
               Save login credentials for quick auto-fill or reference with this profile.
             </p>
-            <UButton size="xs" variant="soft" color="primary" icon="i-lucide-plus" :label="t('profiles.addAccount')"
-              @click="addAccountRow" />
+            <UButton
+              size="xs"
+              variant="soft"
+              color="primary"
+              icon="i-lucide-plus"
+              :label="t('profiles.addAccount')"
+              @click="addAccountRow"
+            />
           </div>
 
-          <div v-if="accounts.length === 0"
-            class="text-center py-6 border border-dashed rounded-lg border-gray-200 dark:border-gray-800 text-gray-400 text-sm">
+          <div
+            v-if="accounts.length === 0"
+            class="text-center py-6 border border-dashed rounded-lg border-gray-200 dark:border-gray-800 text-gray-400 text-sm"
+          >
             No accounts linked yet. Click "Add Account" to attach social or platform accounts.
           </div>
 
-          <div v-for="(acc, idx) in accounts" :key="idx"
-            class="flex items-center gap-2 p-2 border rounded-md border-gray-100 dark:border-gray-800">
-            <USelect v-model="acc.platform" size="sm" class="w-32" :items="[
-              { label: 'Facebook', value: 'facebook' },
-              { label: 'Google', value: 'google' },
-              { label: 'TikTok', value: 'tiktok' },
-              { label: 'X / Twitter', value: 'x' },
-              { label: 'Amazon', value: 'amazon' },
-              { label: 'Other', value: 'other' }
-            ]" />
-            <UInput v-model="acc.username" size="sm" placeholder="Username / Email" class="flex-1" />
-            <UInput v-model="acc.password" size="sm" type="password" placeholder="Password" class="flex-1" />
-            <UButton size="xs" color="error" variant="ghost" icon="i-lucide-trash" @click="removeAccountRow(idx)" />
+          <div
+            v-for="(acc, idx) in accounts"
+            :key="idx"
+            class="flex items-center gap-2 p-2 border rounded-md border-gray-100 dark:border-gray-800"
+          >
+            <USelect
+              v-model="acc.platform"
+              size="sm"
+              class="w-32"
+              :items="[
+                { label: 'Facebook', value: 'facebook' },
+                { label: 'Google', value: 'google' },
+                { label: 'TikTok', value: 'tiktok' },
+                { label: 'X / Twitter', value: 'x' },
+                { label: 'Amazon', value: 'amazon' },
+                { label: 'Other', value: 'other' }
+              ]"
+            />
+            <UInput
+              v-model="acc.username"
+              size="sm"
+              placeholder="Username / Email"
+              class="flex-1"
+            />
+            <UInput
+              v-model="acc.password"
+              size="sm"
+              type="password"
+              placeholder="Password"
+              class="flex-1"
+            />
+            <UButton
+              size="xs"
+              color="error"
+              variant="ghost"
+              icon="i-lucide-trash"
+              @click="removeAccountRow(idx)"
+            />
           </div>
         </div>
       </div>
@@ -751,8 +948,19 @@ async function onSave() {
 
     <template #footer>
       <div class="flex justify-end gap-2 w-full">
-        <UButton color="neutral" variant="ghost" :label="t('global.cancel')" @click="isOpen = false" />
-        <UButton color="primary" variant="soft" :loading="saving" :label="t('global.save')" @click="onSave" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          :label="t('global.cancel')"
+          @click="isOpen = false"
+        />
+        <UButton
+          color="primary"
+          variant="soft"
+          :loading="saving"
+          :label="t('global.save')"
+          @click="onSave"
+        />
       </div>
     </template>
   </UModal>

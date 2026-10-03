@@ -191,8 +191,14 @@ defineExpose({ reload: loadConfigs })
         <p class="text-sm text-muted">
           {{ t('tools.savedToSettings') }}
         </p>
-        <UButton icon="i-lucide-plus" :label="t('tools.newConfig')" color="primary" variant="soft" size="sm"
-          @click="addNew" />
+        <UButton
+          icon="i-lucide-plus"
+          :label="t('tools.newConfig')"
+          color="primary"
+          variant="soft"
+          size="sm"
+          @click="addNew"
+        />
       </div>
 
       <div v-if="loading" class="flex justify-center py-8">
@@ -214,11 +220,24 @@ defineExpose({ reload: loadConfigs })
               </p>
             </div>
             <div class="flex items-center gap-1 shrink-0" @click.stop>
-              <UButton :icon="row.open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" color="neutral"
-                variant="ghost" size="xs" :aria-label="row.open ? t('tools.hide') : t('tools.show')"
-                @click="row.open = !row.open" />
-              <UButton v-if="!row.isNew" icon="i-lucide-trash-2" color="error" variant="ghost" size="xs"
-                :aria-label="t('global.delete')" :loading="row.saving" @click="onDelete(row)" />
+              <UButton
+                :icon="row.open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="row.open ? t('tools.hide') : t('tools.show')"
+                @click="row.open = !row.open"
+              />
+              <UButton
+                v-if="!row.isNew"
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                size="xs"
+                :aria-label="t('global.delete')"
+                :loading="row.saving"
+                @click="onDelete(row)"
+              />
             </div>
           </div>
 
@@ -231,11 +250,14 @@ defineExpose({ reload: loadConfigs })
                   </UFormField>
 
                   <UFormField name="format_id" :label="t('tools.format')">
-                    <USelectMenu v-model="row.format_id"
+                    <USelectMenu
+                      v-model="row.format_id"
                       :items="activeFormats.map(f => ({ label: f.title, value: f.id }))"
                       :placeholder="t('tools.selectFormat')"
-                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" value-key="value"
-                      class="w-full">
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                      value-key="value"
+                      class="w-full"
+                    >
                       <template #empty>
                         {{ t('tools.noFormats') }}
                       </template>
@@ -243,11 +265,22 @@ defineExpose({ reload: loadConfigs })
                   </UFormField>
 
                   <UFormField name="out_path" :label="t('tools.output')">
-                    <UInput v-model="row.out_path" placeholder="D:/Downloads/YouTube" :ui="{ trailing: 'pe-0.5' }"
-                      class="w-full">
+                    <UInput
+                      v-model="row.out_path"
+                      placeholder="D:/Downloads/YouTube"
+                      :ui="{ trailing: 'pe-0.5' }"
+                      class="w-full"
+                    >
                       <template #trailing>
-                        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open"
-                          :title="t('tools.browse')" :aria-label="t('tools.browse')" @click="pickConfigFolder(row)" />
+                        <UButton
+                          color="neutral"
+                          variant="ghost"
+                          size="sm"
+                          icon="i-lucide-folder-open"
+                          :title="t('tools.browse')"
+                          :aria-label="t('tools.browse')"
+                          @click="pickConfigFolder(row)"
+                        />
                       </template>
                     </UInput>
                   </UFormField>
@@ -257,13 +290,23 @@ defineExpose({ reload: loadConfigs })
                   </UFormField>
 
                   <UFormField name="threads" :label="t('tools.threads')">
-                    <UInput v-model.number="row.threads" type="number" min="1" max="8" class="w-full" />
+                    <UInput
+                      v-model.number="row.threads"
+                      type="number"
+                      min="1"
+                      max="8"
+                      class="w-full"
+                    />
                   </UFormField>
 
                   <UFormField name="encoding" :label="t('tools.encoding')">
-                    <USelectMenu v-model="row.encoding" :items="['utf-8', 'ascii', 'latin-1']"
+                    <USelectMenu
+                      v-model="row.encoding"
+                      :items="['utf-8', 'ascii', 'latin-1']"
                       :placeholder="t('tools.encoding')"
-                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full" />
+                      :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                      class="w-full"
+                    />
                   </UFormField>
 
                   <div class="space-y-3">
@@ -273,11 +316,23 @@ defineExpose({ reload: loadConfigs })
                 </UForm>
 
                 <div class="flex justify-end gap-2 pt-2">
-                  <UButton v-if="row.isNew" variant="ghost" color="neutral" :label="t('global.cancel')"
-                    :disabled="row.saving" @click="removeRow(row)" />
-                  <UButton icon="i-lucide-save" :label="row.isNew ? t('global.create') : t('global.update')"
-                    color="primary" variant="soft" :loading="row.saving" :disabled="!row.title.trim()"
-                    @click="row.isNew ? onCreate(row) : onUpdate(row)" />
+                  <UButton
+                    v-if="row.isNew"
+                    variant="ghost"
+                    color="neutral"
+                    :label="t('global.cancel')"
+                    :disabled="row.saving"
+                    @click="removeRow(row)"
+                  />
+                  <UButton
+                    icon="i-lucide-save"
+                    :label="row.isNew ? t('global.create') : t('global.update')"
+                    color="primary"
+                    variant="soft"
+                    :loading="row.saving"
+                    :disabled="!row.title.trim()"
+                    @click="row.isNew ? onCreate(row) : onUpdate(row)"
+                  />
                 </div>
               </UCard>
             </template>

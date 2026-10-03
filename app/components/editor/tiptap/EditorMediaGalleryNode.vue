@@ -38,7 +38,13 @@ onMounted(() => {
 
 <template>
   <NodeViewWrapper class="my-4 w-full">
-    <LazyMediaGallery v-model="selectedFiles" :multiple="false" size="auto" accept="image/*"
-      class="w-full min-h-48" @update:model-value="onSelect" />
+    <LazyMediaGallery
+      v-model="selectedFiles"
+      :multiple="false"
+      size="auto"
+      accept="image/*"
+      class="w-full min-h-48"
+      @update:model-value="onSelect"
+    />
   </NodeViewWrapper>
 </template>

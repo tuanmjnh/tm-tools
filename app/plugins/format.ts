@@ -1,4 +1,5 @@
 import type { Directive } from 'vue'
+
 export default defineNuxtPlugin((nuxtApp) => {
   const formatText: Directive = {
     mounted(el: any, binding: any) {
@@ -17,7 +18,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             return value
               .toLocaleLowerCase()
               .split(/\s+/)
-              .map((word) =>
+              .map(word =>
                 word.charAt(0).toLocaleUpperCase() + word.slice(1)
               )
               .join(' ')
@@ -34,10 +35,10 @@ export default defineNuxtPlugin((nuxtApp) => {
           return root
         }
         return (
-          root.querySelector('input') ||
-          root.querySelector('textarea') ||
-          (root.shadowRoot?.querySelector('input') as HTMLInputElement | null) ||
-          (root.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null)
+          root.querySelector('input')
+          || root.querySelector('textarea')
+          || (root.shadowRoot?.querySelector('input') as HTMLInputElement | null)
+          || (root.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null)
         )
       }
 

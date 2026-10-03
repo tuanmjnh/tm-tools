@@ -44,12 +44,25 @@ async function openDefaultPlayer() {
       <div class="space-y-4">
         <!-- Media Player -->
         <div
-          class="flex flex-col items-center justify-center bg-black/90 rounded-xl overflow-hidden min-h-75 max-h-[70vh] p-2">
-          <video v-if="isVideo" :key="mediaUrl" :src="mediaUrl" controls autoplay
-            class="w-full max-h-[60vh] rounded-lg object-contain" />
+          class="flex flex-col items-center justify-center bg-black/90 rounded-xl overflow-hidden min-h-75 max-h-[70vh] p-2"
+        >
+          <video
+            v-if="isVideo"
+            :key="mediaUrl"
+            :src="mediaUrl"
+            controls
+            autoplay
+            class="w-full max-h-[60vh] rounded-lg object-contain"
+          />
           <div v-else-if="isAudio" class="flex flex-col items-center justify-center p-8 w-full">
             <UIcon name="i-lucide-music" class="size-16 text-primary mb-4 animate-pulse" />
-            <audio :key="mediaUrl" :src="mediaUrl" controls autoplay class="w-full max-w-md" />
+            <audio
+              :key="mediaUrl"
+              :src="mediaUrl"
+              controls
+              autoplay
+              class="w-full max-w-md"
+            />
           </div>
           <div v-else class="text-neutral-400 text-sm p-8 text-center">
             {{ t('tools.unsupportedPreviewFormat') }}
@@ -58,19 +71,34 @@ async function openDefaultPlayer() {
 
         <!-- File Info & Actions -->
         <div
-          class="flex items-center justify-between p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 text-xs">
+          class="flex items-center justify-between p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 text-xs"
+        >
           <div class="flex items-center gap-2 min-w-0 pr-4">
-            <UIcon :name="isAudio ? 'i-lucide-file-audio' : 'i-lucide-file-video'"
-              class="text-primary size-5 shrink-0" />
+            <UIcon
+              :name="isAudio ? 'i-lucide-file-audio' : 'i-lucide-file-video'"
+              class="text-primary size-5 shrink-0"
+            />
             <span class="font-mono truncate" :title="filePath">{{ filePath }}</span>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
-            <UButton icon="i-lucide-folder" size="xs" variant="outline" color="neutral" :title="t('tools.openInFolder')"
-              @click="showInFolder">
+            <UButton
+              icon="i-lucide-folder"
+              size="xs"
+              variant="outline"
+              color="neutral"
+              :title="t('tools.openInFolder')"
+              @click="showInFolder"
+            >
               {{ t('tools.openInFolder') }}
             </UButton>
-            <UButton icon="i-lucide-external-link" size="xs" variant="soft" color="primary"
-              :title="t('tools.openWithApp')" @click="openDefaultPlayer">
+            <UButton
+              icon="i-lucide-external-link"
+              size="xs"
+              variant="soft"
+              color="primary"
+              :title="t('tools.openWithApp')"
+              @click="openDefaultPlayer"
+            >
               {{ t('tools.openWithApp') }}
             </UButton>
           </div>

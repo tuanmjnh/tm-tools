@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { LoginRequest } from '~/types/auth'
+import type { LoginRequest, TotpChallenge } from '~/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({ layout: false })
@@ -10,6 +10,10 @@ const router = useRouter()
 const toast = useToast()
 const remember = ref(false)
 const { t } = useI18n()
+
+const totpChallenge = ref<TotpChallenge | null>(null)
+const totpCode = ref('')
+const passkeyLoading = ref(false)
 
 const schema = z.object({
   email: z.string().min(1, 'Email or username is required'),
@@ -49,16 +53,52 @@ onMounted(loadSaved)
 
 async function onSubmit() {
   try {
-    const input: LoginRequest = state.email.includes('@')
-      ? { email: state.email, password: state.password }
-      : { username: state.email, password: state.password }
-    await auth.login(input)
+    const input: LoginRequest = { email: state.email, password: state.password }
+    const result = await auth.login(input)
     saveCredentials()
+    if ('totpRequired' in result && result.totpRequired) {
+      totpChallenge.value = result
+      totpCode.value = ''
+      return
+    }
     await router.push('/')
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   }
 }
+
+async function onPasskeyLogin() {
+  if (passkeyLoading.value) return
+  passkeyLoading.value = true
+  try {
+    await auth.passkeyLogin()
+    await router.push('/')
+  } catch (err: unknown) {
+    const name = (err as { name?: string })?.name
+    if (name === 'NotAllowedError') toast.add({ title: t('auth.passkeyCancelled'), color: 'neutral' })
+    else toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
+  } finally {
+    passkeyLoading.value = false
+  }
+}
+
+async function onVerifyTotp() {
+  if (!totpChallenge.value) return
+  try {
+    await auth.verifyTotp(totpCode.value.trim(), totpChallenge.value.pendingTotpToken)
+    await router.push('/')
+  } catch (err: unknown) {
+    toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
+    totpCode.value = ''
+  }
+}
+
+function resetTotp() {
+  totpChallenge.value = null
+  totpCode.value = ''
+}
+
+useHead({ title: computed(() => t('auth.signIn')) })
 </script>
 
 <template>
@@ -66,18 +106,30 @@ async function onSubmit() {
     <UCard class="w-full max-w-md">
       <template #header>
         <div class="text-center">
-          <h1 class="text-2xl font-bold">
-            {{ $t('auth.welcomeBack') }}
+          <UIcon :name="totpChallenge ? 'i-lucide-shield-check' : 'i-lucide-boxes'" class="size-6 text-primary" />
+          <h1 class="text-2xl font-bold mt-1">
+            {{ totpChallenge ? $t('auth.totpTitle') : $t('auth.welcomeBack') }}
           </h1>
           <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {{ $t('auth.signInToAccount') }}
+            {{ totpChallenge ? $t('auth.totpSubtitle', { email: totpChallenge.user.email }) : $t('auth.signInToAccount') }}
           </p>
         </div>
       </template>
 
-      <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UForm
+        v-if="!totpChallenge"
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="onSubmit"
+      >
         <UFormField :label="$t('auth.emailOrUsername')" name="email">
-          <UInput v-model="state.email" type="text" :placeholder="$t('auth.emailPlaceholder')" class="w-full" />
+          <UInput
+            v-model="state.email"
+            type="text"
+            :placeholder="$t('auth.emailPlaceholder')"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField :label="$t('auth.password')" name="password">
@@ -86,17 +138,68 @@ async function onSubmit() {
 
         <UCheckbox v-model="remember" :label="$t('auth.rememberMe')" />
 
-        <UButton type="submit" variant="soft" block :loading="auth.loading.value" :disabled="auth.loading.value">
+        <UButton
+          type="submit"
+          variant="soft"
+          block
+          :loading="auth.loading.value"
+          :disabled="auth.loading.value"
+        >
           {{ $t('auth.signIn') }}
         </UButton>
       </UForm>
 
-      <!-- <template #footer>
-        <p class="text-center text-sm text-gray-500">
-          {{ $t('auth.noAccount') }}
-          <NuxtLink to="/register" class="text-primary font-medium">{{ $t('auth.signUp') }}</NuxtLink>
-        </p>
-      </template> -->
+      <div v-if="!totpChallenge" class="mt-4 flex items-center gap-3">
+        <USeparator class="flex-1" />
+        <span class="text-xs text-muted">{{ $t('common.or') }}</span>
+        <USeparator class="flex-1" />
+      </div>
+
+      <UButton
+        v-if="!totpChallenge"
+        class="mt-4"
+        icon="i-lucide-fingerprint"
+        variant="outline"
+        block
+        :loading="passkeyLoading"
+        :disabled="auth.loading.value"
+        @click="onPasskeyLogin"
+      >
+        {{ $t('auth.passkeySignIn') }}
+      </UButton>
+
+      <form v-else class="space-y-4" @submit.prevent="onVerifyTotp">
+        <UFormField :label="$t('auth.totpCodeLabel')" name="code" required>
+          <UInput
+            v-model="totpCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            :placeholder="$t('auth.totpCodePlaceholder')"
+            class="w-full text-center tracking-[0.5em]"
+            size="lg"
+          />
+        </UFormField>
+        <UButton
+          type="submit"
+          variant="soft"
+          block
+          :loading="auth.loading.value"
+          :disabled="auth.loading.value || totpCode.trim().length < 6"
+        >
+          {{ $t('auth.totpVerify') }}
+        </UButton>
+        <UButton
+          type="button"
+          color="neutral"
+          variant="ghost"
+          block
+          @click="resetTotp"
+        >
+          {{ $t('auth.totpBack') }}
+        </UButton>
+      </form>
     </UCard>
   </div>
 </template>

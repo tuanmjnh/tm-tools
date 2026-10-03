@@ -1,20 +1,8 @@
 <script setup lang="ts">
 import { sub } from 'date-fns'
-import type { DropdownMenuItem } from '@nuxt/ui'
 import type { Period, Range } from '~/types'
 
-const { t } = useI18n()
 const { isNotificationsSlideoverOpen } = useDashboard()
-
-const items = computed<DropdownMenuItem[][]>(() => [[{
-  label: t('home.newMail'),
-  icon: 'i-lucide-send',
-  to: '/inbox'
-}, {
-  label: t('home.newCustomer'),
-  icon: 'i-lucide-user-plus',
-  to: '/customers'
-}]])
 
 const range = shallowRef<Range>({
   start: sub(new Date(), { days: 14 }),
@@ -33,7 +21,12 @@ const period = ref<Period>('daily')
 
         <template #right>
           <UTooltip :text="$t('home.notifications')" :shortcuts="['N']">
-            <UButton color="neutral" variant="ghost" square @click="isNotificationsSlideoverOpen = true">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              square
+              @click="isNotificationsSlideoverOpen = true"
+            >
               <UChip color="error" inset>
                 <UIcon name="i-lucide-bell" class="size-5 shrink-0" />
               </UChip>

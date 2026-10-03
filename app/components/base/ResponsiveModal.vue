@@ -75,9 +75,17 @@ const uiConfig = computed(() => {
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :fullscreen="fullscreen || isMobile" :modal="modal" :title="title"
-    :description="description" :ui="uiConfig" :dismissible="isDisabled || isLoading ? false : dismissible"
-    :close="close" v-bind="$attrs">
+  <UModal
+    v-model:open="isOpen"
+    :fullscreen="fullscreen || isMobile"
+    :modal="modal"
+    :title="title"
+    :description="description"
+    :ui="uiConfig"
+    :dismissible="isDisabled || isLoading ? false : dismissible"
+    :close="close"
+    v-bind="$attrs"
+  >
     <template v-if="$slots.header" #header="slotProps">
       <slot name="header" v-bind="slotProps" />
     </template>
@@ -85,8 +93,15 @@ const uiConfig = computed(() => {
     <template v-if="$slots['header-left'] || $slots.icon || icon" #title>
       <div class="flex items-center gap-2 min-w-0">
         <!-- Mobile Back Button -->
-        <UButton color="neutral" variant="ghost" icon="i-lucide-arrow-left" class="inline-flex sm:hidden"
-          :disabled="isDisabled" :loading="isLoading" @click="isOpen = false" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-arrow-left"
+          class="inline-flex sm:hidden"
+          :disabled="isDisabled"
+          :loading="isLoading"
+          @click="isOpen = false"
+        />
 
         <slot name="icon">
           <UIcon v-if="icon" :name="icon" class="size-5 text-primary shrink-0" />

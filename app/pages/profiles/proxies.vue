@@ -274,24 +274,46 @@ function formatDate(dateStr?: string | null) {
     <template #right>
       <div class="flex items-center gap-2">
         <!-- Batch Delete Button -->
-        <UButton v-if="selected.length" :label="t('profiles.batchDelete')" color="error" variant="subtle"
-          icon="i-lucide-trash" @click="showBatchDeleteConfirm = true">
+        <UButton
+          v-if="selected.length"
+          :label="t('profiles.batchDelete')"
+          color="error"
+          variant="subtle"
+          icon="i-lucide-trash"
+          @click="showBatchDeleteConfirm = true"
+        >
           <template #trailing>
             <UKbd>{{ selected.length }}</UKbd>
           </template>
         </UButton>
 
         <!-- Check All Proxies -->
-        <UButton variant="soft" color="neutral" icon="i-lucide-refresh-cw"
-          :label="checkingAll ? t('profiles.checkingAll') : t('profiles.checkAll')" :loading="checkingAll"
-          @click="handleCheckAll" />
+        <UButton
+          variant="soft"
+          color="neutral"
+          icon="i-lucide-refresh-cw"
+          :label="checkingAll ? t('profiles.checkingAll') : t('profiles.checkAll')"
+          :loading="checkingAll"
+          @click="handleCheckAll"
+        />
 
         <!-- Back to Profiles -->
-        <UButton variant="soft" color="neutral" icon="i-lucide-layers" :label="t('profiles.title')" to="/profiles" />
+        <UButton
+          variant="soft"
+          color="neutral"
+          icon="i-lucide-layers"
+          :label="t('profiles.title')"
+          to="/profiles"
+        />
 
         <!-- Add Proxy -->
-        <UButton color="primary" variant="soft" icon="i-lucide-plus" :label="t('profiles.addProxy')"
-          @click="openCreate" />
+        <UButton
+          color="primary"
+          variant="soft"
+          icon="i-lucide-plus"
+          :label="t('profiles.addProxy')"
+          @click="openCreate"
+        />
       </div>
     </template>
 
@@ -299,8 +321,12 @@ function formatDate(dateStr?: string | null) {
       <div class="flex flex-col gap-4 h-full">
         <!-- Filter Toolbar -->
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <UInput v-model="searchQuery" class="w-full sm:max-w-xs" icon="i-lucide-search"
-            :placeholder="t('global.searchPlaceholder')" />
+          <UInput
+            v-model="searchQuery"
+            class="w-full sm:max-w-xs"
+            icon="i-lucide-search"
+            :placeholder="t('global.searchPlaceholder')"
+          />
 
           <div class="flex flex-wrap items-center gap-2">
             <!-- Type Filter -->
@@ -313,8 +339,16 @@ function formatDate(dateStr?: string | null) {
 
         <!-- GridList -->
         <div class="flex-1 min-h-0 relative">
-          <LazyGridList v-model:selected="selected" :items="filteredProxies" :columns="columns" :loading="loading"
-            item-key="id" selectable :action-options="getActionOptions" @refresh="fetchProxies">
+          <LazyGridList
+            v-model:selected="selected"
+            :items="filteredProxies"
+            :columns="columns"
+            :loading="loading"
+            item-key="id"
+            selectable
+            :action-options="getActionOptions"
+            @refresh="fetchProxies"
+          >
             <!-- Custom Name Column -->
             <template #name="{ item }">
               <div class="flex flex-col min-w-0">
@@ -322,8 +356,10 @@ function formatDate(dateStr?: string | null) {
                   <span class="font-medium text-gray-900 dark:text-white truncate">
                     {{ item.name }}
                   </span>
-                  <span v-if="item.country_code"
-                    class="text-xs uppercase font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                  <span
+                    v-if="item.country_code"
+                    class="text-xs uppercase font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+                  >
                     {{ item.country_code }}
                   </span>
                 </div>
@@ -335,7 +371,12 @@ function formatDate(dateStr?: string | null) {
 
             <!-- Custom Type Column -->
             <template #type="{ item }">
-              <UBadge color="neutral" variant="subtle" size="xs" class="uppercase font-mono font-semibold">
+              <UBadge
+                color="neutral"
+                variant="subtle"
+                size="xs"
+                class="uppercase font-mono font-semibold"
+              >
                 {{ item.type }}
               </UBadge>
             </template>
@@ -343,25 +384,32 @@ function formatDate(dateStr?: string | null) {
             <!-- Custom Status Column -->
             <template #status="{ item }">
               <div class="flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full shrink-0" :class="{
-                  'bg-emerald-500 ring-2 ring-emerald-500/20': item.status === 'active',
-                  'bg-rose-500 ring-2 ring-rose-500/20': item.status === 'dead',
-                  'bg-gray-400': !item.status || item.status === 'unknown'
-                }" />
+                <span
+                  class="w-2 h-2 rounded-full shrink-0"
+                  :class="{
+                    'bg-emerald-500 ring-2 ring-emerald-500/20': item.status === 'active',
+                    'bg-rose-500 ring-2 ring-rose-500/20': item.status === 'dead',
+                    'bg-gray-400': !item.status || item.status === 'unknown'
+                  }"
+                />
                 <span class="text-xs capitalize font-medium text-gray-700 dark:text-gray-300">
-                  {{ item.status === 'active' ? t('profiles.proxyLive') : item.status === 'dead' ?
-                    t('profiles.proxyDead') : 'Unknown' }}
+                  {{ item.status === 'active' ? t('profiles.proxyLive') : item.status === 'dead'
+                    ? t('profiles.proxyDead') : 'Unknown' }}
                 </span>
               </div>
             </template>
 
             <!-- Custom Latency Column -->
             <template #latency="{ item }">
-              <span v-if="item.latency_ms" class="text-xs font-mono font-medium" :class="{
-                'text-emerald-500': item.latency_ms < 500,
-                'text-amber-500': item.latency_ms >= 500 && item.latency_ms < 1500,
-                'text-rose-500': item.latency_ms >= 1500
-              }">
+              <span
+                v-if="item.latency_ms"
+                class="text-xs font-mono font-medium"
+                :class="{
+                  'text-emerald-500': item.latency_ms < 500,
+                  'text-amber-500': item.latency_ms >= 500 && item.latency_ms < 1500,
+                  'text-rose-500': item.latency_ms >= 1500
+                }"
+              >
                 {{ item.latency_ms }} ms
               </span>
               <span v-else class="text-xs text-gray-400">-</span>
@@ -369,8 +417,13 @@ function formatDate(dateStr?: string | null) {
 
             <!-- Custom Profile Count Column -->
             <template #profile_count="{ item }">
-              <UBadge color="neutral" variant="subtle" size="sm"
-                class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800" @click="viewProxyProfiles(item)">
+              <UBadge
+                color="neutral"
+                variant="subtle"
+                size="sm"
+                class="cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800"
+                @click="viewProxyProfiles(item)"
+              >
                 <UIcon name="i-lucide-layers" class="w-3 h-3 mr-1" />
                 {{ item.profile_count ?? 0 }}
               </UBadge>
@@ -392,7 +445,12 @@ function formatDate(dateStr?: string | null) {
                       <span class="font-medium text-sm text-gray-900 dark:text-white truncate">
                         {{ item.name }}
                       </span>
-                      <UBadge color="neutral" variant="subtle" size="xs" class="uppercase font-mono">
+                      <UBadge
+                        color="neutral"
+                        variant="subtle"
+                        size="xs"
+                        class="uppercase font-mono"
+                      >
                         {{ item.type }}
                       </UBadge>
                     </div>
@@ -402,11 +460,14 @@ function formatDate(dateStr?: string | null) {
                   </div>
 
                   <div class="flex items-center gap-1.5 shrink-0">
-                    <span class="w-2 h-2 rounded-full shrink-0" :class="{
-                      'bg-emerald-500': item.status === 'active',
-                      'bg-rose-500': item.status === 'dead',
-                      'bg-gray-400': !item.status || item.status === 'unknown'
-                    }" />
+                    <span
+                      class="w-2 h-2 rounded-full shrink-0"
+                      :class="{
+                        'bg-emerald-500': item.status === 'active',
+                        'bg-rose-500': item.status === 'dead',
+                        'bg-gray-400': !item.status || item.status === 'unknown'
+                      }"
+                    />
                     <span v-if="item.latency_ms" class="text-xs font-mono font-medium text-gray-500">
                       {{ item.latency_ms }}ms
                     </span>
@@ -414,13 +475,26 @@ function formatDate(dateStr?: string | null) {
                 </div>
 
                 <div
-                  class="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800">
+                  class="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-800"
+                >
                   <span>{{ item.profile_count ?? 0 }} {{ t('profiles.title') }}</span>
                   <div class="flex items-center gap-1">
-                    <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-refresh-cw"
-                      :loading="testingProxyId === item.id" @click="handleTestProxy(item)" />
-                    <UButton size="xs" variant="ghost" color="primary" icon="i-lucide-arrow-right"
-                      :label="t('profiles.quickProfiles')" @click="viewProxyProfiles(item)" />
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      color="neutral"
+                      icon="i-lucide-refresh-cw"
+                      :loading="testingProxyId === item.id"
+                      @click="handleTestProxy(item)"
+                    />
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      color="primary"
+                      icon="i-lucide-arrow-right"
+                      :label="t('profiles.quickProfiles')"
+                      @click="viewProxyProfiles(item)"
+                    />
                   </div>
                 </div>
               </div>
@@ -436,8 +510,13 @@ function formatDate(dateStr?: string | null) {
                 <p class="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-4">
                   {{ t('profiles.noProxiesDesc') }}
                 </p>
-                <UButton color="primary" variant="soft" icon="i-lucide-plus" :label="t('profiles.addProxy')"
-                  @click="openCreate" />
+                <UButton
+                  color="primary"
+                  variant="soft"
+                  icon="i-lucide-plus"
+                  :label="t('profiles.addProxy')"
+                  @click="openCreate"
+                />
               </div>
             </template>
           </LazyGridList>
@@ -445,8 +524,11 @@ function formatDate(dateStr?: string | null) {
       </div>
 
       <!-- Create / Edit Modal -->
-      <UModal v-model:open="showModal" :title="editingProxy ? t('profiles.editProxy') : t('profiles.addProxy')"
-        :ui="{ content: 'max-w-lg' }">
+      <UModal
+        v-model:open="showModal"
+        :title="editingProxy ? t('profiles.editProxy') : t('profiles.addProxy')"
+        :ui="{ content: 'max-w-lg' }"
+      >
         <template #body>
           <div class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -461,11 +543,21 @@ function formatDate(dateStr?: string | null) {
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <UFormField :label="t('profiles.proxyHost')" required class="sm:col-span-2">
-                <UInput v-model="form.host" placeholder="127.0.0.1 or domain" class="w-full font-mono" autofocus />
+                <UInput
+                  v-model="form.host"
+                  placeholder="127.0.0.1 or domain"
+                  class="w-full font-mono"
+                  autofocus
+                />
               </UFormField>
 
               <UFormField :label="t('profiles.proxyPort')" required>
-                <UInput v-model.number="form.port" type="number" placeholder="8080" class="w-full font-mono" />
+                <UInput
+                  v-model.number="form.port"
+                  type="number"
+                  placeholder="8080"
+                  class="w-full font-mono"
+                />
               </UFormField>
             </div>
 
@@ -475,7 +567,12 @@ function formatDate(dateStr?: string | null) {
               </UFormField>
 
               <UFormField :label="t('profiles.proxyPass')">
-                <UInput v-model="form.password" type="password" placeholder="Optional password" class="w-full" />
+                <UInput
+                  v-model="form.password"
+                  type="password"
+                  placeholder="Optional password"
+                  class="w-full"
+                />
               </UFormField>
             </div>
           </div>
@@ -483,21 +580,40 @@ function formatDate(dateStr?: string | null) {
 
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton variant="ghost" color="neutral" :label="t('global.cancel')" @click="showModal = false" />
-            <UButton color="primary" variant="soft" :label="t('global.save')" :loading="saving" @click="handleSave" />
+            <UButton
+              variant="ghost"
+              color="neutral"
+              :label="t('global.cancel')"
+              @click="showModal = false"
+            />
+            <UButton
+              color="primary"
+              variant="soft"
+              :label="t('global.save')"
+              :loading="saving"
+              @click="handleSave"
+            />
           </div>
         </template>
       </UModal>
 
       <!-- Single Delete Confirm Modal -->
-      <LazyBaseConfirmModal v-model:open="showDeleteConfirm" :title="t('profiles.deleteProxyConfirm')"
-        :description="t('profiles.deleteProxyConfirmDesc', { name: proxyToDelete?.name || '' })" :loading="deleting"
-        @confirm="executeSingleDelete" />
+      <LazyBaseConfirmModal
+        v-model:open="showDeleteConfirm"
+        :title="t('profiles.deleteProxyConfirm')"
+        :description="t('profiles.deleteProxyConfirmDesc', { name: proxyToDelete?.name || '' })"
+        :loading="deleting"
+        @confirm="executeSingleDelete"
+      />
 
       <!-- Batch Delete Confirm Modal -->
-      <LazyBaseConfirmModal v-model:open="showBatchDeleteConfirm" :title="t('profiles.batchDeleteProxiesConfirm')"
-        :description="t('profiles.batchDeleteProxiesConfirmDesc', { count: selected.length })" :loading="deleting"
-        @confirm="executeBatchDelete" />
+      <LazyBaseConfirmModal
+        v-model:open="showBatchDeleteConfirm"
+        :title="t('profiles.batchDeleteProxiesConfirm')"
+        :description="t('profiles.batchDeleteProxiesConfirmDesc', { count: selected.length })"
+        :loading="deleting"
+        @confirm="executeBatchDelete"
+      />
     </template>
   </BasePage>
 </template>

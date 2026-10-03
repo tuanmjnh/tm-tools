@@ -174,12 +174,26 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
 </script>
 
 <template>
-  <BaseResponsiveSlideover v-model:open="open" :title="t('tools.history')" icon="i-lucide-history" side="right"
-    :ui="{ content: 'w-screen max-w-5xl' }">
+  <BaseResponsiveSlideover
+    v-model:open="open"
+    :title="t('tools.history')"
+    icon="i-lucide-history"
+    side="right"
+    :ui="{ content: 'w-screen max-w-5xl' }"
+  >
     <template #body>
       <div class="h-[75vh]">
-        <LazyGridList v-model:selected="selected" :items="history" :columns="columns" item-key="id" selectable
-          :loading="loading" :can-load-more="false" storage-key="tools-video-history" @refresh="loadHistory">
+        <LazyGridList
+          v-model:selected="selected"
+          :items="history"
+          :columns="columns"
+          item-key="id"
+          selectable
+          :loading="loading"
+          :can-load-more="false"
+          storage-key="tools-video-history"
+          @refresh="loadHistory"
+        >
           <template #empty>
             <UEmpty icon="i-lucide-clock" :title="t('tools.noHistoryVideo')" :description="t('tools.noHistoryDesc')" />
           </template>
@@ -187,13 +201,21 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           <template #mobile-content="{ item: h }">
             <div class="flex items-start justify-between gap-2 min-w-0">
               <div class="flex items-center gap-2 flex-1 min-w-0">
-                <UCheckbox :model-value="isSelected(h)" @update:model-value="(val) => toggleSelect(h, val)"
-                  @click.stop />
+                <UCheckbox
+                  :model-value="isSelected(h)"
+                  @update:model-value="(val) => toggleSelect(h, val)"
+                  @click.stop
+                />
                 <p class="text-sm font-semibold truncate flex-1" :title="h.input_file || ''">
                   {{ h.input_file ? h.input_file.split('/').pop() : '-' }}
                 </p>
               </div>
-              <UBadge :color="statusColor(h)" variant="soft" size="sm" class="shrink-0">
+              <UBadge
+                :color="statusColor(h)"
+                variant="soft"
+                size="sm"
+                class="shrink-0"
+              >
                 {{ t('tools.' + h.status) }}
               </UBadge>
             </div>
@@ -209,12 +231,32 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
                 </div>
               </div>
               <div class="flex items-center justify-center gap-1">
-                <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
-                  color="primary" :title="t('tools.openFile')" @click="openFile(h.output_file)" />
-                <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
-                  :title="t('tools.openFolder')" @click="showInFolder(h.output_file)" />
-                <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
-                  @click="confirmDelete(h)" />
+                <UButton
+                  v-if="h.status === 'completed' && h.output_file"
+                  icon="i-lucide-play"
+                  size="xs"
+                  variant="ghost"
+                  color="primary"
+                  :title="t('tools.openFile')"
+                  @click="openFile(h.output_file)"
+                />
+                <UButton
+                  v-if="h.output_file"
+                  icon="i-lucide-folder"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  :title="t('tools.openFolder')"
+                  @click="showInFolder(h.output_file)"
+                />
+                <UButton
+                  icon="i-lucide-trash"
+                  size="xs"
+                  variant="ghost"
+                  color="error"
+                  :title="t('global.delete')"
+                  @click="confirmDelete(h)"
+                />
               </div>
             </div>
           </template>
@@ -255,12 +297,32 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
 
           <template #actions="{ item: h }">
             <div class="flex items-center justify-end gap-1 shrink-0">
-              <UButton v-if="h.status === 'completed' && h.output_file" icon="i-lucide-play" size="xs" variant="ghost"
-                color="primary" :title="t('tools.openFile')" @click="openFile(h.output_file)" />
-              <UButton v-if="h.output_file" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
-                :title="t('tools.openFolder')" @click="showInFolder(h.output_file)" />
-              <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error" :title="t('global.delete')"
-                @click="confirmDelete(h)" />
+              <UButton
+                v-if="h.status === 'completed' && h.output_file"
+                icon="i-lucide-play"
+                size="xs"
+                variant="ghost"
+                color="primary"
+                :title="t('tools.openFile')"
+                @click="openFile(h.output_file)"
+              />
+              <UButton
+                v-if="h.output_file"
+                icon="i-lucide-folder"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                :title="t('tools.openFolder')"
+                @click="showInFolder(h.output_file)"
+              />
+              <UButton
+                icon="i-lucide-trash"
+                size="xs"
+                variant="ghost"
+                color="error"
+                :title="t('global.delete')"
+                @click="confirmDelete(h)"
+              />
             </div>
           </template>
         </LazyGridList>
@@ -269,9 +331,20 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
     <template #footer>
       <div class="flex items-center justify-between w-full gap-2">
         <div class="flex items-center gap-2">
-          <UButton variant="ghost" color="neutral" :label="t('global.cancel')" @click="open = false" />
-          <UButton v-if="selected.length" icon="i-lucide-trash" color="error" variant="subtle" :loading="deleting"
-            @click="confirmBatchDelete">
+          <UButton
+            variant="ghost"
+            color="neutral"
+            :label="t('global.cancel')"
+            @click="open = false"
+          />
+          <UButton
+            v-if="selected.length"
+            icon="i-lucide-trash"
+            color="error"
+            variant="subtle"
+            :loading="deleting"
+            @click="confirmBatchDelete"
+          >
             {{ t('global.delete') }}
             <template #trailing>
               <UKbd>{{ selected.length }}</UKbd>
@@ -279,18 +352,35 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           </UButton>
         </div>
         <div class="flex items-center gap-2">
-          <UButton v-if="history.length > 0" size="xs" variant="ghost" color="neutral" @click="toggleSelectAll">
+          <UButton
+            v-if="history.length > 0"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            @click="toggleSelectAll"
+          >
             {{ selected.length === history.length ? t('tools.deselectAll') : t('tools.selectAll') }}
           </UButton>
-          <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" :loading="loading"
-            @click="loadHistory" />
+          <UButton
+            icon="i-lucide-refresh-cw"
+            :label="t('tools.refresh')"
+            variant="soft"
+            :loading="loading"
+            @click="loadHistory"
+          />
         </div>
       </div>
     </template>
   </BaseResponsiveSlideover>
 
-  <BaseConfirmModal v-model:open="showDeleteConfirm" :title="confirmTitle" confirm-icon="i-lucide-trash-2" color="error"
-    :loading="deleting" @confirm="doDelete">
+  <BaseConfirmModal
+    v-model:open="showDeleteConfirm"
+    :title="confirmTitle"
+    confirm-icon="i-lucide-trash-2"
+    color="error"
+    :loading="deleting"
+    @confirm="doDelete"
+  >
     <template #body>
       <div class="space-y-3 py-1">
         <div class="flex items-start gap-3">
@@ -301,10 +391,15 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
         </div>
 
         <!-- Targeted files list -->
-        <div v-if="deleteTargets.length > 0"
-          class="max-h-36 overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 p-2 space-y-1 text-xs font-mono">
-          <div v-for="item in deleteTargets" :key="item.id"
-            class="flex items-center gap-2 truncate text-neutral-700 dark:text-neutral-300">
+        <div
+          v-if="deleteTargets.length > 0"
+          class="max-h-36 overflow-y-auto rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 p-2 space-y-1 text-xs font-mono"
+        >
+          <div
+            v-for="item in deleteTargets"
+            :key="item.id"
+            class="flex items-center gap-2 truncate text-neutral-700 dark:text-neutral-300"
+          >
             <UIcon name="i-lucide-file-video" class="size-3.5 shrink-0 text-primary" />
             <span class="truncate">{{ getHistoryFileName(item) }}</span>
           </div>

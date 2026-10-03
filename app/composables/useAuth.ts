@@ -1,9 +1,11 @@
-import type { AuthResponse, AuthUser, LoginPlatform, LoginRequest, RegisterRequest } from '~/types/auth'
+import type { AuthResponse, AuthUser, LoginPlatform, LoginRequest, RegisterRequest, TotpChallenge } from '~/types/auth'
+import type { LoginStartResponse } from '~/types/webauthn'
 
 interface HubUserData {
   id: string
   email: string
   name: string
+  username?: string
   roles?: string[]
   permissions?: string[]
   platform?: LoginPlatform
@@ -18,10 +20,17 @@ interface HubAuthData {
   user: HubUserData
 }
 
+type HubLoginData = Partial<HubAuthData> & {
+  totpRequired?: boolean
+  pendingTotpToken?: string
+  user?: HubUserData
+}
+
 interface HubMeData {
   userId: string
   email: string
   name: string
+  username?: string
   roles?: string[]
   permissions?: string[]
   allowedRoutes?: string[]
@@ -65,43 +74,121 @@ export const useAuth = () => {
     return perms.some(p => candidates.has(p))
   }
 
-  async function login(credentials: LoginRequest): Promise<AuthResponse> {
+  function applyAuthData(data: HubAuthData): AuthResponse {
+    const formattedUser: AuthUser = {
+      id: data.user.id,
+      email: data.user.email,
+      name: data.user.name,
+      username: data.user.username,
+      role: data.user.roles?.[0] || 'user',
+      permissions: data.user.permissions || [],
+      platform: data.user.platform || 'web',
+      createdAt: data.user.createdAt || new Date().toISOString(),
+      updatedAt: data.user.updatedAt || new Date().toISOString()
+    }
+
+    user.value = formattedUser
+    accessToken.value = data.accessToken
+    refreshToken.value = data.refreshToken
+
+    const cookieAccess = useCookie('accessToken', { maxAge: data.expiresIn, path: '/', sameSite: 'lax' })
+    const cookieRefresh = useCookie('refreshToken', { maxAge: 604800, path: '/', sameSite: 'lax' })
+
+    cookieAccess.value = data.accessToken
+    cookieRefresh.value = data.refreshToken
+
+    return {
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      expiresIn: data.expiresIn,
+      user: formattedUser
+    }
+  }
+
+  async function login(credentials: LoginRequest): Promise<AuthResponse | TotpChallenge> {
     if (loading.value) return Promise.reject(new Error('Request in progress'))
     loading.value = true
     try {
-      const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/login`, {
+      const { data } = await $fetch<{ success: boolean, data: HubLoginData }>(`${hubUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'X-App-Id': appId },
         body: { ...credentials, appId }
       })
 
-      const formattedUser: AuthUser = {
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.name,
-        role: data.user.roles?.[0] || 'user',
-        permissions: data.user.permissions || [],
-        platform: data.user.platform || 'web',
-        createdAt: data.user.createdAt || new Date().toISOString(),
-        updatedAt: data.user.updatedAt || new Date().toISOString()
+      if (data.totpRequired && data.pendingTotpToken && data.user) {
+        return {
+          totpRequired: true,
+          pendingTotpToken: data.pendingTotpToken,
+          user: { id: data.user.id, email: data.user.email, name: data.user.name }
+        }
       }
 
-      user.value = formattedUser
-      accessToken.value = data.accessToken
-      refreshToken.value = data.refreshToken
+      return applyAuthData(data as HubAuthData)
+    } finally {
+      loading.value = false
+    }
+  }
 
-      const cookieAccess = useCookie('accessToken', { maxAge: data.expiresIn, path: '/', sameSite: 'lax' })
-      const cookieRefresh = useCookie('refreshToken', { maxAge: 604800, path: '/', sameSite: 'lax' })
+  async function verifyTotp(code: string, pendingTotpToken: string): Promise<AuthResponse> {
+    if (loading.value) return Promise.reject(new Error('Request in progress'))
+    loading.value = true
+    try {
+      const { data } = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/totp/login`, {
+        method: 'POST',
+        headers: { 'X-App-Id': appId },
+        body: { code, pendingTotpToken, appId }
+      })
+      return applyAuthData(data)
+    } finally {
+      loading.value = false
+    }
+  }
 
-      cookieAccess.value = data.accessToken
-      cookieRefresh.value = data.refreshToken
+  async function passkeyLogin(): Promise<AuthResponse> {
+    if (loading.value) return Promise.reject(new Error('Request in progress'))
+    loading.value = true
+    try {
+      const start = await $fetch<{ success: boolean, data: LoginStartResponse }>(`${hubUrl}/api/v1/auth/passkey/login/start`, {
+        method: 'POST',
+        headers: { 'X-App-Id': appId },
+        body: { appId }
+      })
+      const opts = start.data
 
-      return {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        expiresIn: data.expiresIn,
-        user: formattedUser
+      const publicKey: PublicKeyCredentialRequestOptions = {
+        challenge: b64urlToBuf(opts.challenge),
+        rpId: opts.rpId,
+        timeout: opts.timeout,
+        allowCredentials: opts.allowCredentials?.map(c => ({
+          id: b64urlToBuf(c.id),
+          type: 'public-key' as const,
+          transports: c.transports as AuthenticatorTransport[] | undefined
+        })),
+        userVerification: opts.userVerification as UserVerificationRequirement | undefined
       }
+
+      const credential = await navigator.credentials.get({ publicKey }) as PublicKeyCredential | null
+      if (!credential) throw new Error('Passkey authentication cancelled')
+
+      const assertion = credential.response as AuthenticatorAssertionResponse
+      const serialized = {
+        id: credential.id,
+        rawId: bufToB64url(credential.rawId),
+        type: 'public-key' as const,
+        response: {
+          clientDataJSON: bufToB64url(assertion.clientDataJSON),
+          authenticatorData: bufToB64url(assertion.authenticatorData),
+          signature: bufToB64url(assertion.signature),
+          userHandle: assertion.userHandle ? bufToB64url(assertion.userHandle) : undefined
+        }
+      }
+
+      const finish = await $fetch<{ success: boolean, data: HubAuthData }>(`${hubUrl}/api/v1/auth/passkey/login/finish`, {
+        method: 'POST',
+        headers: { 'X-App-Id': appId },
+        body: { appId, credential: serialized }
+      })
+      return applyAuthData(finish.data)
     } finally {
       loading.value = false
     }
@@ -121,6 +208,7 @@ export const useAuth = () => {
         id: data.user.id,
         email: data.user.email,
         name: data.user.name,
+        username: data.user.username,
         role: data.user.roles?.[0] || 'user',
         permissions: data.user.permissions || [],
         platform: data.user.platform || 'web',
@@ -253,6 +341,7 @@ export const useAuth = () => {
         id: data.userId,
         email: data.email,
         name: data.name,
+        username: data.username,
         role: data.roles?.[0] || 'user',
         permissions: data.permissions || [],
         platform: data.platform || 'web',
@@ -290,6 +379,8 @@ export const useAuth = () => {
     isAuthenticated,
     can,
     login,
+    verifyTotp,
+    passkeyLogin,
     register,
     logout,
     refresh,

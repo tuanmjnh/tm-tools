@@ -44,24 +44,29 @@ const themes = computed(() => {
 </script>
 
 <template>
-  <Editor v-model="content" api-key="jl2ow90w9fkj758bcj3uw58sntbsdrtnpg8pj5x8cm2zilea" :init="{
-    height: props.height || 500,
-    menubar: true,
-    plugins,
-    toolbar,
-    // fix context error
-    inline: false,
-    fixed_toolbar_container: null,
-    relative_urls: false,
-    remove_script_host: false,
-    placeholder: props.placeholder || $t('editor.placeholder'),
-    image_caption: true,
-    quickbars_selection_toolbar: 'bold italic underline | quicklink h2 h3 blockquote | forecolor backcolor',
-    quickbars_insert_toolbar: 'image media table | hr',
-    content_style: 'body { font-family: Inter, sans-serif; font-size: 14px; line-height: 1.6; }',
-    skin: themes.skin,
-    content_css: themes.content_css
-  }" @update:modelValue="handleChange" />
+  <Editor
+    v-model="content"
+    api-key="jl2ow90w9fkj758bcj3uw58sntbsdrtnpg8pj5x8cm2zilea"
+    :init="{
+      height: props.height || 500,
+      menubar: true,
+      plugins,
+      toolbar,
+      // fix context error
+      inline: false,
+      fixed_toolbar_container: null,
+      relative_urls: false,
+      remove_script_host: false,
+      placeholder: props.placeholder || $t('editor.placeholder'),
+      image_caption: true,
+      quickbars_selection_toolbar: 'bold italic underline | quicklink h2 h3 blockquote | forecolor backcolor',
+      quickbars_insert_toolbar: 'image media table | hr',
+      content_style: 'body { font-family: Inter, sans-serif; font-size: 14px; line-height: 1.6; }',
+      skin: themes.skin,
+      content_css: themes.content_css
+    }"
+    @update:model-value="handleChange"
+  />
 </template>
 
 <style>

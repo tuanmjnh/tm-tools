@@ -69,34 +69,73 @@ async function onTestProxy(p: ProfileProxy) {
         <!-- Action Header -->
         <div class="flex items-center justify-between">
           <span class="text-sm text-gray-500">{{ proxies.length }} proxies</span>
-          <UButton size="xs" color="primary" variant="soft" icon="i-lucide-plus" :label="t('profiles.addProxy')"
-            @click="openAdd" />
+          <UButton
+            size="xs"
+            color="primary"
+            variant="soft"
+            icon="i-lucide-plus"
+            :label="t('profiles.addProxy')"
+            @click="openAdd"
+          />
         </div>
 
         <!-- Add Form -->
-        <div v-if="showAddForm"
-          class="p-3 border rounded-lg bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 space-y-3">
+        <div
+          v-if="showAddForm"
+          class="p-3 border rounded-lg bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 space-y-3"
+        >
           <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
             <UInput v-model="form.name" size="sm" placeholder="Proxy Name" />
-            <USelect v-model="form.type" size="sm" :items="[
-              { label: 'HTTP', value: 'http' },
-              { label: 'SOCKS5', value: 'socks5' }
-            ]" />
+            <USelect
+              v-model="form.type"
+              size="sm"
+              :items="[
+                { label: 'HTTP', value: 'http' },
+                { label: 'SOCKS5', value: 'socks5' }
+              ]"
+            />
             <div class="flex gap-1">
-              <UInput v-model="form.host" size="sm" placeholder="Host / IP" class="flex-1" />
-              <UInput v-model.number="form.port" type="number" size="sm" placeholder="Port" class="w-20" />
+              <UInput
+                v-model="form.host"
+                size="sm"
+                placeholder="Host / IP"
+                class="flex-1"
+              />
+              <UInput
+                v-model.number="form.port"
+                type="number"
+                size="sm"
+                placeholder="Port"
+                class="w-20"
+              />
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
             <UInput v-model="form.username" size="sm" placeholder="Username (optional)" />
-            <UInput v-model="form.password" size="sm" type="password" placeholder="Password (optional)" />
+            <UInput
+              v-model="form.password"
+              size="sm"
+              type="password"
+              placeholder="Password (optional)"
+            />
           </div>
 
           <div class="flex justify-end gap-2">
-            <UButton size="xs" color="neutral" variant="ghost" :label="t('global.cancel')"
-              @click="showAddForm = false" />
-            <UButton size="xs" color="primary" variant="soft" :label="t('global.save')" @click="onSaveProxy" />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :label="t('global.cancel')"
+              @click="showAddForm = false"
+            />
+            <UButton
+              size="xs"
+              color="primary"
+              variant="soft"
+              :label="t('global.save')"
+              @click="onSaveProxy"
+            />
           </div>
         </div>
 
@@ -106,11 +145,17 @@ async function onTestProxy(p: ProfileProxy) {
             No proxies in pool. Click "Add Proxy" to add one.
           </div>
 
-          <div v-for="p in proxies" :key="p.id"
-            class="p-2.5 flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-gray-900/50">
+          <div
+            v-for="p in proxies"
+            :key="p.id"
+            class="p-2.5 flex items-center justify-between gap-2 hover:bg-gray-50 dark:hover:bg-gray-900/50"
+          >
             <div class="flex items-center gap-3">
-              <UBadge :color="p.status === 'active' ? 'success' : (p.status === 'dead' ? 'error' : 'neutral')"
-                variant="subtle" size="sm">
+              <UBadge
+                :color="p.status === 'active' ? 'success' : (p.status === 'dead' ? 'error' : 'neutral')"
+                variant="subtle"
+                size="sm"
+              >
                 {{ p.type.toUpperCase() }}
               </UBadge>
 
@@ -126,9 +171,22 @@ async function onTestProxy(p: ProfileProxy) {
             </div>
 
             <div class="flex items-center gap-1">
-              <UButton size="xs" variant="soft" color="neutral" icon="i-lucide-activity"
-                :loading="testingProxyId === p.id" :label="t('profiles.checkProxy')" @click="onTestProxy(p)" />
-              <UButton size="xs" variant="ghost" color="error" icon="i-lucide-trash" @click="onDeleteProxy(p.id)" />
+              <UButton
+                size="xs"
+                variant="soft"
+                color="neutral"
+                icon="i-lucide-activity"
+                :loading="testingProxyId === p.id"
+                :label="t('profiles.checkProxy')"
+                @click="onTestProxy(p)"
+              />
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="error"
+                icon="i-lucide-trash"
+                @click="onDeleteProxy(p.id)"
+              />
             </div>
           </div>
         </div>

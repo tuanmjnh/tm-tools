@@ -3,7 +3,7 @@ export const removeById = <T extends { _id?: string | number } | any>(
   id: string | number,
   key: keyof T = '_id' as keyof T
 ): T[] => {
-  const index = items.findIndex((item) => item[key] === id)
+  const index = items.findIndex(item => item[key] === id)
   if (index !== -1) {
     items.splice(index, 1)
   }
@@ -528,9 +528,9 @@ export const toNormalize = (string: string) => {
  * Calculate fullPath for a specific language based on urlMode strategy
  */
 export const calculateLocalizedPath = (pathOptions: {
-  slug: string,
-  type?: string,
-  urlMode?: 'flat' | 'prefix' | 'category',
+  slug: string
+  type?: string
+  urlMode?: 'flat' | 'prefix' | 'category'
   parentPath?: string
 }) => {
   const { slug, type, urlMode = 'category', parentPath } = pathOptions
@@ -570,7 +570,6 @@ export const generateEan13 = () => {
   result.push(checksum)
   return result.join('')
 }
-
 
 export const generateCode = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()

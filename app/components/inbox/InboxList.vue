@@ -1,80 +1,100 @@
 <script setup lang="ts">
 import { format, isToday } from 'date-fns'
-import type { Mail } from '~/types'
+import type { InboxItem } from '~/types/inbox'
+import { parseAddress } from '~/utils/inboxHtml'
+
+const { t } = useI18n()
 
 const props = defineProps<{
-  mails: Mail[]
+  messages: InboxItem[]
+  loading?: boolean
 }>()
 
-const mailsRefs = ref<Record<number, Element | null>>({})
+const selectedId = defineModel<string | null>('selectedId', { default: null })
 
-const selectedMail = defineModel<Mail | null>()
+const itemsRef = ref<Record<string, Element | null>>({})
 
-watch(selectedMail, () => {
-  if (!selectedMail.value) {
-    return
-  }
-  const ref = mailsRefs.value[selectedMail.value.id]
-  if (ref) {
-    ref.scrollIntoView({ block: 'nearest' })
-  }
+watch(selectedId, () => {
+  if (!selectedId.value) return
+  const ref = itemsRef.value[selectedId.value]
+  if (ref) ref.scrollIntoView({ block: 'nearest' })
 })
+
+const senderOf = (mail: InboxItem) => {
+  const parsed = parseAddress(mail.from)
+  return parsed.name || parsed.email || t('inbox.unknownSender')
+}
 
 defineShortcuts({
   arrowdown: () => {
-    const index = props.mails.findIndex((mail: Mail) => mail.id === selectedMail.value?.id)
-
-    if (index === -1) {
-      selectedMail.value = props.mails[0]
-    } else if (index < props.mails.length - 1) {
-      selectedMail.value = props.mails[index + 1]
-    }
+    const list = props.messages
+    if (!list.length) return
+    const index = list.findIndex(m => m.id === selectedId.value)
+    if (index === -1) selectedId.value = list[0]?.id || null
+    else selectedId.value = list[index + 1]?.id || selectedId.value
   },
   arrowup: () => {
-    const index = props.mails.findIndex((mail: Mail) => mail.id === selectedMail.value?.id)
-
-    if (index === -1) {
-      selectedMail.value = props.mails[props.mails.length - 1]
-    } else if (index > 0) {
-      selectedMail.value = props.mails[index - 1]
-    }
+    const list = props.messages
+    if (!list.length) return
+    const index = list.findIndex(m => m.id === selectedId.value)
+    if (index > 0) selectedId.value = list[index - 1]?.id || selectedId.value
   }
 })
 </script>
 
 <template>
-  <div class="overflow-y-auto divide-y divide-default">
+  <div class="h-full overflow-y-auto divide-y divide-default">
+    <template v-if="loading && !messages.length">
+      <USkeleton
+        v-for="i in 6"
+        :key="i"
+        class="h-20 rounded-none"
+      />
+    </template>
+
     <div
-      v-for="(mail, index) in mails"
-      :key="index"
-      :ref="(el) => { mailsRefs[mail.id] = el as Element | null }"
+      v-for="mail in messages"
+      :key="mail.id"
+      :ref="(el) => { itemsRef[mail.id] = el as Element | null }"
+      class="p-4 text-sm cursor-pointer border-l-2 transition-colors"
+      :class="[
+        mail.unread ? 'text-highlighted' : 'text-toned',
+        selectedId === mail.id
+          ? 'border-primary bg-primary/10'
+          : 'border-bg hover:border-primary hover:bg-primary/5'
+      ]"
+      @click="selectedId = mail.id"
     >
-      <div
-        class="p-4 sm:px-6 text-sm cursor-pointer border-l-2 transition-colors"
-        :class="[
-          mail.unread ? 'text-highlighted' : 'text-toned',
-          selectedMail && selectedMail.id === mail.id
-            ? 'border-primary bg-primary/10'
-            : 'border-bg hover:border-primary hover:bg-primary/5'
-        ]"
-        @click="selectedMail = mail"
-      >
-        <div class="flex items-center justify-between" :class="[mail.unread && 'font-semibold']">
-          <div class="flex items-center gap-3">
-            {{ mail.from.name }}
-
-            <UChip v-if="mail.unread" />
-          </div>
-
-          <span>{{ isToday(new Date(mail.date)) ? format(new Date(mail.date), 'HH:mm') : format(new Date(mail.date), 'dd MMM') }}</span>
+      <div class="flex items-center justify-between gap-2" :class="[mail.unread && 'font-semibold']">
+        <div class="flex items-center gap-2 min-w-0">
+          <UChip color="error" :show="mail.unread" />
+          <UIcon
+            v-if="mail.starred"
+            name="i-lucide-star"
+            class="size-3.5 shrink-0 text-warning fill-warning"
+          />
+          <span class="truncate">{{ senderOf(mail) }}</span>
         </div>
-        <p class="truncate" :class="[mail.unread && 'font-semibold']">
-          {{ mail.subject }}
-        </p>
-        <p class="text-dimmed line-clamp-1">
-          {{ mail.body }}
-        </p>
+
+        <span class="text-[11px] text-muted shrink-0">
+          {{ mail.date
+            ? (isToday(new Date(mail.date)) ? format(new Date(mail.date), 'HH:mm') : format(new Date(mail.date), 'dd MMM'))
+            : '' }}
+        </span>
       </div>
+      <p class="truncate mt-1" :class="[mail.unread && 'font-semibold']">
+        {{ mail.subject || t('inbox.noSubject') }}
+      </p>
+      <p class="text-dimmed line-clamp-2 text-xs">
+        {{ mail.snippet }}
+      </p>
+    </div>
+
+    <div
+      v-if="!loading && !messages.length"
+      class="p-8 text-center text-sm text-muted"
+    >
+      {{ t('inbox.emptyList') }}
     </div>
   </div>
 </template>

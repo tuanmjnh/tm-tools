@@ -39,5 +39,5 @@ watch(() => [props.value, props.options], () => {
 </script>
 
 <template>
-  <component :is="tag || 'svg'" ref="barcodeRef" class="max-w-full h-auto"></component>
+  <component :is="tag || 'svg'" ref="barcodeRef" class="max-w-full h-auto" />
 </template>

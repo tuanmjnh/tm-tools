@@ -50,34 +50,81 @@ const openConfirm = (type: 'local' | 'session' | 'cookies' | 'pwa' | 'all' | 'si
 </script>
 
 <template>
-  <BaseResponsiveModal v-model:open="isOpen" :title="$t('settings.storage.storage_management')"
-    :description="$t('settings.storage.storage_management_desc')">
+  <BaseResponsiveModal
+    v-model:open="isOpen"
+    :title="$t('settings.storage.storage_management')"
+    :description="$t('settings.storage.storage_management_desc')"
+  >
     <template #body>
       <div class="grid grid-cols-1 gap-2">
-        <UButton icon="i-lucide-database" variant="outline" color="neutral" block
-          class="justify-start text-xs rounded-xl py-5" :label="$t('settings.storage.clear_local_storage')"
-          @click="openConfirm('local')" />
-        <UButton icon="i-lucide-clock" variant="outline" color="neutral" block
-          class="justify-start text-xs rounded-xl py-5" :label="$t('settings.storage.clear_session_storage')"
-          @click="openConfirm('session')" />
-        <UButton icon="i-lucide-cookie" variant="outline" color="neutral" block
-          class="justify-start text-xs rounded-xl py-5" :label="$t('settings.storage.clear_cookies')"
-          @click="openConfirm('cookies')" />
-        <UButton icon="i-lucide-refresh-cw" variant="outline" color="neutral" block
-          class="justify-start text-xs rounded-xl py-5" :label="$t('settings.storage.clear_pwa_data')"
-          @click="openConfirm('pwa')" />
-        <UButton icon="i-lucide-layers" variant="outline" color="neutral" block
-          class="justify-start text-xs rounded-xl py-5" :label="$t('settings.storage.clear_site_data')"
-          @click="openConfirm('site')" />
+        <UButton
+          icon="i-lucide-database"
+          variant="outline"
+          color="neutral"
+          block
+          class="justify-start text-xs rounded-xl py-5"
+          :label="$t('settings.storage.clear_local_storage')"
+          @click="openConfirm('local')"
+        />
+        <UButton
+          icon="i-lucide-clock"
+          variant="outline"
+          color="neutral"
+          block
+          class="justify-start text-xs rounded-xl py-5"
+          :label="$t('settings.storage.clear_session_storage')"
+          @click="openConfirm('session')"
+        />
+        <UButton
+          icon="i-lucide-cookie"
+          variant="outline"
+          color="neutral"
+          block
+          class="justify-start text-xs rounded-xl py-5"
+          :label="$t('settings.storage.clear_cookies')"
+          @click="openConfirm('cookies')"
+        />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="outline"
+          color="neutral"
+          block
+          class="justify-start text-xs rounded-xl py-5"
+          :label="$t('settings.storage.clear_pwa_data')"
+          @click="openConfirm('pwa')"
+        />
+        <UButton
+          icon="i-lucide-layers"
+          variant="outline"
+          color="neutral"
+          block
+          class="justify-start text-xs rounded-xl py-5"
+          :label="$t('settings.storage.clear_site_data')"
+          @click="openConfirm('site')"
+        />
       </div>
 
-      <LazyBaseConfirmModal v-model:open="confirmModal.isOpen" :title="confirmModal.title" :description="confirmModal.description"
-        :cancel-label="$t('global.cancel')" :color="confirmModal.type === 'all' ? 'error' : 'warning'"
-        :confirm-label="$t('global.confirm')" :loading="confirmModal.loading" @confirm="confirmModal.onConfirm" />
+      <LazyBaseConfirmModal
+        v-model:open="confirmModal.isOpen"
+        :title="confirmModal.title"
+        :description="confirmModal.description"
+        :cancel-label="$t('global.cancel')"
+        :color="confirmModal.type === 'all' ? 'error' : 'warning'"
+        :confirm-label="$t('global.confirm')"
+        :loading="confirmModal.loading"
+        @confirm="confirmModal.onConfirm"
+      />
     </template>
     <template #footer>
-      <UButton icon="i-lucide-trash-2" color="error" variant="soft" block class="justify-start text-xs rounded-xl py-2"
-        :label="$t('settings.storage.clear_all')" @click="openConfirm('all')" />
+      <UButton
+        icon="i-lucide-trash-2"
+        color="error"
+        variant="soft"
+        block
+        class="justify-start text-xs rounded-xl py-2"
+        :label="$t('settings.storage.clear_all')"
+        @click="openConfirm('all')"
+      />
     </template>
   </BaseResponsiveModal>
 </template>

@@ -19,7 +19,7 @@ export function readConfigEnv(): Record<string, string> {
         if (eqIdx === -1) continue
         const key = trimmed.slice(0, eqIdx).trim()
         let value = trimmed.slice(eqIdx + 1).trim()
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
           value = value.slice(1, -1)
         }
         result[key] = value

@@ -21,7 +21,7 @@ export const EditorImage = Image.extend({
       ...this.parent?.(),
       width: {
         default: null,
-        renderHTML: attributes => {
+        renderHTML: (attributes) => {
           if (!attributes.width) {
             return {}
           }

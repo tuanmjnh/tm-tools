@@ -223,28 +223,45 @@ onMounted(() => {
   <BasePage id="utilities-icons" :title="t('nav.utilities_icons')">
     <template #right>
       <div class="flex items-center gap-2">
-        <USelectMenu v-model="copyFormat" :items="copyFormats" value-key="value" label-key="label" size="xs"
-          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-36 hidden sm:block" />
+        <USelectMenu
+          v-model="copyFormat"
+          :items="copyFormats"
+          value-key="value"
+          label-key="label"
+          size="xs"
+          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+          class="w-36 hidden sm:block"
+        />
       </div>
     </template>
 
     <div class="flex flex-col flex-1 min-h-0 p-4 sm:p-6 gap-4 h-full">
       <!-- Controls card -->
       <div
-        class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm space-y-3 shrink-0">
+        class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm space-y-3 shrink-0"
+      >
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <!-- Search input -->
           <div class="flex-1 min-w-60">
-            <UInput v-model="filters.search" icon="i-lucide-search"
-              :placeholder="t('utilities.icons.searchPlaceholder')" clearable size="sm" />
+            <UInput
+              v-model="filters.search"
+              icon="i-lucide-search"
+              :placeholder="t('utilities.icons.searchPlaceholder')"
+              clearable
+              size="sm"
+            />
           </div>
 
           <!-- Collection tabs -->
           <div class="flex flex-wrap items-center gap-1.5">
-            <UButton v-for="c in collections" :key="c.value"
+            <UButton
+              v-for="c in collections"
+              :key="c.value"
               :variant="filters.collection === c.value ? 'solid' : 'subtle'"
-              :color="filters.collection === c.value ? 'primary' : 'neutral'" size="xs"
-              @click="filters.collection = c.value">
+              :color="filters.collection === c.value ? 'primary' : 'neutral'"
+              size="xs"
+              @click="filters.collection = c.value"
+            >
               {{ c.label }}
             </UButton>
           </div>
@@ -252,15 +269,22 @@ onMounted(() => {
 
         <!-- Customizer Bar -->
         <div
-          class="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 text-xs text-gray-500 dark:text-gray-400">
+          class="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-gray-100 dark:border-gray-800/80 text-xs text-gray-500 dark:text-gray-400"
+        >
           <div class="flex items-center gap-4 flex-wrap">
             <!-- Size controls -->
             <div class="flex items-center gap-2">
               <span>{{ t('utilities.icons.size') }}:</span>
               <div class="flex items-center gap-1">
-                <UButton v-for="s in [20, 24, 28, 36, 44]" :key="s" :variant="iconSize === s ? 'solid' : 'ghost'"
-                  :color="iconSize === s ? 'primary' : 'neutral'" size="xs" class="px-2 py-0.5 text-xs font-mono"
-                  @click="iconSize = s">
+                <UButton
+                  v-for="s in [20, 24, 28, 36, 44]"
+                  :key="s"
+                  :variant="iconSize === s ? 'solid' : 'ghost'"
+                  :color="iconSize === s ? 'primary' : 'neutral'"
+                  size="xs"
+                  class="px-2 py-0.5 text-xs font-mono"
+                  @click="iconSize = s"
+                >
                   {{ s }}
                 </UButton>
               </div>
@@ -269,11 +293,16 @@ onMounted(() => {
             <!-- Color controls -->
             <div class="flex items-center gap-1.5">
               <span>{{ t('utilities.icons.color') }}:</span>
-              <button v-for="c in colors" :key="c.value" type="button" :title="c.label"
+              <button
+                v-for="c in colors"
+                :key="c.value"
+                type="button"
+                :title="c.label"
                 class="size-5 rounded-full border border-gray-300 dark:border-gray-700 flex items-center justify-center transition-transform"
                 :class="[c.value === selectedColor ? 'scale-125 ring-2 ring-primary-500' : 'hover:scale-110']"
                 :style="{ backgroundColor: c.value === 'currentColor' ? 'transparent' : c.value }"
-                @click="selectedColor = c.value">
+                @click="selectedColor = c.value"
+              >
                 <span v-if="c.value === 'currentColor'" class="text-[9px] font-bold">A</span>
               </button>
             </div>
@@ -287,48 +316,70 @@ onMounted(() => {
       </div>
 
       <!-- Icon grid area -->
-      <div ref="scrollParent"
-        class="flex-1 min-h-0 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 p-4 scrollbar-thin">
-        <div v-if="icons.length > 0"
-          class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-          <div v-for="icon in icons" :key="icon"
+      <div
+        ref="scrollParent"
+        class="flex-1 min-h-0 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 p-4 scrollbar-thin"
+      >
+        <div
+          v-if="icons.length > 0"
+          class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3"
+        >
+          <div
+            v-for="icon in icons"
+            :key="icon"
             class="group relative flex flex-col items-center justify-center p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 hover:border-primary-500 hover:shadow-md hover:shadow-primary-500/10 transition-all duration-200 cursor-pointer aspect-square"
-            @click="copyIcon(icon)">
+            @click="copyIcon(icon)"
+          >
             <!-- Favorite button -->
-            <button type="button"
+            <button
+              type="button"
               class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-amber-500"
-              :class="{ 'opacity-100! text-amber-500': isFavorite(icon) }" @click.stop="toggleFavorite(icon)">
-              <UIcon :name="isFavorite(icon) ? 'i-lucide-star' : 'i-lucide-star'" class="size-3.5"
-                :class="{ 'fill-amber-500': isFavorite(icon) }" />
+              :class="{ 'opacity-100! text-amber-500': isFavorite(icon) }"
+              @click.stop="toggleFavorite(icon)"
+            >
+              <UIcon
+                :name="isFavorite(icon) ? 'i-lucide-star' : 'i-lucide-star'"
+                class="size-3.5"
+                :class="{ 'fill-amber-500': isFavorite(icon) }"
+              />
             </button>
 
             <!-- Inspect button -->
-            <button type="button"
+            <button
+              type="button"
               class="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-primary-500"
-              :title="t('utilities.icons.previewDetails')" @click.stop="openDetails(icon)">
+              :title="t('utilities.icons.previewDetails')"
+              @click.stop="openDetails(icon)"
+            >
               <UIcon name="i-lucide-info" class="size-3.5" />
             </button>
 
             <!-- Icon preview -->
-            <div class="flex items-center justify-center my-auto transition-transform group-hover:scale-110"
-              :style="{ color: selectedColor }">
+            <div
+              class="flex items-center justify-center my-auto transition-transform group-hover:scale-110"
+              :style="{ color: selectedColor }"
+            >
               <UIcon :name="icon" :style="{ width: `${iconSize}px`, height: `${iconSize}px` }" />
             </div>
 
             <!-- Icon name label -->
             <span
               class="w-full text-center text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate px-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 mt-auto"
-              :title="icon">
+              :title="icon"
+            >
               {{ icon.replace(/^(i-lucide:|i-lucide-|i-simple-icons:|i-simple-icons-)/, '') }}
             </span>
           </div>
         </div>
 
         <!-- Empty state -->
-        <div v-if="!isFetching && icons.length === 0"
-          class="flex flex-col items-center justify-center h-64 text-center">
+        <div
+          v-if="!isFetching && icons.length === 0"
+          class="flex flex-col items-center justify-center h-64 text-center"
+        >
           <div
-            class="size-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mb-3">
+            class="size-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center mb-3"
+          >
             <UIcon name="i-lucide-search-x" class="size-6" />
           </div>
           <p class="text-sm font-medium text-gray-900 dark:text-white">
@@ -355,7 +406,8 @@ onMounted(() => {
             <div class="flex items-center gap-4">
               <div
                 class="size-16 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-center shrink-0"
-                :style="{ color: selectedColor }">
+                :style="{ color: selectedColor }"
+              >
                 <UIcon :name="selectedIcon" class="size-10" />
               </div>
               <div>
@@ -367,7 +419,13 @@ onMounted(() => {
                 </p>
               </div>
             </div>
-            <UButton color="neutral" variant="ghost" icon="i-lucide-x" size="xs" @click="isDetailsOpen = false" />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-x"
+              size="xs"
+              @click="isDetailsOpen = false"
+            />
           </div>
 
           <!-- Snippet options -->
@@ -378,51 +436,79 @@ onMounted(() => {
 
             <!-- Icon Name -->
             <div
-              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2">
+              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2"
+            >
               <div class="flex-1 min-w-0">
                 <span class="text-[10px] text-gray-400 uppercase font-mono block">{{ t('utilities.icons.copyName')
-                  }}</span>
+                }}</span>
                 <code class="text-xs font-mono text-gray-800 dark:text-gray-200 break-all">{{ selectedIcon }}</code>
               </div>
-              <UButton size="xs" color="neutral" variant="subtle" icon="i-lucide-copy"
-                @click="copyText(selectedIcon)" />
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-copy"
+                @click="copyText(selectedIcon)"
+              />
             </div>
 
             <!-- Nuxt UI v4 UIcon -->
             <div
-              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2">
+              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2"
+            >
               <div class="flex-1 min-w-0">
                 <span class="text-[10px] text-gray-400 uppercase font-mono block">{{ t('utilities.icons.copyVue')
-                  }}</span>
+                }}</span>
                 <code
-                  class="text-xs font-mono text-primary-600 dark:text-primary-400 break-all">&lt;UIcon name="{{ selectedIcon }}" class="size-5" /&gt;</code>
+                  class="text-xs font-mono text-primary-600 dark:text-primary-400 break-all"
+                >&lt;UIcon name="{{ selectedIcon }}" class="size-5" /&gt;</code>
               </div>
-              <UButton size="xs" color="neutral" variant="subtle" icon="i-lucide-copy"
-                @click="copyText(`<UIcon name=&quot;${selectedIcon}&quot; class=&quot;size-5&quot; />`)" />
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-copy"
+                @click="copyText(`<UIcon name=&quot;${selectedIcon}&quot; class=&quot;size-5&quot; />`)"
+              />
             </div>
 
             <!-- Nuxt UI v4 UButton -->
             <div
-              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2">
+              class="p-3 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2"
+            >
               <div class="flex-1 min-w-0">
                 <span class="text-[10px] text-gray-400 uppercase font-mono block">{{ t('utilities.icons.copyButton')
-                  }}</span>
+                }}</span>
                 <code
-                  class="text-xs font-mono text-warning-600 dark:text-warning-400 break-all">&lt;UButton icon="{{ selectedIcon }}" label="Click me" /&gt;</code>
+                  class="text-xs font-mono text-warning-600 dark:text-warning-400 break-all"
+                >&lt;UButton icon="{{ selectedIcon }}" label="Click me" /&gt;</code>
               </div>
-              <UButton size="xs" color="neutral" variant="subtle" icon="i-lucide-copy"
-                @click="copyText(`<UButton icon=&quot;${selectedIcon}&quot; label=&quot;Click me&quot; />`)" />
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-copy"
+                @click="copyText(`<UButton icon=&quot;${selectedIcon}&quot; label=&quot;Click me&quot; />`)"
+              />
             </div>
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <UButton :color="isFavorite(selectedIcon) ? 'warning' : 'neutral'" variant="soft"
+            <UButton
+              :color="isFavorite(selectedIcon) ? 'warning' : 'neutral'"
+              variant="soft"
               :icon="isFavorite(selectedIcon) ? 'i-lucide-star-off' : 'i-lucide-star'"
-              @click="toggleFavorite(selectedIcon)">
+              @click="toggleFavorite(selectedIcon)"
+            >
               {{ isFavorite(selectedIcon) ? t('utilities.icons.removeFromFavorites')
                 : t('utilities.icons.addToFavorites') }}
             </UButton>
-            <UButton color="primary" variant="soft" icon="i-lucide-check" @click="isDetailsOpen = false">
+            <UButton
+              color="primary"
+              variant="soft"
+              icon="i-lucide-check"
+              @click="isDetailsOpen = false"
+            >
               {{ t('common.done') }}
             </UButton>
           </div>

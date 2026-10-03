@@ -15,27 +15,27 @@ const loading = ref(true)
 
 type ConfigKeys
   = | 'MONGODB_URI'
-  | 'MONGODB_DB_NAME'
-  | 'SUPABASE_URL'
-  | 'SUPABASE_PUBLISHABLE_KEY'
-  | 'SUPABASE_SERVICE_ROLE_KEY'
-  | 'CLOUDINARY_CLOUD_NAME'
-  | 'CLOUDINARY_API_KEY'
-  | 'CLOUDINARY_API_SECRET'
-  | 'FIREBASE_PROJECT_ID'
-  | 'FIREBASE_CLIENT_EMAIL'
-  | 'FIREBASE_PRIVATE_KEY'
-  | 'FIREBASE_STORAGE_BUCKET'
-  | 'WEB_PUSH_PUBLIC_KEY'
-  | 'WEB_PUSH_PRIVATE_KEY'
-  | 'WEB_PUSH_SUBJECT'
-  | 'APP_NAME'
-  | 'APP_URL'
-  | 'APP_PORT'
-  | 'AI_PROVIDER'
-  | 'AI_API_KEY'
-  | 'AI_BASE_URL'
-  | 'AI_MODEL'
+    | 'MONGODB_DB_NAME'
+    | 'SUPABASE_URL'
+    | 'SUPABASE_PUBLISHABLE_KEY'
+    | 'SUPABASE_SERVICE_ROLE_KEY'
+    | 'CLOUDINARY_CLOUD_NAME'
+    | 'CLOUDINARY_API_KEY'
+    | 'CLOUDINARY_API_SECRET'
+    | 'FIREBASE_PROJECT_ID'
+    | 'FIREBASE_CLIENT_EMAIL'
+    | 'FIREBASE_PRIVATE_KEY'
+    | 'FIREBASE_STORAGE_BUCKET'
+    | 'WEB_PUSH_PUBLIC_KEY'
+    | 'WEB_PUSH_PRIVATE_KEY'
+    | 'WEB_PUSH_SUBJECT'
+    | 'APP_NAME'
+    | 'APP_URL'
+    | 'APP_PORT'
+    | 'AI_PROVIDER'
+    | 'AI_API_KEY'
+    | 'AI_BASE_URL'
+    | 'AI_MODEL'
 
 const config = reactive<Record<ConfigKeys, string>>({
   MONGODB_URI: '',
@@ -162,17 +162,34 @@ async function onSubmit() {
 <template>
   <BasePage id="system-config" :title="t('nav.config')">
     <template #right>
-      <UButton form="connections" :label="t('settings.saveChanges')" color="primary" variant="soft" type="submit"
-        :loading="saving" />
+      <UButton
+        form="connections"
+        :label="t('settings.saveChanges')"
+        color="primary"
+        variant="soft"
+        type="submit"
+        :loading="saving"
+      />
     </template>
 
     <div class="flex flex-col flex-1 min-h-0 p-4 gap-6 h-full overflow-hidden">
       <!-- Tabs Navigation -->
-      <UTabs v-model="activeTab" :items="tabs" :content="false" class="shrink-0" />
+      <UTabs
+        v-model="activeTab"
+        :items="tabs"
+        :content="false"
+        class="shrink-0"
+      />
 
       <!-- Config Form -->
-      <UForm v-if="!loading" id="connections" :schema="schema" :state="config" class="space-y-6 flex-1 overflow-y-auto"
-        @submit="onSubmit">
+      <UForm
+        v-if="!loading"
+        id="connections"
+        :schema="schema"
+        :state="config"
+        class="space-y-6 flex-1 overflow-y-auto"
+        @submit="onSubmit"
+      >
         <!-- Database Tab -->
         <div v-show="activeTab === 'database'" class="space-y-6">
           <UCard variant="subtle">
@@ -210,8 +227,11 @@ async function onSubmit() {
               <UFormField name="SUPABASE_PUBLISHABLE_KEY" label="Supabase Publishable Key">
                 <UInput v-model="config.SUPABASE_PUBLISHABLE_KEY" class="w-full" />
               </UFormField>
-              <UFormField name="SUPABASE_SERVICE_ROLE_KEY" label="Supabase Service Role Key"
-                :description="t('settings.bypassRls')">
+              <UFormField
+                name="SUPABASE_SERVICE_ROLE_KEY"
+                label="Supabase Service Role Key"
+                :description="t('settings.bypassRls')"
+              >
                 <BasePasswordInput v-model="config.SUPABASE_SERVICE_ROLE_KEY" class="w-full" />
               </UFormField>
             </div>
@@ -260,13 +280,28 @@ async function onSubmit() {
               </UFormField>
               <UFormField name="FIREBASE_PRIVATE_KEY" label="Private Key">
                 <div class="flex items-center gap-2 w-full">
-                  <UTextarea v-if="showFirebaseKey" v-model="config.FIREBASE_PRIVATE_KEY" :rows="3"
-                    class="w-full font-mono text-xs" />
-                  <UInput v-else type="password" readonly :model-value="maskSecret(config.FIREBASE_PRIVATE_KEY)"
-                    :placeholder="t('settings.secretPlaceholder')" class="w-full font-mono text-xs" />
-                  <UButton :icon="showFirebaseKey ? 'i-lucide-eye-off' : 'i-lucide-eye'" color="neutral" variant="ghost"
-                    size="sm" :aria-label="showFirebaseKey ? t('auth.hidePassword') : t('auth.showPassword')"
-                    @click="showFirebaseKey = !showFirebaseKey" />
+                  <UTextarea
+                    v-if="showFirebaseKey"
+                    v-model="config.FIREBASE_PRIVATE_KEY"
+                    :rows="3"
+                    class="w-full font-mono text-xs"
+                  />
+                  <UInput
+                    v-else
+                    type="password"
+                    readonly
+                    :model-value="maskSecret(config.FIREBASE_PRIVATE_KEY)"
+                    :placeholder="t('settings.secretPlaceholder')"
+                    class="w-full font-mono text-xs"
+                  />
+                  <UButton
+                    :icon="showFirebaseKey ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    :aria-label="showFirebaseKey ? t('auth.hidePassword') : t('auth.showPassword')"
+                    @click="showFirebaseKey = !showFirebaseKey"
+                  />
                 </div>
               </UFormField>
               <UFormField name="FIREBASE_STORAGE_BUCKET" label="Storage Bucket">
@@ -339,19 +374,29 @@ async function onSubmit() {
             </template>
             <div class="flex flex-col gap-4">
               <UFormField name="AI_PROVIDER" :label="t('settings.aiProvider')">
-                <USelect v-model="config.AI_PROVIDER" :items="[
-                  { label: 'Google Gemini', value: 'gemini' },
-                  { label: 'OpenRouter', value: 'openrouter' },
-                  { label: 'OpenAI Compatible', value: 'custom' }
-                ]" class="w-full" />
+                <USelect
+                  v-model="config.AI_PROVIDER"
+                  :items="[
+                    { label: 'Google Gemini', value: 'gemini' },
+                    { label: 'OpenRouter', value: 'openrouter' },
+                    { label: 'OpenAI Compatible', value: 'custom' }
+                  ]"
+                  class="w-full"
+                />
               </UFormField>
               <UFormField name="AI_API_KEY" :label="t('settings.aiApiKey')">
                 <BasePasswordInput v-model="config.AI_API_KEY" class="w-full" />
               </UFormField>
-              <UFormField name="AI_BASE_URL" :label="t('settings.aiBaseUrl')"
-                :description="t('settings.aiBaseUrlDesc')">
-                <UInput v-model="config.AI_BASE_URL" class="w-full font-mono text-xs"
-                  placeholder="https://api.openrouter.ai/api/v1" />
+              <UFormField
+                name="AI_BASE_URL"
+                :label="t('settings.aiBaseUrl')"
+                :description="t('settings.aiBaseUrlDesc')"
+              >
+                <UInput
+                  v-model="config.AI_BASE_URL"
+                  class="w-full font-mono text-xs"
+                  placeholder="https://api.openrouter.ai/api/v1"
+                />
               </UFormField>
               <UFormField name="AI_MODEL" :label="t('settings.aiModel')" :description="t('settings.aiModelDesc')">
                 <UInput v-model="config.AI_MODEL" class="w-full" placeholder="gemini-2.0-flash" />

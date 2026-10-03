@@ -218,10 +218,15 @@ function onSubmit() {
       <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
         {{ t('tools.splitInputFile') }}
       </label>
-      <BaseFilePicker v-model="inputFile" mode="file" placeholder="D:/Videos/sample.mp4"
-        :title="t('tools.splitInputFile')" :disabled="disabled"
+      <BaseFilePicker
+        v-model="inputFile"
+        mode="file"
+        placeholder="D:/Videos/sample.mp4"
+        :title="t('tools.splitInputFile')"
+        :disabled="disabled"
         :filters="[{ name: 'Video', extensions: ['mp4', 'mkv', 'mov', 'avi', 'flv', 'wmv', 'webm', 'ts'] }]"
-        @select="onInputSelected" />
+        @select="onInputSelected"
+      />
 
       <!-- Video Info Cards -->
       <div v-if="probing" class="p-3 text-xs text-neutral-500 flex items-center gap-2">
@@ -229,18 +234,41 @@ function onSubmit() {
         {{ t('common.loading') }}
       </div>
       <div v-else-if="probeData && probeData.duration > 0" class="flex flex-wrap items-center gap-2 pt-1">
-        <UBadge color="primary" variant="subtle" size="sm" class="gap-1 font-mono">
+        <UBadge
+          color="primary"
+          variant="subtle"
+          size="sm"
+          class="gap-1 font-mono"
+        >
           <UIcon name="i-lucide-clock" class="w-3.5 h-3.5" />
           {{ formatTime(probeData.duration) }} ({{ probeData.duration.toFixed(1) }}s)
         </UBadge>
-        <UBadge v-if="probeData.width" color="neutral" variant="subtle" size="sm" class="gap-1 font-mono">
+        <UBadge
+          v-if="probeData.width"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          class="gap-1 font-mono"
+        >
           <UIcon name="i-lucide-monitor" class="w-3.5 h-3.5" />
           {{ probeData.width }}x{{ probeData.height }}
         </UBadge>
-        <UBadge v-if="probeData.fps" color="neutral" variant="subtle" size="sm" class="gap-1 font-mono">
+        <UBadge
+          v-if="probeData.fps"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          class="gap-1 font-mono"
+        >
           {{ probeData.fps }} FPS
         </UBadge>
-        <UBadge v-if="probeData.bitrate" color="neutral" variant="subtle" size="sm" class="gap-1 font-mono">
+        <UBadge
+          v-if="probeData.bitrate"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          class="gap-1 font-mono"
+        >
           {{ Math.round((Number(probeData.bitrate) || 0) / 1000) }} kbps
         </UBadge>
       </div>
@@ -252,12 +280,16 @@ function onSubmit() {
         {{ t('tools.splitMode') }}
       </label>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <button v-for="opt in modeOptions" :key="opt.value" type="button"
+        <button
+          v-for="opt in modeOptions"
+          :key="opt.value"
+          type="button"
           class="flex items-center gap-2.5 p-3 rounded-xl border text-sm font-medium transition-all text-left"
           :class="splitMode === opt.value
             ? 'bg-primary-50/70 border-primary-500 text-primary-700 dark:bg-primary-950/40 dark:border-primary-500 dark:text-primary-300 ring-1 ring-primary-500'
             : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-700'"
-          @click="splitMode = (opt.value as SplitMode)">
+          @click="splitMode = (opt.value as SplitMode)"
+        >
           <UIcon :name="opt.icon" class="w-5 h-5 shrink-0" />
           <span class="truncate">{{ opt.label }}</span>
         </button>
@@ -266,13 +298,20 @@ function onSubmit() {
 
     <!-- Mode Specific Settings -->
     <div
-      class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
+      class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50"
+    >
       <div v-if="splitMode === 'duration'" class="space-y-2">
         <label class="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
           {{ t('tools.splitDuration') }}
         </label>
         <div class="flex items-center gap-3">
-          <UInput v-model.number="segmentDuration" type="number" :min="1" class="w-48 font-mono" :disabled="disabled" />
+          <UInput
+            v-model.number="segmentDuration"
+            type="number"
+            :min="1"
+            class="w-48 font-mono"
+            :disabled="disabled"
+          />
           <span class="text-xs text-neutral-500">
             ≈ {{ formatTime(segmentDuration) }}
           </span>
@@ -284,8 +323,14 @@ function onSubmit() {
           {{ t('tools.splitPartsCount') }}
         </label>
         <div class="flex items-center gap-3">
-          <UInput v-model.number="partsCount" type="number" :min="2" :max="50" class="w-48 font-mono"
-            :disabled="disabled" />
+          <UInput
+            v-model.number="partsCount"
+            type="number"
+            :min="2"
+            :max="50"
+            class="w-48 font-mono"
+            :disabled="disabled"
+          />
           <span v-if="probeData && probeData.duration > 0" class="text-xs text-neutral-500">
             ≈ {{ formatTime((Number(probeData.duration) || 0) / Math.max(1, partsCount)) }} / phần
           </span>
@@ -297,13 +342,25 @@ function onSubmit() {
           <label class="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
             {{ t('tools.splitStartTime') }}
           </label>
-          <UInput v-model.number="customStart" type="number" :min="0" class="font-mono" :disabled="disabled" />
+          <UInput
+            v-model.number="customStart"
+            type="number"
+            :min="0"
+            class="font-mono"
+            :disabled="disabled"
+          />
         </div>
         <div class="space-y-1.5">
           <label class="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
             {{ t('tools.splitDuration') }}
           </label>
-          <UInput v-model.number="customDuration" type="number" :min="1" class="font-mono" :disabled="disabled" />
+          <UInput
+            v-model.number="customDuration"
+            type="number"
+            :min="1"
+            class="font-mono"
+            :disabled="disabled"
+          />
         </div>
       </div>
     </div>
@@ -314,14 +371,23 @@ function onSubmit() {
         <span>{{ t('tools.segmentsCount') }}: {{ calculatedSegments.length }}</span>
       </div>
       <div
-        class="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30">
-        <div v-for="seg in calculatedSegments" :key="seg.index"
-          class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 text-xs">
+        class="max-h-48 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/30 dark:bg-neutral-900/30"
+      >
+        <div
+          v-for="seg in calculatedSegments"
+          :key="seg.index"
+          class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 text-xs"
+        >
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-scissors" class="w-3.5 h-3.5 text-primary-500" />
             <span class="font-medium text-neutral-700 dark:text-neutral-200">{{ seg.label }}</span>
           </div>
-          <UBadge size="xs" color="neutral" variant="subtle" class="font-mono">
+          <UBadge
+            size="xs"
+            color="neutral"
+            variant="subtle"
+            class="font-mono"
+          >
             {{ seg.duration.toFixed(1) }}s
           </UBadge>
         </div>
@@ -334,22 +400,40 @@ function onSubmit() {
         <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
           {{ t('tools.joinSelectOutputDir') }}
         </label>
-        <BaseFilePicker v-model="outputDir" mode="folder" placeholder="D:/Videos/SplitOutput"
-          :title="t('tools.joinSelectOutputDir')" :disabled="disabled" />
+        <BaseFilePicker
+          v-model="outputDir"
+          mode="folder"
+          placeholder="D:/Videos/SplitOutput"
+          :title="t('tools.joinSelectOutputDir')"
+          :disabled="disabled"
+        />
       </div>
 
       <div class="flex flex-col gap-2">
         <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
           {{ t('tools.threads') }}
         </label>
-        <UInput v-model.number="threads" type="number" :min="1" :max="8" :disabled="disabled" />
+        <UInput
+          v-model.number="threads"
+          type="number"
+          :min="1"
+          :max="8"
+          :disabled="disabled"
+        />
       </div>
     </div>
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton icon="i-lucide-scissors" variant="soft" color="primary" size="lg" block :disabled="!canSubmit"
-        @click="onSubmit">
+      <UButton
+        icon="i-lucide-scissors"
+        variant="soft"
+        color="primary"
+        size="lg"
+        block
+        :disabled="!canSubmit"
+        @click="onSubmit"
+      >
         {{ t('tools.splitVideo') }}
       </UButton>
     </div>

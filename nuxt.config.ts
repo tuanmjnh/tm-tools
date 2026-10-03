@@ -17,13 +17,11 @@ export default defineNuxtConfig({
     ]
   },
 
-  alias: {
-    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url))
-  },
-
   devtools: {
     enabled: false
   },
+
+  css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
     public: {
@@ -32,7 +30,9 @@ export default defineNuxtConfig({
     }
   },
 
-  css: ['~/assets/css/main.css'],
+  alias: {
+    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url))
+  },
 
   build: {
     transpile: [
@@ -84,7 +84,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: {
         '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
-        striptags: 'striptags/src/striptags.js'
+        'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [
         'vue'

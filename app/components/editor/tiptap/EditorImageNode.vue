@@ -50,18 +50,26 @@ const onResizeEnd = () => {
 </script>
 
 <template>
-  <NodeViewWrapper as="span" class="image-node-view relative inline-block leading-none"
-    :class="{ 'is-selected': selected }">
+  <NodeViewWrapper
+    as="span"
+    class="image-node-view relative inline-block leading-none"
+    :class="{ 'is-selected': selected }"
+  >
     <div class="relative group inline-block max-w-full">
-      <img :src="src" :alt="alt" :style="{ width: typeof width === 'number' ? width + 'px' : width }"
+      <img
+        :src="src"
+        :alt="alt"
+        :style="{ width: typeof width === 'number' ? width + 'px' : width }"
         class="block max-w-full h-auto transition-all"
-        :class="{ 'ring-2 ring-primary rounded-sm': selected || resizing }" />
+        :class="{ 'ring-2 ring-primary rounded-sm': selected || resizing }"
+      >
 
       <!-- Resize Handle -->
       <div
         class="resize-handle absolute bottom-2 right-2 w-4 h-4 bg-primary border-2 border-white rounded-full cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"
-        :class="{ 'opacity-100': resizing, 'bg-primary-600': resizing }" @mousedown="onResizeStart">
-      </div>
+        :class="{ 'opacity-100': resizing, 'bg-primary-600': resizing }"
+        @mousedown="onResizeStart"
+      />
     </div>
   </NodeViewWrapper>
 </template>

@@ -13,13 +13,25 @@ const filteredMembers = computed(() => {
 
 <template>
   <div>
-    <UPageCard :title="$t('nav.members')" :description="$t('settings.inviteMembers')" variant="naked" orientation="horizontal" class="mb-4">
+    <UPageCard
+      :title="$t('nav.members')"
+      :description="$t('settings.inviteMembers')"
+      variant="naked"
+      orientation="horizontal"
+      class="mb-4"
+    >
       <UButton :label="$t('settings.invitePeople')" color="neutral" class="w-fit lg:ms-auto" />
     </UPageCard>
 
     <UPageCard variant="subtle" :ui="{ container: 'p-0 sm:p-0 gap-y-0', wrapper: 'items-stretch', header: 'p-4 mb-0 border-b border-default' }">
       <template #header>
-        <UInput v-model="q" icon="i-lucide-search" :placeholder="$t('settings.searchMembers')" autofocus class="w-full" />
+        <UInput
+          v-model="q"
+          icon="i-lucide-search"
+          :placeholder="$t('settings.searchMembers')"
+          autofocus
+          class="w-full"
+        />
       </template>
       <SettingsMembersList :members="filteredMembers" />
     </UPageCard>

@@ -112,24 +112,59 @@ function handleKeyDown(event: KeyboardEvent) {
 <template>
   <UPopover v-model:open="open" :ui="{ content: 'p-0.5' }">
     <UTooltip :text="type === 'youtube' ? 'YouTube' : 'Link'">
-      <UButton :icon="type === 'youtube' ? 'i-lucide-youtube' : 'i-lucide-link'" color="neutral" active-color="primary"
-        variant="ghost" active-variant="soft" size="sm" :active="active" :disabled="disabled" />
+      <UButton
+        :icon="type === 'youtube' ? 'i-lucide-youtube' : 'i-lucide-link'"
+        color="neutral"
+        active-color="primary"
+        variant="ghost"
+        active-variant="soft"
+        size="sm"
+        :active="active"
+        :disabled="disabled"
+      />
     </UTooltip>
 
     <template #content>
-      <UInput v-model="url" autofocus name="url" type="url" variant="none"
-        :placeholder="type === 'youtube' ? 'Paste a YouTube video URL...' : 'Paste a link...'" @keydown="handleKeyDown">
+      <UInput
+        v-model="url"
+        autofocus
+        name="url"
+        type="url"
+        variant="none"
+        :placeholder="type === 'youtube' ? 'Paste a YouTube video URL...' : 'Paste a link...'"
+        @keydown="handleKeyDown"
+      >
         <div class="flex items-center mr-0.5">
-          <UButton icon="i-lucide-corner-down-left" variant="ghost" size="sm" :disabled="!url && !active"
-            title="Apply link" @click="submit" />
+          <UButton
+            icon="i-lucide-corner-down-left"
+            variant="ghost"
+            size="sm"
+            :disabled="!url && !active"
+            title="Apply link"
+            @click="submit"
+          />
 
           <USeparator orientation="vertical" class="h-6 mx-1" />
 
-          <UButton icon="i-lucide-external-link" color="neutral" variant="ghost" size="sm" :disabled="!url && !active"
-            title="Open in new window" @click="openLink" />
+          <UButton
+            icon="i-lucide-external-link"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :disabled="!url && !active"
+            title="Open in new window"
+            @click="openLink"
+          />
 
-          <UButton icon="i-lucide-trash" color="neutral" variant="ghost" size="sm" :disabled="!url && !active"
-            title="Remove link" @click="remove" />
+          <UButton
+            icon="i-lucide-trash"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :disabled="!url && !active"
+            title="Remove link"
+            @click="remove"
+          />
         </div>
       </UInput>
     </template>
