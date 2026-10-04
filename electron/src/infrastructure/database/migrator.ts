@@ -16,7 +16,7 @@ export function getMigrationsFolder(): string {
       return path.join(app.getAppPath(), 'electron', 'migrations')
     }
   } catch {
-    // Ngoài môi trường Electron
+    // Non-Electron environment
   }
   return path.resolve(process.cwd(), 'electron', 'migrations')
 }

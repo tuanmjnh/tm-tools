@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const { t } = useI18n()
+const { currentUtility } = useUtilitiesMeta()
 </script>
 
 <template>
-  <BasePage id="utilities-encode" :title="t('nav.utilities_encode')">
+  <BasePage id="utilities-encode" :title="currentUtility.title" :description="currentUtility.description">
     <UtilitiesEncodePanel />
   </BasePage>
 </template>

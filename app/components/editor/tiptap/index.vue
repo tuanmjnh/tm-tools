@@ -838,7 +838,7 @@ const getBubbleItems = (editor: Editor) => {
       </LazyUEditor>
       <!-- <div v-else class="p-20 flex flex-col items-center gap-4 text-gray-500">
         <UIcon name="i-lucide:loader-2" class="animate-spin w-8 h-8" />
-        <p>Đang khởi tạo trình soạn thảo...</p>
+        <p>Initializing editor...</p>
       </div> -->
     </div>
     <template #fallback>

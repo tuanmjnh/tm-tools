@@ -36,9 +36,18 @@ const statusLabel = (p: ConnectionProvider) => {
   if (!p.connection) return t('connections.not_connected')
   return p.connection.status === 'connected' ? t('connections.connected') : t('common.error')
 }
+function cleanVal(v: unknown): string {
+  let s = String(v ?? '').trim()
+  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    if (s.length < 2) break
+    s = s.slice(1, -1).trim()
+  }
+  return s
+}
+
 const accountOf = (p: ConnectionProvider) => {
   const cfg = p.connection?.config || {}
-  return String(cfg.email || cfg.CLOUDINARY_CLOUD_NAME || p.connection?.label || '')
+  return cleanVal(cfg.email || cfg.CLOUDINARY_CLOUD_NAME || p.connection?.label || '')
 }
 
 function showTestFail(res: HubConnectionTestResult | undefined) {
@@ -101,7 +110,7 @@ function openManual(p: ConnectionProvider) {
   manualProvider.value = p
   const values: Record<string, string> = {}
   for (const field of p.fields || []) {
-    if (field.type !== 'password') values[field.key] = String(p.connection?.config?.[field.key] || '')
+    if (field.type !== 'password') values[field.key] = cleanVal(p.connection?.config?.[field.key] || '')
     else values[field.key] = ''
   }
   manualValues.value = values
@@ -113,7 +122,11 @@ async function saveManual() {
   if (!p) return
   manualSaving.value = true
   try {
-    const res = await connections.saveManual(p.key, manualValues.value, appId)
+    const cleanedValues: Record<string, string> = {}
+    for (const [k, v] of Object.entries(manualValues.value)) {
+      cleanedValues[k] = cleanVal(v)
+    }
+    const res = await connections.saveManual(p.key, cleanedValues, appId)
     if (res.data?.test?.ok) toast.add({ title: t('connections.saved'), icon: 'i-lucide-check', color: 'success' })
     else showTestFail(res.data?.test)
     isManualOpen.value = false

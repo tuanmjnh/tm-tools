@@ -117,13 +117,24 @@ function maskSecret(value: string) {
 
 const { configs } = useHub()
 
+function cleanConfigValue(val: unknown): string {
+  let s = String(val ?? '').trim()
+  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    if (s.length < 2) break
+    s = s.slice(1, -1).trim()
+  }
+  return s
+}
+
 async function loadConfig() {
   loading.value = true
   try {
     const res = await configs.getAll()
     const values = res.data || {}
     for (const key of Object.keys(config) as ConfigKeys[]) {
-      if (values[key]) config[key] = values[key]
+      if (values[key] !== undefined && values[key] !== null) {
+        config[key] = cleanConfigValue(values[key])
+      }
     }
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
@@ -143,7 +154,10 @@ async function onSubmit() {
   if (saving.value) return
   saving.value = true
   try {
-    const values = { ...config }
+    const values: Record<string, string> = {}
+    for (const key of Object.keys(config) as ConfigKeys[]) {
+      values[key] = cleanConfigValue(config[key])
+    }
     await configs.update(values)
 
     if (hasElectron.value) {

@@ -256,8 +256,7 @@ onMounted(() => {
         <span>{{ t('settings.emptyForDefault') }}</span>
       </div>
       <p>
-        Nếu bạn để trống đường dẫn, hệ thống sẽ tự động tìm kiếm các file nhị phân mặc định được đóng gói bên trong thư
-        mục <code class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">resources/</code> của ứng dụng.
+        If left empty, the system will automatically search for default binaries packaged inside the application resources/ directory.
       </p>
     </div>
   </div>

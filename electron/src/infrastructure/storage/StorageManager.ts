@@ -10,7 +10,7 @@ function getAppUserDataPath(): string {
       return app.getPath('userData')
     }
   } catch {
-    // Không chạy trong Electron (vd: Unit test / CLI)
+    // Not running in Electron (e.g. Unit test / CLI)
   }
   return path.resolve(process.env.APPDATA || './', 'tm-tools')
 }

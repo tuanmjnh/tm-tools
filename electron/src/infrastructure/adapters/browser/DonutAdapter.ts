@@ -63,7 +63,7 @@ export class DonutAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable Donut Browser: ${options.executablePath}`)
+      throw new Error(`Donut Browser executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
@@ -105,7 +105,7 @@ export class DonutAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình Donut Browser (PID is undefined)')
+      throw new Error('Failed to spawn Donut Browser process (PID is undefined)')
     }
 
     return {

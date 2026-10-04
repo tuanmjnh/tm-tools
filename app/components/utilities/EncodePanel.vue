@@ -302,6 +302,76 @@
         </p>
       </div>
     </UCard>
+
+    <!-- 4. Key Generator -->
+    <UCard>
+      <template #header>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-key" class="h-5 w-5 text-primary" />
+            <div>
+              <h3 class="text-sm font-semibold text-highlighted">
+                {{ t('utilities.crypto.keyGen.title') }}
+              </h3>
+              <p class="text-xs text-muted">{{ t('utilities.crypto.keyGen.desc') }}</p>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <UButton
+              :label="'32 ' + t('utilities.crypto.keyGen.chars')"
+              size="xs"
+              :color="keyLength === 32 ? 'primary' : 'neutral'"
+              :variant="keyLength === 32 ? 'solid' : 'soft'"
+              @click="keyLength = 32"
+            />
+            <UButton
+              :label="'64 ' + t('utilities.crypto.keyGen.chars')"
+              size="xs"
+              :color="keyLength === 64 ? 'primary' : 'neutral'"
+              :variant="keyLength === 64 ? 'solid' : 'soft'"
+              @click="keyLength = 64"
+            />
+            <UButton
+              :label="t('utilities.crypto.keyGen.generate')"
+              icon="i-lucide-refresh-cw"
+              size="xs"
+              color="primary"
+              variant="solid"
+              @click="doGenerateKey"
+            />
+          </div>
+        </div>
+      </template>
+
+      <div class="space-y-3">
+        <div class="flex items-center gap-3">
+          <label class="text-xs font-medium text-muted w-24">{{ t('utilities.crypto.keyGen.length') }}</label>
+          <div class="flex items-center gap-3 flex-1">
+            <USlider v-model="keyLength" :min="16" :max="128" :step="16" class="flex-1" />
+            <span class="w-16 text-right font-mono text-xs font-semibold">{{ keyLength }} {{ t('utilities.crypto.keyGen.chars') }}</span>
+          </div>
+        </div>
+
+        <div v-if="generatedKey" class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-muted">
+              {{ keyLength }}-hex key ({{ keyLength * 4 }} bits / {{ keyLength / 2 }} bytes)
+            </span>
+            <UButton
+              icon="i-lucide-copy"
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="copyText(generatedKey)"
+            />
+          </div>
+          <div class="rounded-lg bg-default/50 p-3 font-mono text-xs break-all border border-default select-all">
+            {{ generatedKey }}
+          </div>
+        </div>
+        <p v-else class="text-xs text-dimmed">{{ t('utilities.crypto.keyGen.hint') }}</p>
+      </div>
+    </UCard>
   </div>
 </template>
 
@@ -322,7 +392,8 @@ const {
   rot13,
   runHash: hashText,
   decodeJwt,
-  encodeJwt
+  encodeJwt,
+  generateHexKey
 } = useEncoding()
 
 type EncodeOp
@@ -498,6 +569,22 @@ const expHint = computed(() => {
 function doDecodeJwt() {
   jwtResult.value = decodeJwt(jwtInput.value)
 }
+
+// ── Key Generator ──────────────────────────────────
+const keyLength = ref<number>(64)
+const generatedKey = ref('')
+
+function doGenerateKey() {
+  generatedKey.value = generateHexKey(keyLength.value)
+}
+
+watch(keyLength, () => {
+  doGenerateKey()
+})
+
+onMounted(() => {
+  doGenerateKey()
+})
 
 async function copyText(text: string) {
   try {

@@ -9,6 +9,11 @@ onMounted(async () => {
 })
 
 useHead({
+  titleTemplate: (titleChunk) => {
+    if (!titleChunk) return 'TM Tools'
+    if (titleChunk.endsWith('TM Tools')) return titleChunk
+    return `${titleChunk} - TM Tools`
+  },
   meta: [
     { charset: 'utf-8' },
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -22,13 +27,10 @@ useHead({
   }
 })
 
-const title = 'TM Tools'
-const description = 'A professional dashboard template with authentication, RBAC, and multi-service integrations.'
+const description = 'TM Tools Desktop - Professional Video Creation, Downloader & Automation Suite'
 
 useSeoMeta({
-  title,
   description,
-  ogTitle: title,
   ogDescription: description
 })
 </script>

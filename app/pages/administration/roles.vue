@@ -1,8 +1,10 @@
 <script setup lang="ts">
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Role } from '~/types/rbac'
+import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { z } from 'zod'
 import { getErrorMessage } from '~/shared/utils/errors'
+import { buildExportChildren, useModuleExport } from '~/composables/useModuleExport'
 
 definePageMeta({
   middleware: () => {
@@ -276,29 +278,56 @@ const getActionOptions = (item: Role) => [
     }
   ]
 ]
+
+const { exporting, exportModule } = useModuleExport()
+
+const headerActions = computed<HeaderAction[]>(() => [
+  {
+    key: 'import',
+    icon: 'i-lucide-file-up',
+    label: t('import.open'),
+    overflow: true,
+    onSelect: () => navigateTo({ path: '/administration/import', query: { target: 'roles' } })
+  },
+  {
+    key: 'export',
+    icon: 'i-lucide-file-down',
+    label: t('admin.export.action'),
+    overflow: true,
+    disabled: exporting.value,
+    children: buildExportChildren(t, fmt => exportModule('roles', fmt))
+  },
+  {
+    key: 'delete',
+    icon: 'i-lucide-trash',
+    label: `${t('global.delete')} (${selected.value.length})`,
+    color: 'error',
+    visible: selected.value.length > 0,
+    onSelect: () => { showBatchDeleteModal.value = true }
+  },
+  {
+    key: 'add',
+    icon: 'i-lucide-plus',
+    label: t('admin.addRole'),
+    color: 'primary',
+    primary: true,
+    onSelect: openAdd
+  }
+])
 </script>
 
 <template>
   <BasePage id="admin-roles" :title="$t('admin.rolesPermissions')">
     <template #right>
       <div class="flex items-center gap-2">
+        <BaseHeaderActions :actions="headerActions" />
         <UButton
-          v-if="selected.length"
-          :label="t('global.delete')"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-trash"
-          @click="showBatchDeleteModal = true"
-        >
-          <template #trailing>
-            <UKbd>{{ selected.length }}</UKbd>
-          </template>
-        </UButton>
-        <UButton
-          :label="$t('admin.addRole')"
-          icon="i-lucide-plus"
+          icon="i-lucide-refresh-cw"
           variant="soft"
-          @click="openAdd"
+          color="neutral"
+          size="sm"
+          :loading="status === 'pending'"
+          @click="refresh"
         />
       </div>
     </template>

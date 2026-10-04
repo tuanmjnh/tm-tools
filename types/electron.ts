@@ -478,6 +478,71 @@ export interface AppUpdaterNamespace {
   onStatusChanged(callback: (status: AppUpdateStatus) => void): () => void
 }
 
+export interface TmcutDirs {
+  base: string
+  projects: string
+  snapshots: string
+  assetsFile: string
+  cache: string
+  thumbs: string
+  waveforms: string
+}
+
+export interface TmcutProjectFileInfo {
+  id: string
+  name: string
+  updatedAt: string
+  size: number
+}
+
+export interface TmcutSnapshotInfo {
+  ts: number
+  name: string
+  updatedAt: string
+}
+
+export interface TmcutFileStat {
+  exists: boolean
+  size: number
+  mtimeMs: number
+}
+
+export interface TmcutProjectMeta {
+  hasProject: boolean
+  projectMtimeMs: number
+  hasRecovery: boolean
+  recoveryUpdatedAtMs: number | null
+}
+
+export interface TmcutExtractResult {
+  ok: boolean
+  cachePath?: string
+  buckets?: number[]
+  durationSec?: number
+  error?: string
+}
+
+export interface TmcutNamespace {
+  getPaths(): Promise<TmcutDirs>
+  readAssetsFile(): Promise<unknown>
+  writeAssetsFile(data: unknown): Promise<boolean>
+  readProject(id: string): Promise<unknown>
+  writeProject(args: { id: string, data: unknown }): Promise<boolean>
+  listProjectFiles(): Promise<TmcutProjectFileInfo[]>
+  readProjectMeta(id: string): Promise<TmcutProjectMeta>
+  writeRecovery(args: { id: string, data: unknown }): Promise<boolean>
+  readRecovery(id: string): Promise<unknown>
+  deleteRecovery(id: string): Promise<boolean>
+  deleteProject(id: string): Promise<boolean>
+  listSnapshots(id: string): Promise<TmcutSnapshotInfo[]>
+  saveSnapshot(args: { id: string, data: unknown, name?: string }): Promise<TmcutSnapshotInfo | null>
+  readSnapshot(args: { id: string, ts: number }): Promise<unknown>
+  deleteSnapshot(args: { id: string, ts: number }): Promise<boolean>
+  statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
+  extractThumbnail(args: { filePath: string }): Promise<TmcutExtractResult>
+  extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
+}
+
 export interface ProfileGroup {
   id: string
   name: string
@@ -641,6 +706,7 @@ export interface ElectronAPI {
   }
   dialog: DialogNamespace
   fileManager: FileManagerNamespace
+  tmcut: TmcutNamespace
   appUpdater?: AppUpdaterNamespace
   system: {
     getInfo(): Promise<ApiResponse<SystemInfoResponse>>

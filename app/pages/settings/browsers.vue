@@ -349,24 +349,24 @@ onMounted(() => {
     >
       <div class="flex items-center gap-2 font-medium text-gray-800 dark:text-gray-200">
         <UIcon name="i-lucide-sparkles" class="size-4 text-primary" />
-        <span>Ưu tiên tìm kiếm & vị trí đặt Runtime khuyến nghị</span>
+        <span>Search Priority & Recommended Runtime Locations</span>
       </div>
       <p>
-        Khi khởi chạy Profile, hệ thống sẽ ưu tiên nạp binary theo thứ tự:
+        When launching a Profile, the system prioritizes loading binaries in this order:
       </p>
       <ol class="list-decimal list-inside space-y-1 pl-1">
         <li>
-          <strong>Đường dẫn đã cấu hình ở trên</strong> (lưu trong <code
+          <strong>Configured path above</strong> (stored in <code
             class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded"
           >userData/config.env</code>).
         </li>
         <li>
-          <strong>Thư mục resources của ứng dụng:</strong> <code
+          <strong>Application resources directory:</strong> <code
             class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded"
           >resources/bin/[camoufox|donut|oxide]/...</code>
         </li>
         <li>
-          <strong>Đường dẫn cài đặt chuẩn trên máy:</strong> <code
+          <strong>Standard machine installation path:</strong> <code
             class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded"
           >%LOCALAPPDATA%</code>, <code
             class="font-mono bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded"
@@ -374,8 +374,8 @@ onMounted(() => {
         </li>
       </ol>
       <p class="text-gray-500">
-        Khi đã cấu hình ở đây, bạn chỉ cần tạo Profile và chọn loại trình duyệt mong muốn, không cần phải chọn lại file
-        executable thủ công.
+        Once configured here, simply create a Profile and select the browser engine without needing to re-select the executable.
+        
       </p>
     </div>
   </div>

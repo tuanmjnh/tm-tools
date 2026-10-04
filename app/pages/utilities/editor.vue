@@ -22,10 +22,12 @@ function downloadContent() {
 function clearContent() {
   content.value = ''
 }
+
+const { currentUtility } = useUtilitiesMeta()
 </script>
 
 <template>
-  <BasePage id="utilities-editor" :title="t('utilities.editor.title')">
+  <BasePage id="utilities-editor" :title="currentUtility.title" :description="currentUtility.description">
     <template #right>
       <div class="flex items-center gap-2">
         <UButton
@@ -39,7 +41,7 @@ function clearContent() {
         </UButton>
         <UButton
           v-else
-          variant="outline"
+          variant="soft"
           color="primary"
           size="sm"
           @click="setEditorType('tiptap')"

@@ -1,5 +1,5 @@
 export interface EventBusContracts {
-  // Sự kiện vòng đời Profile
+  // Profile lifecycle events
   'profile:started': {
     profileId: string
     pid: number
@@ -14,7 +14,7 @@ export interface EventBusContracts {
     error: string
   }
 
-  // Sự kiện vòng đời Browser Runtime
+  // Browser Runtime lifecycle events
   'browser:started': {
     browserId: string
     pid: number
@@ -24,7 +24,7 @@ export interface EventBusContracts {
     pid: number
   }
 
-  // Sự kiện vòng đời Task Automation
+  // Task Automation lifecycle events
   'task:started': {
     taskId: string
     profileId?: string

@@ -71,7 +71,7 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
   const status = getApiErrorStatus(err)
   const rawMsg = String(e?.message || e?.data?.message || '')
 
-  // 1. Lỗi kết nối tới TM-Hub hoặc lỗi mạng (Failed to fetch, <no response>...)
+  // 1. Connection error to TM-Hub or network failure (Failed to fetch, <no response>...)
   if (!status) {
     const isNetwork = /fetch failed|failed to fetch|<no response>|network|econn|timeout|load failed|socket/i.test(rawMsg)
     if (isNetwork) {
@@ -82,14 +82,14 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
     }
   }
 
-  // 2. Kiểm tra statusMessage có phải i18n key không (e.g. error.invalidCredentials)
+  // 2. Check if statusMessage is an i18n key (e.g. error.invalidCredentials)
   const code = e?.statusMessage || e?.data?.statusMessage
   if (code) {
     const translated = t(code)
     if (translated && translated !== code) return translated
   }
 
-  // 3. Mapping các thông điệp trả về từ backend / TM-Hub sang i18n key
+  // 3. Map backend / TM-Hub returned messages to i18n key
   const text = e?.data?.message || e?.message
   if (text) {
     const translated = t(text)
@@ -99,7 +99,7 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
     if (/invalid or inactive app/i.test(text)) return t('error.invalidAppId')
     if (/does not have access to this application/i.test(text)) return t('error.noAppAccess')
 
-    // Bỏ qua hiển thị raw HTTP debug URL nếu là chuỗi lỗi fetch
+    // Skip displaying raw HTTP debug URL if it is a fetch error string
     if (!/\[(GET|POST|PUT|DELETE|PATCH)\]/i.test(text)) {
       return text
     }

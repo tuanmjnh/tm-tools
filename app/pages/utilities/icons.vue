@@ -214,13 +214,15 @@ watch(() => filters.collection, () => {
 
 watch(() => filters.search, debouncedFetch)
 
+const { currentUtility } = useUtilitiesMeta()
+
 onMounted(() => {
   fetchIcons(false)
 })
 </script>
 
 <template>
-  <BasePage id="utilities-icons" :title="t('nav.utilities_icons')">
+  <BasePage id="utilities-icons" :title="currentUtility.title" :description="currentUtility.description">
     <template #right>
       <div class="flex items-center gap-2">
         <USelectMenu

@@ -17,7 +17,7 @@ export interface MobileAction {
   iconClass?: string
   /** Unread count badge rendered at the end of the action row. Hidden when 0/undefined. */
   badge?: number
-  /** Sub-level actions (expandable row) — dùng cho export CSV/JSON. */
+  /** Sub-level actions (expandable row) - used for CSV/JSON export. */
   children?: MobileActionChild[]
   onSelect?: () => unknown
 }
@@ -70,7 +70,7 @@ export function useMobileBar() {
   return { store, registerActions, registerInfo }
 }
 
-/** Map desktop header actions sang mobile actions (giữ children để ActionsSheet expand). */
+/** Map desktop header actions to mobile actions (retain children for ActionsSheet expansion). */
 export function headerActionsToMobile(actions: HeaderAction[]): MobileAction[] {
   return actions
     .filter(a => a.visible !== false)

@@ -11,7 +11,7 @@ export class CustomBrowserAdapter implements IBrowserAdapter {
   public readonly engine: BrowserEngine = 'custom'
 
   public async detect(): Promise<DetectionResult[]> {
-    // Custom adapter không tự động quét mà dựa trên file người dùng cung cấp
+    // Custom adapter relies on user-provided path rather than auto-detection
     return []
   }
 
@@ -21,14 +21,14 @@ export class CustomBrowserAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable tùy chỉnh: ${options.executablePath}`)
+      throw new Error(`Custom executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
       fs.mkdirSync(options.userDataDir, { recursive: true })
     }
 
-    // Nếu engine chỉ định là firefox thì dùng tham số firefox, ngược lại mặc định chuẩn chromium flag
+    // If engine is firefox use firefox flags, otherwise default to chromium flags
     const isFirefox = options.engine === 'firefox'
     const finalArgs: string[] = isFirefox
       ? ['-profile', options.userDataDir, '-no-remote']
@@ -60,7 +60,7 @@ export class CustomBrowserAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình Custom Browser (PID is undefined)')
+      throw new Error('Failed to spawn Custom Browser process (PID is undefined)')
     }
 
     return {

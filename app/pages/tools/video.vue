@@ -31,14 +31,14 @@ const {
 
 type RunMode
   = | 'single'
-    | 'batch'
-    | 'join_root'
-    | 'join_subfolder'
-    | 'join_files'
-    | 'split'
-    | 'images_root'
-    | 'images_subfolder'
-    | 'audio'
+  | 'batch'
+  | 'join_root'
+  | 'join_subfolder'
+  | 'join_files'
+  | 'split'
+  | 'images_root'
+  | 'images_subfolder'
+  | 'audio'
 
 const RUN_MODE_STORAGE_KEY = 'tools:video:last_run_mode'
 const runMode = useLocalStorage<RunMode>(RUN_MODE_STORAGE_KEY, 'single')
@@ -541,38 +541,23 @@ onMounted(async () => {
 </script>
 
 <template>
-  <BasePage id="tools-video" :title="t('nav.video')">
+  <BasePage id="tools-video" :title="t('nav.video')" :description="t('tools.videoBody')">
     <!-- Alerts -->
     <div v-if="exeState === 'missing' || !taskManager.isElectron.value" class="space-y-2 shrink-0 mb-4">
-      <UAlert
-        v-if="exeState === 'missing'"
-        icon="i-lucide-alert-triangle"
-        color="error"
-        variant="subtle"
-      >
+      <UAlert v-if="exeState === 'missing'" icon="i-lucide-alert-triangle" color="error" variant="subtle">
         <template #title>
           {{ t('tools.executableMissing') }}
         </template>
         <template #description>
           <div class="mt-2">
-            <UButton
-              size="xs"
-              color="error"
-              variant="soft"
-              to="/settings/tools"
-            >
+            <UButton size="xs" color="error" variant="soft" to="/settings/tools">
               {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
             </UButton>
           </div>
         </template>
       </UAlert>
-      <UAlert
-        v-if="!taskManager.isElectron.value"
-        icon="i-lucide-monitor"
-        color="warning"
-        variant="subtle"
-        :title="t('tools.noElectron')"
-      />
+      <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
+        :title="t('tools.noElectron')" />
     </div>
 
     <!-- Main Columns -->
@@ -590,71 +575,38 @@ onMounted(async () => {
                     <p class="font-semibold text-sm">
                       {{ t('tools.videoForm') }}
                     </p>
-                    <UBadge
-                      v-if="currentModeItem?.label"
-                      variant="subtle"
-                      color="neutral"
-                      size="xs"
-                    >
+                    <UBadge v-if="currentModeItem?.label" variant="subtle" color="neutral" size="xs">
                       {{ currentModeItem.label }}
                     </UBadge>
                   </div>
                   <div class="flex items-center gap-1">
                     <UTooltip :text="t('tools.refresh')">
-                      <UButton
-                        icon="i-lucide-rotate-ccw"
-                        size="sm"
-                        color="neutral"
-                        variant="ghost"
-                        :disabled="controlsDisabled"
-                        @click="resetConfig"
-                      />
+                      <UButton icon="i-lucide-rotate-ccw" size="sm" color="neutral" variant="ghost"
+                        :disabled="controlsDisabled" @click="resetConfig" />
                     </UTooltip>
-                    <UButton
-                      icon="i-lucide-info"
-                      color="info"
-                      variant="ghost"
-                      size="sm"
-                      :title="t('tools.versionInfo')"
-                      @click="openVersionInfo"
-                    />
-                    <UButton
-                      icon="i-lucide-history"
-                      color="warning"
-                      variant="ghost"
-                      size="sm"
-                      :title="t('tools.history')"
-                      @click="openHistory"
-                    />
+                    <UButton icon="i-lucide-info" color="info" variant="ghost" size="sm" :title="t('tools.versionInfo')"
+                      @click="openVersionInfo" />
+                    <UButton icon="i-lucide-history" color="warning" variant="ghost" size="sm"
+                      :title="t('tools.history')" @click="openHistory" />
                   </div>
                 </div>
               </template>
 
               <!-- Mode Selector via USelectMenu -->
               <div
-                class="mb-5 rounded-xl border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 space-y-2"
-              >
+                class="mb-5 rounded-xl border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 space-y-2">
                 <div class="flex items-center justify-between">
                   <label class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                     {{ t('tools.operationMode') }}
                   </label>
-                  <span
-                    v-if="currentModeItem?.description"
-                    class="text-xs text-neutral-400 dark:text-neutral-500 hidden sm:inline"
-                  >
+                  <span v-if="currentModeItem?.description"
+                    class="text-xs text-neutral-400 dark:text-neutral-500 hidden sm:inline">
                     {{ currentModeItem.description }}
                   </span>
                 </div>
-                <USelectMenu
-                  v-model="runMode"
-                  :items="modeOptions"
-                  value-key="value"
-                  label-key="label"
-                  class="w-full"
-                  size="lg"
-                  :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
-                  :disabled="controlsDisabled"
-                >
+                <USelectMenu v-model="runMode" :items="modeOptions" value-key="value" label-key="label" class="w-full"
+                  size="lg" :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+                  :disabled="controlsDisabled">
                   <template #leading>
                     <UIcon :name="currentModeItem?.icon || 'i-lucide-video'" class="size-5 text-primary shrink-0" />
                   </template>
@@ -662,10 +614,8 @@ onMounted(async () => {
               </div>
 
               <!-- Unified Render Settings & Hardware Encoder Section -->
-              <div
-                v-if="runMode !== 'audio'"
-                class="mb-6 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-4"
-              >
+              <div v-if="runMode !== 'audio'"
+                class="mb-6 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-4">
                 <!-- Section Title -->
                 <div class="flex items-center gap-2">
                   <UIcon name="i-lucide-sliders-horizontal" class="size-4 text-primary" />
@@ -678,33 +628,21 @@ onMounted(async () => {
                 <div v-if="taskManager.isElectron.value">
                   <UFormField :label="t('tools.videoEncoder')" name="selectedEncoder">
                     <div class="flex gap-2">
-                      <USelect
-                        v-model="selectedEncoder"
-                        :items="encoderOptions"
-                        class="flex-1"
-                        size="md"
-                        :disabled="controlsDisabled"
-                      />
+                      <USelect v-model="selectedEncoder" :items="encoderOptions" class="flex-1" size="md"
+                        :disabled="controlsDisabled" />
                       <UTooltip :text="`${t('tools.gpuSupport')}: ${primaryGpuName}`">
-                        <UButton
-                          icon="i-lucide-cpu"
-                          size="md"
+                        <UButton icon="i-lucide-cpu" size="md"
                           :color="gpuSupport.nvenc || gpuSupport.qsv || gpuSupport.amf ? 'primary' : 'neutral'"
-                          variant="soft"
-                          :disabled="controlsDisabled"
-                          :aria-label="t('tools.gpuSupport')"
-                          @click="showGpuModal = true"
-                        />
+                          variant="soft" :disabled="controlsDisabled" :aria-label="t('tools.gpuSupport')"
+                          @click="showGpuModal = true" />
                       </UTooltip>
                     </div>
                   </UFormField>
                 </div>
 
                 <!-- Preset Section: Case 1 - Required for Single and Batch -->
-                <div
-                  v-if="isPresetRequiredMode"
-                  class="space-y-1.5 pt-3 border-t border-neutral-200/70 dark:border-neutral-800/70"
-                >
+                <div v-if="isPresetRequiredMode"
+                  class="space-y-1.5 pt-3 border-t border-neutral-200/70 dark:border-neutral-800/70">
                   <div class="space-y-0.5">
                     <label class="flex items-center gap-1 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                       <span>{{ t('tools.configPreset') }}</span>
@@ -715,49 +653,28 @@ onMounted(async () => {
                     </p>
                   </div>
                   <div class="flex gap-2 w-full">
-                    <USelectMenu
-                      v-model="selectedPresetId"
-                      :items="presetOptions"
-                      value-key="value"
-                      :placeholder="t('tools.selectPreset')"
-                      clear
+                    <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value"
+                      :placeholder="t('tools.selectPreset')" clear
                       :search-input="{ icon: 'i-lucide-search', placeholder: t('tools.searchPreset') }"
-                      :disabled="controlsDisabled"
-                      class="flex-1"
-                      size="md"
-                    >
+                      :disabled="controlsDisabled" class="flex-1" size="md">
                       <template #empty>
                         {{ t('tools.noPresets') }}
                       </template>
                     </USelectMenu>
                     <UTooltip :text="t('tools.addConfig')">
-                      <UButton
-                        icon="i-lucide-plus"
-                        size="md"
-                        color="primary"
-                        variant="soft"
-                        :disabled="controlsDisabled"
-                        @click="openCreateConfig"
-                      />
+                      <UButton icon="i-lucide-plus" size="md" color="primary" variant="soft"
+                        :disabled="controlsDisabled" @click="openCreateConfig" />
                     </UTooltip>
                     <UTooltip :text="t('tools.editConfig')">
-                      <UButton
-                        icon="i-lucide-pencil"
-                        size="md"
-                        color="neutral"
-                        variant="soft"
-                        :disabled="controlsDisabled || !selectedPresetId"
-                        @click="onEditPresetClick"
-                      />
+                      <UButton icon="i-lucide-pencil" size="md" color="neutral" variant="soft"
+                        :disabled="controlsDisabled || !selectedPresetId" @click="onEditPresetClick" />
                     </UTooltip>
                   </div>
                 </div>
 
                 <!-- Preset Section: Case 2 - Optional for Join and Split -->
-                <div
-                  v-else-if="isPresetOptionalMode"
-                  class="space-y-3 pt-3 border-t border-neutral-200/70 dark:border-neutral-800/70"
-                >
+                <div v-else-if="isPresetOptionalMode"
+                  class="space-y-3 pt-3 border-t border-neutral-200/70 dark:border-neutral-800/70">
                   <div class="flex items-center justify-between">
                     <div>
                       <div class="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
@@ -774,40 +691,21 @@ onMounted(async () => {
 
                   <div v-if="applyPresetToTool" class="pt-1">
                     <div class="flex gap-2 w-full">
-                      <USelectMenu
-                        v-model="selectedPresetId"
-                        :items="presetOptions"
-                        value-key="value"
-                        :placeholder="t('tools.selectPreset')"
-                        clear
+                      <USelectMenu v-model="selectedPresetId" :items="presetOptions" value-key="value"
+                        :placeholder="t('tools.selectPreset')" clear
                         :search-input="{ icon: 'i-lucide-search', placeholder: t('tools.searchPreset') }"
-                        :disabled="controlsDisabled"
-                        class="flex-1"
-                        size="md"
-                      >
+                        :disabled="controlsDisabled" class="flex-1" size="md">
                         <template #empty>
                           {{ t('tools.noPresets') }}
                         </template>
                       </USelectMenu>
                       <UTooltip :text="t('tools.addConfig')">
-                        <UButton
-                          icon="i-lucide-plus"
-                          size="md"
-                          color="primary"
-                          variant="soft"
-                          :disabled="controlsDisabled"
-                          @click="openCreateConfig"
-                        />
+                        <UButton icon="i-lucide-plus" size="md" color="primary" variant="soft"
+                          :disabled="controlsDisabled" @click="openCreateConfig" />
                       </UTooltip>
                       <UTooltip :text="t('tools.editConfig')">
-                        <UButton
-                          icon="i-lucide-pencil"
-                          size="md"
-                          color="neutral"
-                          variant="soft"
-                          :disabled="controlsDisabled || !selectedPresetId"
-                          @click="onEditPresetClick"
-                        />
+                        <UButton icon="i-lucide-pencil" size="md" color="neutral" variant="soft"
+                          :disabled="controlsDisabled || !selectedPresetId" @click="onEditPresetClick" />
                       </UTooltip>
                     </div>
                   </div>
@@ -816,8 +714,7 @@ onMounted(async () => {
                 <!-- Preset Section: Case 3 - Image mode notice -->
                 <div v-else-if="isImageMode" class="pt-3 border-t border-neutral-200/70 dark:border-neutral-800/70">
                   <div
-                    class="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/60 text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2"
-                  >
+                    class="p-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/60 text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-2">
                     <UIcon name="i-lucide-info" class="size-4 text-primary shrink-0" />
                     <span>{{ t('tools.imageModePresetNotice') }}</span>
                   </div>
@@ -826,159 +723,72 @@ onMounted(async () => {
 
               <!-- Dynamic Panels based on Mode -->
               <!-- 1. Single Video Panel -->
-              <ToolsVideoSinglePanel
-                v-if="runMode === 'single'"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                :loading="starting"
+              <ToolsVideoSinglePanel v-if="runMode === 'single'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :selected-preset-id="selectedPresetId || undefined"
+                :selected-preset-title="selectedPresetTitle" :config="config" :loading="starting"
                 @update:input-path="(path) => singleInputPath = path"
-                @update:input-media-size="(size) => inputMediaSize = size"
-                @submit="onTasksSubmit"
-              />
+                @update:input-media-size="(size) => inputMediaSize = size" @submit="onTasksSubmit" />
 
               <!-- 2. Batch Videos Panel -->
-              <ToolsVideoBatchPanel
-                v-else-if="runMode === 'batch'"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                :loading="starting"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoBatchPanel v-else-if="runMode === 'batch'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :selected-preset-id="selectedPresetId || undefined"
+                :selected-preset-title="selectedPresetTitle" :config="config" :loading="starting"
+                @submit="onTasksSubmit" />
 
               <!-- 3. Join Videos Panels -->
-              <ToolsVideoJoinPanel
-                v-else-if="runMode === 'join_root'"
-                :presets="presets"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :use-preset="applyPresetToTool"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                mode="root"
-                @update:input-path="(path) => singleInputPath = path"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_root'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :use-preset="applyPresetToTool"
+                :selected-preset-id="selectedPresetId || undefined" :selected-preset-title="selectedPresetTitle"
+                :config="config" mode="root" @update:input-path="(path) => singleInputPath = path"
+                @submit="onTasksSubmit" />
 
-              <ToolsVideoJoinPanel
-                v-else-if="runMode === 'join_subfolder'"
-                :presets="presets"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :use-preset="applyPresetToTool"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                mode="subfolder"
-                @update:input-path="(path) => singleInputPath = path"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_subfolder'" :presets="presets"
+                :disabled="controlsDisabled" :selected-encoder="selectedEncoder" :use-preset="applyPresetToTool"
+                :selected-preset-id="selectedPresetId || undefined" :selected-preset-title="selectedPresetTitle"
+                :config="config" mode="subfolder" @update:input-path="(path) => singleInputPath = path"
+                @submit="onTasksSubmit" />
 
-              <ToolsVideoJoinPanel
-                v-else-if="runMode === 'join_files'"
-                :presets="presets"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :use-preset="applyPresetToTool"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                mode="files"
-                @update:input-path="(path) => singleInputPath = path"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoJoinPanel v-else-if="runMode === 'join_files'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :use-preset="applyPresetToTool"
+                :selected-preset-id="selectedPresetId || undefined" :selected-preset-title="selectedPresetTitle"
+                :config="config" mode="files" @update:input-path="(path) => singleInputPath = path"
+                @submit="onTasksSubmit" />
 
               <!-- 4. Split Videos Panel -->
-              <ToolsVideoSplitPanel
-                v-else-if="runMode === 'split'"
-                :presets="presets"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :use-preset="applyPresetToTool"
-                :selected-preset-id="selectedPresetId || undefined"
-                :selected-preset-title="selectedPresetTitle"
-                :config="config"
-                @update:input-path="(path) => singleInputPath = path"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoSplitPanel v-else-if="runMode === 'split'" :presets="presets" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :use-preset="applyPresetToTool"
+                :selected-preset-id="selectedPresetId || undefined" :selected-preset-title="selectedPresetTitle"
+                :config="config" @update:input-path="(path) => singleInputPath = path" @submit="onTasksSubmit" />
 
               <!-- 5. Image2Video Panels -->
-              <ToolsVideoCreatorPanel
-                v-else-if="runMode === 'images_root'"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :loading="starting"
-                mode="root"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoCreatorPanel v-else-if="runMode === 'images_root'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :loading="starting" mode="root" @submit="onTasksSubmit" />
 
-              <ToolsVideoCreatorPanel
-                v-else-if="runMode === 'images_subfolder'"
-                :disabled="controlsDisabled"
-                :selected-encoder="selectedEncoder"
-                :loading="starting"
-                mode="subfolder"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoCreatorPanel v-else-if="runMode === 'images_subfolder'" :disabled="controlsDisabled"
+                :selected-encoder="selectedEncoder" :loading="starting" mode="subfolder" @submit="onTasksSubmit" />
 
               <!-- 6. Audio Tool Panel -->
-              <ToolsVideoAudioToolPanel
-                v-else-if="runMode === 'audio'"
-                :disabled="controlsDisabled"
-                :loading="starting"
-                @submit="onTasksSubmit"
-              />
+              <ToolsVideoAudioToolPanel v-else-if="runMode === 'audio'" :disabled="controlsDisabled" :loading="starting"
+                @submit="onTasksSubmit" />
 
               <template v-if="taskManager.processing.value || taskManager.paused.value" #footer>
                 <div class="flex justify-end gap-2 w-full">
-                  <UButton
-                    v-if="taskManager.processing.value && !taskManager.paused.value"
-                    icon="i-lucide-pause"
-                    :label="t('tools.pause')"
-                    color="warning"
-                    variant="soft"
-                    @click="taskManager.pause()"
-                  />
-                  <UButton
-                    v-if="taskManager.paused.value"
-                    icon="i-lucide-play"
-                    :label="t('tools.resume')"
-                    color="success"
-                    variant="soft"
-                    @click="taskManager.resume()"
-                  />
-                  <UButton
-                    icon="i-lucide-square"
-                    :label="t('tools.stopAll')"
-                    color="error"
-                    variant="soft"
-                    @click="taskManager.stopAll()"
-                  />
+                  <UButton v-if="taskManager.processing.value && !taskManager.paused.value" icon="i-lucide-pause"
+                    :label="t('tools.pause')" color="warning" variant="soft" @click="taskManager.pause()" />
+                  <UButton v-if="taskManager.paused.value" icon="i-lucide-play" :label="t('tools.resume')"
+                    color="success" variant="soft" @click="taskManager.resume()" />
+                  <UButton icon="i-lucide-square" :label="t('tools.stopAll')" color="error" variant="soft"
+                    @click="taskManager.stopAll()" />
                 </div>
               </template>
             </UCard>
 
             <!-- Task Manager Panel -->
-            <ToolsTaskManagerPanel
-              :items="taskManager.taskList.value"
-              :total="taskManager.total.value"
-              :done="taskManager.done.value"
-              :running="taskManager.running.value"
-              :processing="taskManager.processing.value"
-              :paused="taskManager.paused.value"
-              :retries="taskManager.globalRetryCount.value"
-              :show-actions="false"
-              @refresh="taskManager.refreshStatus()"
-              @stop-task="(key) => taskManager.stopTask(key)"
-              @open-file="openFile"
-              @open-item="showInFolder"
-            />
+            <ToolsTaskManagerPanel :items="taskManager.taskList.value" :total="taskManager.total.value"
+              :done="taskManager.done.value" :running="taskManager.running.value"
+              :processing="taskManager.processing.value" :paused="taskManager.paused.value"
+              :retries="taskManager.globalRetryCount.value" :show-actions="false" @refresh="taskManager.refreshStatus()"
+              @stop-task="(key) => taskManager.stopTask(key)" @open-file="openFile" @open-item="showInFolder" />
           </div>
         </UScrollArea>
       </div>
@@ -997,35 +807,21 @@ onMounted(async () => {
                       {{ t('tools.previewVideo') }}
                     </p>
                   </div>
-                  <UBadge
-                    v-if="selectedPresetTitle"
-                    variant="subtle"
-                    color="primary"
-                    size="xs"
-                    class="truncate max-w-44"
-                  >
+                  <UBadge v-if="selectedPresetTitle" variant="subtle" color="primary" size="xs"
+                    class="truncate max-w-44">
                     {{ selectedPresetTitle }}
                   </UBadge>
                 </div>
               </template>
-              <div
-                ref="previewContainer"
-                class="flex justify-center items-center p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg min-h-96 overflow-hidden"
-              >
-                <ToolsVideoFramePreview
-                  :preview-file="previewFile"
-                  :background="{
-                    type: config.background_type || 'color',
-                    color: config.background_color || '#000000',
-                    boxblur: config.background_boxblur || 10,
-                    file: config.background_file || null
-                  }"
-                  :texts="previewLabels"
-                  :subs="previewFiles"
-                  :base-size="baseSize"
-                  :frame-size="frameSize"
-                  :readonly="true"
-                />
+              <div ref="previewContainer"
+                class="flex justify-center items-center p-3 bg-neutral-50 dark:bg-neutral-900/40 rounded-lg min-h-96 overflow-hidden">
+                <ToolsVideoFramePreview :preview-file="previewFile" :background="{
+                  type: config.background_type || 'color',
+                  color: config.background_color || '#000000',
+                  boxblur: config.background_boxblur || 10,
+                  file: config.background_file || null
+                }" :texts="previewLabels" :subs="previewFiles" :base-size="baseSize" :frame-size="frameSize"
+                  :readonly="true" />
               </div>
             </UCard>
           </div>
@@ -1034,37 +830,20 @@ onMounted(async () => {
     </div>
 
     <!-- Configuration Editor Modal -->
-    <ToolsConfigModal
-      v-model:open="showConfigSlideover"
-      :preset="editingConfig"
-      :loading="savingConfig"
-      :preview-file="singleInputPath"
-      @save="onSaveConfig"
-      @delete="openDeletePreset"
-    />
+    <ToolsConfigModal v-model:open="showConfigSlideover" :preset="editingConfig" :loading="savingConfig"
+      :preview-file="singleInputPath" @save="onSaveConfig" @delete="openDeletePreset" />
 
     <!-- Confirm deletion preset modal -->
-    <LazyBaseConfirmModal
-      v-model:open="showDeletePresetModal"
-      :title="t('tools.confirmDeleteConfigTitle')"
+    <LazyBaseConfirmModal v-model:open="showDeletePresetModal" :title="t('tools.confirmDeleteConfigTitle')"
       :description="t('tools.confirmDeleteConfigDesc', { name: deletePresetTarget?.title || '' })"
-      confirm-icon="i-lucide-trash-2"
-      :loading="deletingPreset"
-      @confirm="doDeletePreset"
-    />
+      confirm-icon="i-lucide-trash-2" :loading="deletingPreset" @confirm="doDeletePreset" />
 
     <!-- History Drawer Slideover -->
     <ToolsVideoHistorySlideover v-model="showHistorySlideover" :api="taskManager.api!" />
 
     <!-- Version Info Slideover -->
-    <BaseResponsiveSlideover
-      v-model:open="showVersionSlideover"
-      :title="t('tools.versionInfo')"
-      icon="i-lucide-info"
-      side="right"
-      :dismissible="!updating"
-      :close="!updating"
-    >
+    <BaseResponsiveSlideover v-model:open="showVersionSlideover" :title="t('tools.versionInfo')" icon="i-lucide-info"
+      side="right" :dismissible="!updating" :close="!updating">
       <template #body>
         <div v-if="loadingVersion" class="flex justify-center py-8">
           <UIcon name="i-lucide-loader-circle" class="size-8 text-muted animate-spin" />
@@ -1077,38 +856,21 @@ onMounted(async () => {
                 <UIcon name="i-lucide-server" class="size-4 text-primary" />
                 {{ t('tools.ffmpegSource') }}
               </span>
-              <UBadge
-                v-if="ffmpegSource === 'btbn'"
-                color="success"
-                variant="subtle"
-                size="xs"
-              >
+              <UBadge v-if="ffmpegSource === 'btbn'" color="success" variant="subtle" size="xs">
                 Font load support
               </UBadge>
-              <UBadge
-                v-else
-                color="neutral"
-                variant="subtle"
-                size="xs"
-              >
+              <UBadge v-else color="neutral" variant="subtle" size="xs">
                 Official release
               </UBadge>
             </div>
-            <USelect
-              v-model="ffmpegSource"
-              :items="ffmpegSourceOptions"
-              class="w-full"
-              :disabled="updating || controlsDisabled"
-              @update:model-value="onSourceChange"
-            />
+            <USelect v-model="ffmpegSource" :items="ffmpegSourceOptions" class="w-full"
+              :disabled="updating || controlsDisabled" @update:model-value="onSourceChange" />
           </div>
 
           <!-- Update Info / Action Card -->
           <div v-if="updateInfo" class="space-y-3">
-            <div
-              v-if="updateInfo.hasUpdate"
-              class="p-3.5 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 space-y-2.5"
-            >
+            <div v-if="updateInfo.hasUpdate"
+              class="p-3.5 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 space-y-2.5">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <UIcon name="i-lucide-arrow-up-circle" class="size-5 text-primary" />
@@ -1132,12 +894,7 @@ onMounted(async () => {
                 </p>
               </div>
               <div class="pt-1">
-                <UCheckbox
-                  v-model="cleanTemp"
-                  :disabled="updating"
-                  :label="t('tools.cleanTemp')"
-                  class="text-xs"
-                />
+                <UCheckbox v-model="cleanTemp" :disabled="updating" :label="t('tools.cleanTemp')" class="text-xs" />
               </div>
               <div v-if="updating" class="space-y-1.5 pt-2 border-t border-primary/20">
                 <div class="flex items-center justify-between text-xs">
@@ -1150,25 +907,15 @@ onMounted(async () => {
                 <UProgress :model-value="updateProgress.percent || 0" color="primary" size="sm" />
               </div>
               <div class="pt-2 flex items-center gap-2">
-                <UButton
-                  icon="i-lucide-download-cloud"
-                  color="primary"
-                  variant="soft"
-                  block
-                  class="flex-1"
-                  :loading="updating"
-                  :disabled="updating"
-                  :label="updating ? t('tools.updating') : t('tools.updateNow')"
-                  @click="performUpdate"
-                />
+                <UButton icon="i-lucide-download-cloud" color="primary" variant="soft" block class="flex-1"
+                  :loading="updating" :disabled="updating"
+                  :label="updating ? t('tools.updating') : t('tools.updateNow')" @click="performUpdate" />
                 <!-- <UButton v-if="updating" icon="i-lucide-minimize-2" color="neutral" variant="ghost" size="sm"
                   :title="t('tools.minimize')" @click="showVersionSlideover = false" /> -->
               </div>
             </div>
-            <div
-              v-else
-              class="p-3 rounded-xl border border-success/30 bg-success/5 dark:bg-success/10 flex items-center gap-2 text-xs text-success font-medium"
-            >
+            <div v-else
+              class="p-3 rounded-xl border border-success/30 bg-success/5 dark:bg-success/10 flex items-center gap-2 text-xs text-success font-medium">
               <UIcon name="i-lucide-check-circle" class="size-4 shrink-0" />
               <span>{{ t('tools.upToDate') }} ({{ updateInfo.latestVersion }})</span>
             </div>
@@ -1206,8 +953,7 @@ onMounted(async () => {
 
           <!-- Runtime Environment Card -->
           <div
-            class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-2.5"
-          >
+            class="p-3.5 rounded-xl border border-neutral-200/80 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/40 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
                 <UIcon name="i-lucide-cpu" class="size-4 text-primary" />
@@ -1219,8 +965,7 @@ onMounted(async () => {
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div
-                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
-              >
+                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
                 <div class="flex items-center gap-1.5 min-w-0">
                   <UIcon name="i-lucide-monitor" class="size-3.5 text-primary shrink-0" />
                   <span class="text-muted text-[11px]">Platform</span>
@@ -1228,8 +973,7 @@ onMounted(async () => {
                 <span class="font-mono font-semibold text-default truncate">{{ electronPlatform }}</span>
               </div>
               <div
-                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
-              >
+                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
                 <div class="flex items-center gap-1.5 min-w-0">
                   <UIcon name="i-lucide-atom" class="size-3.5 text-cyan-500 shrink-0" />
                   <span class="text-muted text-[11px]">Electron</span>
@@ -1239,8 +983,7 @@ onMounted(async () => {
                 </span>
               </div>
               <div
-                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
-              >
+                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
                 <div class="flex items-center gap-1.5 min-w-0">
                   <UIcon name="i-lucide-server" class="size-3.5 text-emerald-500 shrink-0" />
                   <span class="text-muted text-[11px]">Node.js</span>
@@ -1250,8 +993,7 @@ onMounted(async () => {
                 </span>
               </div>
               <div
-                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs"
-              >
+                class="p-2.5 rounded-lg bg-white dark:bg-neutral-800/80 border border-neutral-200/70 dark:border-neutral-700/60 flex items-center justify-between gap-2 shadow-xs">
                 <div class="flex items-center gap-1.5 min-w-0">
                   <UIcon name="i-lucide-globe" class="size-3.5 text-amber-500 shrink-0" />
                   <span class="text-muted text-[11px]">Chrome</span>
@@ -1266,51 +1008,28 @@ onMounted(async () => {
       </template>
       <template #footer>
         <div class="flex items-center justify-between w-full gap-2">
-          <UButton
-            variant="ghost"
-            color="neutral"
-            :disabled="updating"
-            :label="t('global.cancel')"
-            @click="showVersionSlideover = false"
-          />
+          <UButton variant="ghost" color="neutral" :disabled="updating" :label="t('global.cancel')"
+            @click="showVersionSlideover = false" />
           <div class="flex items-center gap-1.5">
-            <UButton
-              icon="i-lucide-refresh-cw"
-              :label="t('tools.refresh')"
-              variant="soft"
-              color="neutral"
-              :loading="loadingVersion"
-              :disabled="updating || loadingVersion"
-              @click="fetchVersion"
-            />
-            <UButton
-              icon="i-lucide-sparkles"
-              :label="t('tools.checkUpdate')"
-              variant="soft"
-              color="primary"
-              :loading="checkingUpdate"
-              :disabled="updating || checkingUpdate"
-              @click="checkUpdate"
-            />
+            <UButton icon="i-lucide-refresh-cw" :label="t('tools.refresh')" variant="soft" color="neutral"
+              :loading="loadingVersion" :disabled="updating || loadingVersion" @click="fetchVersion" />
+            <UButton icon="i-lucide-sparkles" :label="t('tools.checkUpdate')" variant="soft" color="primary"
+              :loading="checkingUpdate" :disabled="updating || checkingUpdate" @click="checkUpdate" />
           </div>
         </div>
       </template>
     </BaseResponsiveSlideover>
 
     <!-- Floating Mini Update Progress Widget -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
+    <Transition enter-active-class="transition duration-300 ease-out"
       enter-from-class="transform translate-y-4 opacity-0 scale-95"
       enter-to-class="transform translate-y-0 opacity-100 scale-100"
       leave-active-class="transition duration-200 ease-in"
       leave-from-class="transform translate-y-0 opacity-100 scale-100"
-      leave-to-class="transform translate-y-4 opacity-0 scale-95"
-    >
-      <div
-        v-if="updating && !showVersionSlideover"
+      leave-to-class="transform translate-y-4 opacity-0 scale-95">
+      <div v-if="updating && !showVersionSlideover"
         class="fixed bottom-5 right-5 z-50 p-3.5 rounded-2xl border border-primary/40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md shadow-2xl w-80 space-y-2.5 cursor-pointer hover:border-primary transition-all duration-200 ring-1 ring-primary/20"
-        @click="showVersionSlideover = true"
-      >
+        @click="showVersionSlideover = true">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <UIcon name="i-simple-icons-ffmpeg" class="size-4 text-emerald-500 shrink-0" />
@@ -1336,28 +1055,20 @@ onMounted(async () => {
     </Transition>
 
     <!-- GPU Support Details Modal -->
-    <BaseResponsiveModal
-      v-model:open="showGpuModal"
-      :title="t('tools.gpuModalTitle')"
-      :description="t('tools.gpuModalDesc')"
-      icon="i-lucide-cpu"
-    >
+    <BaseResponsiveModal v-model:open="showGpuModal" :title="t('tools.gpuModalTitle')"
+      :description="t('tools.gpuModalDesc')" icon="i-lucide-cpu">
       <template #body>
         <div class="space-y-4 text-xs">
           <!-- Physical GPUs -->
           <div class="space-y-2">
             <div
-              class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider flex items-center gap-1.5"
-            >
+              class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
               <UIcon name="i-lucide-monitor" class="size-4 text-primary" />
               <span>{{ t('tools.physicalGpus') }}</span>
             </div>
             <div v-if="gpuSupport.gpus && gpuSupport.gpus.length" class="space-y-2">
-              <div
-                v-for="(gpu, idx) in gpuSupport.gpus"
-                :key="idx"
-                class="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60"
-              >
+              <div v-for="(gpu, idx) in gpuSupport.gpus" :key="idx"
+                class="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60">
                 <div class="p-2 rounded-md bg-primary/10 text-primary">
                   <UIcon name="i-lucide-cpu" class="size-5 shrink-0" />
                 </div>
@@ -1371,10 +1082,8 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-            <div
-              v-else
-              class="text-xs text-neutral-400 italic p-3 rounded-lg border border-dashed border-neutral-200 dark:border-neutral-800"
-            >
+            <div v-else
+              class="text-xs text-neutral-400 italic p-3 rounded-lg border border-dashed border-neutral-200 dark:border-neutral-800">
               {{ t('tools.noPhysicalGpuFound') }}
             </div>
           </div>
@@ -1382,34 +1091,25 @@ onMounted(async () => {
           <!-- Hardware Encoders -->
           <div class="space-y-2">
             <div
-              class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider flex items-center gap-1.5"
-            >
+              class="text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
               <UIcon name="i-lucide-layers" class="size-4 text-primary" />
               <span>{{ t('tools.supportedEncoders') }}</span>
             </div>
             <div class="grid grid-cols-1 gap-2.5">
-              <div
-                v-for="enc in gpuEncodersList"
-                :key="enc.id"
-                class="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60 flex items-start justify-between gap-3"
-              >
+              <div v-for="enc in gpuEncodersList" :key="enc.id"
+                class="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/70 dark:bg-neutral-900/60 flex items-start justify-between gap-3">
                 <div class="space-y-1 min-w-0 flex-1">
                   <div class="flex items-center gap-2">
                     <span class="font-semibold text-sm text-neutral-900 dark:text-neutral-100">{{ enc.name }}</span>
                     <code
-                      class="text-xs text-neutral-500 bg-neutral-200/60 dark:bg-neutral-800 px-1.5 py-0.5 rounded"
-                    >{{ enc.codec }}</code>
+                      class="text-xs text-neutral-500 bg-neutral-200/60 dark:bg-neutral-800 px-1.5 py-0.5 rounded">{{ enc.codec }}</code>
                   </div>
                   <p class="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
                     {{ enc.description }}
                   </p>
                 </div>
-                <UBadge
-                  :color="enc.supported ? 'success' : 'neutral'"
-                  :variant="enc.supported ? 'subtle' : 'outline'"
-                  size="sm"
-                  class="shrink-0"
-                >
+                <UBadge :color="enc.supported ? 'success' : 'neutral'" :variant="enc.supported ? 'subtle' : 'outline'"
+                  size="sm" class="shrink-0">
                   {{ enc.supported ? t('tools.supported') : t('tools.notSupported') }}
                 </UBadge>
               </div>
@@ -1417,10 +1117,8 @@ onMounted(async () => {
           </div>
 
           <!-- Recommendation Note -->
-          <div
-            v-if="gpuRecommendation"
-            class="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary-700 dark:text-primary-300 flex items-center gap-2"
-          >
+          <div v-if="gpuRecommendation"
+            class="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary-700 dark:text-primary-300 flex items-center gap-2">
             <UIcon name="i-lucide-sparkles" class="size-4 shrink-0 text-primary" />
             <span class="font-medium">{{ gpuRecommendation }}</span>
           </div>
@@ -1429,20 +1127,9 @@ onMounted(async () => {
 
       <template #footer>
         <div class="flex items-center justify-between w-full">
-          <UButton
-            variant="ghost"
-            color="neutral"
-            :label="t('common.close')"
-            @click="showGpuModal = false"
-          />
-          <UButton
-            icon="i-lucide-refresh-cw"
-            :label="t('tools.detectingGpu')"
-            variant="soft"
-            color="primary"
-            :loading="gpuLoading"
-            @click="checkGpu"
-          />
+          <UButton variant="ghost" color="neutral" :label="t('common.close')" @click="showGpuModal = false" />
+          <UButton icon="i-lucide-refresh-cw" :label="t('tools.detectingGpu')" variant="soft" color="primary"
+            :loading="gpuLoading" @click="checkGpu" />
         </div>
       </template>
     </BaseResponsiveModal>

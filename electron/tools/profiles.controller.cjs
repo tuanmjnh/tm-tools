@@ -437,7 +437,7 @@ function registerProfilesController(win) {
     if (!exePath || !fs.existsSync(exePath)) {
       return {
         success: false,
-        error: 'Không tìm thấy browser executable tương thích trên hệ thống. Vui lòng cài đặt Google Chrome, Edge, Firefox, hoặc cấu hình đường dẫn trong Cài đặt > Trình duyệt.'
+        error: 'Compatible browser executable not found on the system. Please install Google Chrome, Edge, Firefox, or configure the path in Settings > Browsers.'
       }
     }
 

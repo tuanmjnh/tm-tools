@@ -14,8 +14,8 @@ export default defineNuxtPlugin((nuxtApp) => {
       if (router.currentRoute.value.path !== '/login') {
         const toast = useToast()
         const i18n = (nuxtApp as unknown as { $i18n?: { t: (key: string) => string } }).$i18n
-        const title = i18n?.t?.('auth.sessionExpired') ?? 'Phiên đăng nhập đã hết hạn'
-        const description = i18n?.t?.('auth.sessionExpiredDesc') ?? 'Vui lòng đăng nhập lại để tiếp tục.'
+        const title = i18n?.t?.('auth.sessionExpired') ?? 'Session expired'
+        const description = i18n?.t?.('auth.sessionExpiredDesc') ?? 'Please log in again to continue.'
 
         toast.add({
           title,

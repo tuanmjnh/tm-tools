@@ -439,7 +439,7 @@ onMounted(async () => {
               {{ selectedFiles.length }} {{ $t('media.selected_files_text') || selectedText }}
             </span>
             <span v-else class="tabular-nums">
-              {{ files.length }} {{ $t('media.total_files_text') || 'tệp trong thư mục' }}
+              {{ files.length }} {{ $t('media.total_files_text') || 'files in folder' }}
             </span>
           </div>
           <span class="opacity-30">|</span>

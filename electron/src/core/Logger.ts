@@ -48,11 +48,11 @@ export class Logger {
       console.log(logLine.trim())
     }
 
-    // Ghi vào file log
+    // Write to log file
     try {
       fs.appendFileSync(this.logFilePath, logLine, 'utf8')
     } catch {
-      // bỏ qua nếu lỗi ghi file
+      // Ignore file write errors
     }
   }
 

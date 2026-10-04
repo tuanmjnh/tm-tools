@@ -52,12 +52,12 @@ const subfolderTransitions = ref<string[]>([
 ])
 
 const resolutionOptions = computed(() => [
-  { label: 'Dọc 9:16 (1080x1920 - FHD TikTok/Reels/Shorts)', value: '1080x1920' },
-  { label: 'Dọc 9:16 (720x1280 - HD)', value: '720x1280' },
+  { label: 'Vertical 9:16 (1080x1920 - FHD TikTok/Reels/Shorts)', value: '1080x1920' },
+  { label: 'Vertical 9:16 (720x1280 - HD)', value: '720x1280' },
   { label: 'Ngang 16:9 (1920x1080 - FHD YouTube)', value: '1920x1080' },
   { label: 'Ngang 16:9 (1280x720 - HD)', value: '1280x720' },
   { label: 'Ngang 16:9 (2560x1440 - 2K QHD)', value: '2560x1440' },
-  { label: 'Vuông 1:1 (1080x1080 - Instagram)', value: '1080x1080' }
+  { label: 'Square 1:1 (1080x1080 - Instagram)', value: '1080x1080' }
 ])
 
 const fpsOptions = [
@@ -67,25 +67,25 @@ const fpsOptions = [
 ]
 
 const transitionOptions = computed(() => [
-  { label: 'Ngẫu nhiên (Random)', value: 'random' },
-  { label: 'Fade (Mờ dần)', value: 'fade' },
-  { label: 'Wipe Left (Quét trái)', value: 'wipeleft' },
-  { label: 'Wipe Right (Quét phải)', value: 'wiperight' },
-  { label: 'Slide Left (Trượt trái)', value: 'slideleft' },
-  { label: 'Slide Right (Trượt phải)', value: 'slideright' },
-  { label: 'Circle Crop (Cắt tròn)', value: 'circlecrop' },
-  { label: 'Smooth Left (Mượt trái)', value: 'smoothleft' },
-  { label: 'Smooth Right (Mượt phải)', value: 'smoothright' },
-  { label: 'Radial (Tỏa tròn)', value: 'radial' },
-  { label: 'Pixelize (Điểm ảnh)', value: 'pixelize' },
-  { label: 'Dissolve (Hòa tan)', value: 'dissolve' }
+  { label: 'Random', value: 'random' },
+  { label: 'Fade', value: 'fade' },
+  { label: 'Wipe Left', value: 'wipeleft' },
+  { label: 'Wipe Right', value: 'wiperight' },
+  { label: 'Slide Left', value: 'slideleft' },
+  { label: 'Slide Right', value: 'slideright' },
+  { label: 'Circle Crop', value: 'circlecrop' },
+  { label: 'Smooth Left', value: 'smoothleft' },
+  { label: 'Smooth Right', value: 'smoothright' },
+  { label: 'Radial', value: 'radial' },
+  { label: 'Pixelize', value: 'pixelize' },
+  { label: 'Dissolve', value: 'dissolve' }
 ])
 
 const zoomOptions = computed(() => [
-  { label: 'Ngẫu nhiên (Random In/Out)', value: 'random' },
-  { label: 'Phóng to (Zoom In)', value: 'in' },
-  { label: 'Thu nhỏ (Zoom Out)', value: 'out' },
-  { label: 'Tĩnh (Static)', value: 'none' }
+  { label: 'Random (In/Out)', value: 'random' },
+  { label: 'Zoom In', value: 'in' },
+  { label: 'Zoom Out', value: 'out' },
+  { label: 'Static', value: 'none' }
 ])
 
 function updateSuggestedOutput() {

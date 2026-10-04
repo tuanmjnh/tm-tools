@@ -18,7 +18,7 @@ import type { BrowserProcess } from '../../electron/src/domain/browser/BrowserPr
 async function runMilestone2Tests(): Promise<void> {
   console.log('=== [Milestone 2 Test Suite] Starting tests ===\n')
 
-  // Đảm bảo database đã migrate
+  // Ensure database is migrated
   runMigrations()
 
   // 1. Test Browser Adapters capabilities & instances
@@ -33,7 +33,7 @@ async function runMilestone2Tests(): Promise<void> {
   assert.equal(firefoxAdapter.supports().cdp, false)
   assert.equal(customAdapter.engine, 'custom')
 
-  // Chạy detection trên adapter
+  // Run detection on adapter
   const detectedChromium = await chromiumAdapter.detect()
   console.log(`   Detected ${detectedChromium.length} Chromium-based browsers:`, detectedChromium.map(d => `${d.name} (v${d.version})`).join(', ') || 'none')
   console.log('   Browser Adapters test PASSED.')
@@ -113,7 +113,7 @@ async function runMilestone2Tests(): Promise<void> {
   eventBus.onDomain('profile:started', onProfileStarted)
   eventBus.onDomain('profile:stopped', onProfileStopped)
 
-  // Tạo mock ChildProcess
+  // Create mock ChildProcess
   const mockEmitter = new EventEmitter()
   const mockChild = Object.assign(mockEmitter, {
     pid: 88888,
@@ -139,7 +139,7 @@ async function runMilestone2Tests(): Promise<void> {
   assert.equal(processManager.getProcessByPid(88888)?.profileId, 'mock-profile-1')
   assert.ok(startedEventReceived, 'Event profile:started should be fired')
 
-  // Giả lập process exit
+  // Simulate process exit
   mockChild.emit('exit', 0, null)
   assert.equal(processManager.isProfileRunning('mock-profile-1'), false, 'Profile should no longer be running after exit')
   assert.ok(stoppedEventReceived, 'Event profile:stopped should be fired')

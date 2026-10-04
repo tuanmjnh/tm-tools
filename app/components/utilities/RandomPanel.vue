@@ -70,6 +70,41 @@
       </div>
     </div>
 
+    <div v-if="randomType === 'key'" class="space-y-3 rounded-xl border border-default p-4">
+      <div class="flex items-center gap-2">
+        <UButton
+          label="32 chars"
+          size="xs"
+          :color="hexKeyLength === 32 ? 'primary' : 'neutral'"
+          :variant="hexKeyLength === 32 ? 'solid' : 'soft'"
+          @click="hexKeyLength = 32"
+        />
+        <UButton
+          label="64 chars"
+          size="xs"
+          :color="hexKeyLength === 64 ? 'primary' : 'neutral'"
+          :variant="hexKeyLength === 64 ? 'solid' : 'soft'"
+          @click="hexKeyLength = 64"
+        />
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="w-24 text-sm text-muted">{{ t('utilities.random.length') }}</label>
+        <USlider v-model="hexKeyLength" :min="16" :max="128" :step="16" class="flex-1" />
+        <span class="w-16 text-right font-mono text-sm">{{ hexKeyLength }}</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="w-24 text-sm text-muted">{{ t('utilities.random.count') }}</label>
+        <UInput
+          v-model.number="genCount"
+          type="number"
+          :min="1"
+          :max="20"
+          size="xs"
+          class="w-20"
+        />
+      </div>
+    </div>
+
     <div class="flex gap-2">
       <UButton
         :label="t('utilities.random.generate')"
@@ -116,10 +151,11 @@ const {
   generateUuid,
   generateToken,
   generateApiKey,
+  generateRandomKeyBatch,
   generateUsernameBatch
 } = useRandomGen()
 
-type RandomType = 'password' | 'username' | 'pin' | 'uuid' | 'token' | 'apiKey'
+type RandomType = 'password' | 'username' | 'pin' | 'uuid' | 'token' | 'apiKey' | 'key'
 
 const randomGens: { id: RandomType, icon: string }[] = [
   { id: 'password', icon: 'i-lucide-key-round' },
@@ -127,12 +163,14 @@ const randomGens: { id: RandomType, icon: string }[] = [
   { id: 'pin', icon: 'i-lucide-lock' },
   { id: 'uuid', icon: 'i-lucide-fingerprint' },
   { id: 'token', icon: 'i-lucide-shield' },
-  { id: 'apiKey', icon: 'i-lucide-badge' }
+  { id: 'apiKey', icon: 'i-lucide-badge' },
+  { id: 'key', icon: 'i-lucide-key' }
 ]
 
 const randomType = ref<RandomType>('password')
 const genCount = ref(5)
 const genResults = ref<string[]>([])
+const hexKeyLength = ref(64)
 
 const pwOptions = reactive({
   length: 16,
@@ -175,6 +213,9 @@ function generate() {
       break
     case 'apiKey':
       genResults.value = Array.from({ length: count }, () => generateApiKey('tm'))
+      break
+    case 'key':
+      genResults.value = generateRandomKeyBatch(count, hexKeyLength.value)
       break
   }
 }

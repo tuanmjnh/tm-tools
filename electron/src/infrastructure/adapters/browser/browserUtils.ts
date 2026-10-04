@@ -41,10 +41,10 @@ export function getConfiguredPath(key: string): string | undefined {
 
 export async function getExecutableVersion(executablePath: string): Promise<string> {
   if (!fs.existsSync(executablePath)) {
-    throw new Error(`File không tồn tại: ${executablePath}`)
+    throw new Error(`File not found: ${executablePath}`)
   }
 
-  // Trên Windows: Dùng PowerShell Get-Item VersionInfo lấy version cực nhanh không cần spawn browser
+  // Windows: Use PowerShell Get-Item VersionInfo for fast version retrieval without spawning browser
   if (process.platform === 'win32') {
     try {
       const escaped = executablePath.replace(/'/g, '\'\'')
@@ -53,11 +53,11 @@ export async function getExecutableVersion(executablePath: string): Promise<stri
       const version = stdout.trim()
       if (version) return version
     } catch {
-      // fallback chạy với cờ --version
+      // Fallback to running with --version flag
     }
   }
 
-  // Fallback: Chạy lệnh `executablePath --version`
+  // Fallback: Execute `executablePath --version`
   try {
     const { stdout } = await execAsync(`"${executablePath}" --version`, { timeout: 5000 })
     const matched = stdout.match(/(\d+(\.\d+)+)/)
@@ -65,7 +65,7 @@ export async function getExecutableVersion(executablePath: string): Promise<stri
       return matched[1]
     }
   } catch {
-    // thử tiếp với -v
+    // Retry with -v
     try {
       const { stdout } = await execAsync(`"${executablePath}" -v`, { timeout: 5000 })
       const matched = stdout.match(/(\d+(\.\d+)+)/)
@@ -73,7 +73,7 @@ export async function getExecutableVersion(executablePath: string): Promise<stri
         return matched[1]
       }
     } catch {
-      // bỏ qua
+      // Ignore error
     }
   }
 
@@ -87,8 +87,8 @@ export async function killProcessTree(pid: number, force = true): Promise<void> 
       await execAsync(`taskkill /pid ${pid} /T ${flag}`, { timeout: 5000 })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err)
-      // Nếu process không còn tồn tại thì coi như thành công
-      if (!message.includes('not found') && !message.includes('không tìm thấy')) {
+      // If process no longer exists, consider as success
+      if (!message.includes('not found') && !message.includes('not found')) {
         try {
           process.kill(pid, 'SIGKILL')
         } catch {

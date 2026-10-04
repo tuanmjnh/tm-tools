@@ -105,38 +105,22 @@ function clearConversation() {
 <template>
   <BasePage id="chat" :title="t('chat.title')">
     <template #right>
-      <UButton
-        icon="i-lucide-trash-2"
-        color="neutral"
-        variant="ghost"
-        :label="t('chat.clear')"
-        :disabled="messages.length === 0"
-        @click="clearConversation"
-      />
+      <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" :label="t('chat.clear')"
+        :disabled="messages.length === 0" @click="clearConversation" />
     </template>
 
     <UCard class="flex h-[calc(100vh-14rem)] flex-col">
-      <div
-        v-if="messages.length === 0"
-        class="flex flex-1 items-center justify-center text-center text-muted"
-      >
+      <div v-if="messages.length === 0" class="flex flex-1 items-center justify-center text-center text-muted">
         <div class="space-y-2">
           <UIcon name="i-lucide-message-square" class="mx-auto text-4xl" />
           <p>{{ t('chat.empty') }}</p>
         </div>
       </div>
 
-      <div
-        v-else
-        ref="scrollContainer"
-        class="flex-1 overflow-y-auto px-1 py-4"
-      >
-        <UChatMessages
-          :messages="messages"
-          :status="status"
+      <div v-else ref="scrollContainer" class="flex-1 overflow-y-auto px-1 py-4">
+        <UChatMessages :messages="messages" :status="status"
           :assistant="{ avatar: { icon: 'i-lucide-sparkles' }, side: 'left', variant: 'naked' }"
-          :user="{ side: 'right', variant: 'soft' }"
-        >
+          :user="{ side: 'right', variant: 'soft' }">
           <template #content="{ message }">
             <p class="whitespace-pre-wrap">
               {{ message.content }}
@@ -148,18 +132,8 @@ function clearConversation() {
         </UChatMessages>
       </div>
 
-      <UChatPrompt
-        v-model="input"
-        :error="error"
-        :placeholder="t('chat.placeholder')"
-        class="mt-4"
-        @submit="send"
-      >
-        <UChatPromptSubmit
-          :status="status"
-          @stop="stop"
-          @reload="send"
-        />
+      <UChatPrompt v-model="input" :error="error" :placeholder="t('chat.placeholder')" class="mt-4" @submit="send">
+        <UChatPromptSubmit :status="status" @stop="stop" @reload="send" />
       </UChatPrompt>
     </UCard>
   </BasePage>

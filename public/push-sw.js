@@ -39,9 +39,9 @@ self.addEventListener('push', (event) => {
     const notification = data.notification || data
     const payloadData = data.data || data.payload || {}
 
-    const title = notification.title || 'Thông báo mới'
+    const title = notification.title || 'New Notification'
     const options = {
-      body: notification.body || notification.message || 'Bạn có thông báo mới từ hệ thống',
+      body: notification.body || notification.message || 'You have a new system notification',
       icon: notification.icon || '/pwa-192x192.png',
       badge: notification.badge || '/favicon.ico',
       image: notification.image || payloadData.image,
@@ -55,8 +55,8 @@ self.addEventListener('push', (event) => {
       },
       vibrate: [200, 100, 200],
       actions: [
-        { action: 'open', title: 'Xem ngay' },
-        { action: 'close', title: 'Đóng' }
+        { action: 'open', title: 'View Now' },
+        { action: 'close', title: 'Close' }
       ]
     }
 

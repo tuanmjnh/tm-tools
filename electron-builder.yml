@@ -11,6 +11,8 @@ publish:
 files:
   - electron/**/*
   - .output/**/*
+  - public/icon.ico
+  - public/icon.png
   - package.json
 asarUnpack:
   - .output/server/**
@@ -21,11 +23,15 @@ extraResources:
       - "**/*.exe"
       - "**/*.json"
 win:
+  icon: public/icon.ico
   executableName: TM Tools
   target:
     - nsis
 nsis:
   oneClick: false
+  installerIcon: public/icon.ico
+  uninstallerIcon: public/icon.ico
+  installerHeaderIcon: public/icon.ico
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
@@ -35,6 +41,7 @@ mac:
   target:
     - dmg
 linux:
+  icon: public/icon.png
   target:
     - AppImage
     - snap

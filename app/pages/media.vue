@@ -49,7 +49,7 @@ const toFile = (link: string) => ({
   <BasePage id="media" :title="t('media.title')">
     <template #default>
       <div class="flex-1 flex flex-col min-h-0 relative">
-        <!-- UTabs cần flex-1 min-h-0 để các slot con scroll được -->
+        <!-- UTabs requires flex-1 min-h-0 so child slots can scroll -->
         <UTabs
           :items="items"
           class="flex-1 flex flex-col min-h-0"
@@ -122,7 +122,7 @@ const toFile = (link: string) => ({
           </template>
 
           <template #cloudinary>
-            <!-- flex-1 min-h-0 để Cloudinary component scroll nội bộ -->
+            <!-- flex-1 min-h-0 allows Cloudinary component internal scroll -->
             <div class="flex flex-col h-full p-0 overflow-hidden">
               <LazyMediaCloudinary
                 class="flex-1 min-h-0"

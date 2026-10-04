@@ -1,9 +1,9 @@
 <script setup lang="ts">
-const { t } = useI18n()
+const { currentUtility } = useUtilitiesMeta()
 </script>
 
 <template>
-  <BasePage id="utilities-random" :title="t('nav.utilities_random')">
+  <BasePage id="utilities-random" :title="currentUtility.title" :description="currentUtility.description">
     <UtilitiesRandomPanel />
   </BasePage>
 </template>

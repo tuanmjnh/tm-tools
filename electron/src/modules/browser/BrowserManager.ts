@@ -31,7 +31,7 @@ export class BrowserManager {
     this.processManager = BrowserProcessManager.getInstance()
     this.logger = Logger.getInstance()
 
-    // Đăng ký các adapter mặc định và chuyên dụng
+    // Register default and specialized adapters
     this.registerAdapter(new ChromiumBrowserAdapter())
     this.registerAdapter(new FirefoxBrowserAdapter())
     this.registerAdapter(new CamoufoxAdapter())
@@ -54,7 +54,7 @@ export class BrowserManager {
   public getAdapter(engine: BrowserEngine): IBrowserAdapter {
     const adapter = this.adapters.get(engine)
     if (!adapter) {
-      throw new Error(`Không tìm thấy BrowserAdapter cho engine [${engine}]`)
+      throw new Error(`BrowserAdapter not found for engine [${engine}]`)
     }
     return adapter
   }
@@ -80,7 +80,7 @@ export class BrowserManager {
       engine: BrowserEngine
     }> = []
 
-    // Quét qua các adapter hỗ trợ phát hiện
+    // Scan through detection-supported adapters
     for (const adapter of this.adapters.values()) {
       try {
         const detected = await adapter.detect()
@@ -122,7 +122,7 @@ export class BrowserManager {
       }
     }
 
-    // Đánh dấu missing cho các browser trước đó không còn tồn tại trên đĩa
+    // Mark missing for browsers no longer found on disk
     for (const b of existingInDb) {
       if (!b.isCustom && !foundPaths.has(b.executablePath) && !fs.existsSync(b.executablePath)) {
         this.repository.update(b.id, { status: 'missing' })
@@ -131,7 +131,7 @@ export class BrowserManager {
 
     const updatedList = this.repository.findAll()
 
-    // Đảm bảo luôn có 1 browser làm default nếu có ít nhất 1 browser available
+    // Ensure at least one browser is default if available
     const hasDefault = updatedList.some(b => b.isDefault && b.status === 'available')
     if (!hasDefault) {
       const firstAvailable = updatedList.find(b => b.status === 'available')
@@ -160,14 +160,14 @@ export class BrowserManager {
 
   public async addCustomBrowser(input: AddCustomBrowserInput): Promise<BrowserItem> {
     if (!fs.existsSync(input.executablePath)) {
-      throw new Error(`Đường dẫn executable không tồn tại: ${input.executablePath}`)
+      throw new Error(`Executable path does not exist: ${input.executablePath}`)
     }
 
     const version = await getExecutableVersion(input.executablePath)
     const existing = this.repository.findByPath(input.executablePath)
 
     if (existing) {
-      throw new Error(`Trình duyệt với executable này đã tồn tại trong danh sách: ${existing.name}`)
+      throw new Error(`A browser with this executable already exists in list: ${existing.name}`)
     }
 
     const created = this.repository.create({
@@ -201,7 +201,7 @@ export class BrowserManager {
     if (!fs.existsSync(executablePath)) {
       return {
         valid: false,
-        error: `File không tồn tại: ${executablePath}`
+        error: `File not found: ${executablePath}`
       }
     }
 
@@ -228,7 +228,7 @@ export class BrowserManager {
       const message = err instanceof Error ? err.message : String(err)
       return {
         valid: false,
-        error: `Không thể đọc thông tin executable: ${message}`
+        error: `Failed to read executable info: ${message}`
       }
     }
   }
@@ -236,7 +236,7 @@ export class BrowserManager {
   public removeBrowser(id: string): void {
     const browser = this.repository.findById(id)
     if (!browser) {
-      throw new Error(`Không tìm thấy trình duyệt với ID: ${id}`)
+      throw new Error(`Browser not found with ID: ${id}`)
     }
     this.repository.delete(id)
   }

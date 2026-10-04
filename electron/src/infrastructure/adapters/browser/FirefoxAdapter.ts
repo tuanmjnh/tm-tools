@@ -71,7 +71,7 @@ export class FirefoxBrowserAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable Firefox: ${options.executablePath}`)
+      throw new Error(`Firefox executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
@@ -103,7 +103,7 @@ export class FirefoxBrowserAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình Firefox (PID is undefined)')
+      throw new Error('Failed to spawn Firefox process (PID is undefined)')
     }
 
     return {

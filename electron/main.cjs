@@ -9,6 +9,7 @@ const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
+const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
 
 let initializePlatform
 try {
@@ -92,6 +93,21 @@ async function startServer() {
   })
 }
 
+function getAppIcon() {
+  const isWin = process.platform === 'win32'
+  const iconName = isWin ? 'icon.ico' : 'icon.png'
+  const candidatePaths = [
+    path.join(__dirname, '..', 'public', iconName),
+    path.join(__dirname, '..', '.output', 'public', iconName),
+    path.join(__dirname, '..', 'public', 'icon.png'),
+    path.join(__dirname, '..', '.output', 'public', 'icon.png')
+  ]
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) return p
+  }
+  return undefined
+}
+
 async function createWindow() {
   Menu.setApplicationMenu(null)
 
@@ -101,6 +117,7 @@ async function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     show: false,
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -266,6 +283,7 @@ app.whenReady().then(() => {
   registerFfmpegController()
   registerDialogController()
   registerFileManagerController()
+  registerTmcutController()
   if (typeof initializePlatform === 'function') {
     initializePlatform()
   }

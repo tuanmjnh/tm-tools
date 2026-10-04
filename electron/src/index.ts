@@ -11,12 +11,12 @@ export function initializePlatform(): void {
   const logger = Logger.getInstance()
   logger.info('Platform', 'Initializing Browser Profile Management Platform...')
 
-  // 1. Khởi tạo cấu trúc thư mục dữ liệu
+  // 1. Initialize data directory structure
   const storage = StorageManager.getInstance()
   storage.ensureDirectoryTree()
   logger.info('Platform', `Storage root initialized at: ${storage.getRootPath()}`)
 
-  // 2. Tự động áp dụng Drizzle migrations
+  // 2. Auto-apply Drizzle migrations
   try {
     runMigrations()
     logger.info('Platform', 'Database migrations applied successfully.')
@@ -24,12 +24,12 @@ export function initializePlatform(): void {
     logger.error('Platform', 'Failed to apply database migrations:', err)
   }
 
-  // 3. Đăng ký các kênh IPC
+  // 3. Register IPC channels
   registerSystemIpc()
   registerBrowserIpc()
   logger.info('Platform', 'System & Browser IPC registered.')
 
-  // 4. Dọn dẹp cơ sở dữ liệu và tiến trình khi đóng ứng dụng
+  // 4. Clean up database and processes on app exit
   app.on('before-quit', async () => {
     logger.info('Platform', 'Stopping all running browser processes...')
     try {

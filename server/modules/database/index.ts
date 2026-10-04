@@ -1,7 +1,6 @@
 import type { AuthUser, UserSession } from '../../../types/auth'
 import type { Role, SystemRoute, UserRole } from '../../../types/rbac'
 import type { AppDatabase } from './app'
-import { config } from '../../config/index'
 
 export type { AppDatabase } from './app'
 export { AppMongoDB } from './app'
@@ -54,8 +53,6 @@ export interface DatabaseAdapter {
   markNotificationAsRead(notificationId: string, userId: string): Promise<boolean>
   markAllNotificationsAsRead(userId: string): Promise<number>
   deleteNotifications(userId: string, ids: string[]): Promise<number>
-
-  seed(options?: { reset?: boolean }): Promise<void>
 }
 
 let authAdapter: DatabaseAdapter | null = null
@@ -69,8 +66,9 @@ export async function getDatabase(): Promise<DatabaseAdapter> {
 
   try {
     await adapter.connect()
-  } catch (err: any) {
-    console.warn('[Database] Local MongoDB connection skipped or failed:', err.message)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn('[Database] Local MongoDB connection skipped or failed:', message)
   }
 
   authAdapter = adapter

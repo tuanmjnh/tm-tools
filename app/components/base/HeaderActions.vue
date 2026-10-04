@@ -16,9 +16,9 @@ export interface HeaderAction {
   primary?: boolean
   disabled?: boolean
   visible?: boolean
-  /** Luôn nằm trong ellipsis dropdown, không bao giờ inline. */
+  /** Always placed in ellipsis dropdown, never inline. */
   overflow?: boolean
-  /** Submenu (dropdown children) — tự động overflow. */
+  /** Submenu (dropdown children) - automatically overflows. */
   children?: HeaderActionChild[]
   onSelect?: () => unknown
 }

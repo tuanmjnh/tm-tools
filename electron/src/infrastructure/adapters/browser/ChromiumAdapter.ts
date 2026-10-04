@@ -101,10 +101,10 @@ export class ChromiumBrowserAdapter implements IBrowserAdapter {
               version,
               engine: 'chromium'
             })
-            // Chỉ lấy 1 path đầu tiên tìm thấy cho mỗi tên browser
+            // Take only the first matched path per browser name
             break
           } catch {
-            // bỏ qua nếu lỗi đọc version
+            // Ignore version read errors
           }
         }
       }
@@ -119,7 +119,7 @@ export class ChromiumBrowserAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable trình duyệt: ${options.executablePath}`)
+      throw new Error(`Browser executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
@@ -162,7 +162,7 @@ export class ChromiumBrowserAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình trình duyệt (PID is undefined)')
+      throw new Error('Failed to spawn browser process (PID is undefined)')
     }
 
     return {

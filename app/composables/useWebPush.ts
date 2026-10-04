@@ -1,9 +1,13 @@
+import { getErrorMessage } from '~/shared/utils/errors'
+
 export const useWebPush = () => {
   const { hubFetch, appId } = useHub()
+  const { t } = useI18n()
   const isSupported = ref(false)
   const isSubscribed = ref(false)
   const permission = ref<NotificationPermission>('default')
   const subscription = ref<PushSubscription | null>(null)
+  const currentFcmToken = ref<string | null>(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -22,7 +26,7 @@ export const useWebPush = () => {
 
   const requestPermission = async (): Promise<NotificationPermission> => {
     if (!checkSupport()) {
-      error.value = 'Web Push notifications are not supported in this browser'
+      error.value = t('error.unexpected')
       return 'denied'
     }
 
@@ -31,9 +35,8 @@ export const useWebPush = () => {
       permission.value = result
       return result
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('Error requesting notification permission:', err)
-      error.value = msg
+      error.value = getErrorMessage(err, key => t(key))
       return 'denied'
     }
   }
@@ -53,7 +56,7 @@ export const useWebPush = () => {
 
   const registerDevice = async (deviceType: 'mobile' | 'desktop' | 'tablet' = 'desktop'): Promise<boolean> => {
     if (!checkSupport()) {
-      error.value = 'Web Push notifications are not supported'
+      error.value = t('error.unexpected')
       return false
     }
 
@@ -68,28 +71,30 @@ export const useWebPush = () => {
     error.value = null
 
     try {
-      const resConfig = await hubFetch<{ success: boolean, data: { values: Record<string, string> } }>(`/api/v1/apps/${appId}/configs/public`)
-      const sysConfig = resConfig.data.values
+      const resConfig = await hubFetch<{ success: boolean; data: any }>(`/api/v1/apps/${appId}/configs/public`)
+      const sysConfig: Record<string, string> = resConfig?.data?.values || resConfig?.data || {}
 
       const registration = await navigator.serviceWorker.ready
       let subscriptionData: Record<string, unknown> = {}
 
-      const hasFirebaseClient = sysConfig.FIREBASE_PROJECT_ID && sysConfig.FIREBASE_CLIENT_EMAIL && sysConfig.FIREBASE_PRIVATE_KEY
+      const provider = sysConfig.NOTIFICATION_PROVIDER || 'firebase'
+      const hasFirebaseConfig = !!(sysConfig.FIREBASE_API_KEY && sysConfig.FIREBASE_PROJECT_ID)
 
-      if (hasFirebaseClient) {
+      if (provider === 'firebase' && hasFirebaseConfig) {
         console.log('[FirebasePush] Initializing Firebase Cloud Messaging...')
+
+        const firebaseConfig = {
+          apiKey: sysConfig.FIREBASE_API_KEY,
+          authDomain: sysConfig.FIREBASE_AUTH_DOMAIN || `${sysConfig.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+          projectId: sysConfig.FIREBASE_PROJECT_ID,
+          storageBucket: sysConfig.FIREBASE_STORAGE_BUCKET || `${sysConfig.FIREBASE_PROJECT_ID}.firebasestorage.app`,
+          messagingSenderId: sysConfig.FIREBASE_MESSAGING_SENDER_ID || '',
+          appId: sysConfig.FIREBASE_APP_ID || '',
+          measurementId: sysConfig.FIREBASE_MEASUREMENT_ID || ''
+        }
 
         const { initializeApp, getApps, getApp } = await import('firebase/app')
         const { getMessaging, getToken } = await import('firebase/messaging')
-
-        const firebaseConfig = {
-          apiKey: sysConfig.CLOUDINARY_API_KEY || '',
-          authDomain: `${sysConfig.FIREBASE_PROJECT_ID}.firebaseapp.com`,
-          projectId: sysConfig.FIREBASE_PROJECT_ID,
-          storageBucket: sysConfig.FIREBASE_STORAGE_BUCKET || `${sysConfig.FIREBASE_PROJECT_ID}.appspot.com`,
-          messagingSenderId: sysConfig.FIREBASE_CLIENT_EMAIL?.split('-')?.[1] || '',
-          appId: '1:stub:web:stub'
-        }
 
         const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
         const messaging = getMessaging(app)
@@ -110,6 +115,13 @@ export const useWebPush = () => {
           throw new Error('Failed to retrieve FCM Token')
         }
 
+        currentFcmToken.value = fcmToken
+        try {
+          localStorage.setItem(`fcm_token_${appId}`, fcmToken)
+        } catch {
+          // storage fallback
+        }
+
         subscriptionData = { fcmToken }
       } else {
         const vapidPublicKey = sysConfig.WEB_PUSH_PUBLIC_KEY
@@ -124,7 +136,14 @@ export const useWebPush = () => {
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource
         })
 
-        subscriptionData = { subscription: pushSubscription.toJSON() }
+        const json = pushSubscription.toJSON()
+        subscriptionData = {
+          endpoint: pushSubscription.endpoint,
+          keys: {
+            p256dh: json.keys?.p256dh,
+            auth: json.keys?.auth
+          }
+        }
         subscription.value = pushSubscription
       }
 
@@ -139,9 +158,8 @@ export const useWebPush = () => {
       isSubscribed.value = true
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[WebPush] Error registering device:', err)
-      error.value = msg
+      error.value = getErrorMessage(err, key => t(key))
       return false
     } finally {
       isLoading.value = false
@@ -162,20 +180,34 @@ export const useWebPush = () => {
         await pushSub.unsubscribe()
       }
 
+      let storedFcm = currentFcmToken.value
+      try {
+        if (!storedFcm) storedFcm = localStorage.getItem(`fcm_token_${appId}`)
+      } catch {
+        // ignore
+      }
+
       await hubFetch(`/api/v1/apps/${appId}/notifications/unsubscribe`, {
         method: 'POST',
         body: {
-          endpoint: identifier
+          endpoint: identifier,
+          fcmToken: storedFcm || undefined
         }
       })
 
+      try {
+        localStorage.removeItem(`fcm_token_${appId}`)
+      } catch {
+        // ignore
+      }
+
       subscription.value = null
+      currentFcmToken.value = null
       isSubscribed.value = false
       return true
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
       console.error('[WebPush] Error unregistering device:', err)
-      error.value = msg
+      error.value = getErrorMessage(err, key => t(key))
       return false
     } finally {
       isLoading.value = false
@@ -191,8 +223,16 @@ export const useWebPush = () => {
 
       const pushSubscription = await registration.pushManager.getSubscription()
 
-      if (pushSubscription) {
-        subscription.value = pushSubscription
+      let storedFcm = null
+      try {
+        storedFcm = localStorage.getItem(`fcm_token_${appId}`)
+      } catch {
+        // ignore
+      }
+
+      if (pushSubscription || storedFcm) {
+        if (pushSubscription) subscription.value = pushSubscription
+        if (storedFcm) currentFcmToken.value = storedFcm
         isSubscribed.value = true
         return true
       }
@@ -215,8 +255,10 @@ export const useWebPush = () => {
     isSubscribed,
     permission,
     subscription,
+    currentFcmToken,
     isLoading,
     error,
+    checkSupport,
     requestPermission,
     registerDevice,
     unregisterDevice,

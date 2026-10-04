@@ -73,7 +73,7 @@ export class CamoufoxAdapter implements IBrowserAdapter {
       'user_pref("network.cookie.cookieBehavior", 0);'
     ]
 
-    // Timezone / Locale nếu có
+    // Timezone / Locale if configured
     lines.push('user_pref("intl.accept_languages", "vi-VN,vi,en-US,en");')
 
     try {
@@ -85,14 +85,14 @@ export class CamoufoxAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable Camoufox: ${options.executablePath}`)
+      throw new Error(`Camoufox executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
       fs.mkdirSync(options.userDataDir, { recursive: true })
     }
 
-    // Thiết lập user.js tùy biến
+    // Set custom user.js preferences
     this.generateUserJs(options.userDataDir, options)
 
     const finalArgs: string[] = [
@@ -120,7 +120,7 @@ export class CamoufoxAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình Camoufox (PID is undefined)')
+      throw new Error('Failed to spawn Camoufox process (PID is undefined)')
     }
 
     return {

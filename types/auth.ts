@@ -70,6 +70,19 @@ export interface RegisterRequest {
   name: string
 }
 
+export interface ForgotPasswordRequest {
+  email: string
+  appId?: string
+  redirectUrl?: string
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  token: string
+  password: string
+  appId?: string
+}
+
 export interface AuthResponse {
   user: AuthUser
   accessToken: string

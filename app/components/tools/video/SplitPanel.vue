@@ -332,7 +332,7 @@ function onSubmit() {
             :disabled="disabled"
           />
           <span v-if="probeData && probeData.duration > 0" class="text-xs text-neutral-500">
-            ≈ {{ formatTime((Number(probeData.duration) || 0) / Math.max(1, partsCount)) }} / phần
+            ≈ {{ formatTime((Number(probeData.duration) || 0) / Math.max(1, partsCount)) }} / part
           </span>
         </div>
       </div>

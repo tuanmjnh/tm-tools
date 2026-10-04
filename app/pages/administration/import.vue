@@ -42,7 +42,7 @@ interface RunResult {
   results: RowResult[]
 }
 
-const VALID_TARGETS = ['apps', 'configs', 'users', 'routes']
+const VALID_TARGETS = ['apps', 'configs', 'users', 'routes', 'roles', 'permissions', 'media', 'notifications']
 
 const source = ref<SourceKey>('csv')
 const target = ref('configs')
@@ -72,7 +72,7 @@ const targetItems = computed(() => targets.value.map(ti => ({ label: ti.key, val
 const targetDef = computed(() => targets.value.find(ti => ti.key === target.value) || null)
 
 watch(() => route.query.target, (v) => {
-  if (typeof v === 'string' && VALID_TARGETS.includes(v)) target.value = v
+  if (typeof v === 'string' && (VALID_TARGETS.includes(v) || targets.value.some(t => t.key === v))) target.value = v
 }, { immediate: true })
 
 watch(target, () => {

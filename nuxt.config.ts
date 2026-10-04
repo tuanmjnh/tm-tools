@@ -9,7 +9,9 @@ export default defineNuxtConfig({
     '@nuxtjs/i18n',
     '@nuxt/image',
     '@pinia/nuxt'
-  ], ssr: false,
+  ],
+  ssr: false,
+  spaLoadingTemplate: 'spa-loading-template.html',
 
   imports: {
     dirs: [
@@ -23,10 +25,29 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  app: {
+    head: {
+      charset: 'utf-8',
+      viewport: 'width=device-width, initial-scale=1',
+      link: [
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/manifest.webmanifest' }
+      ]
+    }
+  },
+
+  // PWA: tm-tools has custom service worker (push-sw.js, registered by
+  // app/plugins/sw.client.ts - web push/Firebase) -> DO NOT add
+  // @vite-pwa/nuxt (generates sw.js at scope '/', conflicting with push-sw.js).
+  // manifest.webmanifest (public/) provides PWA metadata: name, icons,
+  // theme_color; service worker already in place -> full PWA support.
+
   runtimeConfig: {
     public: {
-      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
-      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
+      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || process.env.NUXT_PUBLIC_HUB_API_URL || 'http://localhost:4000',
+      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || process.env.NUXT_PUBLIC_APP_ID || 'tm-tools'
     }
   },
 

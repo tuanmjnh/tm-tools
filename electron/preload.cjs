@@ -65,6 +65,17 @@ const dialog = exposeNamespace('tools:dialog', {
   on: []
 })
 
+const tmcut = exposeNamespace('tmcut', {
+  invoke: [
+    'getPaths', 'readAssetsFile', 'writeAssetsFile',
+    'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
+    'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
+    'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
+    'statFiles', 'extractThumbnail', 'extractWaveform'
+  ],
+  on: []
+})
+
 const fileManager = exposeNamespace('tools:file-manager', {
   invoke: [
     'read', 'write', 'append', 'exists', 'delete', 'readJSON', 'writeJSON',
@@ -113,6 +124,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tools: { youtube, ffmpeg, profiles },
   dialog,
   fileManager,
+  tmcut,
   appUpdater,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),

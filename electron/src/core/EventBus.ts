@@ -16,7 +16,7 @@ function getBrowserWindows(): ElectronWindowLike[] {
       return BrowserWindow.getAllWindows()
     }
   } catch {
-    // Ngoài môi trường Electron
+    // Non-Electron environment
   }
   return []
 }
@@ -40,10 +40,10 @@ export class EventBus extends EventEmitter {
     event: K,
     payload: EventBusContracts[K]
   ): boolean {
-    // 1. Emit nội bộ trong Electron Main Process
+    // 1. Emit internally within Electron Main Process
     const localResult = super.emit(event, payload)
 
-    // 2. Broadcast sang toàn bộ BrowserWindow Renderer Process
+    // 2. Broadcast to all BrowserWindow Renderer Processes
     try {
       const windows = getBrowserWindows()
       for (const win of windows) {

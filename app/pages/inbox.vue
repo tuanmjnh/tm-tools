@@ -216,14 +216,8 @@ useHead({ title })
   <BasePage id="inbox" :title="title" :description="description">
     <template #right>
       <div class="flex items-center gap-2">
-        <UBadge
-          v-if="profile"
-          :label="connected && profile.email ? profile.email : t('inbox.notConnected')"
-          :color="connected ? 'success' : 'neutral'"
-          variant="subtle"
-          size="sm"
-          class="max-w-48 truncate"
-        />
+        <UBadge v-if="profile" :label="connected && profile.email ? profile.email : t('inbox.notConnected')"
+          :color="connected ? 'success' : 'neutral'" variant="subtle" size="sm" class="max-w-48 truncate" />
         <BaseHeaderActions :actions="headerActions" />
       </div>
     </template>
@@ -231,109 +225,48 @@ useHead({ title })
     <template #toolbar>
       <UDashboardToolbar>
         <template #left>
-          <UInput
-            v-model="searchInput"
-            icon="i-lucide-search"
-            :placeholder="t('inbox.searchPlaceholder')"
-            size="sm"
-            class="w-full sm:w-72"
-            :ui="{ trailing: 'pe-1.5' }"
-            @keydown.enter="runSearch"
-          >
+          <UInput v-model="searchInput" icon="i-lucide-search" :placeholder="t('inbox.searchPlaceholder')" size="sm"
+            class="w-full sm:w-72" :ui="{ trailing: 'pe-1.5' }" @keydown.enter="runSearch">
             <template #trailing>
-              <UButton
-                v-if="searchInput"
-                icon="i-lucide-x"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                @click="clearSearch"
-              />
-              <UButton
-                v-else
-                icon="i-lucide-arrow-right"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                @click="runSearch"
-              />
+              <UButton v-if="searchInput" icon="i-lucide-x" color="neutral" variant="ghost" size="xs"
+                @click="clearSearch" />
+              <UButton v-else icon="i-lucide-arrow-right" color="neutral" variant="ghost" size="xs"
+                @click="runSearch" />
             </template>
           </UInput>
         </template>
         <template #right>
-          <UBadge
-            v-if="q"
-            :label="t('inbox.filtered', [q])"
-            color="info"
-            variant="subtle"
-            size="sm"
-          />
+          <UBadge v-if="q" :label="t('inbox.filtered', [q])" color="info" variant="subtle" size="sm" />
         </template>
       </UDashboardToolbar>
     </template>
 
     <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
-      <UAlert
-        v-if="profile && !connected"
-        color="info"
-        variant="subtle"
-        icon="i-lucide-plug"
-        :title="t('inbox.notConnectedTitle')"
-        :description="t('inbox.notConnectedDesc')"
-      >
+      <UAlert v-if="profile && !connected" color="info" variant="subtle" icon="i-lucide-plug"
+        :title="t('inbox.notConnectedTitle')" :description="t('inbox.notConnectedDesc')">
         <template #actions>
-          <UButton
-            :label="t('inbox.goToConnections')"
-            icon="i-lucide-plug"
-            size="sm"
-            color="primary"
-            @click="navigateTo('/resources/connections')"
-          />
+          <UButton :label="t('inbox.goToConnections')" icon="i-lucide-plug" size="sm" color="primary" variant="soft"
+            @click="navigateTo('/resources/connections')" />
         </template>
       </UAlert>
 
-      <div
-        v-else-if="connected"
-        class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(300px,380px),1fr] border border-default rounded-lg overflow-hidden bg-default"
-      >
-        <div
-          class="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-default"
-          :class="selectedId ? 'hidden lg:flex' : 'flex'"
-        >
+      <div v-else-if="connected"
+        class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(300px,380px),1fr] border border-default rounded-lg overflow-hidden bg-default">
+        <div class="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-default"
+          :class="selectedId ? 'hidden lg:flex' : 'flex'">
           <div class="flex-1 min-h-0">
-            <InboxList
-              v-model:selected-id="selectedId"
-              :messages="messages"
-              :loading="listLoading"
-            />
+            <InboxList v-model:selected-id="selectedId" :messages="messages" :loading="listLoading" />
           </div>
-          <div
-            v-if="nextPageToken"
-            class="p-2 border-t border-default flex justify-center shrink-0"
-          >
-            <UButton
-              :label="t('inbox.loadMore')"
-              icon="i-lucide-chevron-down"
-              color="neutral"
-              variant="soft"
-              size="xs"
-              :loading="listLoading"
-              @click="loadMessages(false)"
-            />
+          <div v-if="nextPageToken" class="p-2 border-t border-default flex justify-center shrink-0">
+            <UButton :label="t('inbox.loadMore')" icon="i-lucide-chevron-down" color="neutral" variant="soft" size="xs"
+              :loading="listLoading" @click="loadMessages(false)" />
           </div>
         </div>
 
         <div class="min-h-0" :class="selectedId ? 'block' : 'hidden lg:block'">
-          <InboxMail
-            v-if="selectedId"
-            :thread="thread"
-            :loading="threadLoading"
-            @back="backToList"
-            @reply="sendReply"
-            @toggle-unread="toggleUnread"
-            @toggle-star="toggleStar"
-            @download="(msg, attId, filename, mimeType) => downloadAttachment(msg, attId, filename, mimeType)"
-          />
+          <InboxMail v-if="selectedId" :thread="thread" :loading="threadLoading" @back="backToList" @reply="sendReply"
+            @toggle-unread="toggleUnread" @toggle-star="toggleStar"
+            @download="(msg, attId, filename, mimeType) => downloadAttachment(msg, attId, filename, mimeType)" />
           <div v-else class="hidden lg:flex h-full items-center justify-center text-sm text-muted">
             {{ t('inbox.selectPrompt') }}
           </div>

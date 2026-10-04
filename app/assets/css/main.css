@@ -1,5 +1,6 @@
 @import "tailwindcss" theme(static);
 @import "@nuxt/ui";
+@import "./self.css";
 @import "./scroll-bar.css";
 
 @theme static {

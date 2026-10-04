@@ -383,8 +383,4 @@ export class MongoDBAdapter implements DatabaseAdapter {
       return 0
     }
   }
-
-  async seed(_options?: { reset?: boolean }): Promise<void> {
-    // Auth and IAM seeding are managed centrally by TM-Hub
-  }
 }

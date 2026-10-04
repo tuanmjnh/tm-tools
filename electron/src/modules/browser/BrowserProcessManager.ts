@@ -5,9 +5,9 @@ import { killProcessTree } from '../../infrastructure/adapters/browser/browserUt
 
 export class BrowserProcessManager {
   private static instance: BrowserProcessManager | null = null
-  // Map lưu trữ theo profileId
+  // Map stored by profileId
   private readonly runningProcesses = new Map<string, BrowserProcess>()
-  // Map tra cứu ngược theo PID
+  // Reverse lookup map by PID
   private readonly pidToProfileId = new Map<number, string>()
   private readonly eventBus: EventBus
   private readonly logger: Logger
@@ -32,18 +32,18 @@ export class BrowserProcessManager {
 
     this.logger.info('BrowserProcess', `Browser process started for profile [${profileId}] with PID [${pid}]`)
 
-    // Phát sự kiện bắt đầu
+    // Emit started event
     this.eventBus.emitDomain('browser:started', { browserId, pid })
     this.eventBus.emitDomain('profile:started', { profileId, pid, startedAt: processInfo.startedAt.getTime() })
 
-    // Lắng nghe biến cố tiến trình thoát
+    // Listen for process exit
     process.once('exit', (code, signal) => {
       this.logger.info('BrowserProcess', `Browser process PID [${pid}] exited with code: ${code}, signal: ${signal}`)
       this.cleanupProcess(profileId, pid)
 
       this.eventBus.emitDomain('browser:closed', { browserId, pid })
 
-      // Nếu thoát do crash (code khác 0 và không phải do SIGTERM/SIGKILL chủ động)
+      // If crashed (non-zero exit code and not actively killed)
       if (code !== 0 && code !== null) {
         this.eventBus.emitDomain('profile:crashed', {
           profileId,
@@ -54,7 +54,7 @@ export class BrowserProcessManager {
       }
     })
 
-    // Lắng nghe biến cố lỗi
+    // Listen for error events
     process.once('error', (err) => {
       this.logger.error('BrowserProcess', `Error on browser process PID [${pid}]: ${err.message}`, err)
       this.cleanupProcess(profileId, pid)
@@ -96,14 +96,14 @@ export class BrowserProcessManager {
 
     this.logger.info('BrowserProcess', `Stopping browser for profile [${profileId}], PID [${proc.pid}]...`)
 
-    // Thử graceful kill trước
+    // Try graceful kill first
     try {
       proc.process.kill('SIGTERM')
     } catch {
       // ignore
     }
 
-    // Đợi process thoát trong khoảng timeoutMs
+    // Wait for process to exit within timeoutMs
     const exited = await new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => resolve(false), timeoutMs)
       proc.process.once('exit', () => {
@@ -112,7 +112,7 @@ export class BrowserProcessManager {
       })
     })
 
-    // Nếu sau timeout vẫn chưa thoát, cưỡng chế kill cây tiến trình
+    // If timed out, forcefully kill the process tree
     if (!exited) {
       this.logger.warn('BrowserProcess', `Graceful shutdown timed out for PID [${proc.pid}], forcing kill...`)
       await killProcessTree(proc.pid, true)

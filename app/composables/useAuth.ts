@@ -1,4 +1,4 @@
-import type { AuthResponse, AuthUser, LoginPlatform, LoginRequest, RegisterRequest, TotpChallenge } from '~/types/auth'
+import type { AuthResponse, AuthUser, ForgotPasswordRequest, LoginPlatform, LoginRequest, RegisterRequest, ResetPasswordRequest, TotpChallenge } from '~/types/auth'
 import type { LoginStartResponse } from '~/types/webauthn'
 
 interface HubUserData {
@@ -237,6 +237,34 @@ export const useAuth = () => {
     }
   }
 
+  async function forgotPassword(input: ForgotPasswordRequest): Promise<void> {
+    if (loading.value) return Promise.reject(new Error('Request in progress'))
+    loading.value = true
+    try {
+      await $fetch(`${hubUrl}/api/v1/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'X-App-Id': appId },
+        body: { ...input, appId: input.appId || appId }
+      })
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function resetPassword(input: ResetPasswordRequest): Promise<void> {
+    if (loading.value) return Promise.reject(new Error('Request in progress'))
+    loading.value = true
+    try {
+      await $fetch(`${hubUrl}/api/v1/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'X-App-Id': appId },
+        body: { ...input, appId: input.appId || appId }
+      })
+    } finally {
+      loading.value = false
+    }
+  }
+
   let refreshPromise: Promise<boolean> | null = null
 
   async function refresh(): Promise<boolean> {
@@ -382,6 +410,8 @@ export const useAuth = () => {
     verifyTotp,
     passkeyLogin,
     register,
+    forgotPassword,
+    resetPassword,
     logout,
     refresh,
     fetchUser,

@@ -267,6 +267,17 @@ export function decodeJwt(token: string): JwtDecoded {
   }
 }
 
+/**
+ * Generate a cryptographically secure random key in hex format.
+ * @param length Character length of the key (default 64, e.g. 32 for 16 bytes, 64 for 32 bytes).
+ */
+export function generateHexKey(length: number = 64): string {
+  const byteCount = Math.ceil(length / 2)
+  const bytes = new Uint8Array(byteCount)
+  crypto.getRandomValues(bytes)
+  return bytesToHex(bytes).slice(0, length)
+}
+
 export function useEncoding() {
   const runHash = async (algo: HashAlgorithm | 'MD5', text: string): Promise<string> => {
     if (algo === 'MD5') return md5(text)
@@ -293,6 +304,8 @@ export function useEncoding() {
     sha512,
     runHash,
     decodeJwt,
-    encodeJwt
+    encodeJwt,
+    generateHexKey,
+    generateRandomKey: generateHexKey
   }
 }

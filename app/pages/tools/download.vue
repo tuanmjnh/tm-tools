@@ -725,7 +725,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
 </script>
 
 <template>
-  <BasePage id="tools-download" :title="t('nav.download')">
+  <BasePage id="tools-download" :title="t('nav.download')" :description="t('tools.downloadBody')">
     <UForm
       id="download-form"
       :schema="schema"

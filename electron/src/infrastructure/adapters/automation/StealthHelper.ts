@@ -37,7 +37,7 @@ export class StealthHelper {
       '(function() {'
     ]
 
-    // 1. Xóa navigator.webdriver
+    // 1. Remove navigator.webdriver
     if (maskWebdriver) {
       parts.push(`
         Object.defineProperty(navigator, 'webdriver', {
@@ -47,7 +47,7 @@ export class StealthHelper {
       `)
     }
 
-    // 2. Giả lập window.chrome nếu là chromium engine
+    // 2. Emulate window.chrome for chromium engine
     if (fakeChrome) {
       parts.push(`
         if (!window.chrome) {
@@ -61,7 +61,7 @@ export class StealthHelper {
       `)
     }
 
-    // 3. Giả lập cấu hình phần cứng chân thực
+    // 3. Emulate realistic hardware concurrency & memory
     parts.push(`
       Object.defineProperty(navigator, 'hardwareConcurrency', {
         get: () => ${hardwareConcurrency},
@@ -77,7 +77,7 @@ export class StealthHelper {
       });
     `)
 
-    // 4. Giả lập Canvas Noise (chống tracking canvas fingerprint)
+    // 4. Emulate Canvas Noise (prevent canvas fingerprint tracking)
     if (shouldInjectCanvas) {
       parts.push(`
         const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -95,7 +95,7 @@ export class StealthHelper {
       `)
     }
 
-    // 5. Giả lập WebGL Noise / Spoofing
+    // 5. Emulate WebGL Noise / Spoofing
     if (shouldInjectWebgl) {
       parts.push(`
         const getParameter = WebGLRenderingContext.prototype.getParameter;

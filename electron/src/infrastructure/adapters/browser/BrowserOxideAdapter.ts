@@ -64,7 +64,7 @@ export class BrowserOxideAdapter implements IBrowserAdapter {
 
   public async launch(options: LaunchOptions): Promise<BrowserProcess> {
     if (!fs.existsSync(options.executablePath)) {
-      throw new Error(`Không tìm thấy executable Browser Oxide: ${options.executablePath}`)
+      throw new Error(`Browser Oxide executable not found: ${options.executablePath}`)
     }
 
     if (!fs.existsSync(options.userDataDir)) {
@@ -94,7 +94,7 @@ export class BrowserOxideAdapter implements IBrowserAdapter {
     })
 
     if (!child.pid) {
-      throw new Error('Không thể khởi tạo tiến trình Browser Oxide (PID is undefined)')
+      throw new Error('Failed to spawn Browser Oxide process (PID is undefined)')
     }
 
     return {

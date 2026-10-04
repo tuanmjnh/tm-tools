@@ -391,7 +391,7 @@ function onSubmit() {
             variant="soft"
             @click="setExtType('image')"
           >
-            Ảnh
+            Image
           </UButton>
           <UButton
             size="xs"
@@ -399,7 +399,7 @@ function onSubmit() {
             variant="soft"
             @click="setExtType('mixed')"
           >
-            Hỗn hợp
+            Mixed
           </UButton>
           <UButton
             v-if="rootFolder"

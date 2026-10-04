@@ -609,7 +609,7 @@ async function onSave() {
               >
                 <div class="flex items-center gap-1.5">
                   <UIcon name="i-lucide-alert-triangle" class="size-4 shrink-0" />
-                  <span>Trình duyệt này chưa được cấu hình đường dẫn runtime.</span>
+                  <span>This browser does not have a runtime path configured.</span>
                 </div>
                 <UButton
                   size="xs"

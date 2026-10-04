@@ -177,6 +177,20 @@ export function generateUsernameBatch(count: number, options: UsernameOptions = 
   return out
 }
 
+/** Generate cryptographically secure random hex key (e.g., 32 or 64 hex characters) */
+export function generateRandomKey(length = 64): string {
+  const byteCount = Math.ceil(length / 2)
+  const bytes = new Uint8Array(byteCount)
+  crypto.getRandomValues(bytes)
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+  return hex.slice(0, length)
+}
+
+export function generateRandomKeyBatch(count: number, length = 64): string[] {
+  const n = Math.min(Math.max(count, 1), 50)
+  return Array.from({ length: n }, () => generateRandomKey(length))
+}
+
 export function useRandomGen() {
   return {
     generatePassword,
@@ -185,6 +199,8 @@ export function useRandomGen() {
     generateUuid,
     generateToken,
     generateApiKey,
+    generateRandomKey,
+    generateRandomKeyBatch,
     generateUsername,
     generateUsernameBatch,
     generateEmail,

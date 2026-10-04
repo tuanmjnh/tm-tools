@@ -9,7 +9,7 @@ export function parseAddress(raw: string): { name: string, email: string } {
 }
 
 /**
- * Loại bỏ thành phần nguy hiểm trong HTML mail (untrusted content):
+ * Sanitize dangerous elements in HTML mail (untrusted content):
  * script/style/iframe..., on* handlers, javascript: URLs.
  */
 export function sanitizeEmailHtml(html: string): string {

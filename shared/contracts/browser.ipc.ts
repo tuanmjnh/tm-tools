@@ -36,14 +36,14 @@ export const BrowserItemSchema = z.object({
 export type BrowserItem = z.infer<typeof BrowserItemSchema>
 
 export const AddCustomBrowserInputSchema = z.object({
-  name: z.string().min(1, 'Tên trình duyệt không được để trống'),
+  name: z.string().min(1, 'Browser name is required'),
   engine: BrowserEngineSchema,
-  executablePath: z.string().min(1, 'Đường dẫn executable không được để trống')
+  executablePath: z.string().min(1, 'Executable path is required')
 })
 export type AddCustomBrowserInput = z.infer<typeof AddCustomBrowserInputSchema>
 
 export const TestExecutableInputSchema = z.object({
-  executablePath: z.string().min(1, 'Đường dẫn executable không được để trống'),
+  executablePath: z.string().min(1, 'Executable path is required'),
   engine: BrowserEngineSchema.optional()
 })
 export type TestExecutableInput = z.infer<typeof TestExecutableInputSchema>

@@ -45,40 +45,26 @@ defineShortcuts({
 <template>
   <div class="h-full overflow-y-auto divide-y divide-default">
     <template v-if="loading && !messages.length">
-      <USkeleton
-        v-for="i in 6"
-        :key="i"
-        class="h-20 rounded-none"
-      />
+      <USkeleton v-for="i in 6" :key="i" class="h-20 rounded-none" />
     </template>
 
-    <div
-      v-for="mail in messages"
-      :key="mail.id"
-      :ref="(el) => { itemsRef[mail.id] = el as Element | null }"
-      class="p-4 text-sm cursor-pointer border-l-2 transition-colors"
-      :class="[
+    <div v-for="mail in messages" :key="mail.id" :ref="(el) => { itemsRef[mail.id] = el as Element | null }"
+      class="p-4 text-sm cursor-pointer border-l-2 transition-colors" :class="[
         mail.unread ? 'text-highlighted' : 'text-toned',
         selectedId === mail.id
           ? 'border-primary bg-primary/10'
           : 'border-bg hover:border-primary hover:bg-primary/5'
-      ]"
-      @click="selectedId = mail.id"
-    >
+      ]" @click="selectedId = mail.id">
       <div class="flex items-center justify-between gap-2" :class="[mail.unread && 'font-semibold']">
         <div class="flex items-center gap-2 min-w-0">
           <UChip color="error" :show="mail.unread" />
-          <UIcon
-            v-if="mail.starred"
-            name="i-lucide-star"
-            class="size-3.5 shrink-0 text-warning fill-warning"
-          />
+          <UIcon v-if="mail.starred" name="i-lucide-star" class="size-3.5 shrink-0 text-warning fill-warning" />
           <span class="truncate">{{ senderOf(mail) }}</span>
         </div>
 
         <span class="text-[11px] text-muted shrink-0">
           {{ mail.date
-            ? (isToday(new Date(mail.date)) ? format(new Date(mail.date), 'HH:mm') : format(new Date(mail.date), 'dd MMM'))
+            ? (isToday(new Date(mail.date)) ? format(new Date(mail.date), 'HH:mm') : format(new Date(mail.date), 'ddMMM'))
             : '' }}
         </span>
       </div>
@@ -90,10 +76,7 @@ defineShortcuts({
       </p>
     </div>
 
-    <div
-      v-if="!loading && !messages.length"
-      class="p-8 text-center text-sm text-muted"
-    >
+    <div v-if="!loading && !messages.length" class="p-8 text-center text-sm text-muted">
       {{ t('inbox.emptyList') }}
     </div>
   </div>
