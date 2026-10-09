@@ -207,7 +207,7 @@ function onSelectSpecialized(id: string) {
 
 function goToBrowserSettings() {
   isOpen.value = false
-  navigateTo('/settings/browsers')
+  navigateTo('/system/browsers')
 }
 
 const proxyMode = ref<'direct' | 'saved' | 'custom'>('direct')

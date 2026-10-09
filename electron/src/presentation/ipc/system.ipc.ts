@@ -66,4 +66,22 @@ export function registerSystemIpc(): void {
       await shell.openPath(targetPath)
     }
   )
+
+  registerIpcHandler<{ title: string; body?: string; icon?: string }, boolean>(
+    'system:showNotification',
+    null,
+    (input) => {
+      const { Notification: ElectronNotification } = require('electron')
+      if (ElectronNotification && ElectronNotification.isSupported()) {
+        const notif = new ElectronNotification({
+          title: input?.title || 'TM Tools',
+          body: input?.body || '',
+          icon: input?.icon
+        })
+        notif.show()
+        return true
+      }
+      return false
+    }
+  )
 }

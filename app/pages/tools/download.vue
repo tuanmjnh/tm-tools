@@ -750,7 +750,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                 size="xs"
                 color="error"
                 variant="soft"
-                to="/settings/tools"
+                to="/system/tools"
               >
                 {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
               </UButton>

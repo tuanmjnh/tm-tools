@@ -2,6 +2,8 @@
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { getErrorMessage } from '~/shared/utils/errors'
 import { buildExportChildren, useModuleExport } from '~/composables/useModuleExport'
+import { useAdminGridView } from '~/composables/useAdminGridView'
+import { useAdminPageChrome } from '~/composables/useAdminPageChrome'
 
 definePageMeta({
   middleware: () => {
@@ -15,6 +17,11 @@ definePageMeta({
 const { t } = useI18n()
 const toast = useToast()
 const { hubFetch, appId, configs } = useHub()
+const { viewMode } = useAdminGridView('configs-view-mode')
+const { title, description } = useAdminPageChrome({
+  titleKey: 'configs.title',
+  descKey: 'configs.description'
+})
 
 interface ConfigMeta {
   key: string
@@ -457,7 +464,7 @@ onMounted(() => load(true))
 </script>
 
 <template>
-  <BasePage id="admin-configs" :title="$t('configs.title')">
+  <BasePage id="admin-configs" :title="title" :description="description">
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
@@ -467,20 +474,32 @@ onMounted(() => load(true))
     </template>
 
     <template #toolbar>
-      <div class="flex items-center gap-2 px-4 pb-3 flex-wrap">
-        <UInput v-model="search" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
-          class="w-full sm:w-56" />
-        <USelect v-model="categoryFilter" :items="categoryItems" value-key="value" size="sm" class="w-36"
-          :aria-label="t('configs.category')" />
-        <span class="text-xs text-muted whitespace-nowrap">{{ displayItems.length }}</span>
-      </div>
+      <UDashboardToolbar>
+        <template #left>
+          <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
+            <UInput v-model="search" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
+              class="flex-1 min-w-0 sm:flex-none sm:w-56" />
+            <AdminFilterPopover>
+              <USelect v-model="categoryFilter" :items="categoryItems" value-key="value" size="sm"
+                class="w-full md:w-36" :aria-label="t('configs.category')" />
+            </AdminFilterPopover>
+          </div>
+        </template>
+        <template #right>
+          <AdminViewModeToggle v-model="viewMode" />
+        </template>
+      </UDashboardToolbar>
+    </template>
+
+    <template #footer>
+      <SharedListFooter :count="displayItems.length" :has-more="hasMore" :loading="loading" />
     </template>
 
     <template #default>
-      <div class="flex-1 min-h-0 relative h-full">
+      <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
         <LazyGridList :items="displayItems" :columns="columns" :loading="initialLoading" item-key="key"
-          :can-load-more="hasMore" :action-options="getActionOptions" @load-more="loadMore" @refresh="refresh"
-          @click="openEdit">
+          :can-load-more="hasMore" :action-options="getActionOptions" v-model:view-mode="viewMode"
+          storage-key="configs-view-mode" @load-more="loadMore" @refresh="refresh" @click="openEdit">
           <template #key="{ item }">
             <div class="min-w-0">
               <span class="font-mono text-xs font-medium text-highlighted truncate block">{{ item.key }}</span>
@@ -591,22 +610,12 @@ onMounted(() => load(true))
             <div v-else-if="formState.type === 'json'" class="space-y-2 w-full">
               <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-1 bg-default/40 p-0.5 rounded-lg border border-default">
-                  <UButton
-                    label="Visual Tree"
-                    icon="i-lucide-network"
-                    size="xs"
+                  <UButton label="Visual Tree" icon="i-lucide-network" size="xs"
                     :variant="jsonEditMode === 'tree' ? 'solid' : 'ghost'"
-                    :color="jsonEditMode === 'tree' ? 'primary' : 'neutral'"
-                    @click="switchJsonEditMode('tree')"
-                  />
-                  <UButton
-                    label="Raw Code"
-                    icon="i-lucide-code"
-                    size="xs"
+                    :color="jsonEditMode === 'tree' ? 'primary' : 'neutral'" @click="switchJsonEditMode('tree')" />
+                  <UButton label="Raw Code" icon="i-lucide-code" size="xs"
                     :variant="jsonEditMode === 'code' ? 'solid' : 'ghost'"
-                    :color="jsonEditMode === 'code' ? 'primary' : 'neutral'"
-                    @click="switchJsonEditMode('code')"
-                  />
+                    :color="jsonEditMode === 'code' ? 'primary' : 'neutral'" @click="switchJsonEditMode('code')" />
                 </div>
 
                 <div class="flex items-center gap-1.5">

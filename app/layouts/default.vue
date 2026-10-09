@@ -41,33 +41,18 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
 <template>
   <UDashboardGroup unit="rem">
-    <UDashboardSidebar
-      id="default"
-      v-model:open="open"
-      collapsible
-      resizable
-      class="bg-elevated/25"
-      :ui="{ footer: 'lg:border-t lg:border-default' }"
-    >
+    <UDashboardSidebar id="default" v-model:open="open" collapsible resizable class="bg-elevated/25"
+      :ui="{ footer: 'lg:border-t lg:border-default' }">
       <template #header="{ collapsed }">
         <LazyDashboardTeamsMenu :collapsed="collapsed" />
       </template>
 
       <template #default="{ collapsed }">
-        <UDashboardSearchButton
-          :collapsed="collapsed"
-          :label="$t('global.search')"
-          class="bg-transparent ring-default"
-        />
+        <UDashboardSearchButton :collapsed="collapsed" :label="$t('global.search')"
+          class="bg-transparent ring-default" />
 
-        <UNavigationMenu
-          v-if="links[0]?.length"
-          :collapsed="collapsed"
-          :items="links[0]"
-          orientation="vertical"
-          tooltip
-          popover
-        />
+        <UNavigationMenu v-if="links[0]?.length" :collapsed="collapsed" :items="links[0]" orientation="vertical" tooltip
+          popover />
       </template>
 
       <template #footer="{ collapsed }">

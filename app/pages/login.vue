@@ -10,6 +10,7 @@ const router = useRouter()
 const toast = useToast()
 const remember = ref(false)
 const { t } = useI18n()
+const { isSettingsSlideoverOpen } = useDashboard()
 
 useHead(() => ({
   title: t('auth.signIn')
@@ -107,6 +108,13 @@ useHead({ title: computed(() => t('auth.signIn')) })
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+    <div class="absolute top-4 right-4 flex items-center gap-2">
+      <UTooltip :text="t('settings.title')">
+        <UButton icon="i-lucide-settings" color="neutral" variant="soft" size="sm" :aria-label="t('settings.title')"
+          @click="isSettingsSlideoverOpen = true" />
+      </UTooltip>
+    </div>
+
     <UCard class="w-full max-w-md">
       <template #header>
         <div class="text-center">
@@ -179,5 +187,6 @@ useHead({ title: computed(() => t('auth.signIn')) })
         </p>
       </template> -->
     </UCard>
+    <LazyDashboardSettingsSlideover />
   </div>
 </template>

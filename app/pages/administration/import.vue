@@ -246,7 +246,7 @@ function clearAll() {
 </script>
 
 <template>
-  <BasePage id="admin-import" :title="$t('import.title')">
+  <BasePage id="admin-import" :title="$t('import.title')" :description="$t('import.description')">
     <template #right>
       <div class="flex items-center gap-2">
         <UButton

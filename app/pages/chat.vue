@@ -103,7 +103,7 @@ function clearConversation() {
 </script>
 
 <template>
-  <BasePage id="chat" :title="t('chat.title')">
+  <BasePage id="chat" :title="t('chat.title')" :description="t('chat.description')">
     <template #right>
       <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" :label="t('chat.clear')"
         :disabled="messages.length === 0" @click="clearConversation" />

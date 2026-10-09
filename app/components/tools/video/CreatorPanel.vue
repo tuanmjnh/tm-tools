@@ -294,83 +294,49 @@ function onSubmit() {
   <div class="space-y-4">
     <!-- Inputs & Outputs -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <UFormField
-        name="subfolderInput"
-        :label="creatorMode === 'root' ? t('tools.imageFolderRootInput') : t('tools.subfolderInput')"
-      >
-        <BaseFilePicker
-          v-model="subfolderInput"
-          mode="folder"
+      <UFormField name="subfolderInput"
+        :label="creatorMode === 'root' ? t('tools.imageFolderRootInput') : t('tools.subfolderInput')">
+        <BaseFilePicker v-model="subfolderInput" mode="folder"
           :placeholder="creatorMode === 'root' ? 'D:/images/my_album' : 'D:/images/parent_folder'"
           :title="creatorMode === 'root' ? t('tools.imageFolderRootInput') : t('tools.subfolderInput')"
-          :disabled="disabled"
-        />
+          :disabled="disabled" />
       </UFormField>
 
-      <UFormField
-        name="subfolderOutput"
-        :label="creatorMode === 'root' ? t('tools.imageVideoOutput') : t('tools.subfolderOutput')"
-      >
-        <BaseFilePicker
-          v-if="creatorMode === 'root'"
-          v-model="subfolderOutput"
-          mode="save"
-          placeholder="D:/videos/my_album_slideshow.mp4"
-          :title="t('tools.imageVideoOutput')"
-          :disabled="disabled"
-          :filters="[{ name: 'MP4 Video', extensions: ['mp4'] }]"
-        />
-        <BaseFilePicker
-          v-else
-          v-model="subfolderOutput"
-          mode="folder"
-          placeholder="D:/videos/output"
-          :title="t('tools.subfolderOutput')"
-          :disabled="disabled"
-        />
+      <UFormField name="subfolderOutput"
+        :label="creatorMode === 'root' ? t('tools.imageVideoOutput') : t('tools.subfolderOutput')">
+        <BaseFilePicker v-if="creatorMode === 'root'" v-model="subfolderOutput" mode="save"
+          placeholder="D:/videos/my_album_slideshow.mp4" :title="t('tools.imageVideoOutput')" :disabled="disabled"
+          :filters="[{ name: 'MP4 Video', extensions: ['mp4'] }]" />
+        <BaseFilePicker v-else v-model="subfolderOutput" mode="folder" placeholder="D:/videos/output"
+          :title="t('tools.subfolderOutput')" :disabled="disabled" />
       </UFormField>
     </div>
 
     <!-- Extension Filters -->
     <UFormField :label="t('tools.supportedExtensions')">
-      <USelectMenu
-        v-model="subfolderExtensions"
-        :items="availableExtensions"
-        multiple
+      <USelectMenu v-model="subfolderExtensions" :items="availableExtensions" multiple
         :placeholder="t('tools.supportedExtensions')"
-        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
-        class="w-full"
-        :disabled="disabled"
-      />
+        :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" class="w-full"
+        :disabled="disabled" />
     </UFormField>
 
     <!-- Images / Subfolders List Preview -->
     <!-- 1. For Root Mode: Show direct images preview -->
-    <div
-      v-if="creatorMode === 'root' && subfoldersList.length > 0"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-2"
-    >
+    <div v-if="creatorMode === 'root' && subfoldersList.length > 0"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-2">
       <div class="flex items-center justify-between">
         <p class="font-medium text-sm flex items-center gap-2">
           <UIcon name="i-lucide-image" class="text-primary size-4" />
           {{ t('tools.imagesFoundCount', { count: subfoldersList[0]?.count || 0 }) }}
         </p>
-        <UButton
-          icon="i-lucide-refresh-cw"
-          size="xs"
-          variant="ghost"
-          :loading="scanningSubfolders"
-          @click="scanSubfolders"
-        >
+        <UButton icon="i-lucide-refresh-cw" size="xs" variant="ghost" :loading="scanningSubfolders"
+          @click="scanSubfolders">
           {{ t('tools.scanSubfolders') }}
         </UButton>
       </div>
       <div class="max-h-48 overflow-y-auto space-y-1 pr-1">
-        <div
-          v-for="(img, idx) in subfoldersList[0]?.images || []"
-          :key="img"
-          class="flex items-center gap-2 p-1.5 rounded bg-neutral-100 dark:bg-neutral-800/60 text-xs font-mono"
-        >
+        <div v-for="(img, idx) in subfoldersList[0]?.images || []" :key="img"
+          class="flex items-center gap-2 p-1.5 rounded bg-neutral-100 dark:bg-neutral-800/60 text-xs font-mono">
           <span class="text-muted w-6 text-right">{{ idx + 1 }}.</span>
           <UIcon name="i-lucide-file-image" class="size-3.5 text-primary shrink-0" />
           <span class="truncate">{{ img.split('/').pop() }}</span>
@@ -379,31 +345,21 @@ function onSubmit() {
     </div>
 
     <!-- 2. For Subfolder Mode: Show subfolders tree preview -->
-    <div
-      v-else-if="creatorMode === 'subfolder' && subfoldersList.length > 0"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-2"
-    >
+    <div v-else-if="creatorMode === 'subfolder' && subfoldersList.length > 0"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-2">
       <div class="flex items-center justify-between">
         <p class="font-medium text-sm flex items-center gap-2">
           <UIcon name="i-lucide-folder-tree" class="text-primary size-4" />
           {{ t('tools.subfoldersFound') }} ({{ subfoldersList.length }})
         </p>
-        <UButton
-          icon="i-lucide-refresh-cw"
-          size="xs"
-          variant="ghost"
-          :loading="scanningSubfolders"
-          @click="scanSubfolders"
-        >
+        <UButton icon="i-lucide-refresh-cw" size="xs" variant="ghost" :loading="scanningSubfolders"
+          @click="scanSubfolders">
           {{ t('tools.scanSubfolders') }}
         </UButton>
       </div>
       <div class="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-        <div
-          v-for="folder in subfoldersList"
-          :key="folder.path"
-          class="flex items-center justify-between p-2 rounded bg-neutral-100 dark:bg-neutral-800/60 text-xs"
-        >
+        <div v-for="folder in subfoldersList" :key="folder.path"
+          class="flex items-center justify-between p-2 rounded bg-neutral-100 dark:bg-neutral-800/60 text-xs">
           <div class="flex items-center gap-2 min-w-0">
             <UIcon name="i-lucide-folder" class="text-amber-500 shrink-0 size-4" />
             <span class="font-mono font-medium truncate">{{ folder.name }}</span>
@@ -414,135 +370,70 @@ function onSubmit() {
         </div>
       </div>
     </div>
-    <div
-      v-else-if="subfolderInput && !scanningSubfolders"
-      class="p-3 border border-dashed rounded-lg text-center text-xs text-muted"
-    >
+    <div v-else-if="subfolderInput && !scanningSubfolders"
+      class="p-3 border border-dashed rounded-lg text-center text-xs text-muted">
       {{ creatorMode === 'root' ? t('tools.noImagesInFolder') : t('tools.noSubfolders') }}
     </div>
 
     <!-- Video Settings for Image2Video -->
     <div
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
-    >
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4">
       <p class="font-semibold text-xs text-muted uppercase tracking-wider">
         {{ t('tools.videoForm') }} (Image2Video)
       </p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <UFormField :label="t('tools.resolution')">
-          <USelect
-            v-model="subfolderResolution"
-            :items="resolutionOptions"
-            class="w-full"
-            :disabled="disabled"
-          />
+          <USelect v-model="subfolderResolution" :items="resolutionOptions" class="w-full" :disabled="disabled" />
         </UFormField>
 
         <UFormField :label="t('tools.fps')">
-          <USelect
-            v-model.number="subfolderFps"
-            :items="fpsOptions"
-            class="w-full"
-            :disabled="disabled"
-          />
+          <USelect v-model.number="subfolderFps" :items="fpsOptions" class="w-full" :disabled="disabled" />
         </UFormField>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <UFormField :label="t('tools.imageDuration')">
           <div class="flex items-center gap-2">
-            <UInput
-              v-model.number="subfolderMinDuration"
-              type="number"
-              step="0.5"
-              min="1"
-              max="60"
-              :placeholder="t('tools.minDuration')"
-              class="w-full"
-              :disabled="disabled"
-            />
+            <UInput v-model.number="subfolderMinDuration" type="number" step="0.5" min="1" max="60"
+              :placeholder="t('tools.minDuration')" class="w-full" :disabled="disabled" />
             <span class="text-muted">-</span>
-            <UInput
-              v-model.number="subfolderMaxDuration"
-              type="number"
-              step="0.5"
-              min="1"
-              max="60"
-              :placeholder="t('tools.maxDuration')"
-              class="w-full"
-              :disabled="disabled"
-            />
+            <UInput v-model.number="subfolderMaxDuration" type="number" step="0.5" min="1" max="60"
+              :placeholder="t('tools.maxDuration')" class="w-full" :disabled="disabled" />
           </div>
         </UFormField>
 
         <UFormField v-if="creatorMode === 'subfolder'" :label="t('tools.threads')">
-          <UInput
-            v-model.number="subfolderThreads"
-            type="number"
-            min="1"
-            max="8"
-            class="w-full"
-            :disabled="disabled"
-          />
+          <UInput v-model.number="subfolderThreads" type="number" min="1" max="8" class="w-full" :disabled="disabled" />
         </UFormField>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <UFormField :label="t('tools.transitionEffect')">
           <div class="flex items-center gap-2">
-            <USelect
-              v-model="subfolderTransition"
-              :items="transitionOptions"
-              class="flex-1"
-              :disabled="disabled"
-            />
-            <UButton
-              v-if="subfolderTransition === 'random'"
-              icon="i-lucide-sliders-horizontal"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              :title="t('tools.customizeTransitions')"
-              :disabled="disabled"
-              @click="showTransitionsModal = true"
-            >
+            <USelect v-model="subfolderTransition" :items="transitionOptions" class="flex-1" :disabled="disabled" />
+            <UButton v-if="subfolderTransition === 'random'" icon="i-lucide-sliders-horizontal" color="neutral"
+              variant="outline" size="sm" :title="t('tools.customizeTransitions')" :disabled="disabled"
+              @click="showTransitionsModal = true">
               {{ subfolderTransitions.length }}
             </UButton>
           </div>
         </UFormField>
 
         <UFormField :label="t('tools.transitionDuration')">
-          <UInput
-            v-model.number="subfolderTransDuration"
-            type="number"
-            step="0.1"
-            min="0.1"
-            max="3"
-            class="w-full"
-            :disabled="disabled"
-          />
+          <UInput v-model.number="subfolderTransDuration" type="number" step="0.1" min="0.1" max="3" class="w-full"
+            :disabled="disabled" />
         </UFormField>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <UFormField :label="t('tools.zoomEffect')">
-          <USelect
-            v-model="subfolderZoom"
-            :items="zoomOptions"
-            class="w-full"
-            :disabled="disabled"
-          />
+          <USelect v-model="subfolderZoom" :items="zoomOptions" class="w-full" :disabled="disabled" />
         </UFormField>
 
         <UFormField :label="t('tools.bgMusic')">
-          <BaseFilePicker
-            v-model="subfolderAudioFile"
-            mode="file"
-            placeholder="D:/music/bg.mp3"
-            :disabled="disabled"
-            :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
-          />
+          <BaseFilePicker v-model="subfolderAudioFile" mode="file" placeholder="D:/music/bg.mp3" :disabled="disabled"
+            :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]" />
         </UFormField>
       </div>
 
@@ -560,17 +451,8 @@ function onSubmit() {
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton
-        icon="i-lucide-play"
-        :label="t('tools.start')"
-        variant="soft"
-        color="primary"
-        size="lg"
-        block
-        :loading="loading"
-        :disabled="!subfolderInput || subfoldersList.length === 0 || disabled"
-        @click="onSubmit"
-      />
+      <UButton icon="i-lucide-play" :label="t('tools.start')" variant="soft" color="primary" size="lg" block
+        :loading="loading" :disabled="!subfolderInput || subfoldersList.length === 0 || disabled" @click="onSubmit" />
     </div>
 
     <!-- Transitions Selection Modal -->

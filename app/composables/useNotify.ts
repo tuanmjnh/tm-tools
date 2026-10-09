@@ -23,6 +23,7 @@ interface HubNotificationItem {
 export const useNotify = () => {
   const auth = useAuth()
   const { notifications } = useHub()
+  const toast = useToast()
 
   const getNotifyIcon = (type: string): string => {
     const icons: Record<string, string> = {
@@ -122,7 +123,6 @@ export const useNotify = () => {
   }
 
   const showToast = (notification: NotificationItem) => {
-    const toast = useToast()
     toast.add({
       title: notification.sender?.name || 'System',
       description: notification.body,
@@ -130,6 +130,22 @@ export const useNotify = () => {
       color: getNotifyColor(notification.priority || 'normal'),
       duration: notification.priority === 'high' ? 10000 : 5000
     })
+  }
+
+  const success = (title: string, description?: string) => {
+    toast.add({ title, description, icon: 'i-lucide-check-circle-2', color: 'success', duration: 4000 })
+  }
+
+  const error = (title: string, description?: string) => {
+    toast.add({ title, description, icon: 'i-lucide-alert-circle', color: 'error', duration: 6000 })
+  }
+
+  const warning = (title: string, description?: string) => {
+    toast.add({ title, description, icon: 'i-lucide-alert-triangle', color: 'warning', duration: 5000 })
+  }
+
+  const info = (title: string, description?: string) => {
+    toast.add({ title, description, icon: 'i-lucide-info', color: 'info', duration: 4000 })
   }
 
   const refresh = async () => {
@@ -164,6 +180,10 @@ export const useNotify = () => {
     refresh,
     showToast,
     getNotifyIcon,
-    getNotifyColor
+    getNotifyColor,
+    success,
+    error,
+    warning,
+    info
   }
 }

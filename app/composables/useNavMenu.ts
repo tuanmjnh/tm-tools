@@ -43,11 +43,18 @@ export const useNavMenu = () => {
     allowedRoutes.value = []
   }
 
-  const translateLabel = (node: RouteTreeNode): string => {
-    const key = node.label?.startsWith('nav.') ? node.label : `nav.${node.label}`
-    const translated = t(key)
-    return translated === key ? (node.label || '') : translated
+  const translateRouteLabel = (label?: string | null, name?: string | null): string => {
+    const raw = String(label || name || '')
+    if (!raw) return ''
+    const candidates = raw.startsWith('nav.') ? [raw] : [`nav.${raw}`, raw]
+    for (const key of candidates) {
+      const translated = t(key)
+      if (translated && translated !== key) return translated
+    }
+    return raw
   }
+
+  const translateLabel = (node: RouteTreeNode): string => translateRouteLabel(node.label, node.name)
 
   function mapRouteToNav(node: RouteTreeNode, open: Ref<boolean>): NavigationMenuItem {
     const label = translateLabel(node)
@@ -56,7 +63,7 @@ export const useNavMenu = () => {
       return {
         label,
         icon: node.icon || 'i-lucide-folder',
-        defaultOpen: true,
+        defaultOpen: false,
         type: 'trigger',
         children: node.children
           .filter((child: RouteTreeNode) => child.isVisible !== false)
@@ -83,6 +90,7 @@ export const useNavMenu = () => {
     allowedRoutes: readonly(allowedRoutes),
     fetchRoutes,
     clearRoutes,
+    translateRouteLabel,
     buildNavItems
   }
 }

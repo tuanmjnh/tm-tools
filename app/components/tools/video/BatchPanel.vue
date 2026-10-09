@@ -109,25 +109,13 @@ function onSubmit() {
 <template>
   <div class="space-y-4">
     <UFormField name="batchPattern" :label="t('tools.inputPattern')">
-      <BaseFilePicker
-        v-model="batchPattern"
-        mode="folder"
-        placeholder="D:/videos/*.mp4"
-        :title="t('tools.inputPattern')"
-        :disabled="disabled"
-        @select="onPickBatchFolder"
-      />
+      <BaseFilePicker v-model="batchPattern" mode="folder" placeholder="D:/videos/*.mp4"
+        :title="t('tools.inputPattern')" :disabled="disabled" @select="onPickBatchFolder" />
     </UFormField>
 
     <UFormField name="batchOutputDir" :label="t('tools.outputDir')" :hint="t('tools.outputDirHelp')">
-      <BaseFilePicker
-        v-model="batchOutputDir"
-        mode="folder"
-        placeholder="D:/videos/output"
-        :title="t('tools.outputDir')"
-        :disabled="disabled"
-        show-clear
-      />
+      <BaseFilePicker v-model="batchOutputDir" mode="folder" placeholder="D:/videos/output"
+        :title="t('tools.outputDir')" :disabled="disabled" show-clear />
     </UFormField>
 
     <UFormField name="batchOutputPattern">
@@ -136,20 +124,13 @@ function onSubmit() {
           <span>{{ t('tools.outputPattern') }}</span>
           <UPopover :content="{ align: 'start' }">
             <template #default>
-              <UButton
-                icon="i-lucide-help-circle"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                class="text-neutral-400 hover:text-primary -my-1 p-0.5 cursor-pointer"
-                :title="t('tools.variables')"
-              />
+              <UButton icon="i-lucide-help-circle" size="xs" color="neutral" variant="ghost"
+                class="text-neutral-400 hover:text-primary -my-1 p-0.5 cursor-pointer" :title="t('tools.variables')" />
             </template>
             <template #content>
               <div class="p-3 w-80 space-y-2.5 text-xs">
                 <div
-                  class="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-1.5"
-                >
+                  class="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-1.5">
                   <div class="font-semibold flex items-center gap-1.5 text-neutral-800 dark:text-neutral-200">
                     <UIcon name="i-lucide-variable" class="size-4 text-primary" />
                     <span>{{ t('tools.variables') }}</span>
@@ -159,75 +140,57 @@ function onSubmit() {
                   </span>
                 </div>
                 <div class="grid grid-cols-2 gap-1.5 text-[11px]">
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{name}')"
-                  >
+                    @click="insertVariable('{name}')">
                     <code class="text-primary font-semibold">{name}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varFileName') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{ext}')"
-                  >
+                    @click="insertVariable('{ext}')">
                     <code class="text-primary font-semibold">{ext}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varExtension') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{dirname}')"
-                  >
+                    @click="insertVariable('{dirname}')">
                     <code class="text-primary font-semibold">{dirname}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varParentDir') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{fulldir}')"
-                  >
+                    @click="insertVariable('{fulldir}')">
                     <code class="text-primary font-semibold">{fulldir}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varFullDir') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{outdir}')"
-                  >
+                    @click="insertVariable('{outdir}')">
                     <code class="text-primary font-semibold">{outdir}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varOutputDir') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{date}')"
-                  >
+                    @click="insertVariable('{date}')">
                     <code class="text-primary font-semibold">{date}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">YYYYMMDD</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{datetime}')"
-                  >
+                    @click="insertVariable('{datetime}')">
                     <code class="text-primary font-semibold">{datetime}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">YYYYMMDD_HHMMSS</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{config}')"
-                  >
+                    @click="insertVariable('{config}')">
                     <code class="text-primary font-semibold">{config}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varPreset') }}</span>
                   </button>
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-1.5 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/60 hover:border-primary/50 hover:bg-primary/5 text-left transition-colors flex items-center justify-between group cursor-pointer"
-                    @click="insertVariable('{idx}')"
-                  >
+                    @click="insertVariable('{idx}')">
                     <code class="text-primary font-semibold">{idx}</code>
                     <span class="text-neutral-500 text-[10px] truncate ml-1">{{ t('tools.varTaskIndex') }}</span>
                   </button>
@@ -237,69 +200,36 @@ function onSubmit() {
           </UPopover>
         </div>
       </template>
-      <UInput
-        v-model="batchOutputPattern"
-        :placeholder="DEFAULT_BATCH_OUTPUT_PATTERN"
-        class="w-full"
-        :disabled="disabled"
-        :ui="{ trailing: 'pe-0.5' }"
-      >
+      <UInput v-model="batchOutputPattern" :placeholder="DEFAULT_BATCH_OUTPUT_PATTERN" class="w-full"
+        :disabled="disabled" :ui="{ trailing: 'pe-0.5' }">
         <template #trailing>
           <div class="flex items-center gap-0.5">
             <!-- Reset/Default Button -->
-            <UButton
-              v-if="batchOutputPattern !== DEFAULT_BATCH_OUTPUT_PATTERN"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              icon="i-lucide-rotate-ccw"
-              :title="t('global.reset')"
-              :aria-label="t('global.reset')"
-              :disabled="disabled"
-              @click="batchOutputPattern = DEFAULT_BATCH_OUTPUT_PATTERN"
-            />
+            <UButton v-if="batchOutputPattern !== DEFAULT_BATCH_OUTPUT_PATTERN" color="neutral" variant="ghost"
+              size="sm" icon="i-lucide-rotate-ccw" :title="t('global.reset')" :aria-label="t('global.reset')"
+              :disabled="disabled" @click="batchOutputPattern = DEFAULT_BATCH_OUTPUT_PATTERN" />
             <!-- Clear Button -->
-            <UButton
-              v-if="batchOutputPattern"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              icon="i-lucide-x"
-              :title="t('global.clear')"
-              :aria-label="t('global.clear')"
-              :disabled="disabled"
-              @click="batchOutputPattern = ''"
-            />
+            <UButton v-if="batchOutputPattern" color="neutral" variant="ghost" size="sm" icon="i-lucide-x"
+              :title="t('global.clear')" :aria-label="t('global.clear')" :disabled="disabled"
+              @click="batchOutputPattern = ''" />
           </div>
         </template>
       </UInput>
     </UFormField>
 
     <UFormField name="batchThreads" :label="t('tools.threads')">
-      <UInput
-        v-model.number="batchThreads"
-        type="number"
-        min="1"
-        max="8"
-        class="w-full"
-        :disabled="disabled"
-      />
+      <UInput v-model.number="batchThreads" type="number" min="1" max="8" class="w-full" :disabled="disabled" />
     </UFormField>
 
     <!-- Matched Files Preview -->
-    <div
-      v-if="batchMatchedFiles.length"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30"
-    >
+    <div v-if="batchMatchedFiles.length"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30">
       <p class="font-medium text-sm mb-2">
         {{ t('tools.batchItems') }} ({{ batchMatchedFiles.length }})
       </p>
       <div class="max-h-48 overflow-y-auto space-y-1">
-        <div
-          v-for="file in batchMatchedFiles"
-          :key="file"
-          class="text-xs font-mono p-1 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 rounded truncate"
-        >
+        <div v-for="file in batchMatchedFiles" :key="file"
+          class="text-xs font-mono p-1 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50 rounded truncate">
           {{ file }}
         </div>
       </div>
@@ -307,17 +237,8 @@ function onSubmit() {
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton
-        icon="i-lucide-play"
-        :label="t('tools.start')"
-        variant="soft"
-        color="primary"
-        size="lg"
-        block
-        :loading="loading"
-        :disabled="!batchPattern || batchMatchedFiles.length === 0 || disabled"
-        @click="onSubmit"
-      />
+      <UButton icon="i-lucide-play" :label="t('tools.start')" variant="soft" color="primary" size="lg" block
+        :loading="loading" :disabled="!batchPattern || batchMatchedFiles.length === 0 || disabled" @click="onSubmit" />
     </div>
   </div>
 </template>

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
+import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 
 const { t } = useI18n()
 const { selectedClip, selectedClipId, selectClip, updateClip, removeClip } = useTmcutProject()
+const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
+const { formatTimecode } = useTmcutPlayback()
 
 const clip = computed(() => selectedClip.value?.item)
 const trackType = computed(() => selectedClip.value?.track)
@@ -56,6 +59,48 @@ function handleDelete() {
     removeClip(selectedClipId.value)
   }
 }
+
+// Project details (CapCut-style "Chi tiết" panel when no clip is selected)
+const storagePath = ref('')
+onMounted(async () => {
+  try {
+    const dirs = await window.electronAPI?.tmcut?.getPaths()
+    storagePath.value = dirs?.projects || ''
+  } catch {
+    storagePath.value = ''
+  }
+})
+
+const detailRows = computed(() => {
+  const project = currentProject.value
+  const tracks = project?.timeline?.tracks || []
+  const clipCount = tracks.reduce((n, tr) => n + (tr.items?.length || 0), 0)
+  return [
+    { label: t('tmcut.details.name'), value: project?.name || '—' },
+    {
+      label: t('tmcut.details.resolution'),
+      value: project?.canvas ? `${project.canvas.width}x${project.canvas.height}` : '—'
+    },
+    {
+      label: t('tmcut.details.fps'),
+      value: project?.canvas ? `${project.canvas.fps}fps` : '—'
+    },
+    { label: t('tmcut.details.duration'), value: formatTimecode(totalDuration.value) },
+    { label: t('tmcut.details.tracks'), value: String(tracks.length) },
+    { label: t('tmcut.details.clips'), value: String(clipCount) },
+    {
+      label: t('tmcut.details.lastSaved'),
+      value: lastSavedAt.value ? new Date(lastSavedAt.value).toLocaleString() : '—'
+    }
+  ]
+})
+
+const saveStateLabel = computed(() => {
+  if (saveStatus.value === 'saving') return t('tmcut.save.saving')
+  if (saveStatus.value === 'saved') return t('tmcut.save.saved')
+  if (saveStatus.value === 'error') return t('tmcut.save.error')
+  return '—'
+})
 </script>
 
 <template>
@@ -364,12 +409,45 @@ function handleDelete() {
 
   <div
     v-else
-    class="text-neutral-500 text-xs text-center py-16"
+    class="text-xs select-none"
   >
-    <UIcon
-      name="i-lucide-mouse-pointer"
-      class="size-8 mx-auto mb-2 opacity-30"
-    />
-    {{ t('tmcut.inspectorProps.noClipSelected') }}
+    <!-- Project details header -->
+    <div class="flex items-center gap-2 pb-3 border-b border-neutral-800">
+      <UIcon name="i-lucide-clapperboard" class="size-4 shrink-0 text-primary" />
+      <span class="font-medium text-neutral-100 truncate text-sm">
+        {{ currentProject?.name || t('tmcut.project') }}
+      </span>
+    </div>
+
+    <!-- Detail rows (CapCut-style Chi tiết panel) -->
+    <div class="py-2 divide-y divide-neutral-800/60">
+      <div v-for="row in detailRows" :key="row.label" class="flex items-start justify-between gap-3 py-1.5">
+        <span class="text-neutral-500 shrink-0">{{ row.label }}</span>
+        <span class="text-neutral-200 text-right break-all font-mono text-[11px]">{{ row.value }}</span>
+      </div>
+      <div class="flex items-start justify-between gap-3 py-1.5">
+        <span class="text-neutral-500 shrink-0">{{ t('tmcut.details.saveState') }}</span>
+        <span
+          class="text-right text-[11px]"
+          :class="saveStatus === 'error' ? 'text-red-400' : 'text-emerald-400'"
+        >
+          {{ saveStateLabel }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Storage path -->
+    <div v-if="storagePath" class="pt-2 border-t border-neutral-800">
+      <p class="text-[10px] text-neutral-500 mb-1">
+        {{ t('tmcut.details.storage') }}
+      </p>
+      <p class="font-mono text-[10px] text-neutral-400 break-all leading-relaxed">
+        {{ storagePath }}
+      </p>
+    </div>
+
+    <p class="text-neutral-500 text-[11px] text-center pt-4">
+      {{ t('tmcut.inspectorProps.noClipSelected') }}
+    </p>
   </div>
 </template>

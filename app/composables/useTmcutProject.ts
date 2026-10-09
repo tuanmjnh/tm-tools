@@ -1,6 +1,19 @@
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform } from '~/utils/tmcut/canvas'
 import { decideRecovery } from '~/utils/tmcut/recovery'
+import {
+  copyClips,
+  pasteClips,
+  duplicateClips,
+  rippleDelete,
+  snapTime,
+  secToTicks,
+  ticksToSec,
+  v1TracksToV3,
+  syncV3Result,
+  expandRelated
+} from '@tmcut-core'
+import type { CoreClipboard, TmcutTimeline } from '@tmcut-core'
 
 // Type definitions for TMCut project
 export interface TmcutTimelineItem {
@@ -15,6 +28,10 @@ export interface TmcutTimelineItem {
   offset: number
   speed: number
   reverse?: boolean
+  /** Group editing: clips sharing a groupId move/select together (core Phase 2). */
+  groupId?: string | null
+  /** Linked pair (e.g. video + its audio): select/move together. */
+  linkId?: string | null
   opacity: number
   scale: number
   x: number
@@ -36,6 +53,7 @@ export interface TmcutTrack {
   name?: string
   muted?: boolean
   locked?: boolean
+  hidden?: boolean
   items: TmcutTimelineItem[]
 }
 
@@ -109,6 +127,14 @@ const totalDuration = computed(() => {
   return Math.max(maxSec, 5) // Minimum 5 seconds ruler
 })
 
+// True when at least one clip exists on any timeline track.
+// Used to disable preview transport controls when the timeline is empty
+// (playhead animation and seeking are meaningless without media).
+const hasTimelineClips = computed(() => {
+  if (!currentProject.value?.timeline?.tracks) return false
+  return currentProject.value.timeline.tracks.some(t => (t.items?.length || 0) > 0)
+})
+
 function buildDefaultProject(projectId: string, name = 'Untitled Project'): TmcutProject {
   return {
     id: projectId,
@@ -165,24 +191,28 @@ function ensureDefaultTracks(project: TmcutProject) {
   }
 }
 
-// ===== Disk persistence (Electron IPC, localStorage mirror) =====
-
 async function persistProjectToDisk() {
   const project = currentProject.value
   const ipc = tmcutIpc()
   if (!project || !ipc || import.meta.server) return
   saveStatus.value = 'saving'
   try {
-    project.updated_at = new Date().toISOString()
-    await ipc.writeProject({ id: project.id, data: project })
-    await ipc.writeRecovery({ id: project.id, data: project })
+    // Convert Vue reactive project to plain object for IPC serialization
+    // JSON.parse/stringify handles the reactive proxies properly
+    const plainProject = JSON.parse(JSON.stringify(project)) as TmcutProject
+    plainProject.updated_at = new Date().toISOString()
+    await ipc.writeProject({ id: plainProject.id, data: plainProject })
+    await ipc.writeRecovery({ id: plainProject.id, data: plainProject })
     saveStatus.value = 'saved'
-    lastSavedAt.value = project.updated_at
+    lastSavedAt.value = plainProject.updated_at
   } catch (error) {
     console.error('Failed to persist project to disk:', error)
     saveStatus.value = 'error'
   }
 }
+
+// Helper: convert Vue reactive project to plain object for IPC serialization
+// (removed - using inline JSON.parse/stringify instead)
 
 let diskSaveTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleDiskSave(delayMs = 2000) {
@@ -405,6 +435,7 @@ function selectClip(clipId: string | null) {
 function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Partial<TmcutTimelineItem>) {
   if (!currentProject.value) return null
   ensureDefaultTracks(currentProject.value)
+  pushHistory()
 
   let track = currentProject.value.timeline.tracks.find(t => t.type === trackType)
   if (!track) {
@@ -474,6 +505,7 @@ function removeClip(clipId: string) {
   for (const track of currentProject.value.timeline.tracks) {
     const idx = track.items?.findIndex(i => i.id === clipId)
     if (idx !== undefined && idx !== -1) {
+      pushHistory()
       track.items.splice(idx, 1)
       if (selectedClipId.value === clipId) {
         selectedClipId.value = null
@@ -482,6 +514,88 @@ function removeClip(clipId: string) {
       return
     }
   }
+}
+
+// ===== Core-backed editing (roadmap Phase 2 wiring) =====
+// The v1 state shape stays untouched: conversions run through the
+// dependency-free @tmcut/core bridge, results merge back by clip id, and
+// the app JSON history wraps every op so undo keeps working.
+
+const clipboard = ref<CoreClipboard | null>(null)
+const rippleMode = ref(false)
+
+function expandedSelectionIds(): string[] {
+  if (!selectedClipId.value || !currentProject.value) return []
+  return expandRelated(v1TracksToV3(currentProject.value.timeline.tracks), [selectedClipId.value])
+}
+
+/** Run a core op on a converted v3 copy, then merge results back by id. */
+function applyV3Edit<T>(operate: (v3: TmcutTimeline) => T): T | null {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return null
+  const v3 = v1TracksToV3(tracks)
+  pushHistory()
+  const result = operate(v3)
+  syncV3Result(tracks, v3)
+  saveProject()
+  return result
+}
+
+function copySelectedClips(): boolean {
+  const tracks = currentProject.value?.timeline?.tracks
+  const ids = expandedSelectionIds()
+  if (!tracks || ids.length === 0) return false
+  const data = copyClips(v1TracksToV3(tracks), ids)
+  clipboard.value = data
+  return !!data
+}
+
+function pasteClipboardAt(timeSec: number): string[] {
+  const data = clipboard.value
+  if (!data) return []
+  const target = Math.max(0, Math.round(secToTicks(timeSec)))
+  const result = applyV3Edit(v3 => pasteClips(v3, data, target))
+  if (result && result.length > 0) {
+    selectedClipId.value = result[result.length - 1] ?? null
+  }
+  return result ?? []
+}
+
+function duplicateSelectedClips(atSec?: number): string[] {
+  const ids = expandedSelectionIds()
+  if (ids.length === 0) return []
+  const target = atSec === undefined ? undefined : Math.max(0, Math.round(secToTicks(atSec)))
+  const result = applyV3Edit(v3 => duplicateClips(v3, ids, target))
+  const newIds = result ? result.map(copy => copy.id) : []
+  if (newIds.length > 0) {
+    selectedClipId.value = newIds[0] ?? null
+  }
+  return newIds
+}
+
+function rippleDeleteSelected(acrossTracks = false): boolean {
+  const id = selectedClipId.value
+  if (!id || !currentProject.value) return false
+  for (const track of currentProject.value.timeline.tracks) {
+    const item = track.items?.find(i => i.id === id)
+    if (item) {
+      if (track.locked) return false
+      break
+    }
+  }
+  const shifted = applyV3Edit(v3 => rippleDelete(v3, id, { acrossTracks }))
+  if (shifted === null || shifted === undefined) return false
+  selectedClipId.value = null
+  return true
+}
+
+function snapTimeSec(targetSec: number, playheadSec: number): number {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return targetSec
+  const v3 = v1TracksToV3(tracks)
+  return ticksToSec(snapTime(v3, Math.round(secToTicks(targetSec)), {
+    playheadTicks: Math.round(secToTicks(playheadSec))
+  }))
 }
 
 // Re-point all clips that reference an old media path (media relink)
@@ -525,6 +639,7 @@ function splitClip(clipId: string, splitTime: number): boolean {
     const elapsedOnTimeline = splitTime - clipStart
     const splitSourceTime = clip.in + elapsedOnTimeline * speed
 
+    pushHistory()
     // First piece: keep original in, adjust out
     const originalOut = clip.out
     clip.out = splitSourceTime
@@ -612,6 +727,85 @@ function duplicateAsProject(presetId: string): TmcutProject | null {
   return clone
 }
 
+// ===== Undo / Redo history (timeline + canvas snapshots) =====
+
+const undoStack = ref<string[]>([])
+const redoStack = ref<string[]>([])
+const HISTORY_LIMIT = 50
+
+function historySnapshot(): string {
+  return JSON.stringify({
+    timeline: currentProject.value?.timeline,
+    canvas: currentProject.value?.canvas
+  })
+}
+
+// Capture state BEFORE a mutation so it can be restored with undo().
+// Call at drag/trim gesture start and inside discrete ops (add/remove/split).
+function pushHistory() {
+  if (!currentProject.value) return
+  undoStack.value.push(historySnapshot())
+  if (undoStack.value.length > HISTORY_LIMIT) undoStack.value.shift()
+  redoStack.value = []
+}
+
+const canUndo = computed(() => undoStack.value.length > 0)
+const canRedo = computed(() => redoStack.value.length > 0)
+
+function restoreHistorySnapshot(raw: string) {
+  if (!currentProject.value) return
+  try {
+    const parsed = JSON.parse(raw) as { timeline?: TmcutProjectTimeline, canvas?: TmcutCanvas }
+    if (parsed.timeline) currentProject.value.timeline = parsed.timeline
+    if (parsed.canvas) currentProject.value.canvas = parsed.canvas
+    selectedClipId.value = null
+    saveProject()
+  } catch (error) {
+    console.error('Failed to restore history snapshot:', error)
+  }
+}
+
+function undo() {
+  if (!currentProject.value || undoStack.value.length === 0) return
+  redoStack.value.push(historySnapshot())
+  const prev = undoStack.value.pop()!
+  restoreHistorySnapshot(prev)
+}
+
+function redo() {
+  if (!currentProject.value || redoStack.value.length === 0) return
+  undoStack.value.push(historySnapshot())
+  const next = redoStack.value.pop()!
+  restoreHistorySnapshot(next)
+}
+
+// Track-level flags (CapCut-style eye / lock / mute per track)
+function updateTrack(trackId: string, patch: Partial<TmcutTrack>) {
+  if (!currentProject.value?.timeline?.tracks) return
+  const track = currentProject.value.timeline.tracks.find(t => t.id === trackId)
+  if (!track) return
+  Object.assign(track, patch)
+  saveProject()
+}
+
+function toggleTrackMute(trackId: string) {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  if (!track) return
+  updateTrack(trackId, { muted: !track.muted })
+}
+
+function toggleTrackLock(trackId: string) {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  if (!track) return
+  updateTrack(trackId, { locked: !track.locked })
+}
+
+function toggleTrackHidden(trackId: string) {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  if (!track) return
+  updateTrack(trackId, { hidden: !track.hidden })
+}
+
 // Autosave
 let autosaveTimeout: ReturnType<typeof setTimeout> | null = null
 function setupAutosave() {
@@ -646,7 +840,9 @@ async function createSnapshot(name?: string) {
   if (!ipc || !project || import.meta.server) return
   saveProject()
   try {
-    await ipc.saveSnapshot({ id: project.id, data: project, name })
+    // Plain copy for IPC structured clone (reactive proxies fail)
+    const plain = JSON.parse(JSON.stringify(project)) as TmcutProject
+    await ipc.saveSnapshot({ id: project.id, data: plain, name })
     await loadSnapshots()
   } catch (error) {
     console.error('Failed to save snapshot:', error)
@@ -713,6 +909,7 @@ export function useTmcutProject() {
     selectedClipId,
     selectedClip,
     totalDuration,
+    hasTimelineClips,
     saveStatus,
     lastSavedAt,
     pendingRecovery,
@@ -726,6 +923,23 @@ export function useTmcutProject() {
     updateClip,
     removeClip,
     splitClip,
+    pushHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    clipboard,
+    rippleMode,
+    copySelectedClips,
+    pasteClipboardAt,
+    duplicateSelectedClips,
+    rippleDeleteSelected,
+    snapTimeSec,
+    flushDiskSave,
+    updateTrack,
+    toggleTrackMute,
+    toggleTrackLock,
+    toggleTrackHidden,
     updateClipsSrc,
     switchCanvas,
     setCanvasBackground,

@@ -100,38 +100,19 @@ function onSubmit() {
 <template>
   <div class="space-y-4">
     <UFormField name="inputPath" :label="t('tools.input')">
-      <BaseFilePicker
-        v-model="inputPath"
-        mode="file"
-        placeholder="D:/videos/input.mp4"
-        :disabled="disabled"
-        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]"
-      />
+      <BaseFilePicker v-model="inputPath" mode="file" placeholder="D:/videos/input.mp4" :disabled="disabled"
+        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]" />
     </UFormField>
 
     <UFormField :label="t('tools.output')">
-      <BaseFilePicker
-        v-model="outputPath"
-        mode="save"
-        placeholder="D:/videos/output.mp4"
-        :disabled="disabled"
-        :filters="[{ name: 'Videos', extensions: ['mp4'] }]"
-      />
+      <BaseFilePicker v-model="outputPath" mode="save" placeholder="D:/videos/output.mp4" :disabled="disabled"
+        :filters="[{ name: 'Videos', extensions: ['mp4'] }]" />
     </UFormField>
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton
-        icon="i-lucide-play"
-        :label="t('tools.start')"
-        variant="soft"
-        color="primary"
-        size="lg"
-        block
-        :loading="loading"
-        :disabled="!inputPath || disabled"
-        @click="onSubmit"
-      />
+      <UButton icon="i-lucide-play" :label="t('tools.start')" variant="soft" color="primary" size="lg" block
+        :loading="loading" :disabled="!inputPath || disabled" @click="onSubmit" />
     </div>
   </div>
 </template>

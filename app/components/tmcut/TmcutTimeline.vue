@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
+import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
+import { toURL } from '~/utils/ffmpegHelper'
 
 const { t } = useI18n()
 
@@ -13,7 +16,21 @@ const {
   totalDuration,
   addClipToTrack,
   removeClip,
-  splitClip
+  splitClip,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+  toggleTrackMute,
+  toggleTrackLock,
+  toggleTrackHidden,
+  clipboard,
+  rippleMode,
+  copySelectedClips,
+  pasteClipboardAt,
+  duplicateSelectedClips,
+  rippleDeleteSelected,
+  flushDiskSave
 } = useTmcutProject()
 
 const {
@@ -21,11 +38,17 @@ const {
   zoom,
   formatTimecode,
   seek,
-  zoomIn,
-  zoomOut
+  pause,
+  renderIn,
+  renderOut,
+  renderRange,
+  setRenderMark,
+  clearRenderMarks
 } = useTmcutPlayback()
 
-const { pickFile } = useFileSystem()
+const { pickFile, pickWebFiles } = useFileSystem()
+const { isDesktop, importWebFiles } = useTmcutMedia()
+const { tip, shortcutsOpen } = useTmcutUiPrefs()
 const toast = useToast()
 
 const tracksContainerRef = ref<HTMLDivElement | null>(null)
@@ -57,9 +80,29 @@ const rulerTicks = computed(() => {
 // Playhead position in pixels
 const playheadLeft = computed(() => playhead.value * zoom.value)
 
-// Handle scrubbing on ruler
+// In/Out render zone (export zone) overlay geometry — shown on the ruler
+// (flags + tint) and across the track rows (transparent highlight band).
+const renderZoneStyle = computed(() => {
+  const range = renderRange.value
+  if (!range) return null
+  return {
+    left: `${range.start * zoom.value}px`,
+    width: `${Math.max(2, (range.end - range.start) * zoom.value)}px`
+  }
+})
+
+const markInStyle = computed(() => (
+  renderIn.value !== null ? { left: `${renderIn.value * zoom.value}px` } : null
+))
+
+const markOutStyle = computed(() => (
+  renderOut.value !== null ? { left: `${renderOut.value * zoom.value}px` } : null
+))
+
+// Handle scrubbing on ruler (pauses playback, like other NLEs)
 function onRulerMouseDown(e: MouseEvent) {
   if (e.button !== 0) return
+  pause()
   updatePlayheadFromPointer(e)
 
   function onMouseMove(moveEvent: MouseEvent) {
@@ -77,11 +120,25 @@ function onRulerMouseDown(e: MouseEvent) {
 
 function updatePlayheadFromPointer(e: MouseEvent) {
   if (!rulerRef.value) return
+  // The ruler lives INSIDE the scroll container, so its
+  // viewport rect already includes the horizontal scroll
+  // offset. Adding scrollLeft here double-counted it and
+  // shifted every scrub by the scroll distance (the
+  // "playhead jumps / misaligns after scrolling" bug).
   const rect = rulerRef.value.getBoundingClientRect()
-  const scrollLeft = tracksContainerRef.value?.scrollLeft || 0
-  const clickX = e.clientX - rect.left + scrollLeft
+  const clickX = e.clientX - rect.left
   const targetSec = Math.max(0, clickX / zoom.value)
   seek(targetSec)
+}
+
+// Click empty track background to seek (CapCut-style). Clip interactions
+// are guarded by [data-tmcut-clip] so drags/trims never trigger a seek.
+function onTracksBackgroundMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return
+  const target = e.target as HTMLElement
+  if (target.closest('[data-tmcut-clip]')) return
+  pause()
+  updatePlayheadFromPointer(e)
 }
 
 // Split clip action
@@ -110,16 +167,59 @@ function handleSplit() {
   toast.add({ title: t('tmcut.timelineActions.placePlayheadToSplit'), color: 'warning' })
 }
 
-// Delete clip action
+// Delete clip action (ripple mode closes the gap via the core engine)
 function handleDelete() {
-  if (selectedClipId.value) {
-    removeClip(selectedClipId.value)
-    toast.add({ title: t('tmcut.timelineActions.clipDeleted'), color: 'neutral' })
+  if (!selectedClipId.value) return
+  if (rippleMode.value) {
+    if (rippleDeleteSelected()) {
+      // toast.add({ title: t('tmcut.timelineActions.clipDeleted'), color: 'success' })
+    }
+    return
+  }
+  removeClip(selectedClipId.value)
+  // toast.add({ title: t('tmcut.timelineActions.clipDeleted'), color: 'success' })
+}
+
+// Clipboard actions (core copy/paste/duplicate, merged back by clip id)
+function handleCopy() {
+  if (copySelectedClips()) {
+    toast.add({ title: t('tmcut.timelineActions.copied'), color: 'success' })
+  }
+}
+
+function handlePaste() {
+  const ids = pasteClipboardAt(playhead.value)
+  if (ids.length > 0) {
+    toast.add({ title: t('tmcut.timelineActions.pasted'), color: 'success' })
+  }
+}
+
+function handleDuplicate() {
+  const ids = duplicateSelectedClips()
+  if (ids.length > 0) {
+    toast.add({ title: t('tmcut.timelineActions.duplicated'), color: 'success' })
   }
 }
 
 // Add local video file
 async function handleAddVideo() {
+  if (!isDesktop.value) {
+    const files = await pickWebFiles(['mp4', 'mov', 'webm', 'mkv', 'avi'], true)
+    if (files.length === 0) return
+    const imported = await importWebFiles(files)
+    for (const asset of imported) {
+      if (asset.kind !== 'video') continue
+      addClipToTrack('video', {
+        name: asset.name,
+        src: asset.path,
+        in: 0,
+        out: asset.meta.durationSec > 0 ? Math.round(asset.meta.durationSec * 100) / 100 : 10,
+        speed: 1
+      })
+      toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: asset.name }), color: 'success' })
+    }
+    return
+  }
   const filePath = await pickFile({
     title: t('tmcut.timelineActions.selectVideoToAdd'),
     filters: [{ name: 'Videos', extensions: ['mp4', 'mov', 'webm', 'mkv', 'avi'] }]
@@ -128,7 +228,8 @@ async function handleAddVideo() {
   if (!filePath || typeof filePath !== 'string') return
 
   // Probe media metadata using HTML5 Video element
-  const mediaUrl = `media://?file=${encodeURIComponent(filePath.replace(/\\/g, '/'))}`
+  // (toURL serves the file through the privileged media://local protocol)
+  const mediaUrl = toURL(filePath)
   const tempVideo = document.createElement('video')
   tempVideo.src = mediaUrl
   tempVideo.preload = 'metadata'
@@ -176,6 +277,23 @@ function handleAddText() {
 
 // Add audio file
 async function handleAddAudio() {
+  if (!isDesktop.value) {
+    const files = await pickWebFiles(['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg'], true)
+    if (files.length === 0) return
+    const imported = await importWebFiles(files)
+    for (const asset of imported) {
+      if (asset.kind !== 'audio') continue
+      addClipToTrack('audio', {
+        name: asset.name,
+        src: asset.path,
+        in: 0,
+        out: asset.meta.durationSec > 0 ? Math.round(asset.meta.durationSec * 100) / 100 : 15,
+        volume: 100
+      })
+      toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: asset.name }), color: 'success' })
+    }
+    return
+  }
   const filePath = await pickFile({
     title: t('tmcut.timelineActions.selectAudio'),
     filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'aac', 'm4a', 'flac', 'ogg'] }]
@@ -183,7 +301,7 @@ async function handleAddAudio() {
 
   if (!filePath || typeof filePath !== 'string') return
 
-  const mediaUrl = `media://?file=${encodeURIComponent(filePath.replace(/\\/g, '/'))}`
+  const mediaUrl = toURL(filePath)
   const tempAudio = new Audio(mediaUrl)
 
   tempAudio.onloadedmetadata = () => {
@@ -219,20 +337,122 @@ function onTracksScroll(e: Event) {
     rulerRef.value.scrollLeft = target.scrollLeft
   }
 }
+
+// Global shortcuts (timeline scope):
+// Ctrl/Cmd+Z/Y undo-redo, Ctrl/Cmd+C/V/D clipboard, Ctrl/Cmd+S save,
+// Ctrl/Cmd+E export, Ctrl/Cmd+K help, S split, Delete/Backspace remove,
+// R ripple toggle, I/O render marks, ?/F1 shortcuts help (§65.1).
+const emit = defineEmits<{
+  (e: 'open-export'): void
+}>()
+
+// Shared help overlay state (useTmcutUiPrefs.shortcutsOpen) — also opened
+// from the editor header button, so one instance is used everywhere.
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return
+  }
+  const key = e.key.toLowerCase()
+  if (e.ctrlKey || e.metaKey) {
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      undo()
+    } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+      e.preventDefault()
+      redo()
+    } else if (key === 'c') {
+      e.preventDefault()
+      handleCopy()
+    } else if (key === 'v') {
+      e.preventDefault()
+      handlePaste()
+    } else if (key === 'd') {
+      e.preventDefault()
+      handleDuplicate()
+    } else if (key === 's') {
+      e.preventDefault()
+      flushDiskSave()
+    } else if (key === 'e') {
+      e.preventDefault()
+      emit('open-export')
+    } else if (key === 'k') {
+      // Ctrl+K opens the help; the modal focuses its own search field
+      e.preventDefault()
+      shortcutsOpen.value = true
+    }
+    return
+  }
+  // While the help overlay is open only ?/F1 stay active (toggle to close),
+  // so editing keys cannot fire behind the modal.
+  if (shortcutsOpen.value) {
+    if (key === '?' || key === 'f1') {
+      e.preventDefault()
+      shortcutsOpen.value = false
+    }
+    return
+  }
+  if (key === 's') {
+    handleSplit()
+  } else if (key === 'delete' || key === 'backspace') {
+    e.preventDefault()
+    handleDelete()
+  } else if (key === 'r') {
+    // R toggles ripple editing (the toolbar button shows the state)
+    rippleMode.value = !rippleMode.value
+  } else if (key === 'i') {
+    setRenderMark('in')
+  } else if (key === 'o') {
+    setRenderMark('out')
+  } else if (key === '?' || key === 'f1') {
+    e.preventDefault()
+    shortcutsOpen.value = true
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 </script>
 
 <template>
   <div class="h-full flex flex-col bg-neutral-900 border-t border-neutral-800 text-neutral-200 select-none">
     <!-- Timeline Toolbar -->
     <div class="h-10 px-3 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/90 shrink-0">
-      <!-- Left: Tools (Split, Delete, Add Media) -->
+      <!-- Left: History + Tools (Undo, Redo, Split, Delete, Add Media) -->
       <div class="flex items-center gap-1.5">
+        <UButton
+          icon="i-lucide-undo-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :disabled="!canUndo"
+          :title="tip(t('tmcut.timelineActions.undo'), 'Ctrl+Z')"
+          @click="undo"
+        />
+        <UButton
+          icon="i-lucide-redo-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :disabled="!canRedo"
+          :title="tip(t('tmcut.timelineActions.redo'), 'Ctrl+Shift+Z')"
+          @click="redo"
+        />
+
+        <div class="h-4 w-px bg-neutral-800 mx-1" />
+
         <UButton
           icon="i-lucide-scissors"
           size="xs"
           variant="soft"
           color="neutral"
-          :title="t('tmcut.timelineActions.split')"
+          :title="tip(t('tmcut.timelineActions.split'), 'S')"
           @click="handleSplit"
         >
           {{ t('tmcut.timelineActions.split') }}
@@ -243,11 +463,37 @@ function onTracksScroll(e: Event) {
           variant="soft"
           color="error"
           :disabled="!selectedClipId"
-          :title="t('tmcut.timelineActions.delete')"
+          :title="tip(t('tmcut.timelineActions.delete'), 'Del')"
           @click="handleDelete"
         >
           {{ t('tmcut.timelineActions.delete') }}
         </UButton>
+        <UButton
+          icon="i-lucide-copy"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :disabled="!selectedClipId"
+          :title="tip(t('tmcut.timelineActions.duplicate'), 'Ctrl+D')"
+          @click="handleDuplicate"
+        />
+        <UButton
+          icon="i-lucide-clipboard-paste"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :disabled="!clipboard"
+          :title="tip(t('tmcut.timelineActions.paste'), 'Ctrl+V')"
+          @click="handlePaste"
+        />
+        <UButton
+          icon="i-lucide-fold-horizontal"
+          size="xs"
+          :variant="rippleMode ? 'solid' : 'soft'"
+          :color="rippleMode ? 'primary' : 'neutral'"
+          :title="tip(t('tmcut.timelineActions.ripple'), 'R')"
+          @click="rippleMode = !rippleMode"
+        />
 
         <div class="h-4 w-px bg-neutral-800 mx-1" />
 
@@ -281,29 +527,52 @@ function onTracksScroll(e: Event) {
       </div>
 
       <!-- Center: Timecode Info -->
-      <div class="font-mono text-xs flex items-center gap-1 bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-800">
+      <div
+        class="font-mono text-xs flex items-center gap-1 bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-800"
+      >
         <span class="text-primary font-semibold">{{ formatTimecode(playhead) }}</span>
         <span class="text-neutral-500">/</span>
         <span class="text-neutral-400">{{ formatTimecode(totalDuration) }}</span>
       </div>
 
-      <!-- Right: Timeline Zoom -->
-      <div class="flex items-center gap-1">
+      <!-- In/Out render zone chip (clears on click) -->
+      <div
+        v-if="renderIn !== null || renderOut !== null"
+        class="font-mono text-[10px] flex items-center gap-1.5 bg-primary/10 px-2 py-0.5 rounded border border-primary/30 text-primary select-none"
+        :title="t('tmcut.timelineActions.clearMarks')"
+        @click="clearRenderMarks()"
+      >
+        <span>I {{ renderIn !== null ? formatTimecode(renderIn) : '--:--' }}</span>
+        <span class="opacity-50">→</span>
+        <span>O {{ renderOut !== null ? formatTimecode(renderOut) : '--:--' }}</span>
+        <UIcon
+          name="i-lucide-x"
+          class="size-3 hover:text-red-400 cursor-pointer"
+        />
+      </div>
+
+      <!-- Right: Shortcuts help + Timeline Zoom Slider -->
+      <div class="flex items-center gap-2">
         <UButton
-          icon="i-lucide-zoom-out"
+          icon="i-lucide-keyboard"
           size="xs"
           variant="ghost"
           color="neutral"
-          @click="zoomOut"
+          :title="tip(t('tmcut.hotkeys.title'), '?, F1')"
+          @click="shortcutsOpen = true"
         />
-        <span class="text-[10px] font-mono text-neutral-400 w-8 text-center">{{ zoom }}px</span>
-        <UButton
-          icon="i-lucide-zoom-in"
-          size="xs"
-          variant="ghost"
-          color="neutral"
-          @click="zoomIn"
-        />
+        <UIcon name="i-lucide-zoom-out" class="size-3.5 text-neutral-500" />
+        <input
+          v-model.number="zoom"
+          type="range"
+          min="15"
+          max="200"
+          step="5"
+          class="w-24 accent-primary cursor-pointer"
+          :title="t('tmcut.timelineActions.zoom')"
+        >
+        <UIcon name="i-lucide-zoom-in" class="size-3.5 text-neutral-500" />
+        <span class="text-[10px] font-mono text-neutral-400 w-11 text-right">{{ zoom }}px</span>
       </div>
     </div>
 
@@ -316,14 +585,14 @@ function onTracksScroll(e: Event) {
           TRACKS
         </div>
 
-        <!-- Track Labels -->
+        <!-- Track Labels with eye / lock / mute (CapCut-style) -->
         <div class="flex-1 flex flex-col divide-y divide-neutral-800/60 overflow-hidden">
           <div
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
-            class="h-14 px-3 flex items-center justify-between text-xs font-medium text-neutral-300"
+            class="h-14 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-300"
           >
-            <div class="flex items-center gap-2 truncate">
+            <div class="flex items-center gap-1.5 truncate min-w-0">
               <UIcon
                 :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
                 class="size-4 shrink-0"
@@ -331,9 +600,32 @@ function onTracksScroll(e: Event) {
               />
               <span class="truncate">{{ track.name || track.type }}</span>
             </div>
-            <div class="flex items-center gap-1 text-neutral-500">
-              <UIcon name="i-lucide-layers" class="size-3" />
-              <span class="text-[10px]">{{ track.items.length }}</span>
+            <div class="flex items-center shrink-0">
+              <UButton
+                :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                size="xs"
+                variant="ghost"
+                :color="track.hidden ? 'warning' : 'neutral'"
+                :title="track.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide')"
+                @click="toggleTrackHidden(track.id)"
+              />
+              <UButton
+                :icon="track.locked ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+                size="xs"
+                variant="ghost"
+                :color="track.locked ? 'warning' : 'neutral'"
+                :title="track.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock')"
+                @click="toggleTrackLock(track.id)"
+              />
+              <UButton
+                v-if="track.type !== 'text'"
+                :icon="track.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+                size="xs"
+                variant="ghost"
+                :color="track.muted ? 'warning' : 'neutral'"
+                :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
+                @click="toggleTrackMute(track.id)"
+              />
             </div>
           </div>
         </div>
@@ -359,10 +651,7 @@ function onTracksScroll(e: Event) {
             class="absolute top-0 bottom-0 flex flex-col justify-end"
             :style="{ left: `${tick.left}px` }"
           >
-            <div
-              class="w-px bg-neutral-700"
-              :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'"
-            />
+            <div class="w-px bg-neutral-700" :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'" />
             <span
               v-if="tick.isMajor"
               class="absolute -top-0.5 left-1 text-[9px] font-mono text-neutral-500 select-none pointer-events-none"
@@ -370,12 +659,34 @@ function onTracksScroll(e: Event) {
               {{ tick.label }}
             </span>
           </div>
+
+          <!-- In/Out render zone tint + edge flags on the ruler -->
+          <div
+            v-if="renderZoneStyle"
+            class="absolute top-0 bottom-0 bg-primary/10 border-x border-primary/50 pointer-events-none"
+            :style="renderZoneStyle"
+          />
+          <div
+            v-if="markInStyle"
+            class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
+            :style="markInStyle"
+          >
+            <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">I</span>
+          </div>
+          <div
+            v-if="markOutStyle"
+            class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
+            :style="markOutStyle"
+          >
+            <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">O</span>
+          </div>
         </div>
 
         <!-- Tracks Canvas -->
         <div
           class="flex-1 flex flex-col divide-y divide-neutral-800/60 relative"
           :style="{ width: `${timelineWidth}px` }"
+          @mousedown="onTracksBackgroundMouseDown"
         >
           <!-- Red Vertical Playhead Line -->
           <div
@@ -400,6 +711,7 @@ function onTracksScroll(e: Event) {
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
             class="h-14 relative bg-neutral-900/40 hover:bg-neutral-800/20 transition-colors"
+            :class="track.hidden ? 'opacity-40' : ''"
           >
             <!-- Clips inside track -->
             <TmcutTimelineClip
@@ -407,10 +719,21 @@ function onTracksScroll(e: Event) {
               :key="clip.id"
               :track-type="track.type"
               :clip="clip"
+              :locked="!!track.locked"
             />
           </div>
+
+          <!-- In/Out render zone band across tracks (export zone) -->
+          <div
+            v-if="renderZoneStyle"
+            class="absolute top-0 bottom-0 bg-primary/5 border-x-2 border-primary/40 z-20 pointer-events-none"
+            :style="renderZoneStyle"
+          />
         </div>
       </div>
     </div>
+
+    <!-- Keyboard shortcuts help -->
+    <TmcutShortcutsModal v-model:open="shortcutsOpen" />
   </div>
 </template>

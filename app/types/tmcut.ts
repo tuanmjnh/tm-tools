@@ -50,7 +50,10 @@ export interface TmcutAsset {
   usedBy: string[]
   status: TmcutAssetStatus
   meta: TmcutAssetMeta
+  /** Single-frame cover (library grid). Desktop: cache file; web: source/dataURL. */
   thumbPath: string | null
+  /** 8-frame filmstrip for timeline clips (desktop only, null elsewhere). */
+  filmstripPath: string | null
   waveformPath: string | null
   addedAt: string
 }

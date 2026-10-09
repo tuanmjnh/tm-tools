@@ -89,7 +89,7 @@ function askDeleteTemplate(tpl: HubExportTemplate) {
 </script>
 
 <template>
-  <BasePage id="admin-export" :title="$t('admin.export.title')">
+  <BasePage id="admin-export" :title="$t('admin.export.title')" :description="$t('admin.export.description')">
     <template #right>
       <UButton
         :label="t('common.refresh')"

@@ -9,24 +9,24 @@ const { createProject } = useTmcutProject()
 const presets = computed(() => [
   {
     id: 'preset-shorts-vertical',
-    name: 'Vertical Shorts',
-    description: 'Canvas 1080x1920@30fps (TikTok, Reels, Shorts)',
+    name: t('tmcut.presets.shortsName'),
+    description: t('tmcut.presets.shortsDesc'),
     canvas: '1080x1920',
     fps: 30,
     icon: 'i-lucide-smartphone'
   },
   {
     id: 'preset-youtube-horizontal',
-    name: 'YouTube Ngang',
-    description: 'Canvas 1920x1080@30fps (16:9 YouTube)',
+    name: t('tmcut.presets.youtubeName'),
+    description: t('tmcut.presets.youtubeDesc'),
     canvas: '1920x1080',
     fps: 30,
     icon: 'i-lucide-monitor'
   },
   {
     id: 'preset-instagram-feed',
-    name: 'Instagram Feed Vuông',
-    description: 'Canvas 1080x1080@30fps (1:1 Social Feed)',
+    name: t('tmcut.presets.instagramName'),
+    description: t('tmcut.presets.instagramDesc'),
     canvas: '1080x1080',
     fps: 30,
     icon: 'i-lucide-square'
@@ -46,13 +46,7 @@ function applyPreset(preset: { canvas: string, name: string, fps: number }) {
 <template>
   <BasePage id="tmcut-templates" :title="t('nav.tmcut_templates')" :description="t('tmcut.templatesDesc')">
     <template #right>
-      <UButton
-        to="/tmcut"
-        icon="i-lucide-arrow-left"
-        variant="soft"
-        color="neutral"
-        size="sm"
-      >
+      <UButton to="/tmcut" icon="i-lucide-arrow-left" variant="soft" color="neutral" size="sm">
         <span class="hidden sm:inline">{{ t('tmcut.back') }}</span>
       </UButton>
     </template>
@@ -63,12 +57,9 @@ function applyPreset(preset: { canvas: string, name: string, fps: number }) {
         {{ t('tmcut.presetSizes') }}
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div
-          v-for="p in presets"
-          :key="p.id"
+        <div v-for="p in presets" :key="p.id"
           class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 bg-white dark:bg-neutral-900 flex flex-col justify-between hover:border-primary/50 transition cursor-pointer"
-          @click="applyPreset(p)"
-        >
+          @click="applyPreset(p)">
           <div class="space-y-3">
             <div class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
               <UIcon :name="p.icon" class="w-5 h-5" />

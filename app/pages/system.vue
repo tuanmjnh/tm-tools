@@ -4,28 +4,36 @@ const { t } = useI18n()
 const links = computed(() => [[{
   label: t('nav.general'),
   icon: 'i-lucide-user',
-  to: '/settings',
+  to: '/system',
   exact: true
 }, {
   label: t('nav.download_presets'),
   icon: 'i-lucide-download',
-  to: '/settings/downloads'
+  to: '/system/downloads'
 }, {
   label: t('nav.browsers'),
   icon: 'i-lucide-globe',
-  to: '/settings/browsers'
+  to: '/system/browsers'
 }, {
   label: t('nav.tools_binaries'),
   icon: 'i-lucide-wrench',
-  to: '/settings/tools'
+  to: '/system/tools'
+}, {
+  label: t('nav.connections'),
+  icon: 'i-lucide-plug',
+  to: '/system/connections'
 }, {
   label: t('nav.notifications'),
   icon: 'i-lucide-bell',
-  to: '/settings/notifications'
+  to: '/system/notifications'
 }, {
   label: t('nav.security'),
   icon: 'i-lucide-shield',
-  to: '/settings/security'
+  to: '/system/security'
+}, {
+  label: t('nav.members'),
+  icon: 'i-lucide-user-plus',
+  to: '/system/members'
 }], [{
   label: t('nav.documentation'),
   icon: 'i-lucide-book-open',
@@ -35,7 +43,7 @@ const links = computed(() => [[{
 </script>
 
 <template>
-  <BasePage id="settings" :title="t('nav.settings')">
+  <BasePage id="system" :title="t('nav.system')" :description="t('settings.description')">
     <template #toolbar>
       <UDashboardToolbar>
         <UNavigationMenu :items="links" highlight class="-mx-1 flex-1" />

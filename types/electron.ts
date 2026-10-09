@@ -522,6 +522,56 @@ export interface TmcutExtractResult {
   error?: string
 }
 
+export interface TmcutAnalyzeResult {
+  ok: boolean
+  stat?: { size: number, mtimeMs: number }
+  /** Raw ffprobe JSON (format + streams); normalized renderer-side. */
+  probe?: unknown
+  thumbCachePath?: string | null
+  /** 8-frame filmstrip for timeline clips (desktop only). */
+  filmstripCachePath?: string | null
+  waveCachePath?: string | null
+  error?: string
+}
+
+export interface TmcutAnalysisResult {
+  ok: boolean
+  /** Raw ffmpeg stderr; parsed renderer-side via core analysis module. */
+  log?: string
+  durationSec?: number
+  error?: string
+}
+
+export interface AiChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface AiCompleteInput {
+  provider?: string
+  apiKey?: string
+  baseUrl?: string
+  model?: string
+  task?: 'transcribe' | 'triage' | 'plan' | string
+  messages: AiChatMessage[]
+  maxTokens?: number
+  temperature?: number
+  jsonMode?: boolean
+}
+
+export interface AiCompleteResult {
+  content: string
+  usage: unknown
+  model: string
+  latencyMs: number
+}
+
+export interface AiGatewayNamespace {
+  complete(args: AiCompleteInput): Promise<{ ok: boolean, data?: AiCompleteResult, code?: string, error?: string }>
+  transcribe(args: { filePath: string, provider?: string, apiKey?: string, baseUrl?: string, model?: string, language?: string, format?: 'text' | 'verbose_json' }): Promise<{ ok: boolean, data?: { text: string, segments?: Array<{ start: number, end: number, text: string }> }, code?: string, error?: string }>
+  getStatus(): Promise<{ provider: string, baseUrl: string, model: string, hasKey: boolean, rpm: number, timeoutMs: number }>
+}
+
 export interface TmcutNamespace {
   getPaths(): Promise<TmcutDirs>
   readAssetsFile(): Promise<unknown>
@@ -541,6 +591,12 @@ export interface TmcutNamespace {
   statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
   extractThumbnail(args: { filePath: string }): Promise<TmcutExtractResult>
   extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
+  analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
+  analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
+  analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>
+  watchOutput(args: { filePath: string }): Promise<boolean>
+  unwatchOutput(args: { filePath: string }): Promise<boolean>
+  onRenderDone(callback: (payload: { filePath: string, size: number }) => void): () => void
 }
 
 export interface ProfileGroup {
@@ -696,6 +752,7 @@ export interface ElectronAPI {
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
   verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
+  openExternal(url: string): Promise<boolean>
   showItemInFolder(fullPath: string): Promise<boolean>
   send(channel: string, data?: unknown): void
   on(channel: string, callback: (...args: unknown[]) => void): void
@@ -703,6 +760,7 @@ export interface ElectronAPI {
     youtube: ToolsNamespace
     ffmpeg: ToolsNamespace
     profiles: ProfilesNamespace
+    aiGateway: AiGatewayNamespace
   }
   dialog: DialogNamespace
   fileManager: FileManagerNamespace

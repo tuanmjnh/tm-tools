@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
+import { useTmcutMedia } from '~/composables/useTmcutMedia'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   trackType: 'video' | 'text' | 'audio'
   clip: TmcutTimelineItem
-}>()
+  locked?: boolean
+}>(), {
+  locked: false
+})
 
-const { selectedClipId, selectClip, updateClip } = useTmcutProject()
-const { zoom } = useTmcutPlayback()
+const { selectedClipId, selectClip, updateClip, pushHistory, currentProject } = useTmcutProject()
+const { zoom, playhead } = useTmcutPlayback()
+const { findAssetBySrc, loadWaveform, mediaUrl } = useTmcutMedia()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
@@ -56,10 +61,89 @@ const trackStyles = computed(() => {
   }
 })
 
+// Video filmstrip: the cached strip (8 frames spread evenly
+// across the whole source, extracted once at import via the
+// tmcut IPC) is aligned to source time so each clip window
+// shows its own [in, out] slice instead of one repeated
+// frame, CapCut-style. The strip width maps the full source
+// duration to timeline pixels at the current zoom, so the
+// background offset equals the clip's source position.
+// Assets without a dedicated filmstrip (web session
+// thumbs, legacy records) reuse their cover still.
+const filmstripStyle = computed(() => {
+  if (props.trackType !== 'video' || !props.clip.src) return {}
+  const asset = findAssetBySrc(props.clip.src)
+  const strip = asset?.filmstripPath || asset?.thumbPath
+  if (!strip) return {}
+  const duration = asset.meta.durationSec || 0
+  if (duration <= 0) {
+    // No duration probed (web session assets): tile the still.
+    return {
+      backgroundImage: `url('${mediaUrl(strip)}')`,
+      backgroundRepeat: 'repeat-x',
+      backgroundSize: 'auto 100%',
+      backgroundPosition: 'left center'
+    }
+  }
+  const stripWidth = Math.max(1, Math.round(duration * zoom.value))
+  const offset = Math.round((props.clip.in || 0) * zoom.value)
+  return {
+    backgroundImage: `url('${mediaUrl(strip)}')`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: `${stripWidth}px 100%`,
+    backgroundPosition: `-${offset}px center`
+  }
+})
+
+// Audio waveform bars rendered inside the clip body.
+const wavePoints = ref<number[]>([])
+async function refreshWaveform() {
+  wavePoints.value = []
+  if (props.trackType !== 'audio' || !props.clip.src) return
+  const asset = findAssetBySrc(props.clip.src)
+  if (!asset?.waveformPath) return
+  wavePoints.value = await loadWaveform(asset)
+}
+onMounted(() => {
+  void refreshWaveform()
+})
+watch(() => props.clip.src, () => {
+  void refreshWaveform()
+})
+
+// Magnetic snap candidates (seconds): playhead + every other clip edge.
+function snapCandidates(): number[] {
+  const points = [0, playhead.value]
+  for (const track of currentProject.value?.timeline?.tracks || []) {
+    for (const item of track.items || []) {
+      if (item.id === props.clip.id) continue
+      const dur = (item.out - item.in) / (item.speed || 1)
+      points.push(item.offset || 0, (item.offset || 0) + dur)
+    }
+  }
+  return points
+}
+
+function applySnap(targetSec: number): number {
+  const threshold = 8 / zoom.value // 8px magnetic radius
+  let best = targetSec
+  let bestDist = threshold
+  for (const c of snapCandidates()) {
+    const dist = Math.abs(c - targetSec)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = c
+    }
+  }
+  return Math.max(0, Math.round(best * 100) / 100)
+}
+
 // Drag to move clip along timeline
 function onDragStart(e: MouseEvent) {
   if (e.button !== 0) return // Left click only
   selectClip(props.clip.id)
+  if (props.locked) return // Locked track: select only, no move
+  pushHistory()
 
   const startX = e.clientX
   const initialOffset = props.clip.offset || 0
@@ -67,8 +151,8 @@ function onDragStart(e: MouseEvent) {
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
     const deltaSec = deltaX / zoom.value
-    const newOffset = Math.max(0, initialOffset + deltaSec)
-    updateClip(props.clip.id, { offset: Math.round(newOffset * 100) / 100 })
+    const newOffset = applySnap(Math.max(0, initialOffset + deltaSec))
+    updateClip(props.clip.id, { offset: newOffset })
   }
 
   function onMouseUp() {
@@ -84,6 +168,8 @@ function onDragStart(e: MouseEvent) {
 function onTrimLeftStart(e: MouseEvent) {
   e.stopPropagation()
   selectClip(props.clip.id)
+  if (props.locked) return
+  pushHistory()
 
   const startX = e.clientX
   const initialIn = props.clip.in
@@ -118,6 +204,8 @@ function onTrimLeftStart(e: MouseEvent) {
 function onTrimRightStart(e: MouseEvent) {
   e.stopPropagation()
   selectClip(props.clip.id)
+  if (props.locked) return
+  pushHistory()
 
   const startX = e.clientX
   const initialOut = props.clip.out
@@ -147,13 +235,16 @@ function onTrimRightStart(e: MouseEvent) {
 <template>
   <div
     class="absolute top-1 bottom-1 rounded border cursor-move select-none flex items-center overflow-hidden transition-shadow text-xs group"
+    data-tmcut-clip
     :class="[
       isSelected ? trackStyles.activeBg : trackStyles.bg,
-      'border'
+      'border',
+      locked ? 'cursor-not-allowed opacity-70' : ''
     ]"
     :style="{
       left: `${clipLeft}px`,
-      width: `${clipWidth}px`
+      width: `${clipWidth}px`,
+      ...filmstripStyle
     }"
     @mousedown="onDragStart"
   >
@@ -175,6 +266,19 @@ function onTrimRightStart(e: MouseEvent) {
       <span class="ml-auto text-[9px] font-mono opacity-60 shrink-0">
         {{ duration.toFixed(1) }}s
       </span>
+    </div>
+
+    <!-- Audio waveform layer (behind content, CapCut-style) -->
+    <div
+      v-if="trackType === 'audio' && wavePoints.length > 0"
+      class="absolute inset-0 flex items-center justify-center opacity-50 pointer-events-none px-1"
+    >
+      <TmcutWaveform
+        :points="wavePoints"
+        :width="Math.max(20, Math.floor(clipWidth) - 4)"
+        :height="36"
+        color="#6ee7b7"
+      />
     </div>
 
     <!-- Right Trim Handle -->

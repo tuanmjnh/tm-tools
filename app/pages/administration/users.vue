@@ -223,7 +223,7 @@ const headerActions = computed<HeaderAction[]>(() => [
 </script>
 
 <template>
-  <BasePage id="admin-users" :title="$t('admin.usersTitle')">
+  <BasePage id="admin-users" :title="$t('admin.usersTitle')" :description="$t('admin.usersDesc')">
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />

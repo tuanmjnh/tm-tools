@@ -46,23 +46,14 @@ const handleBlur = () => {
 </script>
 
 <template>
-  <div
-    class="json-editor-container h-full min-h-0 flex flex-col"
-    :class="{ 'jse-theme-dark': colorMode.value === 'dark' }"
-  >
+  <div class="json-editor-container h-full min-h-0 flex flex-col"
+    :class="{ 'jse-theme-dark': colorMode.value === 'dark' }">
     <ClientOnly>
-      <JsonEditorVue
-        v-model="localValue"
-        :mode="mode || Mode.tree"
-        :read-only="readOnly"
-        class="flex-1 min-h-0"
-        :on-blur="handleBlur"
-        @update:model-value="onUpdate"
-      />
+      <JsonEditorVue v-model="localValue" :mode="mode || Mode.tree" :read-only="readOnly" class="flex-1 min-h-0"
+        :on-blur="handleBlur" @update:model-value="onUpdate" />
       <template #fallback>
         <div
-          class="h-full w-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-md border border-gray-200 dark:border-gray-700"
-        >
+          class="h-full w-full flex items-center justify-center bg-gray-100 dark:bg-gray-800 text-gray-500 rounded-md border border-gray-200 dark:border-gray-700">
           <UIcon name="i-lucide-loader-2" class="animate-spin mr-2" />
           {{ $t('common.loading') }}...
         </div>
@@ -71,7 +62,7 @@ const handleBlur = () => {
   </div>
 </template>
 
-<style>
+<style scoped>
 /* Ensure the editor takes the full height of the container */
 .json-editor-container {
   /* vanilla-jsoneditor CSS variables override for dark mode if needed */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { toURL } from '~/utils/ffmpegHelper'
 
 const props = defineProps<{
   filePath?: string
@@ -22,7 +23,8 @@ const isVideo = computed(() => {
 
 const mediaUrl = computed(() => {
   if (!props.filePath) return ''
-  return `media://?file=${encodeURIComponent(props.filePath.replace(/\\/g, '/'))}`
+  // Shared builder: local paths via media://, web blob:/http(s): passthrough
+  return toURL(props.filePath)
 })
 
 function showInFolder() {

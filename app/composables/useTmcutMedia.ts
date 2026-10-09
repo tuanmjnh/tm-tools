@@ -9,6 +9,8 @@ import {
 } from '~/utils/tmcut/media'
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
 import { useTmcutProject } from '~/composables/useTmcutProject'
+import { toURL } from '~/utils/ffmpegHelper'
+import { fnv1aHex, normalizeProbe } from '@tmcut-core'
 
 const ASSET_STORAGE_KEY = 'tmcut_assets_v1'
 
@@ -23,12 +25,10 @@ function tmcutIpc() {
   return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
 }
 
-function ffmpegApi() {
-  return typeof window !== 'undefined' ? window.electronAPI?.tools?.ffmpeg : undefined
-}
-
 function mediaUrl(filePath: string): string {
-  return `media://?file=${encodeURIComponent(normalizeMediaPath(filePath))}`
+  // Same URL builder as ToolsVideoFramePreview (tools/video.vue):
+  // local files are served through the privileged media://local protocol
+  return toURL(filePath)
 }
 
 export function useTmcutMedia() {
@@ -46,11 +46,35 @@ export function useTmcutMedia() {
 
   const analyzingCount = computed(() => projectAssets.value.filter(a => a.status === 'analyzing').length)
 
+  // All media paths currently referenced by timeline clips (normalized).
+  // Used for the CapCut-style "Added" badge in the media library.
+  const timelineSrcSet = computed(() => {
+    const set = new Set<string>()
+    for (const track of currentProject.value?.timeline?.tracks || []) {
+      for (const item of track.items || []) {
+        if (item.src) set.add(mediaFileKey(item.src))
+      }
+    }
+    return set
+  })
+
+  function findAssetBySrc(src?: string | null): TmcutAsset | undefined {
+    if (!src) return undefined
+    const key = mediaFileKey(src)
+    return assets.value.find(a => mediaFileKey(a.path) === key)
+  }
+
   async function loadLibrary() {
     if (libraryLoaded.value) return
     libraryLoaded.value = true
     const ipc = tmcutIpc()
-    if (ipc && !import.meta.server) {
+    // Web runtime is session-only: blob: URLs die on reload, so neither
+    // load nor persist the library here (see persistLibrary).
+    if (!ipc) {
+      assets.value = []
+      return
+    }
+    if (!import.meta.server) {
       try {
         const data = (await ipc.readAssetsFile()) as TmcutAsset[] | null
         if (Array.isArray(data) && data.length > 0) {
@@ -75,6 +99,8 @@ export function useTmcutMedia() {
   }
 
   function persistLibrary() {
+    // Web runtime is session-only (blob: URLs do not survive reload).
+    if (!tmcutIpc()) return
     try {
       localStorage.setItem(ASSET_STORAGE_KEY, JSON.stringify(assets.value))
     } catch (error) {
@@ -82,7 +108,12 @@ export function useTmcutMedia() {
     }
     const ipc = tmcutIpc()
     if (ipc) {
-      ipc.writeAssetsFile(assets.value).catch(() => {})
+      // Convert Vue reactive proxies to plain objects — Electron's
+      // structured clone algorithm cannot serialize reactive proxies
+      // ("An object could not be cloned"). Same pattern as
+      // useTmcutProject.persistProjectToDisk.
+      const plain = JSON.parse(JSON.stringify(assets.value)) as TmcutAsset[]
+      ipc.writeAssetsFile(plain).catch(() => {})
     }
   }
 
@@ -97,6 +128,7 @@ export function useTmcutMedia() {
       status: 'analyzing',
       meta: createEmptyTmcutAssetMeta(),
       thumbPath: null,
+      filmstripPath: null,
       waveformPath: null,
       addedAt: new Date().toISOString()
     }
@@ -104,44 +136,40 @@ export function useTmcutMedia() {
 
   async function analyzeAsset(asset: TmcutAsset) {
     const ipc = tmcutIpc()
-    const ffmpeg = ffmpegApi()
     try {
-      if (!ipc || !ffmpeg) {
+      if (!ipc || typeof ipc.analyzeAsset !== 'function') {
         asset.status = 'ready'
         asset.meta.probedAt = new Date().toISOString()
         return
       }
 
-      const stats = await ipc.statFiles([asset.path])
-      const stat = stats[asset.path]
-      if (!stat?.exists) {
+      // Single IPC round-trip (Phase 3 ElectronMediaRuntime pipeline);
+      // probe normalization stays renderer-side via @tmcut/core.
+      const result = await ipc.analyzeAsset({ filePath: asset.path, kind: asset.kind })
+      if (!result?.ok) {
         asset.status = 'missing'
         return
       }
-      asset.meta.fileSize = stat.size
-      asset.meta.mtimeMs = stat.mtimeMs
+      asset.meta.fileSize = result.stat?.size ?? 0
+      asset.meta.mtimeMs = result.stat?.mtimeMs ?? 0
 
       if (asset.kind === 'image') {
         asset.thumbPath = asset.path
       } else {
-        const probe = await ffmpeg.probeMedia(asset.path)
-        if (probe && (probe.duration > 0 || probe.width > 0)) {
-          asset.meta.durationSec = probe.duration || 0
-          asset.meta.width = probe.width || 0
-          asset.meta.height = probe.height || 0
-          asset.meta.fps = probe.fps || 0
+        const meta = normalizeProbe(result.probe)
+        if (meta && (meta.durationSec > 0 || meta.width > 0)) {
+          asset.meta.durationSec = meta.durationSec
+          asset.meta.width = meta.width
+          asset.meta.height = meta.height
+          asset.meta.fps = meta.fps
         }
 
-        if (asset.kind === 'video') {
-          const thumb = await ipc.extractThumbnail({ filePath: asset.path })
-          if (thumb?.ok && thumb.cachePath) {
-            asset.thumbPath = thumb.cachePath
-          }
-        } else {
-          const wave = await ipc.extractWaveform({ filePath: asset.path, buckets: 200 })
-          if (wave?.ok && wave.cachePath) {
-            asset.waveformPath = wave.cachePath
-          }
+        if (asset.kind === 'video' && result.thumbCachePath) {
+          asset.thumbPath = result.thumbCachePath
+          asset.filmstripPath = result.filmstripCachePath || null
+        }
+        if (asset.kind === 'audio' && result.waveCachePath) {
+          asset.waveformPath = result.waveCachePath
         }
       }
 
@@ -153,34 +181,171 @@ export function useTmcutMedia() {
     }
   }
 
-  async function importFiles(paths: string[]): Promise<number> {
+  async function importFiles(paths: string[]): Promise<{ added: number, duplicates: number, failed: number }> {
     importError.value = null
-    const seen = new Set(assets.value.map(a => mediaFileKey(a.path)))
+    // Global registry keyed by path. The library grid
+    // only shows assets linked to the current project
+    // (usedBy), so a file imported under another
+    // project is invisible here but still matches the
+    // dedup key — relink it (CapCut-style: one asset,
+    // many projects) instead of rejecting it.
+    const registry = new Map<string, TmcutAsset>()
+    for (const a of assets.value) {
+      const key = mediaFileKey(a.path)
+      if (key && !registry.has(key)) registry.set(key, a)
+    }
+    const projectId = currentProject.value?.id
     const fresh: string[] = []
+    const processed = new Set<string>()
+    let duplicates = 0
+    let relinked = 0
     for (const p of paths) {
       if (typeof p !== 'string') continue
       const key = mediaFileKey(p)
-      if (!key || seen.has(key)) continue
+      if (!key || processed.has(key)) continue
+      processed.add(key)
+      const existing = registry.get(key)
+      if (existing) {
+        if (projectId && !existing.usedBy.includes(projectId)) {
+          existing.usedBy.push(projectId)
+          relinked++
+        } else {
+          duplicates++
+        }
+        continue
+      }
       const kind = classifyAssetKind(p)
       if (!kind) continue
-      seen.add(key)
       fresh.push(p)
     }
-    if (fresh.length === 0) return 0
-
-    importing.value = true
-    let added = 0
-    for (const p of fresh) {
-      const kind = classifyAssetKind(p)
-      if (!kind) continue
-      const asset = buildAsset(p, kind)
-      assets.value.unshift(asset)
-      await analyzeAsset(asset)
-      if (asset.status !== 'missing') added++
+    let added = relinked
+    let failed = 0
+    if (fresh.length > 0) {
+      importing.value = true
+      for (const p of fresh) {
+        const kind = classifyAssetKind(p)
+        if (!kind) continue
+        const asset = buildAsset(p, kind)
+        assets.value.unshift(asset)
+        await analyzeAsset(asset)
+        // 'error' (analysis threw) must not count as
+        // success — surface it as a failed import.
+        if (asset.status === 'missing' || asset.status === 'error') failed++
+        else added++
+      }
+      importing.value = false
     }
-    importing.value = false
     persistLibrary()
-    return added
+    return { added, duplicates, failed }
+  }
+
+  // Probe duration of a blob: URL via a temporary media element (web only).
+  function probeWebMedia(url: string, kind: TmcutAssetKind): Promise<number> {
+    return new Promise((resolve) => {
+      try {
+        const el = kind === 'audio' ? new Audio() : document.createElement('video')
+        el.preload = 'metadata'
+        el.onloadedmetadata = () => resolve(Number.isFinite(el.duration) ? el.duration : 0)
+        el.onerror = () => resolve(0)
+        el.src = url
+        setTimeout(() => resolve(0), 15000)
+      } catch {
+        resolve(0)
+      }
+    })
+  }
+
+  // Capture a video frame as a dataURL thumbnail (web only, best-effort).
+  // Blob: URLs are same-origin so the canvas stays untainted.
+  function captureVideoThumb(url: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (result: string | null) => {
+        if (settled) return
+        settled = true
+        resolve(result)
+      }
+      try {
+        const video = document.createElement('video')
+        video.muted = true
+        video.preload = 'auto'
+        video.onloadeddata = () => {
+          try {
+            video.currentTime = Math.min(0.5, (video.duration || 1) / 2)
+          } catch {
+            finish(null)
+          }
+        }
+        video.onseeked = () => {
+          try {
+            const canvas = document.createElement('canvas')
+            const scale = 320 / (video.videoWidth || 320)
+            canvas.width = 320
+            canvas.height = Math.max(2, Math.round((video.videoHeight || 180) * scale))
+            const ctx = canvas.getContext('2d')
+            if (!ctx) {
+              finish(null)
+              return
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+            finish(canvas.toDataURL('image/jpeg', 0.7))
+          } catch {
+            finish(null)
+          }
+        }
+        video.onerror = () => finish(null)
+        setTimeout(() => finish(null), 15000)
+        video.src = url
+      } catch {
+        finish(null)
+      }
+    })
+  }
+
+  // Web-runtime import: File objects -> blob: URL assets with probed
+  // duration and captured thumbnails. Session-only (see loadLibrary).
+  // Returns the created records.
+  async function importWebFiles(files: File[]): Promise<TmcutAsset[]> {
+    importError.value = null
+    const created: TmcutAsset[] = []
+    if (files.length === 0) return created
+    importing.value = true
+    try {
+      const seen = new Set(assets.value.map(a => `web:${a.name.toLowerCase()}:${a.meta.fileSize}`))
+      for (const file of files) {
+        const kind = classifyAssetKind(file.name)
+        if (!kind) continue
+        const fingerprint = `web:${file.name.toLowerCase()}:${file.size}`
+        if (seen.has(fingerprint)) continue
+        seen.add(fingerprint)
+        const url = URL.createObjectURL(file)
+        const asset = buildAsset(url, kind)
+        asset.name = file.name
+        asset.meta.fileSize = file.size
+        assets.value.unshift(asset)
+        if (kind !== 'image') {
+          const duration = await probeWebMedia(url, kind)
+          if (duration > 0) asset.meta.durationSec = Math.round(duration * 100) / 100
+        }
+        if (kind === 'video') {
+          const thumb = await captureVideoThumb(url)
+          if (thumb) asset.thumbPath = thumb
+        } else if (kind === 'image') {
+          // The image file is its own thumbnail —
+          // mirrors the desktop pipeline, which points
+          // thumbPath at the source file. Without this
+          // the library grid shows the placeholder
+          // icon instead of the image.
+          asset.thumbPath = url
+        }
+        asset.status = 'ready'
+        asset.meta.probedAt = new Date().toISOString()
+        created.push(asset)
+      }
+    } finally {
+      importing.value = false
+    }
+    return created
   }
 
   async function checkMissing() {
@@ -201,6 +366,38 @@ export function useTmcutMedia() {
           changed = true
         }
       }
+      // Cache-key migration (cover + filmstrip layout):
+      // records analyzed under the retired schemes still
+      // point at the old single-file thumbnail. Re-analyze
+      // them so cover / filmstrip / waveform regenerate
+      // under the current layout (one ffmpeg pass per
+      // asset, then the names match and this becomes a
+      // no-op).
+      for (const asset of assets.value) {
+        if (asset.status !== 'ready') continue
+        const stat = stats[asset.path]
+        if (!stat || !stat.exists) continue
+        const key = fnv1aHex(`v2:${mediaFileKey(asset.path)}:${stat.mtimeMs}:${stat.size}`)
+        if (asset.kind === 'video') {
+          const coverName = asset.thumbPath?.split(/[\\/]/).pop()
+          const stripName = asset.filmstripPath?.split(/[\\/]/).pop()
+          const coverStale = !asset.thumbPath || coverName !== `${key}-cover.png`
+          const stripStale = !asset.filmstripPath || stripName !== `${key}-strip.png`
+          if (coverStale || stripStale) {
+            asset.thumbPath = null
+            asset.filmstripPath = null
+            changed = true
+            void analyzeAsset(asset).then(() => persistLibrary())
+          }
+        } else if (asset.kind === 'audio') {
+          const waveName = asset.waveformPath?.split(/[\\/]/).pop()
+          if (asset.waveformPath && waveName !== `${key}.json`) {
+            asset.waveformPath = null
+            changed = true
+            void analyzeAsset(asset).then(() => persistLibrary())
+          }
+        }
+      }
       if (changed) persistLibrary()
     } catch (error) {
       console.error('Failed to verify media files:', error)
@@ -216,6 +413,7 @@ export function useTmcutMedia() {
     if (kind && kind !== asset.kind) {
       asset.kind = kind
       asset.thumbPath = null
+      asset.filmstripPath = null
       asset.waveformPath = null
     }
     asset.path = normalizeMediaPath(newPath)
@@ -234,6 +432,17 @@ export function useTmcutMedia() {
   function removeAsset(assetId: string) {
     assets.value = assets.value.filter(a => a.id !== assetId)
     persistLibrary()
+  }
+
+  /** Link an asset to a project (marks "Added", persists registry). */
+  function linkAssetToProject(assetId: string, projectId: string): boolean {
+    const asset = assets.value.find(a => a.id === assetId)
+    if (!asset) return false
+    if (!asset.usedBy.includes(projectId)) {
+      asset.usedBy.push(projectId)
+      persistLibrary()
+    }
+    return true
   }
 
   function addAssetToTimeline(assetId: string): boolean {
@@ -294,12 +503,18 @@ export function useTmcutMedia() {
     isDesktop,
     loadLibrary,
     importFiles,
+    importWebFiles,
+    probeWebMedia,
+    captureVideoThumb,
     checkMissing,
     relink,
     removeAsset,
+    linkAssetToProject,
     addAssetToTimeline,
     loadWaveform,
     getThumbUrl,
-    mediaUrl
+    mediaUrl,
+    timelineSrcSet,
+    findAssetBySrc
   }
 }

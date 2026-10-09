@@ -56,6 +56,7 @@ async function browse() {
       return
     }
     const picked = await pickFile({ title: props.title, filters: props.filters, defaultPath: model.value })
+
     if (typeof picked === 'string' && picked) {
       model.value = picked
       emit('select', picked)
@@ -67,53 +68,20 @@ async function browse() {
 </script>
 
 <template>
-  <UInput
-    v-model="model"
-    :placeholder="placeholder"
-    :size="size"
-    :disabled="disabled"
-    :readonly="readonly"
-    class="w-full"
-    :ui="{ trailing: 'pe-0.5' }"
-  >
+  <UInput v-model="model" :placeholder="placeholder" :size="size" :disabled="disabled" :readonly="readonly"
+    class="w-full" :ui="{ trailing: 'pe-0.5' }">
     <template #trailing>
       <div class="flex items-center gap-0.5">
         <!-- Reset/Default Button -->
-        <UButton
-          v-if="defaultValue !== undefined && model !== defaultValue"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          icon="i-lucide-rotate-ccw"
-          :title="t('global.reset')"
-          :aria-label="t('global.reset')"
-          :disabled="disabled"
-          @click="model = defaultValue"
-        />
+        <UButton v-if="defaultValue !== undefined && model !== defaultValue" color="neutral" variant="ghost" size="sm"
+          icon="i-lucide-rotate-ccw" :title="t('global.reset')" :aria-label="t('global.reset')" :disabled="disabled"
+          @click="model = defaultValue" />
         <!-- Clear Button -->
-        <UButton
-          v-if="showClear && model"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          icon="i-lucide-x"
-          :title="t('global.clear')"
-          :aria-label="t('global.clear')"
-          :disabled="disabled"
-          @click="model = ''"
-        />
+        <UButton v-if="showClear && model" color="neutral" variant="ghost" size="sm" icon="i-lucide-x"
+          :title="t('global.clear')" :aria-label="t('global.clear')" :disabled="disabled" @click="model = ''" />
         <!-- Browse Button -->
-        <UButton
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          icon="i-lucide-folder-open"
-          :title="t('tools.browse')"
-          :aria-label="t('tools.browse')"
-          :disabled="disabled || !isElectron"
-          :loading="loading"
-          @click="browse"
-        />
+        <UButton color="neutral" variant="ghost" size="sm" icon="i-lucide-folder-open" :title="t('tools.browse')"
+          :aria-label="t('tools.browse')" :disabled="disabled || !isElectron" :loading="loading" @click="browse" />
       </div>
     </template>
   </UInput>

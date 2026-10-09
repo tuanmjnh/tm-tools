@@ -58,8 +58,7 @@ const headerActions = computed<HeaderAction[]>(() => [
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div
           class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-linear-to-br from-primary/5 to-transparent hover:border-primary/50 cursor-pointer transition"
-          @click="handleNewProject"
-        >
+          @click="handleNewProject">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <UIcon name="i-lucide-smartphone" class="w-5 h-5" />
@@ -77,8 +76,7 @@ const headerActions = computed<HeaderAction[]>(() => [
 
         <div
           class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-linear-to-br from-primary/5 to-transparent hover:border-primary/50 cursor-pointer transition"
-          @click="handleNewProject"
-        >
+          @click="handleNewProject">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <UIcon name="i-lucide-monitor" class="w-5 h-5" />
@@ -96,8 +94,7 @@ const headerActions = computed<HeaderAction[]>(() => [
 
         <div
           class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-linear-to-br from-primary/5 to-transparent hover:border-primary/50 cursor-pointer transition"
-          @click="router.push('/tmcut/autocut')"
-        >
+          @click="router.push('/tmcut/autocut')">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               <UIcon name="i-lucide-sparkles" class="w-5 h-5" />
@@ -123,10 +120,8 @@ const headerActions = computed<HeaderAction[]>(() => [
           <span class="text-xs text-neutral-500">{{ projects.length }} {{ t('tmcut.project') }}</span>
         </div>
 
-        <div
-          v-if="projects.length === 0"
-          class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-12 text-center"
-        >
+        <div v-if="projects.length === 0"
+          class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-12 text-center">
           <UIcon name="i-lucide-film" class="w-12 h-12 text-neutral-400 mx-auto mb-3" />
           <h3 class="text-base font-medium text-neutral-900 dark:text-neutral-100">
             {{ t('tmcut.noProjects') }}
@@ -134,27 +129,18 @@ const headerActions = computed<HeaderAction[]>(() => [
           <p class="text-sm text-neutral-500 max-w-sm mx-auto mt-1 mb-4">
             {{ t('tmcut.noProjectsDesc') }}
           </p>
-          <UButton
-            color="primary"
-            variant="solid"
-            icon="i-lucide-plus"
-            @click="handleNewProject"
-          >
+          <UButton color="primary" variant="solid" icon="i-lucide-plus" @click="handleNewProject">
             {{ t('tmcut.createFirstProject') }}
           </UButton>
         </div>
 
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div
-            v-for="project in projects"
-            :key="project.id"
+          <div v-for="project in projects" :key="project.id"
             class="group border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden bg-white dark:bg-neutral-900 hover:border-primary/50 transition cursor-pointer flex flex-col"
-            @click="openProject(project.id)"
-          >
+            @click="openProject(project.id)">
             <!-- Thumbnail -->
             <div
-              class="aspect-video bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center relative overflow-hidden"
-            >
+              class="aspect-video bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center relative overflow-hidden">
               <img v-if="project.cover" :src="project.cover" class="w-full h-full object-cover">
               <UIcon v-else name="i-lucide-film" class="w-10 h-10 text-neutral-400" />
               <div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] bg-black/70 text-white font-mono">
@@ -173,14 +159,8 @@ const headerActions = computed<HeaderAction[]>(() => [
                 </p>
               </div>
 
-              <UButton
-                icon="i-lucide-trash"
-                size="xs"
-                variant="soft"
-                color="error"
-                :title="t('tmcut.deleteProject')"
-                @click.stop="deleteProject(project.id)"
-              />
+              <UButton icon="i-lucide-trash" size="xs" variant="soft" color="error" :title="t('tmcut.deleteProject')"
+                @click.stop="deleteProject(project.id)" />
             </div>
           </div>
         </div>

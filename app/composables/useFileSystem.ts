@@ -81,6 +81,39 @@ export function useFileSystem() {
     return picked
   }
 
+  // Browser fallback for file picking (web runtime, no Electron dialog).
+  // Returns real File objects; callers create object URLs for preview.
+  async function pickWebFiles(extensions: string[] = [], multiple = true): Promise<File[]> {
+    if (typeof document === 'undefined') return []
+    return new Promise((resolve) => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      if (multiple) input.multiple = true
+      if (extensions.length > 0) {
+        input.accept = extensions.map(ext => `.${String(ext).replace(/^\./, '')}`).join(',')
+      }
+      input.style.display = 'none'
+      document.body.appendChild(input)
+      let done = false
+      const finish = (files: File[]) => {
+        if (done) return
+        done = true
+        window.removeEventListener('focus', onFocus, true)
+        setTimeout(() => input.remove(), 1000)
+        resolve(files)
+      }
+      // Dialog cancelled: window regains focus with no files chosen.
+      const onFocus = () => {
+        setTimeout(() => {
+          if (!done && (!input.files || input.files.length === 0)) finish([])
+        }, 500)
+      }
+      window.addEventListener('focus', onFocus, true)
+      input.onchange = () => finish(input.files ? Array.from(input.files) : [])
+      input.click()
+    })
+  }
+
   // ===== File read/write =====
   async function readText(filePath: string, encoding = 'utf-8'): Promise<string> {
     return fileApi()?.read(filePath, encoding) ?? ''
@@ -199,6 +232,7 @@ export function useFileSystem() {
     selectSaveFile,
     pickFile,
     pickFolder,
+    pickWebFiles,
     readText,
     writeText,
     appendText,

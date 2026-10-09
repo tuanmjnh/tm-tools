@@ -1,7 +1,8 @@
-const { app, BrowserWindow, Menu, ipcMain, protocol, net } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, protocol } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
+const { Readable } = require('node:stream')
 const { pathToFileURL } = require('url')
 const { registerYoutubeController } = require('./tools/youtube.controller.cjs')
 const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
@@ -10,6 +11,7 @@ const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
+const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 
 let initializePlatform
 try {
@@ -151,6 +153,54 @@ async function createWindow() {
     win.show()
   })
 
+  // Handle window.open() calls - allow popups for OAuth flows
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // Allow OAuth providers (Google, etc.) to open in Electron popup
+    // so the session cookie is preserved for the callback validation
+    const allowedOAuthHosts = [
+      'accounts.google.com',
+      'github.com',
+      'login.microsoftonline.com'
+    ]
+    try {
+      const parsed = new URL(url)
+      if (allowedOAuthHosts.some(host => parsed.hostname.includes(host))) {
+        // Open OAuth URLs in Electron popup (shares session cookies)
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            width: 540,
+            height: 680,
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              webSecurity: false
+            }
+          }
+        }
+      }
+      // Other external URLs → system browser
+      if (url.startsWith('http') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
+        const { shell } = require('electron')
+        shell.openExternal(url).catch(() => {})
+        return { action: 'deny' }
+      }
+    } catch { /* ignore URL parse errors */ }
+    // Internal URLs → new window
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 540,
+        height: 680,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: false
+        }
+      }
+    }
+  })
+
   registerAppUpdaterController(win)
   registerProfilesController(win)
 
@@ -224,6 +274,20 @@ ipcMain.handle('open-path', async (event, fullPath) => {
   return false
 })
 
+ipcMain.handle('open-external', async (_event, url) => {
+  const { shell } = require('electron')
+  try {
+    // Validate URL format
+    if (!url || typeof url !== 'string') return false
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false
+    await shell.openExternal(url)
+    return true
+  } catch {
+    return false
+  }
+})
+
 ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
   const { shell } = require('electron')
   const exists = fullPath && fs.existsSync(fullPath)
@@ -233,6 +297,99 @@ ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
     return true
   }
   return false
+})
+
+// Watch-folder for render outputs (TMCut export, docs section 65.4).
+// Watches the output directory and notifies the renderer once the file
+// appears and stays stable (2s idle), so the export modal can toast +
+// offer instant preview without polling.
+const outputWatchers = new Map()
+
+function stopOutputWatcher(key) {
+  const entry = outputWatchers.get(key)
+  if (!entry) return
+  outputWatchers.delete(key)
+  try {
+    if (entry.timer) clearTimeout(entry.timer)
+  } catch {
+    // ignore
+  }
+  try {
+    entry.watcher.close()
+  } catch {
+    // ignore
+  }
+}
+
+function notifyRenderDone(filePath) {
+  let size = 0
+  try {
+    size = fs.statSync(filePath).size
+  } catch {
+    // ignore
+  }
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('tmcut:renderDone', { filePath, size })
+  }
+}
+
+function readOutputStat(key) {
+  try {
+    const stat = fs.statSync(key)
+    return { mtimeMs: stat.mtimeMs, size: stat.size }
+  } catch {
+    return null
+  }
+}
+
+function scheduleRenderNotify(key) {
+  const entry = outputWatchers.get(key)
+  if (!entry) return
+  const current = readOutputStat(key)
+  if (!current || current.size === 0) return
+  // Ignore the stale file that already existed when watching started.
+  if (current.mtimeMs === entry.baseMtime && current.size === entry.baseSize) return
+  try {
+    if (entry.timer) clearTimeout(entry.timer)
+  } catch {
+    // ignore
+  }
+  entry.timer = setTimeout(() => {
+    const latest = readOutputStat(key)
+    stopOutputWatcher(key)
+    if (latest && latest.size > 0) notifyRenderDone(key)
+  }, 2000)
+}
+
+ipcMain.handle('tmcut:watch-output', (_event, { filePath }) => {
+  if (typeof filePath !== 'string' || !filePath) return false
+  const key = path.normalize(filePath)
+  stopOutputWatcher(key)
+  const dir = path.dirname(key)
+  const base = path.basename(key)
+  try {
+    if (!fs.existsSync(dir)) return false
+    const baseline = readOutputStat(key)
+    const watcher = fs.watch(dir, (eventType, filename) => {
+      if (filename && filename !== base) return
+      scheduleRenderNotify(key)
+    })
+    watcher.on('error', () => stopOutputWatcher(key))
+    outputWatchers.set(key, {
+      watcher,
+      timer: null,
+      baseMtime: baseline ? baseline.mtimeMs : -1,
+      baseSize: baseline ? baseline.size : -1
+    })
+    return true
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('tmcut:unwatch-output', (_event, { filePath }) => {
+  stopOutputWatcher(typeof filePath === 'string' ? path.normalize(filePath) : '')
+  return true
 })
 
 ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
@@ -245,7 +402,46 @@ ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
   }
 })
 
+// Content types served by the media:// protocol, keyed by extension.
+// The Chromium media pipeline selects its demuxer from Content-Type,
+// so a missing header breaks playback of some containers.
+const MEDIA_CONTENT_TYPES = {
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska', '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo', '.flv': 'video/x-flv',
+  '.wmv': 'video/x-ms-wmv', '.3gp': 'video/3gpp',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg', '.m4a': 'audio/mp4', '.flac': 'audio/flac',
+  '.aac': 'audio/aac', '.opus': 'audio/ogg',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+  '.tif': 'image/tiff', '.tiff': 'image/tiff', '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml'
+}
+
+function mediaContentTypeFor(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase()
+  return MEDIA_CONTENT_TYPES[ext] || 'application/octet-stream'
+}
+
+// File stream for the media protocol. The 'error' listener
+// is mandatory: an unhandled 'error' event on a Node stream
+// (file locked or deleted between stat and read, requests
+// aborted mid-scrub) would throw an uncaught exception and
+// take down the main process. Readable.toWeb surfaces the
+// failure to the consumer as a broken response body instead.
+function diskStream(filePath, start, end) {
+  const stream = fs.createReadStream(filePath, { start, end })
+  stream.on('error', () => {
+    // surfaced via the web stream as a response error
+  })
+  return stream
+}
+
 app.whenReady().then(() => {
+  if (process.platform === 'win32') {
+    app.setAppUserModelId(process.execPath)
+  }
   protocol.handle('media', async (request) => {
     try {
       let filePath = ''
@@ -267,13 +463,71 @@ app.whenReady().then(() => {
         return new Response('File not found: ' + (filePath || 'empty path'), { status: 404 })
       }
       const stat = fs.statSync(filePath)
-      if (stat.size === 0) {
-        return new Response(new Uint8Array(0), {
+      if (!stat.isFile()) {
+        return new Response('Not a file: ' + filePath, { status: 404 })
+      }
+
+      const fileSize = stat.size
+      const contentType = mediaContentTypeFor(filePath)
+      const baseHeaders = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes' }
+
+      if (request.method === 'HEAD') {
+        return new Response(null, {
           status: 200,
-          headers: { 'Content-Type': 'video/mp4', 'Content-Length': '0' }
+          headers: { ...baseHeaders, 'Content-Length': String(fileSize) }
         })
       }
-      return await net.fetch(pathToFileURL(filePath).toString())
+
+      if (fileSize === 0) {
+        return new Response(new Uint8Array(0), {
+          status: 200,
+          headers: { ...baseHeaders, 'Content-Length': '0' }
+        })
+      }
+
+      // Serve the file straight from disk with HTTP Range support
+      // (206 Partial Content). The media pipeline seeks by issuing
+      // Range requests; a plain 200 without `Accept-Ranges` stalls
+      // seeks beyond the initially buffered window, which froze the
+      // preview whenever the playhead was dragged off 00:00.
+      // (net.fetch(file://) cannot forward Range headers, so the
+      // file is streamed directly instead.)
+      const rangeHeader = request.headers.get('range')
+      const rangeMatch = rangeHeader ? /bytes=(\d*)-(\d*)/.exec(rangeHeader) : null
+
+      if (rangeMatch) {
+        let start = rangeMatch[1] ? Number(rangeMatch[1]) : 0
+        let end = rangeMatch[2] ? Number(rangeMatch[2]) : fileSize - 1
+        if (!Number.isFinite(start) || start < 0) start = 0
+        if (!Number.isFinite(end) || end >= fileSize) end = fileSize - 1
+        if (!rangeMatch[1] && rangeMatch[2]) {
+          // Suffix range ("bytes=-N"): the final N bytes.
+          const suffixLength = Math.min(end, fileSize)
+          start = fileSize - suffixLength
+          end = fileSize - 1
+        }
+        if (start > end || start >= fileSize) {
+          return new Response('Range not satisfiable', {
+            status: 416,
+            headers: { 'Content-Range': `bytes */${fileSize}` }
+          })
+        }
+        const stream = Readable.toWeb(diskStream(filePath, start, end))
+        return new Response(stream, {
+          status: 206,
+          headers: {
+            ...baseHeaders,
+            'Content-Length': String(end - start + 1),
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`
+          }
+        })
+      }
+
+      const stream = Readable.toWeb(diskStream(filePath, 0, fileSize - 1))
+      return new Response(stream, {
+        status: 200,
+        headers: { ...baseHeaders, 'Content-Length': String(fileSize) }
+      })
     } catch (err) {
       return new Response(String(err), { status: 500 })
     }
@@ -284,6 +538,7 @@ app.whenReady().then(() => {
   registerDialogController()
   registerFileManagerController()
   registerTmcutController()
+  registerAiGateway()
   if (typeof initializePlatform === 'function') {
     initializePlatform()
   }

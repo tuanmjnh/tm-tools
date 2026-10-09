@@ -52,7 +52,8 @@ export default defineNuxtConfig({
   },
 
   alias: {
-    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url))
+    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
+    '@tmcut-core': fileURLToPath(new URL('../tmcut-core/src/index.mjs', import.meta.url))
   },
 
   build: {
@@ -79,6 +80,13 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   vite: {
+    server: {
+      // @tmcut-core lives outside the project root (sibling package);
+      // allow Vite dev to serve it. Bundled at build time, so prod is unaffected.
+      fs: {
+        allow: [fileURLToPath(new URL('../tmcut-core', import.meta.url))]
+      }
+    },
     ssr: {
       external: [
         'mongoose',
@@ -105,6 +113,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: {
         '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
+        '@tmcut-core': fileURLToPath(new URL('../tmcut-core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

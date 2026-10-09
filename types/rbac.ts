@@ -1,4 +1,13 @@
-export type PermissionAction = 'read' | 'write' | 'delete' | 'manage' | '*'
+export type PermissionAction =
+  | 'read'
+  | 'create'
+  | 'update'
+  | 'write'
+  | 'delete'
+  | 'send'
+  | 'manage'
+  | 'rotateSecret'
+  | '*'
 
 export interface ModulePermission {
   module: string
@@ -15,6 +24,7 @@ export interface SystemRoute {
   isVisible: boolean
   parentId?: string | null
   isDeleted?: boolean
+  requiredPermission?: string | null
   createdAt: string
   updatedAt: string
 }

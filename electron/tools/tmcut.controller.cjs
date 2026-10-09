@@ -1,7 +1,6 @@
 const { ipcMain, app } = require('electron')
 const fs = require('fs')
 const path = require('path')
-const crypto = require('crypto')
 const { spawn } = require('child_process')
 const { getToolsBinaries } = require('./paths.cjs')
 
@@ -75,9 +74,24 @@ function toPosix(p) {
   return String(p || '').replace(/\\/g, '/')
 }
 
+function fnv1aHex(text) {
+  const input = String(text || '')
+  let hash = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+// Portable cache key (mirror of @tmcut/core src/cache.mjs — keep in sync).
+// Replaces the old sha1 scheme so Electron and future Web runtimes share
+// one layout (docs sections 27-28). Stale sha1-named files are simply
+// orphaned cache and regenerate on demand. The `v2:` prefix marks the
+// filmstrip thumbnail format (8 frames) — bump to regenerate old stills.
 function cacheKeyFor(filePath, stat) {
-  const raw = `${toPosix(filePath)}:${stat.mtimeMs}:${stat.size}`
-  return crypto.createHash('sha1').update(raw).digest('hex')
+  const raw = `v2:${toPosix(filePath).toLowerCase()}:${stat.mtimeMs}:${stat.size}`
+  return fnv1aHex(raw)
 }
 
 function runFfmpeg(args, timeoutMs) {
@@ -93,7 +107,11 @@ function runFfmpeg(args, timeoutMs) {
     let chunk = Buffer.alloc(0)
     let stderr = ''
     const timer = setTimeout(() => {
-      try { child.kill() } catch { /* ignore */ }
+      try {
+        child.kill()
+      } catch {
+        // ignore
+      }
     }, timeoutMs)
     child.stdout.on('data', (data) => {
       chunk = Buffer.concat([chunk, data])
@@ -143,26 +161,73 @@ async function extractThumbnail(filePath) {
   const stat = getFileStat(filePath)
   if (!stat.exists) return { ok: false, error: 'File not found' }
   const key = cacheKeyFor(filePath, stat)
-  const out = path.join(getDirs().thumbs, `${key}.png`)
-  if (fs.existsSync(out)) {
-    return { ok: true, cachePath: toPosix(out) }
+  // Two artifacts per video: a single-frame COVER
+  // for the media-library grid and an 8-frame
+  // FILMSTRIP for timeline clips. Separate files
+  // keep the library thumb a plain image instead
+  // of a cropped filmstrip (the earlier scheme
+  // reused one filmstrip file for both, which
+  // showed all 8 stitched frames in the grid).
+  const coverOut = path.join(getDirs().thumbs, `${key}-cover.png`)
+  const stripOut = path.join(getDirs().thumbs, `${key}-strip.png`)
+  if (fs.existsSync(coverOut) && fs.existsSync(stripOut)) {
+    return { ok: true, cachePath: toPosix(coverOut), filmstripPath: toPosix(stripOut) }
   }
   const duration = await probeDuration(filePath)
-  const seek = duration > 0 ? Math.min(0.5, duration * 0.25) : 0
-  const args = [
-    '-y', '-hide_banner', '-loglevel', 'error',
-    '-ss', String(seek),
-    '-i', filePath,
-    '-frames:v', '1',
-    '-vf', 'scale=320:-2',
-    '-q:v', '5',
-    out
-  ]
+  const frameCount = 8
+  let args
+  if (duration > 0) {
+    // One decode, two outputs: the cover still
+    // (seeked to skip black intro frames) and
+    // the filmstrip spread evenly across the
+    // whole source duration.
+    const seek = Math.min(0.5, duration * 0.25)
+    const fps = (frameCount / duration).toFixed(5)
+    args = [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-ss', String(seek),
+      '-i', filePath,
+      '-map', '0:v:0',
+      '-frames:v', '1',
+      '-vf', 'scale=320:-2',
+      '-q:v', '5',
+      coverOut,
+      '-map', '0:v:0',
+      '-frames:v', '1',
+      '-vf', `fps=${fps},scale=160:-2,tile=${frameCount}x1`,
+      '-q:v', '5',
+      stripOut
+    ]
+  } else {
+    // Duration unknown: cover + a single-frame
+    // strip, so the cache layout is always
+    // complete (the timeline tiles it, same as
+    // web session assets).
+    args = [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-ss', '0.5',
+      '-i', filePath,
+      '-map', '0:v:0',
+      '-frames:v', '1',
+      '-vf', 'scale=320:-2',
+      '-q:v', '5',
+      coverOut,
+      '-map', '0:v:0',
+      '-frames:v', '1',
+      '-vf', 'scale=160:-2',
+      '-q:v', '5',
+      stripOut
+    ]
+  }
   const res = await runFfmpeg(args, 60 * 1000)
-  if (!res.ok || !fs.existsSync(out)) {
+  if (!res.ok || !fs.existsSync(coverOut)) {
     return { ok: false, error: res.error || 'Thumbnail extraction failed' }
   }
-  return { ok: true, cachePath: toPosix(out) }
+  return {
+    ok: true,
+    cachePath: toPosix(coverOut),
+    filmstripPath: fs.existsSync(stripOut) ? toPosix(stripOut) : null
+  }
 }
 
 async function extractWaveform(filePath, buckets = 200) {
@@ -219,10 +284,173 @@ async function extractWaveform(filePath, buckets = 200) {
   return { ok: true, cachePath: toPosix(out), buckets: peaks, durationSec }
 }
 
+// Full ffprobe JSON (format + streams). Raw output only — normalization
+// stays in @tmcut/core (normalizeProbe) per the runtime-adapter rule.
+function probeMediaJson(filePath) {
+  return new Promise((resolve) => {
+    let child = null
+    try {
+      const exe = getToolsBinaries().ffprobe
+      child = spawn(exe, [
+        '-v', 'quiet',
+        '-print_format', 'json',
+        '-show_format',
+        '-show_streams',
+        filePath
+      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch {
+      resolve(null)
+      return
+    }
+    let out = ''
+    let exited = false
+    const timer = setTimeout(() => {
+      if (child && !exited) {
+        exited = true
+        child.kill()
+        resolve(null)
+      }
+    }, 60 * 1000)
+    child.stdout.on('data', (data) => {
+      out += data.toString()
+    })
+    child.on('error', () => {
+      if (exited) return
+      exited = true
+      clearTimeout(timer)
+      resolve(null)
+    })
+    child.on('close', (code) => {
+      if (exited) return
+      exited = true
+      clearTimeout(timer)
+      if (code !== 0) {
+        resolve(null)
+        return
+      }
+      try {
+        resolve(JSON.parse(out))
+      } catch {
+        resolve(null)
+      }
+    })
+  })
+}
+
+// Run ffmpeg and capture stderr text (scene/silence detectors log there).
+// Returns { code, log }. Parsing stays in @tmcut/core (analysis module).
+function runFfmpegLog(args, timeoutMs) {
+  return new Promise((resolve) => {
+    let child = null
+    try {
+      const exe = getToolsBinaries().ffmpeg
+      child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch {
+      resolve({ code: -1, log: '' })
+      return
+    }
+    let log = ''
+    let exited = false
+    const timer = setTimeout(() => {
+      if (child && !exited) {
+        exited = true
+        child.kill()
+        resolve({ code: -1, log })
+      }
+    }, timeoutMs)
+    child.stderr.on('data', (data) => {
+      log += data.toString()
+    })
+    child.on('error', () => {
+      if (exited) return
+      exited = true
+      clearTimeout(timer)
+      resolve({ code: -1, log })
+    })
+    child.on('close', (code) => {
+      if (exited) return
+      exited = true
+      clearTimeout(timer)
+      resolve({ code: code === null ? -1 : code, log })
+    })
+  })
+}
+
+// Shot detection: lavfi scene filter + showinfo. Returns raw log +
+// duration; the renderer parses cuts via core parseSceneOutput.
+async function analyzeScenes(filePath, threshold) {
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const score = Number.isFinite(threshold) && threshold > 0 && threshold < 1 ? threshold : 0.4
+  const probe = await probeMediaJson(filePath)
+  const durationSec = probe && probe.format ? Number(probe.format.duration) || 0 : await probeDuration(filePath)
+  const { code, log } = await runFfmpegLog([
+    '-hide_banner',
+    '-i', filePath,
+    '-vf', `select='gt(scene,${score})',showinfo`,
+    '-vsync', '0',
+    '-f', 'null', '-'
+  ], 10 * 60 * 1000)
+  if (code !== 0) return { ok: false, error: 'Scene detection failed' }
+  return { ok: true, log, durationSec }
+}
+
+// Silence detection for speech/silence segmentation (podcast/vlog).
+async function analyzeSilence(filePath, noiseDb, minDuration) {
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const noise = Number.isFinite(noiseDb) ? noiseDb : -30
+  const minDur = Number.isFinite(minDuration) && minDuration > 0 ? minDuration : 0.5
+  const probe = await probeMediaJson(filePath)
+  const durationSec = probe && probe.format ? Number(probe.format.duration) || 0 : await probeDuration(filePath)
+  const { code, log } = await runFfmpegLog([
+    '-hide_banner',
+    '-i', filePath,
+    '-af', `silencedetect=noise=${noise}dB:d=${minDur}`,
+    '-vn', '-sn', '-dn',
+    '-f', 'null', '-'
+  ], 10 * 60 * 1000)
+  if (code !== 0) return { ok: false, error: 'Silence detection failed' }
+  return { ok: true, log, durationSec }
+}
+
+// Single-call media analysis pipeline (Phase 3 ElectronMediaRuntime):
+// stat + probe + thumbnail/waveform in one IPC round-trip. The renderer
+// normalizes `probe` with core normalizeProbe and persists the record.
+async function analyzeAsset(filePath, kind) {
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const result = {
+    ok: true,
+    stat: { size: stat.size, mtimeMs: stat.mtimeMs },
+    probe: null,
+    thumbCachePath: null,
+    filmstripCachePath: null,
+    waveCachePath: null
+  }
+  if (kind === 'image') return result
+  try {
+    result.probe = await probeMediaJson(filePath)
+  } catch {
+    result.probe = null
+  }
+  if (kind === 'video') {
+    const thumb = await extractThumbnail(filePath)
+    if (thumb && thumb.ok && thumb.cachePath) {
+      result.thumbCachePath = thumb.cachePath
+      result.filmstripCachePath = thumb.filmstripPath || null
+    }
+  } else if (kind === 'audio') {
+    const wave = await extractWaveform(filePath, 200)
+    if (wave && wave.ok && wave.cachePath) result.waveCachePath = wave.cachePath
+  }
+  return result
+}
+
 function listProjectFiles() {
   ensureDirs()
   const dir = getDirs().projects
-  let entries = []
+  let entries
   try {
     entries = fs.readdirSync(dir)
   } catch {
@@ -248,7 +476,7 @@ function listProjectFiles() {
 function listSnapshots(id) {
   ensureDirs()
   const dir = getDirs().snapshots
-  let entries = []
+  let entries
   try {
     entries = fs.readdirSync(dir)
   } catch {
@@ -427,6 +655,21 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
     return extractWaveform(filePath, buckets)
+  })
+
+  ipcMain.handle(`${moduleName}:analyzeAsset`, async (_event, { filePath, kind }) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
+    return analyzeAsset(filePath, kind)
+  })
+
+  ipcMain.handle(`${moduleName}:analyzeScenes`, async (_event, { filePath, threshold }) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
+    return analyzeScenes(filePath, threshold)
+  })
+
+  ipcMain.handle(`${moduleName}:analyzeSilence`, async (_event, { filePath, noiseDb, minDuration }) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
+    return analyzeSilence(filePath, noiseDb, minDuration)
   })
 }
 

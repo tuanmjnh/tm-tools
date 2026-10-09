@@ -1,3 +1,5 @@
+// Strangler (roadmap Phase 1): canonical implementation lives in @tmcut/core
+// (pure, unit-tested). Types stay here; existing import paths preserved.
 export type TmcutRecoveryDecision = 'none' | 'suggest' | 'force'
 
 export interface TmcutRecoveryInput {
@@ -7,10 +9,4 @@ export interface TmcutRecoveryInput {
   projectMtimeMs: number
 }
 
-export function decideRecovery(input: TmcutRecoveryInput): TmcutRecoveryDecision {
-  if (!input.hasRecovery || input.recoveryUpdatedAtMs === null) return 'none'
-  if (Number.isNaN(input.recoveryUpdatedAtMs)) return 'none'
-  if (!input.hasProject) return 'force'
-  if (!Number.isFinite(input.projectMtimeMs)) return 'suggest'
-  return input.recoveryUpdatedAtMs > input.projectMtimeMs ? 'suggest' : 'none'
-}
+export { decideRecovery } from '@tmcut-core'

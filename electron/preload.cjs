@@ -60,6 +60,11 @@ const profiles = exposeNamespace('tools:profiles', {
   ]
 })
 
+const aiGateway = exposeNamespace('tools:ai-gateway', {
+  invoke: ['complete', 'transcribe', 'getStatus'],
+  on: []
+})
+
 const dialog = exposeNamespace('tools:dialog', {
   invoke: ['openFile', 'openFolder', 'saveFile'],
   on: []
@@ -71,9 +76,11 @@ const tmcut = exposeNamespace('tmcut', {
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractWaveform'
+    'statFiles', 'extractThumbnail', 'extractWaveform', 'analyzeAsset',
+    'analyzeScenes', 'analyzeSilence',
+    'watchOutput', 'unwatchOutput'
   ],
-  on: []
+  on: ['renderDone']
 })
 
 const fileManager = exposeNamespace('tools:file-manager', {
@@ -116,12 +123,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setConfig: values => ipcRenderer.invoke('set-config', values),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
+  openExternal: url => ipcRenderer.invoke('open-external', url),
   showItemInFolder: fullPath => ipcRenderer.invoke('show-item-in-folder', fullPath),
   send: (channel, data) => ipcRenderer.send(channel, data),
   on: (channel, callback) => {
     ipcRenderer.on(channel, (event, ...args) => callback(...args))
   },
-  tools: { youtube, ffmpeg, profiles },
+  tools: { youtube, ffmpeg, profiles, aiGateway },
   dialog,
   fileManager,
   tmcut,
@@ -129,7 +137,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),
     openDirectory: input => ipcRenderer.invoke('system:openDirectory', input),
-    getStorageUsage: () => ipcRenderer.invoke('system:getStorageUsage')
+    getStorageUsage: () => ipcRenderer.invoke('system:getStorageUsage'),
+    showNotification: options => ipcRenderer.invoke('system:showNotification', options)
   },
   browser: {
     list: () => ipcRenderer.invoke('browser:list'),

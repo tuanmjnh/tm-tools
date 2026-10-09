@@ -550,7 +550,7 @@ onMounted(async () => {
         </template>
         <template #description>
           <div class="mt-2">
-            <UButton size="xs" color="error" variant="soft" to="/settings/tools">
+            <UButton size="xs" color="error" variant="soft" to="/system/tools">
               {{ t('nav.goTo') }} {{ t('settings.toolsBinaries') }}
             </UButton>
           </div>
