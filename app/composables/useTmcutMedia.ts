@@ -445,7 +445,8 @@ export function useTmcutMedia() {
     return true
   }
 
-  function addAssetToTimeline(assetId: string): boolean {
+  /** `offset` places the clip at that time (drop on timeline); omitted = append at the end. `trackId` targets a specific compatible track. */
+  function addAssetToTimeline(assetId: string, options?: { offset?: number, trackId?: string }): boolean {
     const asset = assets.value.find(a => a.id === assetId)
     const project = currentProject.value
     if (!asset || !project) return false
@@ -466,8 +467,9 @@ export function useTmcutMedia() {
       src: asset.path,
       in: 0,
       out: Math.round(duration * 100) / 100,
-      speed: 1
-    })
+      speed: 1,
+      offset: options?.offset
+    }, options?.trackId)
     if (clip) persistLibrary()
     return !!clip
   }

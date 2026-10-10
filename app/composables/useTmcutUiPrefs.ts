@@ -4,17 +4,26 @@ import { ref, watch } from 'vue'
 // choice survives reloads (single editor instance — module-level state
 // mirrors the pattern used by useTmcutPlayback).
 const STORAGE_KEY = 'tmcut.shortcutTips'
+const SNAP_STORAGE_KEY = 'tmcut.magnet'
 const shortcutTips = ref(true)
 // Shared shortcuts-help modal state: opened from the timeline toolbar,
 // the editor header button, or Ctrl+K / ? — one instance everywhere.
 const shortcutsOpen = ref(false)
+// Magnetic snap toggle (Magnet toolbar button / N key) — default on so
+// behavior matches the always-snap editor shipped before the toggle.
+const snapOn = ref(true)
 
 if (import.meta.client && typeof window !== 'undefined') {
   const stored = window.localStorage.getItem(STORAGE_KEY)
   if (stored !== null) shortcutTips.value = stored === '1'
+  const storedSnap = window.localStorage.getItem(SNAP_STORAGE_KEY)
+  if (storedSnap !== null) snapOn.value = storedSnap === '1'
 
   watch(shortcutTips, (value) => {
     window.localStorage.setItem(STORAGE_KEY, value ? '1' : '0')
+  })
+  watch(snapOn, (value) => {
+    window.localStorage.setItem(SNAP_STORAGE_KEY, value ? '1' : '0')
   })
 }
 
@@ -24,5 +33,5 @@ export function useTmcutUiPrefs() {
     return shortcutTips.value ? `${label} (${keys})` : label
   }
 
-  return { shortcutTips, shortcutsOpen, tip }
+  return { shortcutTips, shortcutsOpen, snapOn, tip }
 }

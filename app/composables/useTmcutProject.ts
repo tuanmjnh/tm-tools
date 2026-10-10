@@ -2,6 +2,8 @@ import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform } from '~/utils/tmcut/canvas'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
+  addTrack,
+  removeTrack,
   copyClips,
   pasteClips,
   duplicateClips,
@@ -11,7 +13,18 @@ import {
   ticksToSec,
   v1TracksToV3,
   syncV3Result,
-  expandRelated
+  expandRelated,
+  addMarker,
+  removeMarker,
+  trimClip,
+  groupClips,
+  ungroupClips,
+  insertClipRipple,
+  closeGaps,
+  v1ClipToV3,
+  canApplyTransition,
+  applyTransition,
+  clearTransition
 } from '@tmcut-core'
 import type { CoreClipboard, TmcutTimeline } from '@tmcut-core'
 
@@ -43,8 +56,13 @@ export interface TmcutTimelineItem {
   focusY?: number
   cropRect?: TmcutCropRect
   effects?: Array<{ type: string, params: Record<string, unknown> }>
-  keyframes?: Array<{ t: number, prop: string, value: number }>
+  /** Keyframes: animated prop values (t in ticks; easing drives the
+      segment to the NEXT keyframe). Export renders them in a later R
+      item — until then the UI must label keyframes preview-only. */
+  keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
   transitionIn?: { type: string, duration: number }
+  /** Fade in/out audio envelope (t in TICKS; core C12). */
+  fade?: { in: number, out: number }
 }
 
 export interface TmcutTrack {
@@ -57,10 +75,21 @@ export interface TmcutTrack {
   items: TmcutTimelineItem[]
 }
 
+/** Ruler marker (roadmap B5) — structurally identical to the core type. */
+export interface TmcutMarker {
+  id: string
+  /** Timeline position in ticks (TICKS_PER_SECOND). */
+  at: number
+  label?: string
+  color?: string
+}
+
 export interface TmcutProjectTimeline {
   version: number
   tracks: TmcutTrack[]
   durationMs: number
+  /** Ruler markers — read/written in place by the core marker ops. */
+  markers?: TmcutMarker[]
 }
 
 export interface TmcutProject {
@@ -149,7 +178,8 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
         { id: 't-video-1', type: 'video', name: 'Video 1', items: [] },
         { id: 't-audio-1', type: 'audio', name: 'Audio 1', items: [] }
       ],
-      durationMs: 0
+      durationMs: 0,
+      markers: []
     },
     settings: {
       resolution: '1920x1080',
@@ -167,14 +197,22 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
 function applyProjectMigration(project: TmcutProject) {
   project.canvas = normalizeCanvas(project.canvas)
   ensureDefaultTracks(project)
+  // Pre-B5 projects were saved without a markers array (core addMarker
+  // throws on a missing array), so backfill it during migration.
+  if (!Array.isArray(project.timeline.markers)) {
+    project.timeline.markers = []
+  }
 }
 
 function ensureDefaultTracks(project: TmcutProject) {
   if (!project.timeline) {
-    project.timeline = { version: 1, tracks: [], durationMs: 0 }
+    project.timeline = { version: 1, tracks: [], durationMs: 0, markers: [] }
   }
   if (!project.timeline.tracks) {
     project.timeline.tracks = []
+  }
+  if (!Array.isArray(project.timeline.markers)) {
+    project.timeline.markers = []
   }
   const hasText = project.timeline.tracks.some(t => t.type === 'text')
   const hasVideo = project.timeline.tracks.some(t => t.type === 'video')
@@ -403,6 +441,56 @@ function createProject(name: string = 'Untitled Project'): TmcutProject {
   return newProject
 }
 
+// Rename a project from the dashboard. The project does not need to be
+// the open one: on desktop the new name is written straight to disk, on
+// the web session it stays in memory (same rule as saveProject).
+async function renameProject(projectId: string, name: string) {
+  const project = projects.value.find(p => p.id === projectId)
+  const clean = String(name || '').trim()
+  if (!project || !clean) return
+  project.name = clean
+  project.updated_at = new Date().toISOString()
+
+  if (currentProject.value?.id === projectId) {
+    currentProject.value.name = clean
+    saveProject()
+    return
+  }
+
+  const ipc = tmcutIpc()
+  if (ipc) {
+    try {
+      await ipc.writeProject({ id: projectId, data: JSON.parse(JSON.stringify(project)) })
+    } catch (error) {
+      console.error('Failed to rename project on disk:', error)
+    }
+  }
+}
+
+// Duplicate a project from the dashboard (full deep copy with a new id).
+// The copy suffix is passed in by the caller — module-scope composable
+// code has no vue-i18n instance (useI18n only works inside setup).
+function duplicateProject(projectId: string, copySuffix = 'copy'): TmcutProject | null {
+  const source = projects.value.find(p => p.id === projectId)
+  if (!source) return null
+  const clone: TmcutProject = JSON.parse(JSON.stringify(source))
+  clone.id = Math.random().toString(36).slice(2, 10)
+  clone.name = `${source.name} (${copySuffix})`
+  clone.created_at = new Date().toISOString()
+  clone.updated_at = clone.created_at
+  projects.value.unshift(clone)
+
+  const ipc = tmcutIpc()
+  if (ipc) {
+    try {
+      void ipc.writeProject({ id: clone.id, data: JSON.parse(JSON.stringify(clone)) })
+    } catch (error) {
+      console.error('Failed to persist duplicated project:', error)
+    }
+  }
+  return clone
+}
+
 // Delete project
 async function deleteProject(projectId: string) {
   if (!import.meta.server) {
@@ -432,12 +520,19 @@ function selectClip(clipId: string | null) {
 }
 
 // Add a clip to a track
-function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Partial<TmcutTimelineItem>) {
+function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Partial<TmcutTimelineItem>, trackId?: string) {
   if (!currentProject.value) return null
   ensureDefaultTracks(currentProject.value)
   pushHistory()
-
-  let track = currentProject.value.timeline.tracks.find(t => t.type === trackType)
+  // Optional explicit target (timeline drop, Roadmap A4): only honored
+  // when the id belongs to the matching track type, otherwise fall back
+  // to the first track of the desired type (or create one below).
+  let track = trackId
+    ? currentProject.value.timeline.tracks.find(t => t.id === trackId && t.type === trackType)
+    : undefined
+  if (!track) {
+    track = currentProject.value.timeline.tracks.find(t => t.type === trackType)
+  }
   if (!track) {
     track = { id: `t-${trackType}-${Date.now()}`, type: trackType, name: trackType, items: [] }
     currentProject.value.timeline.tracks.push(track)
@@ -480,10 +575,61 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
     transitionIn: partialItem.transitionIn
   }
 
+  // Ripple insert (roadmap B9, core C2): with ripple mode ON, dropping
+  // a clip ON TOP of existing content becomes an INSERT edit — the new
+  // clip lands at the target and every later clip on the track shifts
+  // right by its duration. Drops into empty gaps keep the plain
+  // overlay behaviour, like CapCut's insert mode. History was already
+  // pushed above, so the bridge runs with skipHistory.
+  const durationSec = (outPoint - inPoint) / speed
+  const collides = track.items.some((i) => {
+    const start = i.offset || 0
+    const end = start + (i.out - i.in) / (i.speed || 1)
+    return start < offset + durationSec && end > offset
+  })
+  if (rippleMode.value && collides) {
+    const rippleId = `clip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const v3Partial = v1ClipToV3({ ...newItem, id: rippleId }, trackType)
+    const result = applyV3Edit(v3 => insertClipRipple(v3, trackType, v3Partial, secToTicks(offset)), { skipHistory: true })
+    if (result) {
+      selectedClipId.value = result.clip.id
+      return currentProject.value.timeline.tracks
+        .flatMap(t => t.items || [])
+        .find(i => i.id === result.clip.id) ?? null
+    }
+    // A locked target track refuses the bridge insert; fall through to
+    // the plain overlay path so the drop never silently vanishes.
+  }
+
   track.items.push(newItem)
   selectedClipId.value = newItem.id
   saveProject()
   return newItem
+}
+
+// Close gaps (roadmap B9 — core C2): pull every unlocked track
+// together. A cheap v1 pre-scan avoids pushing a no-op history entry
+// when there is nothing to close; returns the seconds closed.
+function closeProjectGaps(): number {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return 0
+  let hasGap = false
+  for (const track of tracks) {
+    if (track.locked) continue
+    const sorted = [...(track.items || [])].sort((a, b) => (a.offset || 0) - (b.offset || 0))
+    let cursor = 0
+    for (const item of sorted) {
+      const start = item.offset || 0
+      if (start > cursor) {
+        hasGap = true
+        break
+      }
+      cursor = Math.max(cursor, start + (item.out - item.in) / (item.speed || 1))
+    }
+    if (hasGap) break
+  }
+  if (!hasGap) return 0
+  return applyV3Edit(v3 => closeGaps(v3)) ?? 0
 }
 
 // Update clip
@@ -530,11 +676,13 @@ function expandedSelectionIds(): string[] {
 }
 
 /** Run a core op on a converted v3 copy, then merge results back by id. */
-function applyV3Edit<T>(operate: (v3: TmcutTimeline) => T): T | null {
+function applyV3Edit<T>(operate: (v3: TmcutTimeline) => T, options?: { skipHistory?: boolean }): T | null {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return null
   const v3 = v1TracksToV3(tracks)
-  pushHistory()
+  // Callers that already pushed history (multi-step gestures) pass
+  // skipHistory so one user action stays ONE undo entry.
+  if (!options?.skipHistory) pushHistory()
   const result = operate(v3)
   syncV3Result(tracks, v3)
   saveProject()
@@ -589,14 +737,121 @@ function rippleDeleteSelected(acrossTracks = false): boolean {
   return true
 }
 
-function snapTimeSec(targetSec: number, playheadSec: number): number {
+function snapTimeSec(
+  targetSec: number,
+  playheadSec: number,
+  options?: { ignoreIds?: string[], thresholdSec?: number }
+): number {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return targetSec
   const v3 = v1TracksToV3(tracks)
+  // Roadmap B5: real markers join the snap candidates — core snapTime
+  // reads timeline.markers, but v1TracksToV3 always starts it empty.
+  v3.markers = ensureMarkers()
   return ticksToSec(snapTime(v3, Math.round(secToTicks(targetSec)), {
-    playheadTicks: Math.round(secToTicks(playheadSec))
+    playheadTicks: Math.round(secToTicks(playheadSec)),
+    ignoreIds: options?.ignoreIds,
+    thresholdTicks: options?.thresholdSec !== undefined
+      ? Math.round(secToTicks(options.thresholdSec))
+      : undefined
   }))
 }
+
+// ---- Ruler markers (roadmap B5) ----
+// Core marker ops mutate a timeline's `markers` array in place. The app
+// wraps them with pushHistory + saveProject itself (applyV3Edit only
+// bridges TRACKS between the v1 project model and the v3 DSL) and hands
+// core a minimal { markers } shim — the array reference is shared with
+// project state, so changes show up in the UI immediately.
+function ensureMarkers(): TmcutMarker[] {
+  const timeline = currentProject.value?.timeline
+  if (!timeline) return []
+  if (!Array.isArray(timeline.markers)) timeline.markers = []
+  return timeline.markers
+}
+
+function markerShim(): TmcutTimeline {
+  return { version: 3, tracks: [], markers: ensureMarkers() }
+}
+
+/** Reactive view of the project's ruler markers (empty array when none. */
+const timelineMarkers = computed<TmcutMarker[]>(() => ensureMarkers())
+
+/** Drop a marker at the given timeline position (seconds). */
+function addMarkerAt(timeSec: number): boolean {
+  if (!currentProject.value) return false
+  ensureMarkers()
+  pushHistory()
+  addMarker(markerShim(), Math.max(0, Math.round(secToTicks(timeSec))))
+  saveProject()
+  return true
+}
+
+/** Rename / recolor a marker. Returns false when the id is unknown. */
+function updateMarker(markerId: string, patch: { label?: string, color?: string }): boolean {
+  const marker = ensureMarkers().find(m => m.id === markerId)
+  if (!marker) return false
+  pushHistory()
+  if (patch.label !== undefined) marker.label = patch.label
+  if (patch.color !== undefined) marker.color = patch.color
+  saveProject()
+  return true
+}
+
+/** Delete a marker by id. Returns false when the id is unknown. */
+function removeMarkerById(markerId: string): boolean {
+  if (!ensureMarkers().some(m => m.id === markerId)) return false
+  pushHistory()
+  const removed = removeMarker(markerShim(), markerId)
+  saveProject()
+  return removed
+}
+
+// ===== Transitions (roadmap B3 / core C5) =====
+// `transitionIn.duration` is stored in TICKS inside the v1 seconds model —
+// the v1compat bridge passes the field through untouched (like keyframes).
+// Applying shifts the clip left so its head overlaps the neighbor's tail;
+// clearing restores the original cut. Validation always runs BEFORE the
+// history push so a refused request leaves no stray undo entry.
+
+/** Read-only transition validation for the clip context menu. */
+function checkClipTransition(clipId: string, type: string, durationSec: number): { ok: boolean, reason?: string } {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return { ok: false, reason: 'no-neighbor' }
+  const check = canApplyTransition(v1TracksToV3(tracks), clipId, type, Math.round(secToTicks(durationSec)))
+  return check.ok ? { ok: true } : { ok: false, reason: check.reason ?? 'no-neighbor' }
+}
+
+/** Apply a transition (core C5) — one undo entry per successful call. */
+function applyClipTransition(clipId: string, type: string, durationSec: number): { ok: boolean, reason?: string } {
+  const check = checkClipTransition(clipId, type, durationSec)
+  if (!check.ok) return check
+  const ticks = Math.round(secToTicks(durationSec))
+  const applied = applyV3Edit(v3 => applyTransition(v3, clipId, type, ticks))
+  return applied === true ? { ok: true } : { ok: false, reason: 'no-neighbor' }
+}
+
+/** Remove a transition and restore the original cut position. */
+function clearClipTransition(clipId: string): boolean {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return false
+  // Probe on a throwaway conversion first — a refusal pushes no history.
+  if (!clearTransition(v1TracksToV3(tracks), clipId)) return false
+  return applyV3Edit(v3 => clearTransition(v3, clipId)) === true
+}
+
+/** Clips carrying a transition — drives the export honesty badge. */
+const timelineTransitionCount = computed(() => {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return 0
+  let count = 0
+  for (const track of tracks) {
+    for (const item of track.items || []) {
+      if ((item.transitionIn?.duration ?? 0) > 0) count++
+    }
+  }
+  return count
+})
 
 // Re-point all clips that reference an old media path (media relink)
 function updateClipsSrc(oldSrc: string, newSrc: string): number {
@@ -652,6 +907,10 @@ function splitClip(clipId: string, splitTime: number): boolean {
       out: originalOut,
       offset: splitTime
     }
+    // The tail's incoming neighbor changed (roadmap B3): the inherited
+    // transition only ever described the ORIGINAL pair (the first half
+    // keeps it — its start still touches the previous clip).
+    delete secondClip.transitionIn
 
     track.items.splice(idx + 1, 0, secondClip)
     selectedClipId.value = secondClip.id
@@ -660,6 +919,133 @@ function splitClip(clipId: string, splitTime: number): boolean {
   }
 
   return false
+}
+
+// Keyboard trim (roadmap B7): cut the selected clip's in/out edge to a
+// timeline position (seconds) via the core trimClip through the v1↔v3
+// bridge. The playhead must sit INSIDE the clip with the same 0.1s
+// margin splitClip uses, so the core never has to clamp the source
+// boundary and no over-extension past the source can happen.
+function trimSelectedEdgeAt(edge: 'in' | 'out', timeSec: number): boolean {
+  const id = selectedClipId.value
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!id || !tracks) return false
+  for (const track of tracks) {
+    const clip = track.items?.find(i => i.id === id)
+    if (!clip) continue
+    if (track.locked) return false
+    const speed = clip.speed || 1
+    const start = clip.offset
+    const end = start + (clip.out - clip.in) / speed
+    if (timeSec <= start + 0.1 || timeSec >= end - 0.1) return false
+    const sourceTicks = Math.round(secToTicks(clip.in + (timeSec - start) * speed))
+    return applyV3Edit(v3 => trimClip(v3, id, edge, sourceTicks)) === true
+  }
+  return false
+}
+
+// ---- Groups & linked pairs (roadmap B4, core C9) ----
+// The app selection is single-clip, so both operations work on the
+// EXPANDED selection (the clip plus its group/link relatives).
+
+/** Unlocked members of the expanded selection (core also skips locks). */
+function expandedUnlockedIds(): string[] {
+  const wanted = new Set(expandedSelectionIds())
+  const ids: string[] = []
+  for (const track of currentProject.value?.timeline?.tracks || []) {
+    if (track.locked) continue
+    for (const item of track.items || []) {
+      if (wanted.has(item.id)) ids.push(item.id)
+    }
+  }
+  return ids
+}
+
+/** Group the expanded selection (Ctrl+G). False when it cannot reach 2. */
+function groupSelection(): boolean {
+  const ids = expandedUnlockedIds()
+  if (ids.length < 2) return false
+  return typeof applyV3Edit(v3 => groupClips(v3, ids)) === 'string'
+}
+
+/** Dissolve the group of the expanded selection (Ctrl+Shift+G). */
+function ungroupSelection(): boolean {
+  const tracks = currentProject.value?.timeline?.tracks
+  const ids = expandedUnlockedIds()
+  if (!tracks || ids.length === 0) return false
+  const hasGroup = tracks.some(track => !track.locked
+    && (track.items || []).some(item => ids.includes(item.id) && item.groupId))
+  if (!hasGroup) return false
+  return (applyV3Edit(v3 => ungroupClips(v3, ids)) ?? 0) > 0
+}
+
+/**
+ * Link / unlink the selected clip to every clip overlapping it in time
+ * on other tracks (Ctrl+L toggles). Returns 'linked' | 'unlinked' |
+ * 'none' (nothing overlapping or selection locked) for honest toasts.
+ */
+function toggleLinkSelection(): 'linked' | 'unlinked' | 'none' {
+  const tracks = currentProject.value?.timeline?.tracks
+  const id = selectedClipId.value
+  if (!tracks || !id) return 'none'
+  let clip: TmcutTimelineItem | undefined
+  let locked = false
+  for (const track of tracks) {
+    const item = track.items?.find(i => i.id === id)
+    if (item) {
+      clip = item
+      locked = !!track.locked
+      break
+    }
+  }
+  if (!clip || locked) return 'none'
+  const start = clip.offset || 0
+  const end = start + (clip.out - clip.in) / (clip.speed || 1)
+  const overlaps: TmcutTimelineItem[] = []
+  for (const track of tracks) {
+    if (track.locked) continue
+    for (const item of track.items || []) {
+      if (item.id === id) continue
+      const itemStart = item.offset || 0
+      const itemEnd = itemStart + (item.out - item.in) / (item.speed || 1)
+      if (itemStart < end && itemEnd > start) overlaps.push(item)
+    }
+  }
+  if (overlaps.length === 0) return 'none'
+  // Toggle: when the clip and every overlap already share one linkId,
+  // Ctrl+L breaks the pair instead of minting a new link.
+  const current = clip.linkId
+  if (current && overlaps.every(o => o.linkId === current)) {
+    pushHistory()
+    clip.linkId = null
+    for (const overlap of overlaps) overlap.linkId = null
+    saveProject()
+    return 'unlinked'
+  }
+  pushHistory()
+  const linkId = `link_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  clip.linkId = linkId
+  for (const overlap of overlaps) overlap.linkId = linkId
+  saveProject()
+  return 'linked'
+}
+
+/**
+ * Relative offsets (id → offset) of the expanded selection WITHOUT the
+ * given clip — the drag handler carries them along so grouped/linked
+ * clips travel together (roadmap B4). Locked tracks are excluded.
+ */
+function relatedOffsetsFor(clipId: string): Record<string, number> {
+  const wanted = new Set(expandedSelectionIds())
+  wanted.delete(clipId)
+  const out: Record<string, number> = {}
+  for (const track of currentProject.value?.timeline?.tracks || []) {
+    if (track.locked) continue
+    for (const item of track.items || []) {
+      if (wanted.has(item.id)) out[item.id] = item.offset || 0
+    }
+  }
+  return out
 }
 
 // ===== Canvas Engine (Phase 2) =====
@@ -749,11 +1135,32 @@ function pushHistory() {
   redoStack.value = []
 }
 
+// Undo coalescing (roadmap B8 — the snapshot-stack twin of core C15):
+// consecutive edits of the SAME target inside a short burst become ONE
+// undo entry, so typing a text or dragging a slider undoes as a whole.
+// Snapshots hold full state, so merging only means "do not push again" —
+// the top entry already captures the state from before the burst.
+const HISTORY_COALESCE_MS = 800
+let lastCoalesce: { key: string, at: number } | null = null
+
+function pushHistoryCoalesced(key: string) {
+  const now = Date.now()
+  if (lastCoalesce && lastCoalesce.key === key && now - lastCoalesce.at < HISTORY_COALESCE_MS) {
+    lastCoalesce.at = now
+    redoStack.value = [] // a fresh edit invalidates redo, like pushHistory
+    return
+  }
+  pushHistory()
+  lastCoalesce = { key, at: now }
+}
+
 const canUndo = computed(() => undoStack.value.length > 0)
 const canRedo = computed(() => redoStack.value.length > 0)
 
 function restoreHistorySnapshot(raw: string) {
   if (!currentProject.value) return
+  // Restoring breaks any edit burst — the next edit starts fresh.
+  lastCoalesce = null
   try {
     const parsed = JSON.parse(raw) as { timeline?: TmcutProjectTimeline, canvas?: TmcutCanvas }
     if (parsed.timeline) currentProject.value.timeline = parsed.timeline
@@ -804,6 +1211,26 @@ function toggleTrackHidden(trackId: string) {
   const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
   if (!track) return
   updateTrack(trackId, { hidden: !track.hidden })
+}
+
+// Track add/remove (Roadmap A5): routed through applyV3Edit so history,
+// undo and autosave see the change; syncV3Result keeps the v1 track list
+// in step (creates on add, prunes on remove).
+function addTrackToProject(trackType: 'video' | 'text' | 'audio'): boolean {
+  return applyV3Edit(v3 => addTrack(v3, trackType)) !== null
+}
+
+function removeTrackFromProject(trackId: string): boolean {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  // Locked tracks refuse removal (core does the same; checked here too so
+  // no history entry or save is pushed for a refused operation).
+  if (!track || track.locked) return false
+  const removedIds = new Set((track.items || []).map(item => item.id))
+  const ok = applyV3Edit(v3 => removeTrack(v3, trackId)) === true
+  if (ok && selectedClipId.value && removedIds.has(selectedClipId.value)) {
+    selectedClipId.value = null
+  }
+  return ok
 }
 
 // Autosave
@@ -918,12 +1345,16 @@ export function useTmcutProject() {
     saveProject,
     createProject,
     deleteProject,
+    renameProject,
+    duplicateProject,
     selectClip,
     addClipToTrack,
     updateClip,
     removeClip,
     splitClip,
+    closeProjectGaps,
     pushHistory,
+    pushHistoryCoalesced,
     undo,
     redo,
     canUndo,
@@ -935,12 +1366,27 @@ export function useTmcutProject() {
     duplicateSelectedClips,
     rippleDeleteSelected,
     snapTimeSec,
+    timelineMarkers,
+    addMarkerAt,
+    updateMarker,
+    removeMarkerById,
+    checkClipTransition,
+    applyClipTransition,
+    clearClipTransition,
+    timelineTransitionCount,
     flushDiskSave,
     updateTrack,
     toggleTrackMute,
     toggleTrackLock,
     toggleTrackHidden,
+    addTrackToProject,
+    removeTrackFromProject,
     updateClipsSrc,
+    trimSelectedEdgeAt,
+    groupSelection,
+    ungroupSelection,
+    toggleLinkSelection,
+    relatedOffsetsFor,
     switchCanvas,
     setCanvasBackground,
     duplicateAsProject,

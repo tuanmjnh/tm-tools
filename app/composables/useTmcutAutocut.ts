@@ -1,9 +1,11 @@
 import type { TmcutAsset } from '~/types/tmcut'
-import type { TmcutEdl } from '@tmcut-core'
+import type { TmcutEdl, TmcutEdlSegment } from '@tmcut-core'
 import {
   parseSceneOutput,
   parseSilenceOutput,
   scoreSegments,
+  segmentsToClips,
+  ticksToSec,
   validateEdl
 } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
@@ -16,12 +18,16 @@ export interface AutocutAnalysis {
   edl: TmcutEdl
   sceneCount: number
   transcriptUsed: boolean
-}
-
-export interface AutocutAnalysis {
-  edl: TmcutEdl
-  sceneCount: number
-  transcriptUsed: boolean
+  /** total source duration, seconds (from FFmpeg scene probe) */
+  sourceDurationSec: number
+  /** number of silence ranges detected by FFmpeg silencedetect */
+  silenceCount: number
+  /** total seconds covered by the detected silences */
+  silenceRemovedSec: number
+  /** total seconds covered by the transcript (speech coverage) */
+  speechSec: number
+  /** raw transcript lines kept so the review UI can show real text */
+  transcript: Array<{ start: number, end: number, text?: string }>
 }
 
 function tmcutIpc() {
@@ -65,17 +71,23 @@ export function useTmcutAutocut() {
 
       // Transcript is best-effort: EDL scoring degrades gracefully without it.
       let speech: Array<{ start: number, end: number }> = []
+      let transcriptText: Array<{ start: number, end: number, text?: string }> = []
       let transcriptUsed = false
       stageKey.value = 'tmcut.steps.stageTranscript'
       try {
         const aiStatus = await status()
         if (aiStatus?.hasKey) {
           const transcript = await transcribe(asset.path, { format: 'verbose_json' })
-          speech = (transcript.segments ?? []).map(segment => ({ start: segment.start, end: segment.end }))
+          const rawSegments = transcript.segments ?? []
+          speech = rawSegments.map(segment => ({ start: segment.start, end: segment.end }))
+          // Keep the text so the review UI can show a real transcript line
+          // per EDL segment (scoring only needs the timings).
+          transcriptText = rawSegments.map(segment => ({ start: segment.start, end: segment.end, text: segment.text }))
           transcriptUsed = speech.length > 0
         }
       } catch {
         speech = []
+        transcriptText = []
       }
 
       stageKey.value = 'tmcut.steps.stageScoring'
@@ -89,7 +101,24 @@ export function useTmcutAutocut() {
       })
       const problems = validateEdl(edl)
       if (problems.length > 0) throw new Error(problems[0])
-      return { edl, sceneCount: shotList.length, transcriptUsed }
+      const silenceRemovedSec = silenceList.reduce(
+        (total, range) => total + Math.max(0, range.end - range.start),
+        0
+      )
+      const speechSec = speech.reduce(
+        (total, range) => total + Math.max(0, range.end - range.start),
+        0
+      )
+      return {
+        edl,
+        sceneCount: shotList.length,
+        transcriptUsed,
+        sourceDurationSec: durationSec,
+        silenceCount: silenceList.length,
+        silenceRemovedSec,
+        speechSec,
+        transcript: transcriptText
+      }
     } catch (err: unknown) {
       analysisError.value = err instanceof Error ? err.message : String(err)
       return null
@@ -101,7 +130,8 @@ export function useTmcutAutocut() {
 
   /**
    * Apply accepted EDL segments as a NEW draft project (source untouched,
-   * docs section 41). Returns the draft project id.
+   * docs section 41). Returns the draft project id, or null when nothing
+   * applies (empty selection or an invalid EDL).
    */
   async function applyDraft(
     asset: TmcutAsset,
@@ -109,13 +139,15 @@ export function useTmcutAutocut() {
     included: number[],
     projectName: string
   ): Promise<string | null> {
-    const segments = []
+    const segments: TmcutEdlSegment[] = []
     for (const index of included) {
       const segment = edl.segments[index]
-      if (segment && segment.end > segment.start) segments.push(segment)
+      if (segment) segments.push(segment)
     }
-    segments.sort((a, b) => (a?.start ?? 0) - (b?.start ?? 0))
-    if (segments.length === 0) return null
+    // Core (C10) validates the EDL, drops broken spans, sorts by start and
+    // lays the kept segments out contiguously — v3 ticks in, v3 ticks out.
+    const clips = segmentsToClips(edl, segments)
+    if (clips.length === 0) return null
     const proj = createProject(projectName)
     if (edl.profile === 'viral-shorts') {
       switchCanvas(1080, 1920)
@@ -123,13 +155,15 @@ export function useTmcutAutocut() {
       switchCanvas(asset.meta.width, asset.meta.height)
     }
     linkAssetToProject(asset.id, proj.id)
-    for (const segment of segments) {
+    // The editor timeline is the legacy v1 seconds model: convert the core
+    // ticks back at the boundary, like every other core bridge.
+    for (const clip of clips) {
       addClipToTrack('video', {
         name: asset.name,
         src: asset.path,
-        in: segment.start,
-        out: segment.end,
-        speed: 1
+        in: ticksToSec(clip.in),
+        out: ticksToSec(clip.out),
+        offset: ticksToSec(clip.offset)
       })
     }
     return proj.id

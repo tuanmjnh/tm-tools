@@ -1,0 +1,850 @@
+# TMCut Roadmap v3 — Kế hoạch xây dựng chi tiết
+
+> File **lập kế hoạch & theo dõi tiến độ** của TMCut. Bổ sung cho
+> `docs/TMCut Architecture v3.md` (architecture + log các round §65–§79).
+> Trạng thái cập nhật: **10/2026**.
+
+---
+
+## 0. Cách dùng tài liệu này
+
+- Mục có `- [x]` = đã làm & verify xong; `- [ ]` = chưa làm. Khi làm xong
+  một mục, tick checkbox + ghi log vào architecture doc (§ tiếp theo).
+- Mỗi hạng mục ghi rõ **Nơi làm**:
+
+  | Nơi | Repo | Quy tắc |
+  |---|---|---|
+  | UI (Nuxt/Vue) | `D:/Applications/tm-tools/app` | Chỉ render + gọi composable/core; **không** chứa logic thời gian thuần |
+  | Engine thuần | `D:/Applications/tmcut-core` (`@tmcut/core`) | Zero-dep, không Vue/Nuxt/Electron/builtins/browser (§57, `tools/check-boundaries.mjs`); thời gian dùng **ticks** (`TICKS_PER_SECOND = 120_000`); test bằng `node:test` |
+  | Runtime/IPC/FFmpeg | `D:/Applications/tm-tools/electron` | Main process; đổi gì → **full restart** app Electron |
+  | Render pipeline | `app/utils/tmcut/compiler.ts` | Sinh lệnh FFmpeg; sau này refactor theo Phase 6 thành `@tmcut/render` |
+
+- Quy tắc **bất biến** mỗi round (AGENTS.md + thực tế các round đã làm):
+  1. Trung thực: control nào chưa có backend thì **không render** (hoặc badge
+     "Sắp ra mắt") — tuyệt đối không nút chết.
+  2. i18n: mọi chuỗi người dùng qua `t()`, en+vi **parity** (cùng số key).
+  3. Comment/hằng số/tên biến: English.
+  4. Không thêm runtime dependency mới.
+  5. Verify tối thiểu mỗi round: `pnpm typecheck` + `npx eslint <file chạm>`;
+     nếu đụng core: thêm `pnpm test:core && pnpm check:core &&
+     pnpm lint:core && pnpm typecheck:core`.
+- Việc chọn thứ tự làm: ưu tiên cột **Ưu tiên** (P0 > P1 > P2),effort
+  (S < 1 ngày · M 1–3 ngày · L > 3 ngày).
+
+---
+
+## 1. Trạng thái hiện tại (10/2026)
+
+### 1.1 Năm mockup design — đã làm đủ
+
+| Mockup | Vùng | Round | Trạng thái |
+|---|---|---|---|
+| `private/tmcut/1` | Home dashboard | R11 | ✅ (§77) |
+| `private/tmcut/2` | Editor workspace | R10 | ✅ (§76) — còn vài chênh lệch nhỏ, xem 1.4 |
+| `private/tmcut/3` | Export modal | R9 | ✅ (§75) |
+| `private/tmcut/4` | AutoCut wizard | R12 | ✅ (§78) |
+| `private/tmcut/5` | Shortcuts help | R8 | ✅ (§74) |
+
+### 1.2 Round QoL gần nhất (§79 — chưa commit)
+
+- [x] **F5 = reload app** (main.cjs: bỏ Ctrl+R/Ctrl+Shift+R theo yêu cầu;
+      giữ Ctrl+Shift+I devtools) — main process → cần 1 lần restart app.
+- [x] **Ctrl+scroll zoom timeline** (`onTracksWheel` trong TmcutTimeline:
+      zoom quanh con trỏ, range 15–200, step 10, `preventDefault()` chặn
+      zoom trang của Electron).
+- [x] **R13 (§80)**: playhead → `bg-primary`; help modal + dòng
+      Ctrl+scroll (i18n +2 key ×2 locale).
+- [x] Review design #2: sửa hardcode `+ Video` → `t('tmcut.addVideo')`;
+      4 comment tiếng Việt → English.
+- [x] Verify: `pnpm typecheck` EXIT=0, eslint file chạm = 0,
+      `node --check electron/main.cjs` = 0.
+
+> ⚠️ Toàn bộ Round 8–12 + §79 **chưa commit** (HEAD vẫn `482ec4a 2026.10.04`).
+
+### 1.3 @tmcut/core (Phase 1–3 architecture) — đã xong
+
+- Repo `D:/Applications/tmcut-core`: 18 module `src/*.mjs`, `types/`
+  (DSL v3 = logical `@tmcut/types`), 10 file test — **66 tests**.
+- App nối core qua alias `@tmcut-core` (nuxt.config): `media.ts`,
+  `recovery.ts`, `waveform.ts` đã rewire; `useTmcutProject` dùng
+  `applyV3Edit` (v1→v3→merge) + `snapTimeSec` (gọi `snapTime` của core);
+  `useTmcutAutocut` dùng `selectSegments`/`scoreSegments`; preview dùng
+  `previewScale`.
+- Verify core: `pnpm test:core` · `pnpm check:core` · `pnpm lint:core` ·
+  `pnpm typecheck:core` (chạy từ tm-tools, script trỏ sang repo kia).
+
+### 1.4 Khoảng trống đã rà ra (chưa có trong §76.5)
+
+- [x] **Playhead màu đỏ** → đổi `bg-primary` (2 chỗ TmcutTimeline) —
+      **đã làm R13 (§80)**.
+- [ ] **Transform handles trên canvas** cho video clip (chỉ text kéo được).
+- [ ] **Drag & drop media → timeline** (hiện chỉ click/hover "+" ).
+- [x] **Minimap timeline** — **đã làm R19 (§86)**.
+- [x] **Track V2/A2** (design có 4 track) — **đã làm R16 (§83)**: nút
+      "+" dropdown (Video/Text/Audio) + 🗑 per header.
+- [x] **Rotation slider trong Inspector** — **đã làm R21+R22 (§88, §89)**:
+      C7 thêm filter rotate (verify export thật) → A8 expose slider
+      (video-only) + rotate handle canvas.
+- [x] Help modal thêm dòng **Ctrl+scroll zoom** — **đã làm R13 (§80)**.
+- [x] Snap/magnet: **đã làm R15 (§82)** — drag/trim gọi core + toggle N.
+
+---
+
+## 2. Quy tắc đóng góp cho @tmcut/core (đọc trước khi code phần core)
+
+Mỗi hạng mục core **bắt buộc** đủ 5 thành phần (đây là "thông tin đầy đủ"
+theo yêu cầu):
+
+1. **Module**: file `src/<ten>.mjs` mới hoặc mở rộng file có sẵn; thêm
+   export vào `src/index.mjs` (barrel) **và** khai báo kiểu ở
+   `src/index.d.ts`.
+2. **Kiểu**: nếu cần đổi DSL → sửa `types/dsl.ts` (ghi chú comment theo
+   architecture §2/§3); `types/` là type-only, không runtime import.
+3. **Test**: file `test/<ten>.test.mjs` bằng `node:test` + `node:assert`;
+   chạy `pnpm test:core`.
+4. **Giới hạn**: không import Vue/Nuxt/Electron/`node:*`/browser global —
+   vượt qua sẽ fail `pnpm check:core`.
+5. **Consumer app**: ghi rõ file `app/...` nào sẽ gọi (để verify sau:
+   `pnpm typecheck` + eslint).
+
+Quy ước hàm: nhận dữ liệu + **ticks** (không giây, trừ parser dữ liệu
+ngoại lai như Whisper/EDL vốn là giây — convert qua `secToTicks`);
+mutate timeline được (core đang mutate in-place, `applyV3Edit` bọc undo
+bên ngoài); trả về handle/kết quả thay vì boolean mơ hồ khi cần info.
+
+---
+
+## 3. @tmcut/core — các hạng mục mở rộng (thông tin đầy đủ)
+
+> Thứ tự ID = thứ tự ưu tiên thực hiện. Cột **App consumer** liệt kê file
+> tm-tools sẽ dùng hàm đó.
+
+### C0 — Rewire `canvas.ts` về core (loại bản copy song song) · P0 · S · **✅ R14 (§81)**
+
+- **Hiện trạng**: `app/utils/tmcut/canvas.ts` (TypeScript) và
+  `core/src/canvas.mjs` **cùng có** `buildFfmpegFitFilters`,
+  `computeFitObjectStyle`, `reframeTransform`, `previewScale` — 2 bản phải
+  giữ đồng tay.
+- **Làm**: đối chiếu 2 bản, port phần TS còn thiếu (nếu có) vào
+  `canvas.mjs`; `app/utils/tmcut/canvas.ts` chuyển thành re-export
+  `export { ... } from '@tmcut-core'` (mẫu `media.ts`/`waveform.ts`).
+- **Test**: `test/canvas.test.mjs` bổ sung case thiếu (focus/crop/pad).
+- **Consumer**: `app/utils/tmcut/compiler.ts` (import
+  `buildFfmpegFitFilters`), `TmcutPreviewPlayer.vue` (`previewScale`).
+- **Verify**: `pnpm test:core && pnpm check:core && pnpm typecheck`.
+
+### C1 — Snap khi kéo: ứng dụng `snapTime` + ứng viên chi tiết · P0 · S · **✅ R15 (§82)**
+
+- **Hiện trạng**: `editing.mjs` đã có
+  `snapTime(timeline, targetTicks, { thresholdTicks?, playheadTicks?, ignoreIds? })`
+  và `useTmcutProject.snapTimeSec` đã wrap. **Chưa có clip drag nào gọi.**
+- **Thêm vào `editing.mjs`** (đề xuất):
+
+```ts
+export interface SnapCandidate {
+  ticks: number
+  kind: 'clip-start' | 'clip-end' | 'marker' | 'playhead' | 'zero'
+  fromId?: string
+}
+export function snapCandidates(timeline, targetTicks, options?): SnapCandidate[]
+export function snapTimeDetailed(timeline, targetTicks, options?): { ticks: number, snapped: SnapCandidate | null }
+```
+
+- **Test** (`test/editing.test.mjs`): vượt ngưỡng không snap; `ignoreIds`
+  (clip đang kéo không tự snap cạnh chính nó); marker vs clip-đối-diện ưu
+  tiên theo khoảng cách; playhead trả `kind:'playhead'`.
+- **Consumer**: `TmcutTimelineClip.vue` (`onDragStart`/`onTrimLeftStart`/
+  `onTrimRightStart` → gọi `snapTimeDetailed` trong `onMouseMove`) +
+  toggle magnet trong toolbar (A6).
+- **Shortcut**: N (bật/tắt magnet) — thêm help modal khi làm A6.
+
+### C2 — Ripple insert & close gap · P1 · S
+
+- **Module**: `editing.mjs` (bên cạnh `rippleDelete` đã có).
+
+```ts
+export function insertClipRipple(timeline, trackType, partial, atTicks): { clip, shifted }
+export function closeGaps(timeline, options?: { acrossTracks?: boolean }): number // số giây đã đóng
+```
+
+- **Test**: chèn giữa 2 clip → clip sau dịch đúng bằng duration bản mới,
+  clip đầu giữ nguyên; `acrossTracks:false` chỉ đụng 1 track; timeline
+  rỗng/chèn cuối không lỗi.
+- **Consumer**: `useTmcutProject` (chèn clip từ media bin khi rippleMode
+  bật), autocut acceptDraft (dồn các segment giữ về liền nhau).
+  **✅ R33 (§101)**: `insertClipRipple` (+option `acrossTracks` ngoài
+  spec) + `closeGaps` (option `trackType`; **trả seconds** theo spec;
+  `acrossTracks` mặc định true) · +4 tests → core 113/113 ·
+  **UI**: drop-đè khi rippleMode → insert qua bridge · nút toolbar
+  Close gaps (`closeProjectGaps` pre-scan tránh history no-op) ·
+  autocut `applyDraft` đã contiguous nên không cần closeGaps.
+
+### C3 — Keyframes: eval + easing · P1 · M · **module mới `src/keyframes.mjs`** · **✅ R23 (§90)**
+
+- **DSL** (`types/dsl.ts`): `TmcutKeyframe` đã có `{ t, prop, value }` —
+  thêm optional `easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step'`.
+- **API đề xuất**:
+
+```ts
+export function evalKeyframe(clip, prop, atTicks): number | undefined // clamp ngoài 2 đầu
+export function keyframeAt(clip, prop, atTicks, toleranceTicks?): TmcutKeyframe | null
+export function setKeyframe(clip, prop, atTicks, value, easing?): TmcutKeyframe // thay nếu trùng t
+export function removeKeyframe(clip, prop, atTicks, toleranceTicks?): boolean
+export function propsWithKeyframes(clip): string[]
+export function keyframeTimes(clip, prop): number[] // ticks tăng dần
+```
+
+- **Test** (`test/keyframes.test.mjs`): trước kf đầu = giá trị kf đầu; sau
+  kf cuối = kf cuối; linear giữa 2 kf; step giữ giá trị cũ đến đúng kf kế;
+  `atTicks` trùng kf trả đúng kf; eval prop chưa có kf = `undefined`;
+  easing-in/out tại điểm giữa ≠ linear.
+- **Consumer**: `TmcutPreviewPlayer.vue` (apply giá trị interp vào style —
+  thay `clip.scale` đọc trực tiếp), `TmcutInspector.vue` (nút thêm keyframe
+  ⏱), timeline (biểu tượng diamond trên clip).
+- **Render dependency**: compiler map keyframes → expression FFmpeg
+  (`scale`/`opacity`/`x`/`y` theo `t`) — item **R2** (Phase I), chưa có thì
+  UI chỉ được ghi chú "preview-only" (trung thực).
+
+### C4 — Retime: speed/reverse time map · P1 · M · **module mới `src/retime.mjs`** · **✅ R25 (§92)**
+
+- **DSL**: `speed`, `reverse?` đã có trong `TmcutTimelineClip`.
+- **API đề xuất** (toàn bộ ticks):
+
+```ts
+export function isRetimed(clip): boolean // speed !== 1 || reverse
+export function timelineToSource(clip, atTicks): number  // ticks nguồn (đã map speed+reverse)
+export function sourceToTimeline(clip, sourceTicks): number
+export function withSpeed(clip, speed): TmcutTimelineClip // normalize source/out + timeline duration
+export function validateSpeed(speed): number // clamp ≥ 0.01
+```
+
+- **Test** (`test/retime.test.mjs`): speed 2 → duration /2; reverse map
+  đầu↔cuối; speed 0.5 ×2; map ngược `sourceToTimeline∘timelineToSource`
+  đúng ±1 tick; trim sau khi đổi speed giữ nguồn hợp lý.
+- **Consumer**: `TmcutInspector` tab Tốc độ (hiện speed change chưa
+  normalize duration — verify khi làm B4), compiler (setpts/asetspts).
+- **Render dependency**: compiler đã có `setpts`? — nếu chưa thì item
+  **R1** (Phase I) bổ sung; `withSpeed` là nguồn sự thật duy nhất.
+
+### C5 — Transition model (overlap) · P1 · M · **module mới `src/transitions.mjs`**
+
+- **DSL**: `transitionIn?: { type, duration }` đã có (chỉ 1 phía — chấp
+  nhận: transition gắn vào clip sau, hàm tự tìm clip liền trước).
+- **API đề xuất**:
+
+```ts
+export const KNOWN_TRANSITIONS: string[] // 'fade','dissolve','wipe-left','wipe-right','slide-left','zoom-in'
+export function canApplyTransition(timeline, clipId, durationTicks):
+  { ok: boolean, reason?: 'no-neighbor' | 'gap' | 'too-long' | 'unknown-type', overlapTicks?: number }
+export function applyTransition(timeline, clipId, type, durationTicks): boolean
+export function clearTransition(timeline, clipId): boolean
+export function transitionWindows(track): Array<{ fromId, toId, startTicks, endTicks }>
+```
+
+- **Test** (`test/transitions.test.mjs`): duration > clip láng giềng →
+  `too-long`; có khoảng trống → `gap`; không clip trước → `no-neighbor`;
+  apply → `transitionWindows` trả đúng vùng overlap; type lạ → fail.
+- **Consumer**: menu chuột phải clip / toolbar (B3), tooltip hiển thị
+  `transitionWindows`.
+- **Render dependency**: FFmpeg `xfade` yêu cầu 2 input overlap + music
+  `acrossfade` → compiler phải gộp dây clip liền nhau thành chuỗi concat
+  + xfade (item **R3**, Phase I). **Trước khi R3 xong, UI chỉ cho chọn
+  transition nếu export đã hỗ trợ** (hoặc badge "Sắp ra mắt" → quyết định
+  khi làm B3).
+- **✅ R34 (§102)**: `src/transitions.mjs` — `canApplyTransition` thêm
+  param `type` (spec bỏ type nhưng reason `unknown-type` cần) + reason
+  `'locked'` (lock-guard core) · apply shift clip trái bằng duration
+  (overlap thật — cả 2 layer phát liên tục, không nhảy frame), re-apply
+  un-shift cũ trước khi shift mới · `transitionWindows` skip cặp vỡ
+  (neighbor không còn end tại window end) · fix `v1MatchesV3` so
+  `transitionIn` + `splitClip` strip `transitionIn` nửa sau ·
+  +9 test → **core 124/124** · UI xem **B3**.
+
+### C6 — Effect registry + validate · P1 · S · **module mới `src/effects.mjs`**
+
+```ts
+export interface EffectParam { name, kind: 'number'|'color'|'enum'|'bool', min?, max?, default?, options? }
+export interface EffectDescriptor { type, label, params: EffectParam[], renderReady: boolean }
+export const EFFECT_REGISTRY: Record<string, EffectDescriptor>
+// đợt 1: blur, sharpen, vignette, grain, chromakey, lut3d, stabilize, eq-grade
+export function validateEffect(effect): string[]   // lỗi kiểu validateTimeline
+export function normalizeEffects(list): TmcutClipEffect[]
+```
+
+- Flag `renderReady` = trung thực: UI hiện slider được (preview CSS/filter)
+  nhưng nếu compiler chưa map → badge "Chưa xuất bản" đúng sự thật.
+- **Test**: param out-of-range báo lỗi; normalize bỏ field lạ; registry
+  không rỗng key.
+- **Consumer**: `TmcutInspector` accordion Effects (Phase E), compiler
+  (R4).
+- **✅ R35 (§103)**: `src/effects.mjs` — registry 8 effect đợt 1 với
+  range/options/default đầy đủ · `validateEffect` (lỗi kiểu
+  `validateTimeline`: unknown type/param, out-of-range, sai kind) ·
+  `normalizeEffects` (drop type lạ + field lạ whitelist, clamp number
+  về range, invalid → default, fill đủ registry params → output luôn
+  validate sạch) · **`renderReady: false` toàn bộ** (trung thực —
+  compiler chưa map, chờ R4; badge "chưa xuất bản" làm ở Phase E
+  cùng accordion Inspector) · +5 test → **core 129/129** ·
+  `TmcutClipEffect` đưa vào d.ts re-export.
+
+### C7 — Rotation trong fit filters (mở khóa Inspector Rotation) · P1 · S · **✅ R21 (§88)**
+
+- **Hiện trạng**: `transform.rotation` trong DSL + preview CSS đã xoay;
+  `buildFfmpegFitFilters` (sau C0 chỉ còn **1 bản ở core**) chưa sinh
+  filter xoay → compiler không xoay khi export.
+- **Làm**: thêm option `rotation?: number` (độ, chiều kim đồng hồ) vào
+  `buildFfmpegFitFilters(mode, canvasW, canvasH, { ..., rotation })` →
+  append `rotate=${deg}*PI/180:ow=iw:oh=ih` (giữ size canvas; corner
+  crop — chấp nhận, ghi chú trong doc) **hoặc** rotate trước rồi fit (mới
+  sau khi test thực tế bằng `resources/ffmpeg.exe`).
+- **Test**: `test/canvas.test.mjs` — rotation 90/0/neg trả filter string
+  đúng thứ tự (rotate **sau** fit).
+- **Consumer**: `compiler.ts` truyền `clip.transform.rotation`;
+  `TmcutInspector` thêm slider Rotation (`handleUpdate('rotation', ...)`)
+  — chỉ expose **sau khi** verify export thật quay đúng.
+- **Verify đặc biệt**: render thử 1 clip 90° bằng harness esbuild quen
+  dùng, xem frame đầu.
+
+### C8 — Track ops: thêm/xóa track · P1 · S · **✅ R16 (§83)**
+
+- **Module**: `timeline.mjs` (bên cạnh `ensureTrack` — `ensureTrack` =
+  tìm-or-tạo; cần hàm **luôn tạo mới** cho nút "Thêm track").
+
+```ts
+export function addTrack(timeline, type, name?): TmcutTrack
+export function nextTrackName(timeline, type): string  // 'Video 2', 'Audio 2'
+export function removeTrack(timeline, trackId, options?: { keepClips?: boolean }): boolean
+```
+
+- **Test**: thêm Video tạo đúng type/name tăng dần; remove mặc định xóa cả
+  clip (hoặc `keepClips` chuyển về track khác); không xóa được track cuối
+  cùng của type (bảo vệ) → define rõ ràng trong test.
+- **Consumer**: `TmcutTimeline.vue` — nút "+" ở khu vực track header (A5).
+
+### C9 — Group / ungroup · P1 · S
+
+- **Module**: `selection.mjs` (`expandRelated` đã resolve khi chọn — thiếu
+  hàm tạo/bỏ).
+
+```ts
+export function groupClips(timeline, ids): string | null  // trả groupId mới
+export function ungroupClips(timeline, ids): number        // số clip đã gỡ
+```
+
+- **Test**: group ≥2 → chung groupId; `expandRelated` chọn 1 clip mở rộng
+  cả nhóm; ungroup xóa groupId; group 1 clip / 0 clip → null.
+- **Consumer**: `TmcutTimeline` (Ctrl+G / Ctrl+Shift+G, menu chuột phải),
+  help modal. **✅ R30 (§97)**: `groupClips`/`ungroupClips` +4 test +
+  fix `v1MatchesV3` compare (`groupId/linkId` bị drop khi merge-back) ·
+  **UI chờ R31**.
+
+### C10 — EDL segments → clip inputs (glue AutoCut → Timeline) · P1 · S
+
+- **Module**: `edl.mjs` (đã có `validateEdl`, `selectSegments`).
+
+```ts
+export function segmentsToClips(edl, segments, options?: { trackType?: 'video', minGapTicks?: number }): CoreClipInput[]
+```
+
+- **Test**: segment `{ start, end, ... }` (giây) → clip
+  `source.in/out` + `timeline.start/duration` đúng `secToTicks`;
+  sort theo start; segment không hợp lệ (end ≤ start) bị loại.
+- **Consumer**: `useTmcutAutocut.acceptDraft` (hiện tự ghép object —
+  thay bằng core để test được).
+- **✅ R36 (§104)**: `segmentsToClips(edl, segments, options?)` trong
+  `edl.mjs` — EDL invalid → `[]` (validateEdl gate, không tin output
+  model) · filter span ≤ 0 + sort by start · mặc định **concatenate**
+  (dead air biến mất — khớp applyDraft cũ) · `minGapTicks`: gap
+  ≥ ngưỡng được GIỮ (khoảng nghỉ thật), gap nhỏ hơn vẫn đóng → mọi
+  gap trong output ≥ minGapTicks · `trackType` validate intent
+  ('text' → `[]`; shape clip giống nhau video/audio hôm nay) ·
+  output flat `{ in, out, offset }` ticks · +5 test (round-trip
+  `addClip` assert `source/timeline` ticks đúng) → **core 134/134** ·
+  consumer `applyDraft` dùng core + `ticksToSec` ở biên (timeline app
+  là v1 seconds) · EDL invalid → `null` (trước: áp dụng rác).
+
+### C11 — Caption/Auto-subtitle + SRT · P2 · M · **module mới `src/caption.mjs`**
+
+```ts
+export interface TranscriptCue { text: string, start: number, end: number } // GIÂY (nguồn Whisper)
+export function cuesToCaptionClips(cues, options?: { maxChars?, maxDurTicks?, fromTicks?, rangeTicks? }): CoreClipInput[]
+export function parseSrt(text: string): TranscriptCue[]
+export function serializeSrt(cues: TranscriptCue[]): string
+export function splitLongCue(cue, maxChars): TranscriptCue[]
+```
+
+- **Test**: cue quá dài → split theo từ (không cắt giữa từ); parseSrt
+  format chuẩn `00:00:01,000 --> ...`; round-trip parse→serialize; ticks
+  đúng `secToTicks`.
+- **Consumer**: Auto-captions (Phase C) — `useTmcutAutocut` đã bắt
+  `transcript[]` thật từ Whisper (Round 12) → biến thành text clips;
+  xuất/phụ đề SRT từ project.
+- **AI dependency**: đã có (gateway Whisper `audio/transcriptions`) —
+  task `transcribe`.
+- **✅ R37 (§105)**: `src/caption.mjs` — `splitLongCue` (greedy theo từ,
+  không bao giờ cắt giữa từ; word dài hơn maxChars giữ nguyên 1 chunk;
+  timing tỉ lệ theo chars, chunk cuối pin `end` gốc) ·
+  `cuesToCaptionClips` (`maxChars` 42 + `maxDurTicks` 7s — slice thời
+  gian chia đều, `fromTicks` neo offset, `rangeTicks` clamp cửa sổ:
+  ngoài → drop, vắt biên → cắt) · `parseSrt` (tolerant: index tùy ý,
+  CRLF, decimal chấm, toạ độ đuôi; block rác → skip, không throw) ·
+  `serializeSrt` (chuẩn `HH:MM:SS,mmm`, đánh số, trailing newline;
+  drop cue rỗng/invalid để round-trip sạch) · `TranscriptCue` types/
+  caption.ts · +5 test (word-bound, CRLF junk, round-trip, ticks
+  round-trip qua `secToTicks`, duration-slice) → **core 139/139** ·
+  fix boundary: comment chứa "window." (regex `check-boundaries`) →
+  viết lại chữ · round core-only (UI auto-captions + xuất SRT nằm
+  Phase C).
+
+### C12 — Fade in/out + gain math · P2 · S · **module mới `src/audio.mjs`**
+
+- **DSL**: thêm `fade?: { in: MediaTime, out: MediaTime }` (ticks) vào
+  `TmcutTimelineClip`.
+
+```ts
+export function fadeDuration(clip, edge): number        // ticks, clamp ≤ duration/2
+export function gainAt(clip, atTicks): number           // volume(0..1) × envelope 0..1
+export function volumeExpr(clip): string                // expression FFmpeg: 'if(lt(t,A),t/A, if(...))'
+```
+
+- **Test**: đầu clip gain≈0 → giữa = volume → cuối về 0; fade > duration
+  bị clamp; `volumeExpr` chứa đủ mốc.
+- **Consumer**: `TmcutInspector` tab Âm thanh (nút Fade in/out), preview
+  dùng `gainAt` đặt `video.volume` (nếu đang phát), compiler (R5).
+- **Shortcut dự kiến**: Shift+D (fade mặc định 0.5s) — chỉ thêm khi thật.
+- **✅ R38 (§106)**: `src/audio.mjs` — `fadeDuration` (clamp ≤ duration/2,
+  2 edge không bao giờ đè nhau) · `gainAt` (volume 0..100 → 0..1 ×
+  envelope, atTicks clip-LOCAL, ngoài clip clamp về edge) ·
+  `volumeExpr` (marker đủ A / D−B / D, float noise được trim, không
+  fade → '1') · clip nhận CẢ 2 shape (v3 ticks + v1 flat seconds —
+  cùng contract `evalKeyframe`) · DSL `fade?: { in, out }` (TICKS) +
+  `addClip` passthrough · v1compat: fade passthrough 2 chiều +
+  `sameFade` (clear fade phải sync về — y hệt transitionIn) ·
+  **UI**: Inspector tab Âm thanh — chip Fade in/out toggle 0.5s +
+  slider (max min(5s, duration/2), step 0.1s) hiện khi active, slider
+  burst coalesce history (B8/C15), toggle = 1 undo entry · preview
+  `videoVolume = gainAt({...clip, volume: keyframed}, localTicks)` ·
+  +5 test (4 audio + 1 v1compat fade-clear) → **core 144/144** ·
+  i18n +2 (fadeIn/fadeOut) → **parity 2439/2439** · Shift+D CHƯA thêm
+  (đúng tinh thần "chỉ thêm khi thật") · export: volume+fade cùng
+  gap family, compiler R5 sẽ xử lý cả hai (không thêm badge mới).
+
+### C13 — Safe-area rects (canvas) · P2 · S
+
+- **Module**: `canvas.mjs`.
+
+```ts
+export function safeAreaRects(canvas): { actionSafe: {x,y,w,h}, titleSafe: {x,y,h,w} } // 0.90 / 0.80 (fractions)
+export const SAFE_AREA_PRESETS: Array<{ id, label, ratio }>
+```
+
+- **Test**: 16:9 → actionSafe 0.9/0.9 đúng tâm; 9:16 cùng logic.
+- **Consumer**: `TmcutPreviewPlayer` thay hardcode inset 2.5%/5% (overlay
+  Safe Area) + thêm preset theo tỷ lệ.
+- **✅ R39 (§107)**: thêm vào `canvas.mjs` (module có sẵn) —
+  `safeAreaRects` (actionSafe 0.9 / titleSafe 0.8 fractions, thay hardcode
+  2.5%/5% thành broadcast standard 5%/10% inset; canvas invalid →
+  zero rects; inset trim float noise) · `SAFE_AREA_PRESETS` (7 preset
+  16:9/9:16/1:1/4:5/4:3/3:4/21:9) · UI: HUD thêm dropdown Frame guide
+  (None + preset, check item active) → overlay khung dashed
+  primary căn giữa theo tỷ lệ chọn (composition aid, không crop) ·
+  +3 test → **core 147/147** · i18n +2 (ratioGuide/none) →
+  **parity 2441/2441**.
+
+### C14 — Frame plan (filmstrip / thumbnail / extractFrame) · P1 · S
+
+- **Module**: mới `src/frames.mjs` (hoặc mở rộng `cache.mjs`).
+
+```ts
+export function filmstripTimes(startTicks, durationTicks, count): number[]  // ticks đều, tránh đầu/cuối 2%
+export function frameTimesForSegments(segments, perSegment): Array<{ id, times: number[] }>
+export function clampFrameTime(atTicks, startTicks, durationTicks): number
+```
+
+- **Test**: count=8 → 8 mốc tăng đều & nằm trong range; duration 0 → [];
+- **Consumer**: Round sau (G1) — IPC **`tmcut:extractFrame`** mới (main +
+  preload → **full restart**) cho: thumbnail segment AutoCut (đang bỏ
+  "để round sau"), filmstrip timeline (thay cover 1 frame), nút snapshot
+  HUD. Core chỉ tính **danh sách timestamp** (giây qua `ticksToSec`);
+  FFmpeg `-ss` runtime thuộc Electron.
+
+### C15 — History: batch + coalesce · P2 · S
+
+- **Module**: `history.mjs` (đã có `createHistory`).
+
+```ts
+export function pushBatch(history, entries, label?): void
+export function coalesce(history, entry, windowTicks?): boolean // gộp thao tác liên tiếp (gõ chữ)
+```
+
+- **Test**: limit vẫn tôn trọng; coalesce cùng key gộp thành 1 undo;
+  khác key không gộp.
+- **Consumer**: `useTmcutProject` (undo gõ text không bị 1 ký tự/nhấn).
+  **✅ R32 (§100)**: `pushBatch` + `coalesce` (+`_top`/`_replaceAfter`
+  nội bộ, **`windowMs` wall-clock thay `windowTicks`** — ticks là media
+  time) · +3 tests → core 109/109 · app consumer qua
+  `pushHistoryCoalesced` trên snapshot stack (B8).
+
+### C16 — Đưa app sang DSL v3 đầy đủ (bỏ bridge v1) · P3 · L
+
+- **Hiện trạng**: model app theo v1 (giây), mỗi thao tác qua
+  `applyV3Edit` (v1→v3→op→merge) + `v1compat` sync — thừa lệch & chi phí.
+- **Làm**: `useTmcutProject` store ticks/v3 (DSL làm nguồn sự thật),
+  components đọc qua selector `ticksToSec` khi hiển thị; `v1compat` chỉ
+  còn cho file project cũ (migrate 1 lần khi mở).
+- **Test**: test core giữ nguyên; app: typecheck + thao tác tay (undo/
+  split/trim/paste); migration file v1 cũ → v3 mở lại đúng.
+- **Rủi ro**: L — làm sau khi các C1–C15 ổn định; tách nhỏ nhiều round.
+
+### C17 — Beat/tempo detection (hoãn — có backend mới làm) · P3 · ?
+
+- **Phụ thuộc**: FFmpeg không có filter detect beat; cần lib onsets
+  (aubio/essentia — thêm runtime dependency) **hoặc** AI. **Chưa chọn →
+  không làm core vội.**
+- Khi có backend: `analysis.mjs` thêm `parseBeatOutput(stderrText)` theo
+  pattern `parseSceneOutput` đã có; UI: marker nhịp (M) auto.
+- **Consumer dự kiến**: `useTmcutMedia` generate beat map → markers (Phase
+  D).
+
+**Verify chung mỗi lần sửa core**: `pnpm test:core && pnpm check:core &&
+pnpm lint:core && pnpm typecheck:core`, sau đó `pnpm typecheck` app (đụng
+consumer) + `npx eslint <file app chạm>`.
+
+---
+
+## 4. Phase tính năng UI (CapCut-like) — theo thứ tự ưu tiên
+
+### Phase A — Còn thiếu của design #2 (P0, làm ngay)
+
+- [x] **A1 · Đổi playhead `bg-red-500` → `bg-primary`** (2 chỗ
+      `TmcutTimeline.vue`) · S · **R13 ✅**.
+- [x] **A2 · Thêm dòng "Ctrl + Cuộn — Zoom timeline" vào help modal**
+      (`TmcutShortcutsModal`, i18n en+vi 2 key) · S · **R13 ✅**.
+- [x] **A3 · Transform handles trên canvas cho video clip** — **R18 ✅**:
+      bounding box +4 corner handle khi clip được chọn; kéo body = move
+      (`x/y` canvas-px `/ textScale`), kéo góc = scale (distance/center,
+      clamp 10–300 = Inspector). Fix `videoTransformStyle` từ screen-px →
+      canvas-px (đồng bộ với text). **Rotate handle hoãn tới C7** (export
+      chưa có rotate filter — cùng lý do Inspector slider còn ẩn) →
+      **đã thêm ở R22 (§89)** ·
+      `TmcutPreviewPlayer.vue`; §85.
+- [x] **A4 · Drag & drop media → timeline** — **R17 ✅**: HTML5 DnD (MIME
+      chung `~/utils/tmcut/dnd`) từ thẻ media → Tracks Canvas; drop
+      `sec = (clientX − rect.left)/zoom` + snap 8px (C1), row hit-test
+      h-14 → đúng type (sai type → track type đầu tiên); giữ click "+"
+      · `editor.vue` + `TmcutTimeline.vue`.
+- [x] **A5 · Thêm/xóa track** — **R16 ✅**: nút "+" góc TRACKS (dropdown
+      Video/Text/Audio) + nút trash per header (thay menu chuột phải —
+      trực quan hơn, disabled khi locked); core **C8** · i18n keys
+      `tmcut.tracks.addTrack/addVideoTrack/addTextTrack/addAudioTrack/
+      removeTrack`.
+- [x] **A6 · Bật snap/magnet thật** (toggle toolbar `N` + drag/trim gọi
+      core snap; xóa bản snap local tự viết trong TmcutTimelineClip) · M ·
+      **R15 ✅** — help modal +1 dòng `snapMagnet`.
+- [x] **A7 · Minimap timeline** — **R19 ✅**: thanh overview `h-4` cố định
+      trên ruler (ngoài khung scroll): clip blocks cả dự án (màu theo
+      loại track), khung viewport, playhead; click/drag pan viewport
+      (căn giữa). State mirror `scrollLeft/width` qua scroll+zoom+resize ·
+      `TmcutTimeline.vue` +1 key · §86.
+- [x] **A8 · Rotation slider Inspector** — **R22 ✅**: `USlider`
+      −180..180 trong Transform section (**video-only** — text rotation
+      chưa export, chờ **R12**) + rotate handle trên selection box
+      (stem+knob counter-scale, `atan2` direction khớp CSS/export) ·
+      `TmcutInspector.vue` + `TmcutPreviewPlayer.vue` +1 key · §89.
+      (Blocker C7 đã gỡ ở **R21 ✅**.)
+
+### Phase B — Sức mạnh Timeline (P1)
+
+- [x] **B1 · Keyframes UI**: nút ⏱ thêm keyframe cho scale/x/y/opacity/
+      volume (core **C3** ✅ R23 — API eval/set/remove sẵn sàng), diamond
+      marker trên clip, xóa keyframe · M —
+      Inspector + Timeline + PreviewPlayer. *Render sau (R2).*
+      **✅ R24 (§91)**: ⏱ toggle ở4 ô Transform + Volume (volume
+      **video-only** — audio track chưa có preview engine), diamond
+      %-duration trên clip, preview eval keyframes (video active +
+      text overlay + volume), chip "Preview only" +3 key.
+- [x] **B2 · Speed ramp / reverse**: tab Tốc độ thêm preset (0.5×/1×/2×/
+      4×) + reverse toggle; duration normalize qua core **C4** · M.
+      **✅ R26 (§93)**: +preset4.0x · `handleSpeedUpdate` → `withSpeed`
+      (validate + sàn0.2s,1entry undo) · `USwitch` reverse
+      (**text-gated** — text không có playback hướng) · preview reverse
+      seek-driven (`mediaCurrentTime` nhánh `out − t*speed`, pause+seek
+      như shuttle J).
+- [x] **B3 · Transitions**: menu chuột phải clip → loại + duration;
+      preview crossfade bằng 2 layer (fade-op) · M — core **C5**; export
+      thật chờ **R3** (xfade) → nếu R3 chưa làm thì badge trung thực.
+      **✅ R34 (§102)**: core `transitions.mjs` — overlap model (apply
+      shift clip trái để 2 layer chồng thật, clear trả cut gốc) +9 test ·
+      menu chuột phải `TmcutTimelineClip` (Teleport popover: 6 loại
+      `KNOWN_TRANSITIONS` + preset 0.2/0.5/1/2s, live-validate
+      `canApplyTransition`, lý do từ chối hiện inline, "None"enabled
+      khi đã có transition) · preview crossfade 2 `<video>` (outgoing
+      muted + per-type ramp: fade/dissolve opacity, wipe clip-path,
+      slide translateX, zoom scale) · fix `v1MatchesV3` so
+      `transitionIn` (clear từng bị skip) + `splitClip` strip
+      `transitionIn` nửa sau + guard incoming-đã-kết-thúc · export
+      badge trung thực · **video clips only** (text/audio omit —
+      không preview được = dead control).
+- [x] **B4 · Link/unlink A-V** (`linkId` DSL đã có; Ctrl+L) + group
+      (core **C9**, Ctrl+G) · S. **✅ R30+R31 (§97–§98)**: core
+      `groupClips`/`ungroupClips` + fix `v1MatchesV3` compare ·
+      `toggleLinkSelection` (overlap → linkId chung, Ctrl+L toggle) ·
+      Ctrl+G/Ctrl+Shift+G · **drag move theo nhóm**
+      (`relatedOffsetsFor`) · help modal +2 mục · +10 keys.
+- [x] **B5 · Marker UI**: gutter ruler + nút `M` thêm marker tại playhead
+      (core `addMarker` đã có, **chưa có UI**),dblclick sửa nhãn, đổi
+      màu · S. **✅ R27 (§94)**: `TmcutMarker` + `timeline.markers`
+      (backfill migration) · helpers `addMarkerAt/updateMarker/
+      removeMarkerById` (undo+save) · pin trên ruler (click seek,
+      dblclick editor fixed: nhãn + 6 màu + trash) · phím `M` · snap
+      nhận marker · help modal + mục `M` · +4 keys (parity 2403).
+- [x] **B6 · Razor toàn track** (S khi chưa chọn clip = cắt tất cả clip
+      dưới playhead) · S. **✅ R28 (§95)**: `handleSplit` fallback giờ
+      razor mọi track không locked (snapshot loop, tránh cắt mảnh
+      mới), toast `{count}` · help `desc.split` mô tả razor ·
+      key `splitVideoAtPlayhead` → `razorSplitCount`.
+- [x] **B7 · Trim by keyboard**: `Alt+[` / `Alt+]` cắt In/Out về playhead
+      (core `trimClip` đã có) · S. **✅ R29 (§96)**: `trimSelectedEdgeAt`
+      (guard trong clip + margin 0.1s → core không clamp) gọi
+      `trimClip` qua `applyV3Edit` · nhánh Alt+[/] + toast · help modal
+      `trimKeyboard` · +4 keys (parity 2407).
+- [x] **B8 · Text typing coalesce undo** (core **C15**) · S. **✅ R32
+      (§100)**: core `pushBatch`/`coalesce` · app
+      `pushHistoryCoalesced` (800ms cùng key) → **toàn bộ Inspector
+      giờ undo được** (trước: không có history) · ⏱/speed/fit = discrete
+      push.
+- [x] **B9 · Ripple insert khi thả clip đè** (core **C2**) · S. **✅ R33
+      (§101)**: drop-đè + rippleMode → `insertClipRipple` qua bridge
+      (`applyV3Edit` +skipHistory) · thả chỗ trống vẫn overlay ·
+      toolbar **Close gaps** (core `closeGaps`, toast `{seconds}s`) ·
+      +3 keys.
+
+### Phase C — Text & Captions (P1–P2)
+
+- [ ] **C-1 · Bảng font thật** (list font system qua CSS
+  `document.fonts`/registry; chọn + preview) · M — Text presets hiện 3 mẫu
+  cố định.
+- [ ] **C-2 · Style cho text**: bold/italic/align/shadow/border/stroke
+  (preview CSS; export qua `drawtext` options — compiler đã có
+  `escapeDrawText` → mở rộng `borderw/shadowx/fontfile`) · M.
+- [ ] **C-3 · Auto-captions**: nút "Tạo phụ đề" → Whisper transcript
+  (đã có, Round 12 bắt được `transcript[]`) → core **C11** `cuesToCaptionClips`
+  → text clips track riêng · M — deps: AI gateway `transcribe` (đã có),
+  cách tách audio (ffmpeg `-vn` runtime).
+- [ ] **C-4 · Import/Export SRT** (core **C11** parse/serialize; file qua
+  IPC dialog) · S.
+- [ ] **C-5 · Text animation in/out** (fade/slide/pop) — cần keyframes
+  **C3** + render **R2** trước · M.
+
+### Phase D — Audio (P2)
+
+- [ ] **D-1 · Fade in/out** (core **C12** + Inspector buttons + preview
+  gain) · S · render **R5**.
+- [ ] **D-2 · Volume keyframes** (C3 + C12 expression) · M.
+- [ ] **D-3 · Noise reduction**: exporter option `afftdn` / `anlmdn`
+  (checkbox trung thực — chỉ hiện khi đã map trong compiler) · S.
+- [ ] **D-4 · Ghi voiceover** (media bin nút mic → `getUserMedia` +
+  `MediaRecorder` → blob → import asset; đã có pattern record?) · M —
+  web+electron đều chạy được (mic permission).
+- [ ] **D-5 · TTS (giọng đọc)**: **phụ thuộc** AI gateway **chưa có**
+  endpoint speech (hiện chỉ chat + transcribe) → cần thêm
+  `{base}/audio/speech` (OpenAI-compatible) trong `ai-gateway.cjs` · L ·
+  đánh dấu blocked直到 gateway mở.
+- [ ] **D-6 · Beat markers** (core **C17** — blocked backend).
+
+### Phase E — Effects & Color (P2)
+
+- [ ] **E-1 · Adjust/Color grade** (brightness/contrast/saturation/
+  temperature → FFmpeg `eq`/`colorbalance` + preview CSS filter) · M —
+  registry **C6** + compiler **R4**.
+- [ ] **E-2 · Filters**: blur, sharpen, vignette, grain (FFmpeg
+  `gblur`, `unsharp`, `vignette`, `noise`) · M.
+- [ ] **E-3 · Chroma key (xóa phông xanh)**: FFmpeg `chromakey` +
+  slider similarity/blend; preview CSS approximation · M — v1 không cần
+  AI (khác "smart cutout").
+- [ ] **E-4 · LUT**: `lut3d` (.cube) — chọn file .cube · S (render sẵn
+  có trong ffmpeg build).
+- [ ] **E-5 · Stabilizer**: `vidstabdetect` + `vidstabtransform` (2 pass,
+  cần file trung gian — runtime Electron) · L.
+- [ ] **E-6 · AI cutout (người/phông)**: cần model (rembg/ONNX) —
+  **blocked** (dependency nặng) → giữ badge "Sắp ra mắt" · L.
+
+### Phase F — Preview & Canvas (P1–P2)
+
+- [ ] **F-1 · Safe area presets** (core **C13**; overlay 90%/80% thay
+  hardcode) · S.
+- [ ] **F-2 · Canvas zoom controls** (fit/100%/± trong header player —
+  design #2 có "100% Fit"; hiện auto-fit) · S.
+- [ ] **F-3 · Mask / crop on canvas** (kéo khung crop trực tiếp —
+  inspector đã có cropRect sliders) · M.
+- [ ] **F-4 · Proxy preview**: core đã có `buildProxyArgs` → runtime
+  generate proxy (ffprobe qua `tmcut:analyzeAsset`) + toggle "Dùng proxy"
+  trong preview (thay design #2 proxy toggle — giờ backend **có thật**)
+  · M — cần IPC tạo proxy file + path map trong `useTmcutMedia`.
+
+### Phase G — Media & Runtime IPC (P1)
+
+- [ ] **G-1 · IPC `tmcut:extractFrame`** (main + preload + giới hạn
+  timestamp; **full restart**) → thumbnail segment AutoCut (§78.6),
+  filmstrip timeline thật, snapshot HUD · M. Core: **C14** plan.
+- [ ] **G-2 · Media bin drag & drop file ngoài** (kéo file từ Explorer
+  vào panel → import; web: DataTransfer file) · S.
+- [ ] **G-3 · Album/folder trong media bin** (nhóm asset) · M · P2.
+- [ ] **G-4 · Camera record / quay màn hình** — blocked (không backend
+  ghi màn hình; ghi cam = getUserMedia D-4 pattern) · P3.
+
+### Phase H — AI (P2–P3, luôn trung thực)
+
+- [ ] **H-1 · AutoCut v2 — "theo transcript"**: scoring thêm yếu tố
+  từ vựng (LLM `complete` đã có task `plan`) · M — deps gateway (có).
+- [ ] **H-2 · AI script (ý tưởng → storyboard)**: panel generate →
+  text clips nháp · M — deps `complete` (có).
+- [ ] **H-3 · Auto-reframe 9:16**: core đã có `reframeTransform`; thiếu
+  detection subject (cần model) → v1 = manual preset ratio (đã có) · L.
+- [ ] **H-4 · Smart tracking/mask (Alt+T)** — giữ badge "Sắp ra mắt"
+  trong help modal (đang làm đúng) until model.
+- [ ] **H-5 · AI voice** — blocked như D-5.
+
+### Phase I — Export & Render (P1, nối architecture Phase 6)
+
+- [x] **R1 · Speed & reverse trong compiler** (`setpts`/`asetpts`/
+  `reverse`/`areverse` theo **C4**) · M — `compiler.ts`.
+  **✅ R25 (§92)**: core C4 `retime.mjs` (5 API ticks +7 test → 101/101)
+  · compiler retiming5 chuỗi audio+video · thử FFmpeg: **`areverse`
+  phải đứng TRƯỚC `asetpts`** (đặt sau vô hiệu speed — đo1.0s vs0.52s);
+  video thứ tự nào cũng byte-identical · harness e2e PASS3.5s
+  (2s +1s +1s/speed2).
+- [ ] **R2 · Keyframes → expression** (scale/x/y/opacity/volume map
+  expression FFmpeg theo **C3**) · L.
+- [ ] **R3 · Transitions → `xfade` + `acrossfade`** (theo **C5**; gộp
+  chuỗi clip liền nhau) · L.
+- [ ] **R4 · Effects graph** (map registry **C6** → filter chain, thứ tự
+  ổn định: fit → effect → keyframe → text → zone-trim) · L.
+- [ ] **R5 · Fade → `volume` expression** (**C12**) · S.
+- [ ] **R6 · Export form đầy đủ theo design #3**: bitrate options
+  (CRF/MBps), format & codec selector (libx264/libx265/h264_qsv/
+  h264_nvenc — detect HW thật), destination picker (đã có?), advanced
+  checklist · M — `TmcutExportModal` (form hiện: mode/range/scale/fps/
+  encoder/quality/audio đã có).
+- [ ] **R7 · Export queue** (hàng đợi nhiều tác vụ —
+  `useToolTaskManager('ffmpeg')` đã có task system, thêm UI queue) · M.
+- [ ] **R8 · Social presets** (TikTok 1080×1920 30fps, YouTube 1080p,
+  Reels…) — chỉ chọn preset có thật của pipeline · S.
+- [ ] **R9 · Refactor `compiler.ts` → `render/` graph** (architecture
+  Phase 6: `graph/normalize/resolver/ffmpeg/plan/adapters`) · L — làm khi
+  R1–R5 tích lũy đủ.
+- [x] **R10 · Video transform → export** — **R20 ✅**: `buildFfmpegTransform`
+  (core `canvas.mjs`) — `color` bg + `overlay=x:y:shortest=1` (bg d =
+  duration+2s headroom), identity → `null` giữ chain cũ nguyên vẹn;
+  đơn vị canvas-px khớp preview từ R18. Thử nghiệm FFmpeg thật: `pad` bỏ
+  qua offset âm + không crop được input lớn → phải dùng `overlay` (§87.2).
+  Rotation vẫn chờ **C7**. Opacity còn preview-only → thêm **R11** · M —
+  `compiler.ts`, tests core82/82, harness e2e PASS · §87.
+- [ ] **R11 · Opacity → export** (video: blend với bg theo `opacity`;
+  text: `drawtext alpha=…`) — preview, Inspector và canvas handles đã ghi
+  model · S/M — `compiler.ts`.
+- [ ] **R12 · Text rotation → export** (preview đã xoay text nhưng
+  `drawtext` không có góc quay — cần render text ra ảnh rồi `rotate` +
+  `overlay`) · M — `compiler.ts`; **A8 chỉ expose slider cho video**
+  tới khi item này xong (§88.5).
+
+### Phase J — Home & Templates (P2)
+
+- [ ] **J-1 · Template engine**: JSON template (layout text+media placeholder)
+  áp vào project thật (thay card "Coming soon" honest hiện tại) · M.
+- [ ] **J-2 · Theo design #1 còn lại**: Recently opened sort thật (đã
+  sort?), pin project (lưu flag trong project file) · S.
+- [ ] **J-3 · Cloud widget/Share** — vẫn bỏ (không backend) · giữ §77.
+
+### Phase K — Shortcut (song song, luôn cập nhật help modal)
+
+- [x] Ctrl+scroll zoom (§79) · dòng help đã thêm (**A2** · R13).
+- [ ] K1: `N` magnet (A6) · K2: `M` marker (B5) · K3: `Ctrl+G`/
+      `Ctrl+Shift+G` (B4) · K4: `Ctrl+L` link · K5: `Alt+[`/`Alt+]` trim
+      (B7) · K6: `Ctrl+=`/`Ctrl+-` zoom · K7: `Home`/`End` nhảy đầu/cuối ·
+      K8: `Shift+D` fade (D-1) — **mỗi shortcut thêm lúc feature thật
+      hoạt động**, sửa help modal cùng round (trung thực).
+
+### Phase L — Architecture Phases 4–6 (nối docs, song song dần)
+
+- [ ] **Phase 4 Canvas Engine** (docs): ratios/custom ✓ hiện tại, fit
+  modes ✓, background canvas (color/image/transparent — DSL có, UI chưa)
+  · safe area (C13/F1) · zoom/pan preview (F2) · smart reframe foundation
+  (reframeTransform ✓).
+- [ ] **Phase 5 Preview Engine**: tách `ElectronPreviewEngine`
+  (HTMLVideoElement + media:// + proxy F4) / `WebPreviewEngine`
+  (WebCodecs/WASM) — preview **không** gọi FFmpeg.
+- [ ] **Phase 6 Render**: R9.
+
+---
+
+## 5. Bảng phím tắt master (nguồn sự thật cho help modal)
+
+### Đã implement (hiện trong help modal — truthful)
+
+| Phím | Hành động | Nơi |
+|---|---|---|
+| Ctrl+Z · Ctrl+Shift+Z/Y | Undo · Redo | TmcutTimeline |
+| Ctrl+C / Ctrl+V / Ctrl+D | Copy · Paste · Duplicate | TmcutTimeline |
+| Ctrl+S · Ctrl+E · Ctrl+K | Save · Export · Shortcuts | TmcutTimeline |
+| S | Split tại playhead | TmcutTimeline |
+| Del / Backspace | Delete (theo rippleMode) | TmcutTimeline |
+| R | Bật/tắt Ripple | TmcutTimeline |
+| I · O | Đặt In/Out render zone | TmcutTimeline |
+| ? / F1 | Mở help | Timeline + header |
+| Space | Play/Pause | TmcutPreviewPlayer |
+| ← / → (Shift = 5 frame) | Step frame | TmcutPreviewPlayer |
+| J / K / L | Shuttle về/trừ/tiến | TmcutPreviewPlayer |
+| **Ctrl + Cuộn chuột** | **Zoom timeline (anchor con trỏ)** | **TmcutTimeline (§79)** |
+| F5 | Reload app (main) | electron/main.cjs |
+| Ctrl+Shift+I | DevTools (main) | electron/main.cjs |
+| Alt+A · Alt+T | AI (badge "Sắp ra mắt" — chưa bật) | Help modal planned |
+
+### Dự kiến thêm (chỉ khi feature thật — sửa help modal cùng round)
+
+`N` magnet · `M` marker · `Ctrl+G`/`Ctrl+Shift+G` group · `Ctrl+L` link ·
+`Alt+[`/`Alt+]` trim · `Ctrl+=`/`Ctrl+-` zoom · `Home`/`End` · `Shift+D`
+fade.
+
+---
+
+## 6. Checklist theo dõi tổng hợp
+
+```text
+[x] Mockup #1–#5 (Rounds 8–12)
+[x] F5-only reload · Ctrl+scroll zoom · review fixes (§79)   ← chưa commit
+[x] Phase A — Design #2 còn thiếu … A1 ✅ A2 ✅ A3 ✅ A4 ✅ A5 ✅ A6 ✅ A7 ✅ A8 ✅ — HOÀN TẤT
+[x] Phase B  — Timeline power (keyframe/speed/trans/link/marker) — B1 ✅ (R24) · B2 ✅ (R26) · B3 ✅ (R34) · B4 ✅ (R31) · B5 ✅ (R27) · B6 ✅ (R28) · B7 ✅ (R29) · B8 ✅ (R32) · B9 ✅ (R33) — HOÀN TẤT
+[ ] Phase C  — Text & Captions ................... C-1..C-5
+[ ] Phase D  — Audio ............................. D-1..D-6
+[ ] Phase E  — Effects & Color ................... E-1..E-6
+[ ] Phase F  — Preview & Canvas .................. F-1..F-4
+[ ] Phase G  — Media & IPC ....................... G-1..G-4
+[ ] Phase H  — AI ............................... H-1..H-5
+[ ] Phase I  — Export & Render — R1 ✅ (R25), còn R2..R12
+[ ] Phase J  — Home & Templates .................. J-1..J-3
+[ ] Phase K  — Shortcuts (K1..K8)
+[ ] Phase L  — Architecture Phases 4–6
+[x] Core Phase 1–3 (66 tests)
+[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C15 (R32) ✅ · [ ] Core C14,C16,C17 (section 3)
+```
+
+---
+
+## 7. Quy trình verify mỗi round (checklist dán vào lúc finish)
+
+```text
+□ pnpm typecheck                      → EXIT=0
+□ npx eslint <tất cả file chạm>      → 0 lỗi (Vue stylistic: --fix trước)
+□ i18n: parity en/vi (cùng số key)    → script đếm nhanh
+□ Đụng tmcut-core?
+    pnpm test:core      → pass (66+ tests)
+    pnpm check:core     → pass (boundaries)
+    pnpm lint:core      → 0 lỗi
+    pnpm typecheck:core → 0 lỗi
+□ Help modal khớp sự thật (badge "Sắp ra mắt" cho thứ chưa chạy)
+□ Không còn chuỗi hardcode / comment tiếng Việt
+□ Renderer-only → F5 (đã 1 lần restart app sau §79); main/preload → full restart
+□ Ghi log round vào docs/TMCut Architecture v3.md (§ mới)
+□ Tick checkbox ở section 6 file này
+```

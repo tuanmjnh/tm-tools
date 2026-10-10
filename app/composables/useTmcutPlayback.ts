@@ -1,11 +1,16 @@
 import { ref, computed } from 'vue'
+import { TICKS_PER_SECOND } from '@tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
+import type { TmcutTimelineItem } from './useTmcutProject'
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
 const isPlaying = ref(false)
 const zoom = ref(50) // Pixels per second (zoom level)
 const videoRef = ref<HTMLVideoElement | null>(null)
+// OUTGOING crossfade layer (roadmap B3): the second <video> element that
+// fades out during a transition window; registered by the preview player.
+const outgoingVideoRef = ref<HTMLVideoElement | null>(null)
 // J-K-L shuttle rate: 1 = normal, 2/4/8 = fast forward, -1/-2/-4/-8 = reverse.
 // Forward shuttle rides the native video playbackRate; reverse is seek-driven
 // because HTMLVideoElement does not decode backwards reliably.
@@ -44,21 +49,70 @@ export function useTmcutPlayback() {
     return `${m}:${s}.${f}`
   }
 
+  // Source-media time of a clip at a timeline position. Reverse clips
+  // (roadmap B2) run from the source end backwards — core C4 retime
+  // semantics. Shared by the main element and the crossfade layer.
+  function mediaTimeAt(clip: TmcutTimelineItem, at: number): number {
+    const localSec = at - (clip.offset || 0)
+    return clip.reverse
+      ? clip.out - localSec * (clip.speed || 1)
+      : clip.in + localSec * (clip.speed || 1)
+  }
+
+  // Transition crossfade state (roadmap B3 / core C5): while the playhead
+  // sits inside a transition window BOTH clips are live — the INCOMING
+  // clip carries `transitionIn`, the OUTGOING clip is the neighbor whose
+  // end lands on the window end (an intact pair). Broken pairs (neighbor
+  // moved/trimmed since) return null and render as a plain cut, matching
+  // what the export badge warns about until R3.
+  const transitionCrossfade = computed(() => {
+    const videoTrack = currentProject.value?.timeline?.tracks?.find(t => t.type === 'video')
+    const items = videoTrack?.items
+    if (!items?.length) return null
+    const at = playhead.value
+    for (const incoming of items) {
+      const ti = incoming.transitionIn
+      if (!ti || !(ti.duration > 0)) continue
+      const winStart = incoming.offset || 0
+      const winEnd = winStart + ti.duration / TICKS_PER_SECOND
+      if (at < winStart || at >= winEnd) continue
+      // The incoming clip must still cover the playhead — a split or trim
+      // inside the window broke the pair (render as a plain cut).
+      const incomingEnd = winStart + (incoming.out - incoming.in) / (incoming.speed || 1)
+      if (at >= incomingEnd) continue
+      const outgoing = items.find(o =>
+        o.id !== incoming.id
+        && Math.abs((o.offset || 0) + (o.out - o.in) / (o.speed || 1) - winEnd) < 0.005)
+      if (!outgoing) continue
+      return {
+        incoming,
+        outgoing,
+        type: ti.type,
+        progress: Math.min(1, (at - winStart) / Math.max(0.001, winEnd - winStart)),
+        outgoingMediaTime: mediaTimeAt(outgoing, at)
+      }
+    }
+    return null
+  })
+
   // Active video clip at current playhead
   const activeVideoClip = computed(() => {
     if (!currentProject.value?.timeline?.tracks) return null
     const videoTrack = currentProject.value.timeline.tracks.find(t => t.type === 'video')
     if (!videoTrack) return null
 
+    const crossfade = transitionCrossfade.value
     for (const clip of videoTrack.items || []) {
+      // Inside a transition window the OUTGOING clip owns the second
+      // layer — the main element always renders the INCOMING clip.
+      if (crossfade && clip.id === crossfade.outgoing.id) continue
       const clipDuration = (clip.out - clip.in) / (clip.speed || 1)
       const clipStart = clip.offset || 0
       const clipEnd = clipStart + clipDuration
       if (playhead.value >= clipStart && playhead.value < clipEnd) {
         return {
           clip,
-          // Time within the source media
-          mediaCurrentTime: clip.in + (playhead.value - clipStart) * (clip.speed || 1)
+          mediaCurrentTime: mediaTimeAt(clip, playhead.value)
         }
       }
     }
@@ -92,6 +146,46 @@ export function useTmcutPlayback() {
         // loop self-heals the frame position while playing
       }
     }
+    syncOutgoingVideo()
+  }
+
+  // Keep the OUTGOING crossfade layer in sync (roadmap B3). Mirrors the
+  // main element: seek-driven for reverse clips or a reverse (J) shuttle,
+  // playing forward with drift correction otherwise; paused whenever no
+  // transition window is active.
+  function syncOutgoingVideo() {
+    const el = outgoingVideoRef.value
+    if (!el) return
+    const pair = transitionCrossfade.value
+    if (!pair) {
+      if (!el.paused) el.pause()
+      return
+    }
+    const target = pair.outgoingMediaTime
+    if (shuttleRate.value < 0 || pair.outgoing.reverse) {
+      if (!el.paused) el.pause()
+      if (Math.abs(el.currentTime - target) > 0.25) {
+        try {
+          el.currentTime = target
+        } catch {
+          // ignore seeks on unloaded metadata; retried next frame
+        }
+      }
+      return
+    }
+    if (Math.abs(el.currentTime - target) > 0.3) {
+      try {
+        el.currentTime = target
+      } catch {
+        // ignore seeks on unloaded metadata; retried next frame
+      }
+    }
+    el.playbackRate = Math.max(0.1, Math.abs(shuttleRate.value))
+    if (isPlaying.value) {
+      if (el.paused) el.play().catch(() => {})
+    } else if (!el.paused) {
+      el.pause()
+    }
   }
 
   // Playback animation loop
@@ -100,8 +194,8 @@ export function useTmcutPlayback() {
 
   // Loop wrap bounds: the In/Out zone when valid, else the full timeline.
   function loopBounds(): { start: number, end: number } {
-    const hasRange = renderIn.value !== null && renderOut.value !== null &&
-      renderOut.value - renderIn.value >= 0.05
+    const hasRange = renderIn.value !== null && renderOut.value !== null
+      && renderOut.value - renderIn.value >= 0.05
     return hasRange
       ? { start: renderIn.value!, end: renderOut.value! }
       : { start: 0, end: totalDuration.value }
@@ -155,6 +249,7 @@ export function useTmcutPlayback() {
           }
         }
       }
+      syncOutgoingVideo()
       animId = requestAnimationFrame(step)
       return
     }
@@ -183,20 +278,35 @@ export function useTmcutPlayback() {
     if (videoRef.value) {
       if (activeVideoClip.value) {
         const targetTime = activeVideoClip.value.mediaCurrentTime
-        if (Math.abs(videoRef.value.currentTime - targetTime) > 0.3) {
-          try {
-            videoRef.value.currentTime = targetTime
-          } catch {
-            // ignore seeks on unloaded metadata; retried next frame
+        // Reverse clips cannot play natively (the element only runs
+        // forward): step by seeking, exactly like the J shuttle branch
+        // above. Forward clips keep playing with drift-correction seeks.
+        if (activeVideoClip.value.clip.reverse) {
+          if (!videoRef.value.paused) videoRef.value.pause()
+          if (Math.abs(videoRef.value.currentTime - targetTime) > 0.25) {
+            try {
+              videoRef.value.currentTime = targetTime
+            } catch {
+              // ignore seeks on unloaded metadata; retried next frame
+            }
           }
-        }
-        if (videoRef.value.paused) {
-          videoRef.value.play().catch(() => {})
+        } else {
+          if (Math.abs(videoRef.value.currentTime - targetTime) > 0.3) {
+            try {
+              videoRef.value.currentTime = targetTime
+            } catch {
+              // ignore seeks on unloaded metadata; retried next frame
+            }
+          }
+          if (videoRef.value.paused) {
+            videoRef.value.play().catch(() => {})
+          }
         }
       } else if (!videoRef.value.paused) {
         videoRef.value.pause()
       }
     }
+    syncOutgoingVideo()
 
     animId = requestAnimationFrame(step)
   }
@@ -218,6 +328,7 @@ export function useTmcutPlayback() {
       videoRef.value.playbackRate = Math.max(0.1, Math.abs(shuttleRate.value))
       videoRef.value.play().catch(() => {})
     }
+    syncOutgoingVideo()
     animId = requestAnimationFrame(step)
   }
 
@@ -233,6 +344,7 @@ export function useTmcutPlayback() {
       videoRef.value.pause()
       videoRef.value.playbackRate = 1
     }
+    syncOutgoingVideo()
   }
 
   function togglePlayPause() {
@@ -335,7 +447,9 @@ export function useTmcutPlayback() {
     isPlaying,
     zoom,
     videoRef,
+    outgoingVideoRef,
     activeVideoClip,
+    transitionCrossfade,
     activeTextClips,
     formatTimecode,
     seek,

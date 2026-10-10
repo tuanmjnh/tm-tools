@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { TICKS_PER_SECOND } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { toURL } from '~/utils/ffmpegHelper'
+import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
+import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 
 const { t } = useI18n()
 
@@ -24,12 +27,24 @@ const {
   toggleTrackMute,
   toggleTrackLock,
   toggleTrackHidden,
+  addTrackToProject,
+  removeTrackFromProject,
   clipboard,
   rippleMode,
   copySelectedClips,
   pasteClipboardAt,
   duplicateSelectedClips,
   rippleDeleteSelected,
+  snapTimeSec,
+  timelineMarkers,
+  addMarkerAt,
+  updateMarker,
+  removeMarkerById,
+  trimSelectedEdgeAt,
+  groupSelection,
+  ungroupSelection,
+  toggleLinkSelection,
+  closeProjectGaps,
   flushDiskSave
 } = useTmcutProject()
 
@@ -47,8 +62,8 @@ const {
 } = useTmcutPlayback()
 
 const { pickFile, pickWebFiles } = useFileSystem()
-const { isDesktop, importWebFiles } = useTmcutMedia()
-const { tip, shortcutsOpen } = useTmcutUiPrefs()
+const { isDesktop, importWebFiles, addAssetToTimeline } = useTmcutMedia()
+const { tip, shortcutsOpen, snapOn } = useTmcutUiPrefs()
 const toast = useToast()
 
 const tracksContainerRef = ref<HTMLDivElement | null>(null)
@@ -58,6 +73,32 @@ const rulerRef = ref<HTMLDivElement | null>(null)
 const timelineWidth = computed(() => {
   return Math.max(1200, (totalDuration.value + 10) * zoom.value)
 })
+
+// Fit the whole timeline (content + right padding) into the visible
+// tracks viewport — the "fit to screen" button of design #2.
+function zoomToFit() {
+  const el = tracksContainerRef.value
+  if (!el || totalDuration.value <= 0) return
+  const fit = (el.clientWidth - 8) / (totalDuration.value + 10)
+  zoom.value = Math.round(Math.min(200, Math.max(15, fit)))
+}
+
+// Ctrl/Cmd + wheel zooms the timeline anchored at the cursor position
+// (plain wheel keeps the native horizontal scrolling). preventDefault
+// also stops Electron/Chromium from page-zooming the app window.
+function onTracksWheel(event: WheelEvent) {
+  if (!event.ctrlKey && !event.metaKey) return
+  event.preventDefault()
+  const container = tracksContainerRef.value
+  if (!container) return
+  const offsetX = event.clientX - container.getBoundingClientRect().left
+  const timeAtCursor = (container.scrollLeft + offsetX) / zoom.value
+  const direction = event.deltaY > 0 ? -1 : 1
+  zoom.value = Math.round(Math.min(200, Math.max(15, zoom.value + direction * 10)))
+  nextTick(() => {
+    container.scrollLeft = Math.max(0, timeAtCursor * zoom.value - offsetX)
+  })
+}
 
 // Generate tick markers for ruler (every 1s, with major ticks every 5s)
 const rulerTicks = computed(() => {
@@ -80,6 +121,72 @@ const rulerTicks = computed(() => {
 // Playhead position in pixels
 const playheadLeft = computed(() => playhead.value * zoom.value)
 
+// ---- Ruler markers (roadmap B5) ----
+const MARKER_COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#a855f7', '#e5e7eb']
+
+// Marker pins: ticks → px at the current zoom. The value is shifted
+// left by 6px so the wrapper's 12px hit strip is centered on the line
+// (an easy dblclick target).
+const markerPins = computed(() => timelineMarkers.value.map(m => ({
+  ...m,
+  left: (m.at / TICKS_PER_SECOND) * zoom.value - 6
+})))
+
+const editingMarkerId = ref<string | null>(null)
+const editingMarkerLabel = ref('')
+const markerEditorPos = ref({ x: 0, y: 0 })
+const markerEditorRef = ref<HTMLElement | null>(null)
+const markerLabelInputRef = ref<HTMLInputElement | null>(null)
+
+// Label/color editor opened by dblclicking a pin. It is fixed-positioned
+// because the ruler clips overflow; a window mousedown listener commits
+// the label and dismisses it when clicking anywhere else (Esc discards).
+function openMarkerEditor(marker: { id: string, label?: string }, e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  editingMarkerId.value = marker.id
+  editingMarkerLabel.value = marker.label || ''
+  markerEditorPos.value = {
+    x: Math.min(rect.left, window.innerWidth - 240),
+    y: Math.min(rect.bottom + 6, window.innerHeight - 120)
+  }
+}
+
+function commitMarkerEditor() {
+  const id = editingMarkerId.value
+  editingMarkerId.value = null
+  if (!id) return
+  const pin = timelineMarkers.value.find(m => m.id === id)
+  if (!pin) return
+  const label = editingMarkerLabel.value.trim()
+  // Touch history only when the label really changed.
+  if (label !== (pin.label || '')) updateMarker(id, { label })
+}
+
+function setMarkerColor(color: string) {
+  if (editingMarkerId.value) updateMarker(editingMarkerId.value, { color })
+}
+
+function deleteMarker() {
+  const id = editingMarkerId.value
+  editingMarkerId.value = null
+  if (id) removeMarkerById(id)
+}
+
+function onMarkerEditorOutside(e: MouseEvent) {
+  if (markerEditorRef.value && !markerEditorRef.value.contains(e.target as Node)) {
+    commitMarkerEditor()
+  }
+}
+
+watch(editingMarkerId, (id) => {
+  if (id) {
+    window.addEventListener('mousedown', onMarkerEditorOutside)
+    nextTick(() => markerLabelInputRef.value?.focus())
+  } else {
+    window.removeEventListener('mousedown', onMarkerEditorOutside)
+  }
+})
+
 // In/Out render zone (export zone) overlay geometry — shown on the ruler
 // (flags + tint) and across the track rows (transparent highlight band).
 const renderZoneStyle = computed(() => {
@@ -98,6 +205,94 @@ const markInStyle = computed(() => (
 const markOutStyle = computed(() => (
   renderOut.value !== null ? { left: `${renderOut.value * zoom.value}px` } : null
 ))
+
+// --- Minimap overview strip (Roadmap A7) ---
+// Fixed bar above the scroll area: clip blocks for the whole project,
+// viewport frame and playhead. DOM scrollLeft/width are not reactive,
+// so they are mirrored here on scroll/zoom/resize.
+const minimapRef = ref<HTMLDivElement | null>(null)
+const minimapState = ref({ scrollLeft: 0, width: 0 })
+
+function syncMinimapState() {
+  const el = tracksContainerRef.value
+  if (!el) return
+  minimapState.value = { scrollLeft: el.scrollLeft, width: el.clientWidth }
+}
+
+watch([zoom, timelineWidth], async () => {
+  await nextTick()
+  syncMinimapState()
+})
+
+// Clip blocks: every track's items projected onto the bar (content px
+// → bar px via visibleWidth / timelineWidth). Duration honors speed so
+// blocks match what the timeline rows show.
+const minimapClipBlocks = computed(() => {
+  const tracks = currentProject.value?.timeline?.tracks || []
+  const w = minimapState.value.width
+  const denom = timelineWidth.value || 1
+  const blocks: Array<{ id: string, left: number, width: number, color: string }> = []
+  for (const track of tracks) {
+    const color = track.type === 'video'
+      ? 'bg-blue-400/50'
+      : track.type === 'text'
+        ? 'bg-amber-400/50'
+        : 'bg-emerald-400/50'
+    for (const clip of track.items || []) {
+      const dur = Math.max(0.01, (clip.out - clip.in) / (clip.speed || 1))
+      blocks.push({
+        id: clip.id,
+        left: ((clip.offset || 0) * zoom.value * w) / denom,
+        width: Math.max(1, (dur * zoom.value * w) / denom),
+        color
+      })
+    }
+  }
+  return blocks
+})
+
+// Viewport frame: the slice of the content currently visible. Clamped so
+// a content narrower than the viewport still renders a full-width frame.
+const minimapViewportStyle = computed(() => {
+  const w = minimapState.value.width
+  const denom = timelineWidth.value || 1
+  if (!w) return null
+  const left = (minimapState.value.scrollLeft / denom) * w
+  const width = Math.max(4, Math.min(w - left, (w * w) / denom))
+  return { left: `${left}px`, width: `${width}px` }
+})
+
+const minimapPlayheadStyle = computed(() => ({
+  left: `${(playhead.value * zoom.value * minimapState.value.width) / (timelineWidth.value || 1)}px`
+}))
+
+// Click/drag anywhere on the bar centers the viewport at that position
+// (the scroll event then refreshes the frame via syncMinimapState).
+function panFromMinimap(e: MouseEvent) {
+  const container = tracksContainerRef.value
+  const bar = minimapRef.value
+  if (!container || !bar) return
+  const rect = bar.getBoundingClientRect()
+  const ratio = (e.clientX - rect.left) / rect.width
+  container.scrollLeft = (ratio * timelineWidth.value) - container.clientWidth / 2
+}
+
+function onMinimapMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return
+  panFromMinimap(e)
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    panFromMinimap(moveEvent)
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
 
 // Handle scrubbing on ruler (pauses playback, like other NLEs)
 function onRulerMouseDown(e: MouseEvent) {
@@ -131,6 +326,40 @@ function updatePlayheadFromPointer(e: MouseEvent) {
   seek(targetSec)
 }
 
+// --- Media card drop (Roadmap A4): HTML5 DnD from the media grid ---
+function onMediaDragOver(e: DragEvent) {
+  // Only accept our own asset payload so external file drags are ignored.
+  if (!e.dataTransfer?.types.includes(TMCUT_ASSET_MIME)) return
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'copy'
+}
+
+function onMediaDrop(e: DragEvent) {
+  const raw = e.dataTransfer?.getData(TMCUT_ASSET_MIME)
+  if (!raw) return
+  e.preventDefault()
+  let payload: TmcutAssetDragPayload
+  try {
+    payload = JSON.parse(raw) as TmcutAssetDragPayload
+  } catch {
+    return
+  }
+  const canvas = e.currentTarget as HTMLElement
+  const rect = canvas.getBoundingClientRect()
+  // Same rule as the ruler scrub: the canvas lives inside the scroll
+  // container, so rect.left already includes the horizontal scroll.
+  const targetSec = Math.max(0, (e.clientX - rect.left) / zoom.value)
+  const snappedSec = snapTimeSec(targetSec, playhead.value, { thresholdSec: 8 / zoom.value })
+  const desiredType = payload.kind === 'audio' ? 'audio' : 'video'
+  const tracks = currentProject.value?.timeline?.tracks || []
+  // Track rows are uniform h-14 (56px); dropping below the last row (or
+  // on an incompatible type) falls back to the first compatible track
+  // inside addClipToTrack.
+  const rowTrack = tracks[Math.floor((e.clientY - rect.top) / 56)]
+  const trackId = rowTrack && rowTrack.type === desiredType ? rowTrack.id : undefined
+  addAssetToTimeline(payload.id, { offset: snappedSec, trackId })
+}
+
 // Click empty track background to seek (CapCut-style). Clip interactions
 // are guarded by [data-tmcut-clip] so drags/trims never trigger a seek.
 function onTracksBackgroundMouseDown(e: MouseEvent) {
@@ -151,21 +380,92 @@ function handleSplit() {
     }
   }
 
-  // Fallback: look for clip under playhead in video track
-  const videoTrack = currentProject.value?.timeline?.tracks.find(t => t.type === 'video')
-  if (videoTrack) {
-    for (const clip of videoTrack.items) {
+  // Roadmap B6 — razor mode: with nothing selected (or the selected
+  // clip out of range), cut EVERY clip under the playhead across all
+  // unlocked tracks. Iterate a snapshot because splitClip splices a
+  // second piece into the same array — fresh pieces must not split
+  // again — and let splitClip's own 0.1s margin guard reject edges.
+  let count = 0
+  for (const track of currentProject.value?.timeline?.tracks || []) {
+    if (track.locked) continue
+    for (const clip of [...(track.items || [])]) {
       const dur = (clip.out - clip.in) / (clip.speed || 1)
       if (playhead.value > clip.offset && playhead.value < clip.offset + dur) {
-        splitClip(clip.id, playhead.value)
-        toast.add({ title: t('tmcut.timelineActions.splitVideoAtPlayhead'), color: 'success' })
-        return
+        if (splitClip(clip.id, playhead.value)) count++
       }
     }
+  }
+  if (count > 0) {
+    toast.add({ title: t('tmcut.timelineActions.razorSplitCount', { count }), color: 'success' })
+    return
   }
 
   toast.add({ title: t('tmcut.timelineActions.placePlayheadToSplit'), color: 'warning' })
 }
+
+// Alt+[ / Alt+] (roadmap B7): cut the selected clip's In/Out edge to
+// the playhead through core trimClip (via the v1↔v3 bridge). One toast
+// covers every no-op case: no selection, locked track, or playhead
+// outside the clip.
+function handleTrimEdge(edge: 'in' | 'out') {
+  if (trimSelectedEdgeAt(edge, playhead.value)) {
+    toast.add({ title: t('tmcut.timelineActions.trimAtPlayhead'), color: 'success' })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.trimNotPossible'), color: 'warning' })
+  }
+}
+
+// Groups & linked pairs (roadmap B4). Every no-op gets an honest toast:
+// the single-clip selection can only group what its relations expand to.
+function handleGroup() {
+  if (groupSelection()) {
+    toast.add({ title: t('tmcut.timelineActions.groupCreated'), color: 'success' })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.relationsNone'), color: 'warning' })
+  }
+}
+
+function handleUngroup() {
+  if (ungroupSelection()) {
+    toast.add({ title: t('tmcut.timelineActions.ungrouped'), color: 'success' })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.relationsNone'), color: 'warning' })
+  }
+}
+
+function handleLinkToggle() {
+  const result = toggleLinkSelection()
+  if (result === 'linked') {
+    toast.add({ title: t('tmcut.timelineActions.linkCreated'), color: 'success' })
+  } else if (result === 'unlinked') {
+    toast.add({ title: t('tmcut.timelineActions.linkRemoved'), color: 'success' })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.linkNotPossible'), color: 'warning' })
+  }
+}
+
+// Close gaps (roadmap B9 — core C2): pull every unlocked track together.
+function handleCloseGaps() {
+  const closed = closeProjectGaps()
+  if (closed > 0) {
+    toast.add({
+      title: t('tmcut.timelineActions.gapsClosed', { seconds: Math.round(closed * 10) / 10 }),
+      color: 'success'
+    })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.noGaps'), color: 'warning' })
+  }
+}
+
+// Track add menu (Roadmap A5): one entry per track type, opened from the
+// "+"/TRACKS corner above the track headers.
+const addTrackMenuItems = computed(() => [
+  [
+    { label: t('tmcut.tracks.addVideoTrack'), icon: 'i-lucide-film', onSelect: () => addTrackToProject('video') },
+    { label: t('tmcut.tracks.addTextTrack'), icon: 'i-lucide-type', onSelect: () => addTrackToProject('text') },
+    { label: t('tmcut.tracks.addAudioTrack'), icon: 'i-lucide-music', onSelect: () => addTrackToProject('audio') }
+  ]
+])
 
 // Delete clip action (ripple mode closes the gap via the core engine)
 function handleDelete() {
@@ -336,12 +636,15 @@ function onTracksScroll(e: Event) {
   if (rulerRef.value) {
     rulerRef.value.scrollLeft = target.scrollLeft
   }
+  syncMinimapState()
 }
 
 // Global shortcuts (timeline scope):
 // Ctrl/Cmd+Z/Y undo-redo, Ctrl/Cmd+C/V/D clipboard, Ctrl/Cmd+S save,
-// Ctrl/Cmd+E export, Ctrl/Cmd+K help, S split, Delete/Backspace remove,
-// R ripple toggle, I/O render marks, ?/F1 shortcuts help (§65.1).
+// Ctrl/Cmd+E export, Ctrl/Cmd+K help, Ctrl/Cmd+G group, Ctrl/Cmd+L link,
+// S split (razor when nothing is selected), Delete/Backspace remove,
+// R ripple toggle, N snap toggle, M add marker, I/O render marks,
+// Alt+[/] trim edge to playhead, ?/F1 shortcuts help (§65.1).
 const emit = defineEmits<{
   (e: 'open-export'): void
 }>()
@@ -381,6 +684,15 @@ function handleGlobalKeydown(e: KeyboardEvent) {
       // Ctrl+K opens the help; the modal focuses its own search field
       e.preventDefault()
       shortcutsOpen.value = true
+    } else if (key === 'g') {
+      // Ctrl+G groups / Ctrl+Shift+G ungroups the expanded selection (B4)
+      e.preventDefault()
+      if (e.shiftKey) handleUngroup()
+      else handleGroup()
+    } else if (key === 'l') {
+      // Ctrl+L links / Ctrl+Shift+L unlinks overlapping clips (B4)
+      e.preventDefault()
+      handleLinkToggle()
     }
     return
   }
@@ -401,10 +713,20 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   } else if (key === 'r') {
     // R toggles ripple editing (the toolbar button shows the state)
     rippleMode.value = !rippleMode.value
+  } else if (key === 'n') {
+    // N toggles magnetic snap (the Magnet toolbar button shows the state)
+    snapOn.value = !snapOn.value
+  } else if (key === 'm') {
+    // M drops a ruler marker at the playhead (roadmap B5)
+    addMarkerAt(playhead.value)
   } else if (key === 'i') {
     setRenderMark('in')
   } else if (key === 'o') {
     setRenderMark('out')
+  } else if (e.altKey && (key === '[' || key === ']')) {
+    // Alt+[ / Alt+] cut the selected clip's In/Out edge to the
+    // playhead (roadmap B7)
+    handleTrimEdge(key === '[' ? 'in' : 'out')
   } else if (key === '?' || key === 'f1') {
     e.preventDefault()
     shortcutsOpen.value = true
@@ -413,10 +735,16 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('resize', syncMinimapState)
+  syncMinimapState()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('resize', syncMinimapState)
+  // A marker editor left open would otherwise keep its outside-click
+  // listener alive after the timeline unmounts.
+  window.removeEventListener('mousedown', onMarkerEditorOutside)
 })
 </script>
 
@@ -494,6 +822,22 @@ onUnmounted(() => {
           :title="tip(t('tmcut.timelineActions.ripple'), 'R')"
           @click="rippleMode = !rippleMode"
         />
+        <UButton
+          icon="i-lucide-magnet"
+          size="xs"
+          :variant="snapOn ? 'solid' : 'soft'"
+          :color="snapOn ? 'primary' : 'neutral'"
+          :title="tip(t('tmcut.timelineActions.magnet'), 'N')"
+          @click="snapOn = !snapOn"
+        />
+        <UButton
+          icon="i-lucide-chevrons-left"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :title="t('tmcut.timelineActions.closeGaps')"
+          @click="handleCloseGaps"
+        />
 
         <div class="h-4 w-px bg-neutral-800 mx-1" />
 
@@ -504,7 +848,7 @@ onUnmounted(() => {
           color="primary"
           @click="handleAddVideo"
         >
-          + Video
+          + {{ t('tmcut.addVideo') }}
         </UButton>
         <UButton
           icon="i-lucide-type"
@@ -573,6 +917,14 @@ onUnmounted(() => {
         >
         <UIcon name="i-lucide-zoom-in" class="size-3.5 text-neutral-500" />
         <span class="text-[10px] font-mono text-neutral-400 w-11 text-right">{{ zoom }}px</span>
+        <UButton
+          icon="i-lucide-maximize-2"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :title="t('tmcut.timelineActions.zoomFit')"
+          @click="zoomToFit"
+        />
       </div>
     </div>
 
@@ -580,9 +932,22 @@ onUnmounted(() => {
     <div class="flex-1 flex overflow-hidden relative">
       <!-- Fixed Left Track Headers (w-44) -->
       <div class="w-44 border-r border-neutral-800 bg-neutral-950/80 flex flex-col shrink-0 z-20">
-        <!-- Ruler Corner -->
-        <div class="h-6 border-b border-neutral-800 flex items-center px-2 text-[10px] font-mono text-neutral-500">
-          TRACKS
+        <!-- Spacer aligned with the minimap strip on the right, so the
+             TRACKS corner keeps matching the ruler height -->
+        <div class="h-4 mt-1 mx-1 shrink-0" />
+
+        <!-- Ruler Corner (+ opens the add-track menu) -->
+        <div class="h-6 border-b border-neutral-800 flex items-center justify-between px-2 text-[10px] font-mono text-neutral-500">
+          <span>TRACKS</span>
+          <UDropdownMenu :items="addTrackMenuItems" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-plus"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :title="t('tmcut.tracks.addTrack')"
+            />
+          </UDropdownMenu>
         </div>
 
         <!-- Track Labels with eye / lock / mute (CapCut-style) -->
@@ -626,110 +991,218 @@ onUnmounted(() => {
                 :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
                 @click="toggleTrackMute(track.id)"
               />
+              <UButton
+                icon="i-lucide-trash-2"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                :disabled="track.locked"
+                :title="t('tmcut.tracks.removeTrack')"
+                @click="removeTrackFromProject(track.id)"
+              />
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Scrollable Tracks & Ruler Area -->
-      <div
-        ref="tracksContainerRef"
-        class="flex-1 flex flex-col overflow-x-auto overflow-y-hidden relative select-none"
-        @scroll="onTracksScroll"
-      >
-        <!-- Time Ruler Bar (Sticky at top of tracks) -->
+      <!-- Right column: fixed minimap strip + scrollable tracks -->
+      <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+        <!-- Minimap overview (Roadmap A7): clip blocks for the whole
+             project + viewport frame + playhead; click/drag pans the
+             scroll viewport -->
         <div
-          ref="rulerRef"
-          class="h-6 border-b border-neutral-800 bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
-          :style="{ width: `${timelineWidth}px` }"
-          @mousedown="onRulerMouseDown"
+          ref="minimapRef"
+          class="h-4 mt-1 mx-1 shrink-0 relative rounded-sm bg-neutral-900 border border-neutral-800 overflow-hidden cursor-ew-resize"
+          :title="t('tmcut.timelineActions.minimap')"
+          @mousedown="onMinimapMouseDown"
         >
-          <!-- Ruler Ticks -->
           <div
-            v-for="tick in rulerTicks"
-            :key="tick.sec"
-            class="absolute top-0 bottom-0 flex flex-col justify-end"
-            :style="{ left: `${tick.left}px` }"
-          >
-            <div class="w-px bg-neutral-700" :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'" />
-            <span
-              v-if="tick.isMajor"
-              class="absolute -top-0.5 left-1 text-[9px] font-mono text-neutral-500 select-none pointer-events-none"
-            >
-              {{ tick.label }}
-            </span>
-          </div>
-
-          <!-- In/Out render zone tint + edge flags on the ruler -->
-          <div
-            v-if="renderZoneStyle"
-            class="absolute top-0 bottom-0 bg-primary/10 border-x border-primary/50 pointer-events-none"
-            :style="renderZoneStyle"
+            v-for="block in minimapClipBlocks"
+            :key="block.id"
+            class="absolute top-0 bottom-0 opacity-70"
+            :class="block.color"
+            :style="{ left: `${block.left}px`, width: `${block.width}px` }"
           />
           <div
-            v-if="markInStyle"
-            class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
-            :style="markInStyle"
-          >
-            <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">I</span>
-          </div>
+            v-if="minimapViewportStyle"
+            class="absolute top-0 bottom-0 border-x border-primary/70 bg-primary/15 pointer-events-none"
+            :style="minimapViewportStyle"
+          />
           <div
-            v-if="markOutStyle"
-            class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
-            :style="markOutStyle"
-          >
-            <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">O</span>
-          </div>
+            class="absolute top-0 bottom-0 w-px bg-primary pointer-events-none"
+            :style="minimapPlayheadStyle"
+          />
         </div>
 
-        <!-- Tracks Canvas -->
+        <!-- Scrollable Tracks & Ruler Area -->
         <div
-          class="flex-1 flex flex-col divide-y divide-neutral-800/60 relative"
-          :style="{ width: `${timelineWidth}px` }"
-          @mousedown="onTracksBackgroundMouseDown"
+          ref="tracksContainerRef"
+          class="flex-1 flex flex-col overflow-x-auto overflow-y-hidden relative select-none"
+          @scroll="onTracksScroll"
+          @wheel="onTracksWheel"
         >
-          <!-- Red Vertical Playhead Line -->
+          <!-- Time Ruler Bar (Sticky at top of tracks) -->
           <div
-            class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none"
-            :style="{ left: `${playheadLeft}px` }"
+            ref="rulerRef"
+            class="h-6 border-b border-neutral-800 bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
+            :style="{ width: `${timelineWidth}px` }"
+            @mousedown="onRulerMouseDown"
           >
-            <!-- Top Playhead Needle Head -->
-            <div class="absolute -top-6 -translate-x-1/2 w-3 h-3 bg-red-500 rotate-45 rounded-xs" />
+            <!-- Ruler Ticks -->
+            <div
+              v-for="tick in rulerTicks"
+              :key="tick.sec"
+              class="absolute top-0 bottom-0 flex flex-col justify-end"
+              :style="{ left: `${tick.left}px` }"
+            >
+              <div class="w-px bg-neutral-700" :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'" />
+              <span
+                v-if="tick.isMajor"
+                class="absolute -top-0.5 left-1 text-[9px] font-mono text-neutral-500 select-none pointer-events-none"
+              >
+                {{ tick.label }}
+              </span>
+            </div>
+
+            <!-- In/Out render zone tint + edge flags on the ruler -->
+            <div
+              v-if="renderZoneStyle"
+              class="absolute top-0 bottom-0 bg-primary/10 border-x border-primary/50 pointer-events-none"
+              :style="renderZoneStyle"
+            />
+            <div
+              v-if="markInStyle"
+              class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
+              :style="markInStyle"
+            >
+              <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">I</span>
+            </div>
+            <div
+              v-if="markOutStyle"
+              class="absolute top-0 bottom-0 w-0.5 bg-primary/80 pointer-events-none"
+              :style="markOutStyle"
+            >
+              <span class="absolute top-0 left-1 text-[9px] font-mono font-bold text-primary leading-none">O</span>
+            </div>
+
+            <!-- Ruler markers (roadmap B5): the pin keeps bubbling its
+                 mousedown to the ruler (click seeks), while dblclick
+                 stops here and opens the label/color editor. -->
+            <div
+              v-for="pin in markerPins"
+              :key="pin.id"
+              class="absolute top-0 bottom-0 w-3 cursor-pointer"
+              :style="{ left: `${pin.left}px` }"
+              :title="pin.label || undefined"
+              @dblclick.stop="openMarkerEditor(pin, $event)"
+            >
+              <div
+                class="absolute left-[5px] top-0 h-full w-0.5"
+                :style="{ background: pin.color || '#3b82f6' }"
+              />
+              <div
+                class="absolute left-[4px] top-0 h-2 w-2 rotate-45"
+                :style="{ background: pin.color || '#3b82f6' }"
+              />
+              <span
+                v-if="pin.label"
+                class="absolute top-0.5 left-[9px] max-w-24 truncate rounded bg-neutral-800/90 px-1 py-0.5 text-[8px] leading-none text-neutral-300"
+              >
+                {{ pin.label }}
+              </span>
+            </div>
           </div>
 
-          <!-- Background Time Grid Lines -->
+          <!-- Tracks Canvas -->
           <div
-            v-for="tick in rulerTicks"
-            v-show="tick.isMajor"
-            :key="'grid-' + tick.sec"
-            class="absolute top-0 bottom-0 w-px bg-neutral-800/30 pointer-events-none"
-            :style="{ left: `${tick.left}px` }"
-          />
-
-          <!-- Track Rows -->
-          <div
-            v-for="track in currentProject?.timeline?.tracks || []"
-            :key="track.id"
-            class="h-14 relative bg-neutral-900/40 hover:bg-neutral-800/20 transition-colors"
-            :class="track.hidden ? 'opacity-40' : ''"
+            class="flex-1 flex flex-col divide-y divide-neutral-800/60 relative"
+            :style="{ width: `${timelineWidth}px` }"
+            @mousedown="onTracksBackgroundMouseDown"
+            @dragover="onMediaDragOver"
+            @drop="onMediaDrop"
           >
-            <!-- Clips inside track -->
-            <TmcutTimelineClip
-              v-for="clip in track.items"
-              :key="clip.id"
-              :track-type="track.type"
-              :clip="clip"
-              :locked="!!track.locked"
+            <!-- Vertical playhead line (primary accent, design #2) -->
+            <div
+              class="absolute top-0 bottom-0 w-0.5 bg-primary z-30 pointer-events-none"
+              :style="{ left: `${playheadLeft}px` }"
+            >
+              <!-- Top Playhead Needle Head -->
+              <div class="absolute -top-6 -translate-x-1/2 w-3 h-3 bg-primary rotate-45 rounded-xs" />
+            </div>
+
+            <!-- Background Time Grid Lines -->
+            <div
+              v-for="tick in rulerTicks"
+              v-show="tick.isMajor"
+              :key="'grid-' + tick.sec"
+              class="absolute top-0 bottom-0 w-px bg-neutral-800/30 pointer-events-none"
+              :style="{ left: `${tick.left}px` }"
+            />
+
+            <!-- Track Rows -->
+            <div
+              v-for="track in currentProject?.timeline?.tracks || []"
+              :key="track.id"
+              class="h-14 relative bg-neutral-900/40 hover:bg-neutral-800/20 transition-colors"
+              :class="track.hidden ? 'opacity-40' : ''"
+            >
+              <!-- Clips inside track -->
+              <TmcutTimelineClip
+                v-for="clip in track.items"
+                :key="clip.id"
+                :track-type="track.type"
+                :clip="clip"
+                :locked="!!track.locked"
+              />
+            </div>
+
+            <!-- In/Out render zone band across tracks (export zone) -->
+            <div
+              v-if="renderZoneStyle"
+              class="absolute top-0 bottom-0 bg-primary/5 border-x-2 border-primary/40 z-20 pointer-events-none"
+              :style="renderZoneStyle"
             />
           </div>
-
-          <!-- In/Out render zone band across tracks (export zone) -->
-          <div
-            v-if="renderZoneStyle"
-            class="absolute top-0 bottom-0 bg-primary/5 border-x-2 border-primary/40 z-20 pointer-events-none"
-            :style="renderZoneStyle"
-          />
         </div>
+      </div>
+    </div>
+
+    <!-- Marker label/color editor (roadmap B5): fixed-positioned so the
+         ruler's overflow-hidden never clips it. Enter or an outside
+         click commits the label; Esc discards; dots recolor, trash
+         deletes (with undo history). -->
+    <div
+      v-if="editingMarkerId"
+      ref="markerEditorRef"
+      class="fixed z-50 w-56 rounded-md border border-neutral-700 bg-neutral-900 p-2 shadow-xl shadow-black/40"
+      :style="{ left: `${markerEditorPos.x}px`, top: `${markerEditorPos.y}px` }"
+      @mousedown.stop
+    >
+      <input
+        ref="markerLabelInputRef"
+        v-model="editingMarkerLabel"
+        class="h-7 w-full rounded border border-neutral-700 bg-neutral-950 px-2 text-xs text-neutral-200 outline-none focus:border-primary"
+        @keydown.enter="commitMarkerEditor"
+        @keydown.esc="editingMarkerId = null"
+      >
+      <div class="mt-2 flex items-center gap-1.5">
+        <button
+          v-for="color in MARKER_COLORS"
+          :key="color"
+          type="button"
+          class="h-4 w-4 rounded-full border border-neutral-600 transition-transform hover:scale-110"
+          :style="{ background: color }"
+          :aria-label="t('tmcut.marker.color')"
+          @click="setMarkerColor(color)"
+        />
+        <button
+          type="button"
+          class="ml-auto flex h-6 w-6 items-center justify-center rounded text-red-400 hover:bg-red-500/10"
+          :aria-label="t('tmcut.marker.delete')"
+          @click="deleteMarker"
+        >
+          <UIcon name="i-lucide-trash-2" class="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
 

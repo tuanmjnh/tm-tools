@@ -1,5 +1,5 @@
 import type { TmcutProject } from '~/composables/useTmcutProject'
-import { buildFfmpegFitFilters } from '~/utils/tmcut/canvas'
+import { buildFfmpegFitFilters, buildFfmpegTransform } from '~/utils/tmcut/canvas'
 
 export type TmcutCompileMode = 'video' | 'audio' | 'gif'
 
@@ -61,8 +61,8 @@ function ffmpegColor(color: string | undefined): string {
  */
 function compileAudioOnly(
   outputPath: string,
-  videoClips: Array<{ src?: string, in: number, out: number, volume?: number }>,
-  audioClips: Array<{ src?: string, in: number, out: number, offset?: number, volume?: number }>,
+  videoClips: Array<{ src?: string, in: number, out: number, volume?: number, speed?: number, reverse?: boolean }>,
+  audioClips: Array<{ src?: string, in: number, out: number, offset?: number, volume?: number, speed?: number, reverse?: boolean }>,
   options: CompileOptions,
   outputDuration: number,
   range: TmcutCompileRange | null
@@ -77,13 +77,18 @@ function compileAudioOnly(
   let inputIdx = 0
 
   // Track audio (from video clips), resampled to a uniform 48 kHz so the
-  // concat and the MP3 encoder always get a supported layout.
+  // concat and the MP3 encoder always get a supported layout. Speed and
+  // reverse retime each clip like the video path (roadmap R1) so the
+  // audio-only export keeps the timeline's real durations.
   for (const clip of videoClips) {
     args.push('-i', clip.src!)
     const out = `[aud_${inputIdx}]`
     const vol = (clip.volume ?? 100) / 100
+    const speed = clip.speed || 1
+    const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
+    const aReverse = clip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},asetpts=PTS-STARTPTS,aresample=48000,volume=${vol}${out}`
+      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},aresample=48000,volume=${vol}${out}`
     )
     trackAuds.push(out)
     inputIdx++
@@ -97,15 +102,19 @@ function compileAudioOnly(
     current = trackAuds[0]!
   }
 
-  // Background audio clips, delayed to their timeline offset
+  // Background audio clips, delayed to their timeline offset (retime
+  // first, position second — same order as the video-mode BGM path).
   const bgmAuds: string[] = []
   for (const aClip of audioClips) {
     args.push('-i', aClip.src!)
     const out = `[bgm_${inputIdx}]`
     const delayMs = Math.round((aClip.offset || 0) * 1000)
     const vol = (aClip.volume ?? 100) / 100
+    const speed = aClip.speed || 1
+    const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
+    const aReverse = aClip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},asetpts=PTS-STARTPTS,aresample=48000,adelay=${delayMs}|${delayMs},volume=${vol}${out}`
+      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts},aresample=48000,adelay=${delayMs}|${delayMs},volume=${vol}${out}`
     )
     bgmAuds.push(out)
     inputIdx++
@@ -253,26 +262,62 @@ export function compileTimelineToFfmpeg(
 
       const speed = clip.speed || 1
       const setpts = speed !== 1 ? `setpts=(PTS-STARTPTS)/${speed}` : 'setpts=PTS-STARTPTS'
+      // Reverse playback (roadmap R1/C4): the frame sequence flips after
+      // retiming — setpts and reverse commute, so placement here only
+      // needs to stay before the fit chain. Audio mirrors it with areverse.
+      const reverseStep = clip.reverse ? ',reverse' : ''
 
-      // Video stream processing (trim, setpts, fit mode filters, setsar)
+      // Video stream processing (trim, setpts/reverse, fit mode filters,
+      // setsar). rotation (roadmap C7) appends a `rotate` step after the
+      // fit chain.
       const fitFilters = buildFfmpegFitFilters(clip.fit || 'fit', canvasW, canvasH, {
         focusX: clip.focusX ?? 0.5,
         focusY: clip.focusY ?? 0.5,
         cropRect: clip.cropRect,
-        padColor: bgColor
+        padColor: bgColor,
+        rotation: clip.rotation
       })
-      const vScaled = `[v_scaled_${currentInputIdx}]`
-      filterChains.push(
-        `[${currentInputIdx}:v]trim=start=${clip.in}:end=${clip.out},${setpts},${fitFilters.join(',')},setsar=1${vScaled}`
-      )
-      vStreams.push(vScaled)
+      const clipDuration = (clip.out - clip.in) / speed
+      // Clip transform (x/y/scale, roadmap R10): non-identity transforms
+      // compose the canvas-sized stream over a solid background so scaled
+      // content larger than the canvas (or gaps below 100%) render like the
+      // preview. Identity clips keep the plain chain.
+      const transform = buildFfmpegTransform({
+        canvasW,
+        canvasH,
+        scale: clip.scale,
+        x: clip.x,
+        y: clip.y,
+        fps,
+        duration: clipDuration,
+        bgColor
+      })
+      const vOut = `[v_scaled_${currentInputIdx}]`
+      const clipChain = `[${currentInputIdx}:v]trim=start=${clip.in}:end=${clip.out},${setpts}${reverseStep},${fitFilters.join(',')},setsar=1`
+      if (transform) {
+        const vBg = `[v_bg_${currentInputIdx}]`
+        const vFg = `[v_fg_${currentInputIdx}]`
+        filterChains.push(`${transform.bg}${vBg}`)
+        filterChains.push(`${clipChain},${transform.tail}${vFg}`)
+        filterChains.push(`${vBg}${vFg}${transform.overlay}${vOut}`)
+      } else {
+        filterChains.push(`${clipChain}${vOut}`)
+      }
+      vStreams.push(vOut)
 
-      // Audio stream processing (atrim, asetpts, volume)
+      // Audio stream processing (atrim, reverse, speed retime, volume).
+      // ORDER MATTERS (verified against ffmpeg): areverse rebuilds its
+      // output at the nominal sample rate, so it must run BEFORE the
+      // speed asetpts — the other order silently undoes the retime.
+      // Audio must retime exactly like video (roadmap R1) or the concat
+      // segments drift out of sync.
       if (hasAudio) {
         const vol = (clip.volume ?? 100) / 100
+        const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
+        const aReverse = clip.reverse ? 'areverse,' : ''
         const aTrimmed = `[a_trim_${currentInputIdx}]`
         filterChains.push(
-          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},asetpts=PTS-STARTPTS,volume=${vol}${aTrimmed}`
+          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},volume=${vol}${aTrimmed}`
         )
         aStreams.push(aTrimmed)
       }
@@ -316,9 +361,16 @@ export function compileTimelineToFfmpeg(
         const aProcessed = `[bgm_${i}]`
         const delayMs = Math.round((aClip.offset || 0) * 1000)
         const vol = (aClip.volume ?? 100) / 100
+        // Retime before positioning: reverse/speed the clip content first,
+        // then adelay places the result at its timeline offset (R1). The
+        // areverse-before-asetpts order is required — see the clip audio
+        // chain comment above.
+        const aSpeed = aClip.speed || 1
+        const aSetpts = aSpeed !== 1 ? `asetpts=(PTS-STARTPTS)/${aSpeed}` : 'asetpts=PTS-STARTPTS'
+        const aReverse = aClip.reverse ? 'areverse,' : ''
 
         filterChains.push(
-          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${vol}${aProcessed}`
+          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts},adelay=${delayMs}|${delayMs},volume=${vol}${aProcessed}`
         )
         audioMixStreams.push(aProcessed)
       }

@@ -143,9 +143,16 @@ async function createWindow() {
     win.loadURL(`http://127.0.0.1:${PORT}`)
   }
 
-  win.webContents.on('before-input-event', (_event, input) => {
+  win.webContents.on('before-input-event', (event, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'i') {
       win.webContents.toggleDevTools()
+      return
+    }
+    // F5 reload: the app sets the application menu to null (which removes
+    // Electron's default reload roles), so F5 is wired here manually.
+    if (input.key === 'F5') {
+      event.preventDefault()
+      win.webContents.reload()
     }
   })
 

@@ -34,7 +34,7 @@ const sectionMeta: Array<{ key: Category, icon: string }> = [
   { key: 'ai', icon: 'i-lucide-sparkles' }
 ]
 
-// All 15 documented actions. Items marked "planned" (In/Out points, AI
+// Every documented action. Items marked "planned" (In/Out points, AI
 // automation) are shown dimmed with a badge until the feature ships, so
 // the action counter and the help stay truthful (§65.1).
 const items = computed<ShortcutItem[]>(() => [
@@ -62,6 +62,36 @@ const items = computed<ShortcutItem[]>(() => [
     id: 'rippleToggle', category: 'editing', label: t('tmcut.hotkeys.rippleToggle'),
     desc: t('tmcut.hotkeys.desc.rippleToggle'), keys: ['R'], keySep: false,
     keywords: 'ripple toggle gap gapless editing r', badge: 'dynamic', wide: true
+  },
+  {
+    id: 'zoomScroll', category: 'editing', label: t('tmcut.hotkeys.zoomScroll'),
+    desc: t('tmcut.hotkeys.desc.zoomScroll'), keys: ['Ctrl + Scroll'], keySep: false,
+    keywords: 'zoom timeline scroll wheel ctrl cuộn phóng to thu nhỏ'
+  },
+  {
+    id: 'snapMagnet', category: 'editing', label: t('tmcut.hotkeys.snapMagnet'),
+    desc: t('tmcut.hotkeys.desc.snapMagnet'), keys: ['N'], keySep: false,
+    keywords: 'snap magnet magnetic bám dính từ tính toggle n'
+  },
+  {
+    id: 'addMarker', category: 'editing', label: t('tmcut.hotkeys.addMarker'),
+    desc: t('tmcut.hotkeys.desc.addMarker'), keys: ['M'], keySep: false,
+    keywords: 'marker bookmark ruler flag mốc đánh dấu m'
+  },
+  {
+    id: 'trimKeyboard', category: 'editing', label: t('tmcut.hotkeys.trimKeyboard'),
+    desc: t('tmcut.hotkeys.desc.trimKeyboard'), keys: ['Alt + [', 'Alt + ]'], keySep: true,
+    keywords: 'trim cut in out edge playhead alt bracket cắt đầu đuôi'
+  },
+  {
+    id: 'groupUngroup', category: 'editing', label: t('tmcut.hotkeys.groupUngroup'),
+    desc: t('tmcut.hotkeys.desc.groupUngroup'), keys: ['Ctrl + G', 'Ctrl + Shift + G'], keySep: true,
+    keywords: 'group ungroup nhóm gỡ nhóm ctrl g'
+  },
+  {
+    id: 'linkUnlink', category: 'editing', label: t('tmcut.hotkeys.linkUnlink'),
+    desc: t('tmcut.hotkeys.desc.linkUnlink'), keys: ['Ctrl + L', 'Ctrl + Shift + L'], keySep: true,
+    keywords: 'link unlink pair audio video liên kết ctrl l'
   },
   {
     id: 'playPause', category: 'playback', label: t('tmcut.hotkeys.playPause'),

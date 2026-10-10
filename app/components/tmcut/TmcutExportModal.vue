@@ -11,7 +11,7 @@ import type { ToolTask } from '~/types'
 const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
-const { currentProject, totalDuration } = useTmcutProject()
+const { currentProject, totalDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl } = useTmcutMedia()
 const taskManager = useToolTaskManager('ffmpeg')
@@ -442,6 +442,24 @@ function previewResultDirectly() {
               {{ t('tmcut.export.watchFolder') }} · {{ t('tmcut.export.watchFolderHint') }}
             </span>
           </label>
+
+          <!-- Honest badge (roadmap B3): transitions blend in the editor
+               preview, but export blends them only once the xfade render
+               lands — until then these points export as hard cuts. -->
+          <div
+            v-if="timelineTransitionCount > 0 && mode !== 'audio'"
+            class="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+          >
+            <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400 shrink-0 mt-0.5" />
+            <div class="flex flex-col gap-0.5 min-w-0">
+              <span class="text-xs font-medium text-amber-300">
+                {{ t('tmcut.export.transitionsTitle', { n: timelineTransitionCount }) }}
+              </span>
+              <span class="text-[11px] leading-snug text-amber-200/70">
+                {{ t('tmcut.export.transitionsDesc') }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- BODY: left specs (5) / right parameters (7) -->

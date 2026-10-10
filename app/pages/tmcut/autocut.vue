@@ -6,11 +6,12 @@ import { useTmcutAutocut } from '~/composables/useTmcutAutocut'
 import type { AutocutProfile, AutocutAnalysis } from '~/composables/useTmcutAutocut'
 import type { TmcutAsset } from '~/types/tmcut'
 import { formatDurationSec } from '~/utils/tmcut/media'
+import { toURL } from '~/utils/ffmpegHelper'
 
 const { t } = useI18n()
 const toast = useToast()
 const { pickFile, pickWebFiles } = useFileSystem()
-const { assets, isDesktop, importFiles, importWebFiles, findAssetBySrc } = useTmcutMedia()
+const { assets, isDesktop, importFiles, importWebFiles, findAssetBySrc, getThumbUrl } = useTmcutMedia()
 const { analyzing, stageKey, analysisError, analyzeSource, applyDraft } = useTmcutAutocut()
 
 const currentStep = ref(1)
@@ -20,6 +21,12 @@ const edlResult = ref<AutocutAnalysis | null>(null)
 const included = ref<number[]>([])
 const draftProjectId = ref<string | null>(null)
 const applying = ref(false)
+
+// Mini-review player state (design #4 right panel)
+const activeSegmentIndex = ref<number | null>(null)
+const reviewTime = ref(0)
+const reviewPlaying = ref(false)
+const reviewVideo = ref<HTMLVideoElement | null>(null)
 
 const sourceFilters = [
   { name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', 'mpg', 'mpeg', 'ts', 'wmv', 'flv'] }
@@ -47,6 +54,67 @@ const keptDuration = computed(() => {
     return total + (segment ? Math.max(0, segment.end - segment.start) : 0)
   }, 0)
 })
+
+// ===== Review metrics (all derived from the real analysis result) =====
+
+const segments = computed(() => edlResult.value?.edl.segments ?? [])
+const segmentCount = computed(() => segments.value.length)
+const sourceDuration = computed(() => edlResult.value?.sourceDurationSec || 0)
+
+const compressionPct = computed(() => {
+  if (sourceDuration.value <= 0) return 0
+  return Math.max(0, Math.round((1 - keptDuration.value / sourceDuration.value) * 100))
+})
+
+const avgScore = computed(() => {
+  if (segments.value.length === 0) return 0
+  const total = segments.value.reduce((sum, segment) => sum + segment.score, 0)
+  return Math.round((total / segments.value.length) * 100)
+})
+
+const speechPct = computed(() => {
+  if (!edlResult.value || sourceDuration.value <= 0) return 0
+  return Math.min(100, Math.round((edlResult.value.speechSec / sourceDuration.value) * 100))
+})
+
+// Real transcript text per segment (overlapping Whisper lines are joined)
+const transcriptLines = computed(() => segments.value.map((segment) => {
+  const parts = (edlResult.value?.transcript ?? [])
+    .filter(part => part.text && part.start < segment.end && part.end > segment.start)
+    .map(part => (part.text || '').trim())
+    .filter(Boolean)
+  return parts.join(' ')
+}))
+
+const activeSegment = computed(() => {
+  const index = activeSegmentIndex.value
+  return index === null ? null : (segments.value[index] ?? null)
+})
+
+const reviewProgress = computed(() => {
+  const segment = activeSegment.value
+  if (!segment) return 0
+  const span = segment.end - segment.start
+  if (span <= 0) return 0
+  return Math.min(100, Math.max(0, ((reviewTime.value - segment.start) / span) * 100))
+})
+
+const sourceVideoUrl = computed(() => (sourceAsset.value ? toURL(sourceAsset.value.path) : ''))
+const sourceThumbUrl = computed(() => (sourceAsset.value ? getThumbUrl(sourceAsset.value) : ''))
+
+function scoreBarClass(score: number): string {
+  if (score >= 0.7) return 'bg-emerald-500'
+  if (score >= 0.4) return 'bg-amber-500'
+  return 'bg-red-500'
+}
+
+function scoreBadgeClass(score: number): string {
+  if (score >= 0.7) return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+  if (score >= 0.4) return 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+  return 'bg-red-500/15 text-red-600 dark:text-red-400'
+}
+
+// ===== Source picking (step 1) =====
 
 function pickSourceAsset(paths: string[]): TmcutAsset | null {
   for (const filePath of paths) {
@@ -118,24 +186,110 @@ function handleChooseFromMedia() {
   currentStep.value = 2
 }
 
+// ===== Analysis (step 3) =====
+
 async function startAnalysis() {
   if (!sourceAsset.value) return
   currentStep.value = 3
+  activeSegmentIndex.value = null
+  reviewTime.value = 0
   const result = await analyzeSource(sourceAsset.value, selectedProfile.value)
   if (!result) return
   edlResult.value = result
   included.value = result.edl.segments.map((_, index) => index)
+  activeSegmentIndex.value = result.edl.segments.length > 0 ? 0 : null
 }
 
-function toggleSegment(index: number) {
+// Re-score with another profile (real re-run of the analysis pipeline)
+function rescoreWith(profile: AutocutProfile) {
+  if (analyzing.value) return
+  selectedProfile.value = profile
+  void startAnalysis()
+}
+
+function toggleInclude(index: number) {
   const position = included.value.indexOf(index)
   if (position === -1) included.value.push(index)
   else included.value.splice(position, 1)
 }
 
+function bulkSelectAll() {
+  included.value = segments.value.map((_, index) => index)
+}
+
+function bulkSelectHigh() {
+  included.value = segments.value
+    .map((segment, index) => (segment.score >= 0.7 ? index : -1))
+    .filter(index => index !== -1)
+}
+
 function formatRange(start: number, end: number): string {
   return `${formatDurationSec(start)} - ${formatDurationSec(end)}`
 }
+
+// ===== Mini-review player =====
+
+function selectSegment(index: number, autoplay = false) {
+  activeSegmentIndex.value = index
+  const segment = segments.value[index]
+  const video = reviewVideo.value
+  if (!segment || !video) return
+  video.currentTime = segment.start
+  reviewTime.value = segment.start
+  if (autoplay) video.play().catch(() => {})
+}
+
+function onReviewLoadedMetadata() {
+  const segment = activeSegment.value
+  const video = reviewVideo.value
+  if (segment && video) video.currentTime = segment.start
+}
+
+function onReviewTimeUpdate() {
+  const video = reviewVideo.value
+  const segment = activeSegment.value
+  if (!video || !segment) return
+  reviewTime.value = video.currentTime
+  // Stop exactly at the segment out point (mini-review loop bound)
+  if (video.currentTime >= segment.end) video.pause()
+}
+
+function toggleReviewPlay() {
+  const video = reviewVideo.value
+  const segment = activeSegment.value
+  if (!video || !segment) return
+  if (video.paused) {
+    if (video.currentTime >= segment.end || video.currentTime < segment.start) {
+      video.currentTime = segment.start
+    }
+    video.play().catch(() => {})
+  } else {
+    video.pause()
+  }
+}
+
+function nudgeReview(deltaSec: number) {
+  const video = reviewVideo.value
+  if (!video) return
+  video.currentTime = Math.max(0, video.currentTime + deltaSec)
+}
+
+function seekReview(event: MouseEvent) {
+  const segment = activeSegment.value
+  const video = reviewVideo.value
+  if (!segment || !video) return
+  const track = event.currentTarget as HTMLElement
+  const rect = track.getBoundingClientRect()
+  const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0
+  video.currentTime = segment.start + (segment.end - segment.start) * Math.min(1, Math.max(0, ratio))
+  reviewTime.value = video.currentTime
+}
+
+onUnmounted(() => {
+  reviewVideo.value?.pause()
+})
+
+// ===== Accept draft (step 4) =====
 
 async function handleAccept() {
   if (!sourceAsset.value || !edlResult.value || included.value.length === 0 || applying.value) return
@@ -159,25 +313,81 @@ async function handleAccept() {
 <template>
   <BasePage id="tmcut-autocut" :title="t('nav.tmcut_autocut')" :description="t('tmcut.autocutDesc')">
     <template #right>
-      <UButton to="/tmcut" icon="i-lucide-arrow-left" variant="soft" color="neutral" size="sm">
+      <UButton
+        to="/tmcut"
+        icon="i-lucide-arrow-left"
+        variant="soft"
+        color="neutral"
+        size="sm"
+      >
         <span class="hidden sm:inline">{{ t('tmcut.back') }}</span>
       </UButton>
     </template>
 
-    <div class="space-y-6 max-w-5xl">
-      <!-- Stepper Indicator -->
-      <div class="grid grid-cols-4 gap-2 border-b border-neutral-200 dark:border-neutral-800 pb-4">
-        <div v-for="s in steps" :key="s.step" class="flex flex-col border-t-2 pt-2 transition"
-          :class="currentStep >= s.step ? 'border-primary text-primary' : 'border-neutral-200 dark:border-neutral-800 text-neutral-400'">
-          <span class="text-xs font-semibold">{{ t('tmcut.steps.step', { step: s.step }) }}</span>
-          <span class="text-xs font-medium truncate text-neutral-900 dark:text-neutral-100">{{ s.title }}</span>
+    <div class="space-y-4 max-w-7xl">
+      <!-- Stepper breadcrumb (design #4) -->
+      <div
+        class="flex items-center gap-3 overflow-x-auto border-b border-neutral-200 dark:border-neutral-800 pb-4"
+      >
+        <template v-for="(s, index) in steps" :key="s.step">
+          <div
+            class="flex items-center gap-2 shrink-0 transition"
+            :class="currentStep === s.step
+              ? 'bg-neutral-100 dark:bg-neutral-800 px-3 py-1.5 rounded-xl shadow-sm'
+              : currentStep > s.step ? 'opacity-80 hover:opacity-100' : 'opacity-40'"
+          >
+            <div
+              class="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+              :class="currentStep > s.step
+                ? 'bg-primary/20 text-primary'
+                : currentStep === s.step
+                  ? 'bg-primary text-neutral-900 shadow-[0_0_10px_rgba(var(--ui-primary),0.4)]'
+                  : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-400'"
+            >
+              <UIcon v-if="currentStep > s.step" name="i-lucide-check" class="w-3 h-3" />
+              <span v-else class="text-[11px] font-semibold">{{ s.step }}</span>
+            </div>
+            <div class="flex flex-col">
+              <span
+                class="text-[10px] uppercase tracking-wider"
+                :class="currentStep === s.step ? 'text-primary font-semibold' : 'text-neutral-400'"
+              >
+                {{ t('tmcut.steps.step', { step: s.step }) }}
+              </span>
+              <span
+                class="text-xs font-medium whitespace-nowrap"
+                :class="currentStep === s.step ? 'text-neutral-900 dark:text-neutral-100' : 'text-neutral-500'"
+              >
+                {{ s.title }}
+              </span>
+            </div>
+          </div>
+          <UIcon
+            v-if="index < steps.length - 1"
+            name="i-lucide-chevron-right"
+            class="w-4 h-4 text-neutral-400 shrink-0"
+          />
+        </template>
+
+        <!-- Honest status chips: real analyzer version + real average score
+             (the mockup's "Neural Engine v3.1 / Confidence 97.8%" is fake) -->
+        <div v-if="edlResult" class="hidden lg:flex items-center gap-2 ml-auto shrink-0">
+          <span
+            class="px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 font-mono text-[11px] text-neutral-500"
+          >
+            {{ t('tmcut.wizard.analyzer') }} {{ edlResult.edl.analyzerVersion }}
+          </span>
+          <span class="px-2 py-1 rounded-lg bg-primary/10 font-mono text-[11px] text-primary font-semibold">
+            {{ t('tmcut.wizard.avgScore', { pct: avgScore }) }}
+          </span>
         </div>
       </div>
 
       <!-- Step 1: Upload Source -->
       <div v-if="currentStep === 1" class="space-y-4">
         <div
-          class="border-2 border-dashed border-neutral-300 dark:border-neutral-700 rounded-2xl p-12 text-center bg-neutral-50 dark:bg-neutral-900/50">
+          class="border-2 border-dashed border-neutral-300 dark:border-neutral-700 rounded-2xl p-12 text-center bg-neutral-50 dark:bg-neutral-900/50"
+        >
           <UIcon name="i-lucide-upload-cloud" class="w-12 h-12 text-primary mx-auto mb-3" />
           <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100">
             {{ t('tmcut.steps.dragDrop') }}
@@ -186,10 +396,20 @@ async function handleAccept() {
             {{ t('tmcut.steps.dragDropDesc') }}
           </p>
           <div class="flex justify-center gap-3">
-            <UButton icon="i-lucide-file-video" color="primary" variant="soft" @click="handleChooseFromDevice">
+            <UButton
+              icon="i-lucide-file-video"
+              color="primary"
+              variant="soft"
+              @click="handleChooseFromDevice"
+            >
               {{ t('tmcut.steps.chooseFromDevice') }}
             </UButton>
-            <UButton icon="i-lucide-cloud" variant="soft" color="neutral" @click="handleChooseFromMedia">
+            <UButton
+              icon="i-lucide-cloud"
+              variant="soft"
+              color="neutral"
+              @click="handleChooseFromMedia"
+            >
               {{ t('tmcut.steps.chooseFromMedia') }}
             </UButton>
           </div>
@@ -201,7 +421,12 @@ async function handleAccept() {
         </div>
 
         <div class="flex justify-end">
-          <UButton color="primary" variant="solid" :disabled="!sourceAsset" @click="currentStep = 2">
+          <UButton
+            color="primary"
+            variant="solid"
+            :disabled="!sourceAsset"
+            @click="currentStep = 2"
+          >
             {{ t('tmcut.steps.continueStep2') }}
           </UButton>
         </div>
@@ -210,10 +435,13 @@ async function handleAccept() {
       <!-- Step 2: Choose AI Profile -->
       <div v-else-if="currentStep === 2" class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div v-for="prof in aiProfiles" :key="prof.id"
+          <div
+            v-for="prof in aiProfiles"
+            :key="prof.id"
             class="border-2 rounded-xl p-5 cursor-pointer transition flex flex-col justify-between"
             :class="selectedProfile === prof.id ? 'border-primary bg-primary/5' : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300'"
-            @click="selectedProfile = prof.id as AutocutProfile">
+            @click="selectedProfile = prof.id as AutocutProfile"
+          >
             <div class="space-y-2">
               <UIcon :name="prof.icon" class="w-6 h-6 text-primary" />
               <h4 class="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
@@ -230,7 +458,12 @@ async function handleAccept() {
           <UButton variant="soft" color="neutral" @click="currentStep = 1">
             {{ t('tmcut.back') }}
           </UButton>
-          <UButton color="primary" variant="solid" :disabled="!sourceAsset" @click="startAnalysis">
+          <UButton
+            color="primary"
+            variant="solid"
+            :disabled="!sourceAsset"
+            @click="startAnalysis"
+          >
             {{ t('tmcut.steps.analyzeEdl') }}
           </UButton>
         </div>
@@ -239,8 +472,10 @@ async function handleAccept() {
       <!-- Step 3: Analyze + Review EDL -->
       <div v-else-if="currentStep === 3" class="space-y-4">
         <!-- Analyzing state -->
-        <div v-if="analyzing"
-          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center bg-neutral-50 dark:bg-neutral-900/50">
+        <div
+          v-if="analyzing"
+          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center bg-neutral-50 dark:bg-neutral-900/50"
+        >
           <UIcon name="i-lucide-loader-circle" class="w-10 h-10 text-primary mx-auto mb-3 animate-spin" />
           <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
             {{ t('tmcut.steps.analyzing') }}
@@ -269,70 +504,453 @@ async function handleAccept() {
           </div>
         </div>
 
-        <!-- Review state -->
+        <!-- Review state: split workspace (design #4) -->
         <div v-else-if="edlResult" class="space-y-4">
-          <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 bg-neutral-50 dark:bg-neutral-900/50">
-            <div class="flex flex-wrap items-center gap-2 text-xs">
-              <UBadge color="primary" variant="soft">
-                {{ t('tmcut.steps.keptInfo', { count: included.length, duration: formatDurationSec(keptDuration) }) }}
-              </UBadge>
-              <UBadge color="neutral" variant="soft">
-                {{ edlResult.sceneCount }} segments
-              </UBadge>
-              <UBadge :color="edlResult.transcriptUsed ? 'success' : 'neutral'" variant="soft">
-                {{ edlResult.transcriptUsed ? t('tmcut.steps.transcriptOn') : t('tmcut.steps.transcriptOff') }}
-              </UBadge>
-            </div>
-            <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-3">
-              {{ t('tmcut.steps.reviewTitle') }}
-            </h3>
-          </div>
-
-          <div v-if="edlResult.edl.segments.length === 0"
-            class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-8 text-center">
-            <p class="text-sm text-neutral-500">
-              {{ t('tmcut.steps.noSegments') }}
-            </p>
-          </div>
-
-          <div v-else class="space-y-2 max-h-96 overflow-y-auto pr-1">
-            <div v-for="(segment, index) in edlResult.edl.segments" :key="index"
-              class="flex items-center gap-3 border rounded-lg p-3 transition cursor-pointer" :class="included.includes(index)
-                ? 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900'
-                : 'border-neutral-200 dark:border-neutral-800 opacity-50'" @click="toggleSegment(index)">
-              <UCheckbox :model-value="included.includes(index)" @click.stop />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-xs font-mono text-neutral-900 dark:text-neutral-100">
-                    {{ formatRange(segment.start, segment.end) }}
-                  </span>
-                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500">
-                    {{ segment.reason }}
-                  </span>
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+            <!-- LEFT: EDL segment list + scoring -->
+            <div class="xl:col-span-7 flex flex-col gap-3">
+              <!-- Section header -->
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary">
+                    <UIcon name="i-lucide-list-ordered" class="w-4 h-4" />
+                  </div>
+                  <h3 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    {{ t('tmcut.wizard.reviewList', { count: segmentCount }) }}
+                  </h3>
                 </div>
-                <div class="h-1.5 mt-2 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
-                  <div class="h-full rounded-full"
-                    :class="segment.score >= 0.5 ? 'bg-emerald-500' : segment.score >= 0.25 ? 'bg-amber-500' : 'bg-red-500'"
-                    :style="{ width: `${Math.round(segment.score * 100)}%` }" />
+                <span
+                  class="font-mono text-[11px] px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500"
+                >
+                  EDL · {{ edlResult.edl.profile }} · {{ edlResult.edl.analyzerVersion }}
+                </span>
+              </div>
+
+              <!-- Metric stat strip + bulk actions -->
+              <div
+                class="flex flex-wrap items-center justify-between gap-3 bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-800 rounded-xl p-3"
+              >
+                <div class="flex items-center gap-4">
+                  <div class="flex flex-col">
+                    <span class="text-[10px] uppercase tracking-wider text-neutral-400">
+                      {{ t('tmcut.wizard.keptLabel') }}
+                    </span>
+                    <div class="flex items-baseline gap-1">
+                      <span class="font-mono text-lg font-bold text-primary">
+                        {{ formatDurationSec(keptDuration) }}
+                      </span>
+                      <span class="font-mono text-[11px] text-neutral-400">
+                        / {{ t('tmcut.wizard.sourceLabel', { duration: formatDurationSec(sourceDuration) }) }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+                  <div class="flex flex-col">
+                    <span class="text-[10px] uppercase tracking-wider text-neutral-400">
+                      {{ t('tmcut.wizard.compressionLabel') }}
+                    </span>
+                    <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                      {{ t('tmcut.wizard.compressionValue', { pct: compressionPct }) }}
+                    </span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    :label="t('tmcut.wizard.bulkAll', { count: segmentCount })"
+                    @click="bulkSelectAll"
+                  />
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    :label="t('tmcut.wizard.bulkHigh')"
+                    @click="bulkSelectHigh"
+                  />
                 </div>
               </div>
-              <span class="text-[11px] font-mono text-neutral-500 w-10 text-right shrink-0">
-                {{ segment.score.toFixed(2) }}
-              </span>
+
+              <!-- Profile scorer selector: clicking re-runs the real scoring pipeline -->
+              <div class="flex flex-col gap-1.5">
+                <span class="text-[10px] uppercase tracking-wider text-neutral-400">
+                  {{ t('tmcut.wizard.scorerLabel') }}
+                </span>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+                  <button
+                    v-for="prof in aiProfiles"
+                    :key="prof.id"
+                    type="button"
+                    class="flex items-center justify-between p-2.5 rounded-lg border text-left transition cursor-pointer"
+                    :class="selectedProfile === prof.id
+                      ? 'border-primary/60 bg-primary/5 shadow-sm'
+                      : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 bg-white dark:bg-neutral-900'"
+                    :disabled="analyzing"
+                    @click="rescoreWith(prof.id as AutocutProfile)"
+                  >
+                    <div class="flex items-center gap-2 min-w-0">
+                      <UIcon
+                        :name="prof.icon"
+                        class="w-4 h-4 shrink-0"
+                        :class="selectedProfile === prof.id ? 'text-primary' : 'text-neutral-400'"
+                      />
+                      <span
+                        class="text-xs font-medium truncate"
+                        :class="selectedProfile === prof.id ? 'text-primary' : 'text-neutral-600 dark:text-neutral-300'"
+                      >
+                        {{ prof.name }}
+                      </span>
+                    </div>
+                    <span v-if="selectedProfile === prof.id" class="w-2 h-2 rounded-full bg-primary shrink-0" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Segment list cards -->
+              <div
+                v-if="segmentCount === 0"
+                class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-8 text-center"
+              >
+                <p class="text-sm text-neutral-500">
+                  {{ t('tmcut.steps.noSegments') }}
+                </p>
+              </div>
+
+              <div v-else class="flex flex-col gap-1.5 max-h-[480px] overflow-y-auto pr-1">
+                <div
+                  v-for="(segment, index) in segments"
+                  :key="index"
+                  class="flex flex-col md:flex-row items-start md:items-center gap-3 p-2.5 rounded-xl border transition cursor-pointer"
+                  :class="activeSegmentIndex === index
+                    ? 'border-primary/50 bg-primary/5 shadow-sm'
+                    : included.includes(index)
+                      ? 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:border-neutral-300'
+                      : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 opacity-60'"
+                  @click="selectSegment(index)"
+                >
+                  <!-- Checkbox & sequence # -->
+                  <div class="flex items-center gap-2 shrink-0">
+                    <UCheckbox
+                      :model-value="included.includes(index)"
+                      @click.stop
+                      @update:model-value="toggleInclude(index)"
+                    />
+                    <span
+                      class="font-mono text-[11px] font-semibold"
+                      :class="activeSegmentIndex === index ? 'text-primary' : 'text-neutral-400'"
+                    >
+                      #{{ String(index + 1).padStart(2, '0') }}
+                    </span>
+                  </div>
+
+                  <!-- Thumbnail with In/Out chip (source poster: per-segment frame
+                       extraction needs a new extractFrame IPC — docs §78.6) -->
+                  <div
+                    class="relative w-28 h-16 rounded-lg overflow-hidden shrink-0 bg-neutral-200 dark:bg-neutral-800"
+                    :class="{ grayscale: !included.includes(index) }"
+                  >
+                    <img
+                      v-if="sourceThumbUrl"
+                      :src="sourceThumbUrl"
+                      class="w-full h-full object-cover"
+                      alt=""
+                    >
+                    <UIcon v-else name="i-lucide-film" class="w-6 h-6 text-neutral-400 absolute inset-0 m-auto" />
+                    <span class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-white font-mono text-[9px]">
+                      {{ formatRange(segment.start, segment.end) }}
+                    </span>
+                  </div>
+
+                  <!-- Segment meta & transcript -->
+                  <div class="flex flex-col flex-1 min-w-0 gap-1">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        <span
+                          class="font-mono text-xs text-neutral-900 dark:text-neutral-100 font-semibold"
+                        >
+                          {{ formatRange(segment.start, segment.end) }}
+                        </span>
+                        <span class="font-mono text-[10px] text-neutral-400">
+                          ({{ Math.max(0, segment.end - segment.start).toFixed(1) }}s)
+                        </span>
+                      </div>
+                      <span
+                        class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0"
+                        :class="scoreBadgeClass(segment.score)"
+                      >
+                        {{ Math.round(segment.score * 100) }}/100
+                      </span>
+                    </div>
+                    <p v-if="transcriptLines[index]" class="text-xs italic text-primary/80 truncate">
+                      “{{ transcriptLines[index] }}”
+                    </p>
+                    <div class="h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                      <div
+                        class="h-full rounded-full transition-all"
+                        :class="scoreBarClass(segment.score)"
+                        :style="{ width: `${Math.round(segment.score * 100)}%` }"
+                      />
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 truncate"
+                      >
+                        {{ segment.reason }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Segment action: preview this segment (the mockup's "tune
+                       In/Out" button has no implementation — not rendered) -->
+                  <div class="flex items-center gap-1 shrink-0 self-end md:self-center">
+                    <button
+                      type="button"
+                      class="w-7 h-7 flex items-center justify-center rounded bg-neutral-100 dark:bg-neutral-800 hover:bg-primary hover:text-neutral-900 text-neutral-600 dark:text-neutral-300 transition-colors cursor-pointer"
+                      :title="t('tmcut.wizard.playSegment')"
+                      @click.stop="selectSegment(index, true)"
+                    >
+                      <UIcon name="i-lucide-play" class="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT: mini player + breakdown + draft notice -->
+            <div class="xl:col-span-5 flex flex-col gap-4">
+              <!-- Video player mini-review card -->
+              <div class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex flex-col gap-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <UIcon name="i-lucide-crop-portrait" class="w-4 h-4 text-primary shrink-0" />
+                    <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                      {{ t('tmcut.wizard.playerTitle', { index: activeSegmentIndex === null ? '–' : activeSegmentIndex + 1 }) }}
+                    </span>
+                  </div>
+                  <span
+                    class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 shrink-0"
+                  >
+                    {{ t('tmcut.wizard.guideTag') }}
+                  </span>
+                </div>
+
+                <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                  <video
+                    ref="reviewVideo"
+                    :src="sourceVideoUrl"
+                    class="w-full h-full object-contain"
+                    preload="metadata"
+                    playsinline
+                    @loadedmetadata="onReviewLoadedMetadata"
+                    @timeupdate="onReviewTimeUpdate"
+                    @play="reviewPlaying = true"
+                    @pause="reviewPlaying = false"
+                  />
+
+                  <!-- 9:16 crop guide mask (visual guide only — no face tracking) -->
+                  <div
+                    class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[42%] pointer-events-none shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] rounded"
+                  >
+                    <div class="absolute top-1 inset-x-1 flex justify-between text-[9px] font-mono text-primary/80">
+                      <span>9:16 CROP</span>
+                      <span>{{ t('tmcut.wizard.guideTag') }}</span>
+                    </div>
+                    <div class="absolute bottom-1 inset-x-1 text-center">
+                      <span class="px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-neutral-300">
+                        {{ t('tmcut.wizard.guideBottom') }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Playback state overlay -->
+                  <div class="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/80 px-2 py-0.5 rounded-md">
+                    <span
+                      class="w-1.5 h-1.5 rounded-full"
+                      :class="reviewPlaying ? 'bg-primary animate-pulse' : 'bg-neutral-500'"
+                    />
+                    <span class="font-mono text-[11px] text-primary">
+                      {{ formatDurationSec(Math.max(0, reviewTime - (activeSegment?.start || 0))) }} /
+                      {{ activeSegment ? formatDurationSec(activeSegment.end - activeSegment.start) : '--:--' }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Mini scrubber + transport -->
+                <div class="flex flex-col gap-1.5">
+                  <div
+                    class="relative w-full h-2 rounded-full bg-neutral-200 dark:bg-neutral-700 overflow-hidden cursor-pointer"
+                    @click="seekReview"
+                  >
+                    <div
+                      class="absolute left-0 top-0 bottom-0 bg-primary transition-all"
+                      :style="{ width: `${reviewProgress}%` }"
+                    />
+                  </div>
+                  <div class="flex items-center justify-between font-mono text-[10px] text-neutral-400">
+                    <span>In: {{ activeSegment ? formatDurationSec(activeSegment.start) : '--:--' }}</span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="text-neutral-500 hover:text-primary transition-colors cursor-pointer"
+                        :title="t('tmcut.wizard.replay5')"
+                        @click="nudgeReview(-5)"
+                      >
+                        <UIcon name="i-lucide-rotate-ccw" class="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        class="w-6 h-6 rounded-full bg-primary text-neutral-900 flex items-center justify-center cursor-pointer"
+                        :title="reviewPlaying ? t('tmcut.wizard.pause') : t('tmcut.wizard.play')"
+                        @click="toggleReviewPlay"
+                      >
+                        <UIcon :name="reviewPlaying ? 'i-lucide-pause' : 'i-lucide-play'" class="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        class="text-neutral-500 hover:text-primary transition-colors cursor-pointer"
+                        :title="t('tmcut.wizard.forward5')"
+                        @click="nudgeReview(5)"
+                      >
+                        <UIcon name="i-lucide-fast-forward" class="w-4 h-4" />
+                      </button>
+                    </div>
+                    <span>Out: {{ activeSegment ? formatDurationSec(activeSegment.end) : '--:--' }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI analysis breakdown (real metrics only — no loudness /
+                   face-tracker numbers exist in the pipeline) -->
+              <div
+                class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex flex-col gap-2"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5">
+                    <UIcon name="i-lucide-bar-chart-3" class="w-4 h-4 text-primary" />
+                    <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+                      {{ t('tmcut.wizard.breakdownTitle') }}
+                    </span>
+                  </div>
+                  <span class="font-mono text-[10px] text-neutral-400">§65.6</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <div class="bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded-lg flex flex-col">
+                    <div class="flex items-center justify-between mb-0.5">
+                      <span class="text-[10px] text-neutral-400">{{ t('tmcut.wizard.metricScenes') }}</span>
+                      <UIcon name="i-lucide-scissors" class="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                      {{ edlResult.sceneCount }}
+                    </span>
+                    <span class="text-[10px] text-neutral-500 truncate">
+                      {{ t('tmcut.wizard.metricScenesSub') }}
+                    </span>
+                  </div>
+                  <div class="bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded-lg flex flex-col">
+                    <div class="flex items-center justify-between mb-0.5">
+                      <span class="text-[10px] text-neutral-400">{{ t('tmcut.wizard.metricSilences') }}</span>
+                      <UIcon name="i-lucide-volume-x" class="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                      {{ edlResult.silenceCount }}
+                    </span>
+                    <span class="text-[10px] text-neutral-500 truncate">
+                      {{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult.silenceRemovedSec) }) }}
+                    </span>
+                  </div>
+                  <div class="bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded-lg flex flex-col">
+                    <div class="flex items-center justify-between mb-0.5">
+                      <span class="text-[10px] text-neutral-400">{{ t('tmcut.wizard.metricSpeech') }}</span>
+                      <UIcon name="i-lucide-mic" class="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                      {{ edlResult.transcriptUsed ? `${speechPct}%` : '—' }}
+                    </span>
+                    <span class="text-[10px] text-neutral-500 truncate">
+                      {{ edlResult.transcriptUsed ? t('tmcut.steps.transcriptOn') : t('tmcut.steps.transcriptOff') }}
+                    </span>
+                  </div>
+                  <div class="bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded-lg flex flex-col">
+                    <div class="flex items-center justify-between mb-0.5">
+                      <span class="text-[10px] text-neutral-400">{{ t('tmcut.wizard.metricSource') }}</span>
+                      <UIcon name="i-lucide-clock" class="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <span class="text-sm font-bold text-neutral-900 dark:text-neutral-100">
+                      {{ formatDurationSec(sourceDuration) }}
+                    </span>
+                    <span class="text-[10px] text-neutral-500 truncate">
+                      {{ sourceAsset?.name || '—' }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Safe draft project notice (docs §41) -->
+                <div class="p-2.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-start gap-2">
+                  <div class="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <UIcon name="i-lucide-shield-check" class="w-3 h-3" />
+                  </div>
+                  <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
+                        {{ t('tmcut.wizard.draftNoticeTitle') }}
+                      </span>
+                      <span
+                        class="font-mono text-[9px] bg-white dark:bg-neutral-900 px-1 rounded text-neutral-500"
+                      >
+                        Non-destructive
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-neutral-500 leading-relaxed">
+                      {{ t('tmcut.wizard.draftNotice') }}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="flex justify-between pt-4">
-            <UButton variant="soft" color="neutral" @click="currentStep = 2">
-              {{ t('tmcut.back') }}
-            </UButton>
-            <div class="flex gap-3">
-              <UButton variant="soft" color="neutral" @click="startAnalysis">
-                {{ t('tmcut.steps.retry') }}
+          <!-- Bottom action bar -->
+          <div
+            class="sticky bottom-0 z-40 px-3 py-2.5 bg-white/95 dark:bg-neutral-950/95 backdrop-blur border-t border-neutral-200 dark:border-neutral-800 rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg"
+          >
+            <div class="flex items-center gap-2 text-sm">
+              <span class="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span class="font-medium text-neutral-900 dark:text-neutral-100">
+                {{ t('tmcut.wizard.selectedSummary', { selected: included.length, total: segmentCount }) }}
+              </span>
+              <span class="text-neutral-300 dark:text-neutral-700">•</span>
+              <span class="text-neutral-500">{{ t('tmcut.wizard.publishDuration') }}</span>
+              <span class="font-mono font-bold text-primary">{{ formatDurationSec(keptDuration) }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UButton
+                variant="soft"
+                color="neutral"
+                size="sm"
+                @click="currentStep = 2"
+              >
+                {{ t('tmcut.back') }}
               </UButton>
-              <UButton color="primary" variant="solid" icon="i-lucide-clapperboard"
-                :disabled="included.length === 0 || applying" :loading="applying" @click="handleAccept">
+              <UButton
+                variant="soft"
+                color="neutral"
+                size="sm"
+                icon="i-lucide-refresh-cw"
+                :loading="analyzing"
+                @click="startAnalysis"
+              >
+                {{ t('tmcut.wizard.rerun') }}
+              </UButton>
+              <UButton
+                color="primary"
+                variant="solid"
+                size="sm"
+                icon="i-lucide-clapperboard"
+                :disabled="included.length === 0 || applying"
+                :loading="applying"
+                @click="handleAccept"
+              >
                 {{ t('tmcut.steps.acceptDraft') }}
               </UButton>
             </div>
@@ -356,7 +974,12 @@ async function handleAccept() {
           <UButton variant="soft" color="neutral" @click="currentStep = 3">
             {{ t('tmcut.back') }}
           </UButton>
-          <UButton color="primary" variant="solid" icon="i-lucide-clapperboard" :to="editorUrl">
+          <UButton
+            color="primary"
+            variant="solid"
+            icon="i-lucide-clapperboard"
+            :to="editorUrl"
+          >
             {{ t('tmcut.steps.openInEditor') }}
           </UButton>
         </div>

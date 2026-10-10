@@ -4,8 +4,11 @@ import type { TmcutAsset } from '~/types/tmcut'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
+import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
+import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
+import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel } from '~/utils/tmcut/canvas'
 
 const { t } = useI18n()
@@ -13,6 +16,7 @@ const route = useRoute()
 const router = useRouter()
 const {
   currentProject,
+  totalDuration,
   loadProject,
   saveProject,
   saveStatus,
@@ -53,7 +57,23 @@ const {
   findAssetBySrc
 } = useTmcutMedia()
 
-const { playhead } = useTmcutPlayback()
+const { playhead, formatTimecode } = useTmcutPlayback()
+const { shortcutsOpen } = useTmcutUiPrefs()
+
+// Hardware status chip (design #2 "GPU" indicator — honest data only):
+// WebGPU availability is really detectable; the engine side names the
+// export backend (FFmpeg on desktop, preview-only on the web).
+const hasWebGPU = ref(false)
+const hardwareLabel = computed(() => {
+  const gpu = hasWebGPU.value ? 'WebGPU' : 'WebGL'
+  return `${gpu} · ${isDesktop.value ? 'FFmpeg' : t('tmcut.status.previewOnly')}`
+})
+
+// Status footer data: total timeline clip count
+const clipCount = computed(() => (
+  (currentProject.value?.timeline?.tracks || [])
+    .reduce((n, track) => n + (track.items?.length || 0), 0)
+))
 
 const { pickFile, pickWebFiles } = useFileSystem()
 const toast = useToast()
@@ -100,9 +120,16 @@ const mediaTabs = computed(() => [
 
 const isAssetTab = computed(() => ['media', 'video', 'audio', 'image'].includes(mediaTab.value))
 
+// Library search box (design #2): filter visible assets by name
+const assetSearch = ref('')
+
 const filteredAssets = computed(() => {
-  if (mediaTab.value === 'media') return projectAssets.value
-  return projectAssets.value.filter(a => a.kind === mediaTab.value)
+  const base = mediaTab.value === 'media'
+    ? projectAssets.value
+    : projectAssets.value.filter(a => a.kind === mediaTab.value)
+  const q = assetSearch.value.trim().toLowerCase()
+  if (!q) return base
+  return base.filter(a => (a.name || '').toLowerCase().includes(q))
 })
 
 function isAssetOnTimeline(asset: TmcutAsset): boolean {
@@ -227,6 +254,16 @@ function handleAddToTimeline(asset: TmcutAsset) {
   }
 }
 
+// Media card → timeline drag payload (Roadmap A4): click keeps appending
+// at the end, dragging lets the timeline place the clip at the drop
+// point. The shared MIME type lives in ~/utils/tmcut/dnd.
+function handleAssetDragStart(e: DragEvent, asset: TmcutAsset) {
+  if (asset.status === 'missing' || !e.dataTransfer) return
+  const payload: TmcutAssetDragPayload = { id: asset.id, kind: asset.kind }
+  e.dataTransfer.setData(TMCUT_ASSET_MIME, JSON.stringify(payload))
+  e.dataTransfer.effectAllowed = 'copy'
+}
+
 function assetKindIcon(asset: TmcutAsset): string {
   return asset.kind === 'video' ? 'i-lucide-film' : asset.kind === 'audio' ? 'i-lucide-music' : 'i-lucide-image'
 }
@@ -290,6 +327,7 @@ async function handleDeleteSnapshot(ts: number) {
 }
 
 onMounted(async () => {
+  hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
   await loadProject(projectId.value)
   refreshProjects()
   loadLibrary()
@@ -519,64 +557,135 @@ const editorExtraActions = computed(() => [
 </script>
 
 <template>
-  <BasePage id="tmcut-editor" :title="currentProject?.name || t('tmcut.editor')"
+  <BasePage
+    id="tmcut-editor"
+    :title="currentProject?.name || t('tmcut.editor')"
     :description="currentProject?.canvas ? `${currentProject.canvas.width}x${currentProject.canvas.height} (${currentProject.canvas.fps}fps)` : undefined"
-    flush>
+    flush
+  >
     <template #leading>
       <div class="flex items-center gap-1">
         <UDashboardSidebarCollapse />
-        <UButton to="/tmcut" icon="i-lucide-arrow-left" size="sm" variant="soft" color="neutral"
-          :title="t('tmcut.back')" />
+        <UButton
+          to="/tmcut"
+          icon="i-lucide-arrow-left"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          :title="t('tmcut.back')"
+        />
       </div>
     </template>
 
     <template #left>
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-clapperboard" class="size-5 text-primary shrink-0" />
-        <input v-if="currentProject" v-model="currentProject.name"
+        <input
+          v-if="currentProject"
+          v-model="currentProject.name"
           class="bg-transparent border-none font-semibold text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary rounded px-1.5 py-0.5 max-w-50 truncate"
-          @blur="saveProject">
+          @blur="saveProject"
+        >
       </div>
     </template>
 
     <template #right>
+      <!-- Shortcuts help (shared overlay with the timeline Ctrl+K / ?) -->
+      <UButton
+        icon="i-lucide-keyboard"
+        size="sm"
+        variant="soft"
+        color="neutral"
+        :title="t('tmcut.workspace.shortcutsBtn')"
+        @click="shortcutsOpen = true"
+      >
+        <span class="hidden lg:inline">{{ t('tmcut.workspace.shortcutsBtn') }}</span>
+      </UButton>
+
+      <!-- Honest hardware status chip (WebGPU detection + export engine) -->
+      <span
+        class="hidden xl:inline flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-400"
+        :title="t('tmcut.workspace.hardwareStatus')"
+      >
+        <UIcon name="i-lucide-cpu" class="size-3 text-primary" />
+        {{ hardwareLabel }}
+      </span>
+
       <!-- Aspect Ratio & Resolution Preset Dropdown -->
       <UDropdownMenu :items="canvasMenuItems" :content="{ side: 'bottom', align: 'end' }">
-        <UButton v-if="currentProject?.canvas" icon="i-lucide-proportions" size="sm" variant="soft" color="neutral"
-          :title="t('tmcut.canvasRatio')">
+        <UButton
+          v-if="currentProject?.canvas"
+          icon="i-lucide-proportions"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          :title="t('tmcut.canvasRatio')"
+        >
           <span class="font-mono text-xs">{{ currentRatioLabel }} ({{ currentProject.canvas.fps }}fps)</span>
           <UIcon name="i-lucide-chevron-down" class="size-3 text-neutral-400" />
         </UButton>
       </UDropdownMenu>
 
-      <span v-if="saveLabel" class="hidden lg:inline text-[11px] font-mono text-neutral-400"
+      <span
+        v-if="saveLabel"
+        class="hidden lg:inline text-[11px] font-mono text-neutral-400"
         :class="saveStatus === 'error' ? 'text-red-400' : ''"
-        :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''">
+        :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''"
+      >
         {{ saveLabel }}
       </span>
-      <UButton icon="i-lucide-save" size="sm" color="primary" variant="soft" @click="saveProject">
+      <UButton
+        icon="i-lucide-save"
+        size="sm"
+        color="primary"
+        variant="soft"
+        @click="saveProject"
+      >
         <span class="hidden md:inline">{{ t('global.save') }}</span>
       </UButton>
-      <UButton icon="i-lucide-download" size="sm" color="secondary" variant="soft" @click="showExportModal = true">
+      <UButton
+        icon="i-lucide-download"
+        size="sm"
+        color="secondary"
+        variant="soft"
+        @click="showExportModal = true"
+      >
         <span class="hidden md:inline">{{ t('tmcut.exportVideo') }}</span>
       </UButton>
       <UDropdownMenu :items="editorExtraActions" :content="{ side: 'bottom', align: 'end' }">
-        <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="soft" size="sm"
-          :aria-label="t('common.more')" />
+        <UButton
+          icon="i-lucide-ellipsis-vertical"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          :aria-label="t('common.more')"
+        />
       </UDropdownMenu>
     </template>
 
     <!-- Full viewport Workspace (flush p-0) -->
     <div class="flex-1 flex flex-col min-h-0 bg-neutral-950 text-white overflow-hidden select-none">
       <!-- Recovery banner -->
-      <div v-if="pendingRecovery"
-        class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs">
+      <div
+        v-if="pendingRecovery"
+        class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs"
+      >
         <span class="truncate">{{ t('tmcut.recovery.banner') }}</span>
         <div class="flex items-center gap-2 shrink-0">
-          <UButton size="xs" variant="solid" color="warning" @click="handleRestoreRecovery">
+          <UButton
+            size="xs"
+            variant="solid"
+            color="warning"
+            @click="handleRestoreRecovery"
+          >
             {{ t('tmcut.recovery.restore') }}
           </UButton>
-          <UButton size="xs" variant="soft" color="neutral" @click="handleDismissRecovery">
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            @click="handleDismissRecovery"
+          >
             {{ t('tmcut.recovery.discard') }}
           </UButton>
         </div>
@@ -590,26 +699,56 @@ const editorExtraActions = computed(() => [
             <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
               {{ t('tmcut.media.library') }}
             </span>
-            <UButton icon="i-lucide-plus" size="xs" variant="soft" color="primary" :disabled="importing"
-              @click="handleImportMedia">
+            <UButton
+              icon="i-lucide-plus"
+              size="xs"
+              variant="soft"
+              color="primary"
+              :disabled="importing"
+              @click="handleImportMedia"
+            >
               {{ t('tmcut.media.import') }}
             </UButton>
           </div>
 
-          <div v-if="!isDesktop"
-            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200">
+          <div
+            v-if="!isDesktop"
+            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200"
+          >
             {{ t('tmcut.media.webSession') }}
           </div>
 
           <!-- Category tab bar -->
           <div class="flex items-center gap-1 px-2 py-2 border-b border-neutral-800 overflow-x-auto">
-            <UButton v-for="tab in mediaTabs" :key="tab.id" :icon="tab.icon" size="xs"
-              :variant="mediaTab === tab.id ? 'solid' : 'ghost'" :color="mediaTab === tab.id ? 'primary' : 'neutral'"
-              :title="tab.label" class="shrink-0" @click="mediaTab = tab.id" />
+            <UButton
+              v-for="tab in mediaTabs"
+              :key="tab.id"
+              :icon="tab.icon"
+              size="xs"
+              :variant="mediaTab === tab.id ? 'solid' : 'ghost'"
+              :color="mediaTab === tab.id ? 'primary' : 'neutral'"
+              :title="tab.label"
+              class="shrink-0"
+              @click="mediaTab = tab.id"
+            />
           </div>
 
-          <div v-if="missingAssets.length > 0"
-            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200">
+          <!-- Library search (design #2) -->
+          <div v-if="isAssetTab" class="px-2 pt-2">
+            <UInput
+              v-model="assetSearch"
+              icon="i-lucide-search"
+              size="xs"
+              color="neutral"
+              class="w-full"
+              :placeholder="t('tmcut.media.search')"
+            />
+          </div>
+
+          <div
+            v-if="missingAssets.length > 0"
+            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200"
+          >
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0" />
               <span class="truncate">{{ t('tmcut.media.missingBanner', { count: missingAssets.length }) }}</span>
@@ -618,19 +757,25 @@ const editorExtraActions = computed(() => [
 
           <div class="flex-1 overflow-y-auto p-3 space-y-2">
             <!-- Loading indicator -->
-            <div v-if="importing || analyzingCount > 0"
-              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-400">
+            <div
+              v-if="importing || analyzingCount > 0"
+              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-400"
+            >
               <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
               {{ t('tmcut.media.importing') }}
             </div>
 
             <!-- CapCut-style thumbnail grid (Media / Video / Audio / Image tabs) -->
             <div v-else-if="isAssetTab">
-              <div v-if="filteredAssets.length === 0"
+              <div
+                v-if="filteredAssets.length === 0"
                 class="border border-dashed border-neutral-800 hover:border-primary/50 cursor-pointer rounded-lg p-4 text-center transition-colors group"
-                @click="handleImportMedia">
-                <UIcon name="i-lucide-upload-cloud"
-                  class="size-7 mx-auto text-neutral-500 group-hover:text-primary mb-1.5 transition-colors" />
+                @click="handleImportMedia"
+              >
+                <UIcon
+                  name="i-lucide-upload-cloud"
+                  class="size-7 mx-auto text-neutral-500 group-hover:text-primary mb-1.5 transition-colors"
+                />
                 <p class="text-xs text-neutral-400 group-hover:text-neutral-200 font-medium">
                   {{ t('tmcut.media.empty') }}
                 </p>
@@ -643,55 +788,98 @@ const editorExtraActions = computed(() => [
                 <div v-for="asset in filteredAssets" :key="asset.id" class="min-w-0">
                   <div
                     class="group/thumb relative aspect-video rounded-md overflow-hidden bg-neutral-800 cursor-pointer border border-transparent hover:border-primary/60 transition-colors"
-                    :class="asset.status === 'missing' ? 'border-amber-500/60!' : ''" :title="asset.name"
-                    @click="asset.status !== 'missing' && handleAddToTimeline(asset)">
-                    <img v-if="asset.kind !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
-                      :src="getThumbUrl(asset)" class="absolute inset-0 w-full h-full object-cover" loading="lazy"
-                      @error="thumbErrors[asset.id] = true">
-                    <div v-else-if="asset.kind === 'audio' && waveformMap[asset.id]"
-                      class="absolute inset-0 flex items-center justify-center p-1">
+                    :class="asset.status === 'missing' ? 'border-amber-500/60!' : ''"
+                    :title="asset.name"
+                    :draggable="asset.status !== 'missing'"
+                    @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
+                    @dragstart="handleAssetDragStart($event, asset)"
+                  >
+                    <img
+                      v-if="asset.kind !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
+                      :src="getThumbUrl(asset)"
+                      draggable="false"
+                      class="absolute inset-0 w-full h-full object-cover"
+                      loading="lazy"
+                      @error="thumbErrors[asset.id] = true"
+                    >
+                    <div
+                      v-else-if="asset.kind === 'audio' && waveformMap[asset.id]"
+                      class="absolute inset-0 flex items-center justify-center p-1"
+                    >
                       <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="100" :height="36" />
                     </div>
-                    <UIcon v-else :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-6 text-neutral-600" />
+                    <UIcon
+                      v-else
+                      :name="assetKindIcon(asset)"
+                      class="absolute inset-0 m-auto size-6 text-neutral-600"
+                    />
 
-                    <div v-if="asset.status === 'analyzing'"
-                      class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div
+                      v-if="asset.status === 'analyzing'"
+                      class="absolute inset-0 bg-black/50 flex items-center justify-center"
+                    >
                       <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-neutral-300" />
                     </div>
-                    <div v-if="asset.status === 'missing'"
-                      class="absolute inset-0 bg-amber-950/60 flex items-center justify-center">
+                    <div
+                      v-if="asset.status === 'missing'"
+                      class="absolute inset-0 bg-amber-950/60 flex items-center justify-center"
+                    >
                       <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400" />
                     </div>
 
                     <!-- Duration badge (top-right, like CapCut) -->
-                    <span v-if="assetDurationLabel(asset)"
-                      class="absolute top-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white">
+                    <span
+                      v-if="assetDurationLabel(asset)"
+                      class="absolute top-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
+                    >
                       {{ assetDurationLabel(asset) }}
                     </span>
-                    <!-- Added badge (top-left, like CapCut "Đã thêm") -->
-                    <span v-if="isAssetOnTimeline(asset)"
-                      class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white">
+                    <!-- Added badge (top-left, CapCut-style) -->
+                    <span
+                      v-if="isAssetOnTimeline(asset)"
+                      class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white"
+                    >
                       {{ t('tmcut.media.addedBadge') }}
                     </span>
 
                     <!-- Hover quick actions -->
                     <div class="absolute bottom-1 right-1 hidden group-hover/thumb:flex items-center gap-0.5">
-                      <UButton v-if="asset.status !== 'missing'" icon="i-lucide-plus" size="xs" variant="solid"
-                        color="primary" :title="t('tmcut.media.addToTimeline')"
-                        @click.stop="handleAddToTimeline(asset)" />
-                      <UButton v-if="asset.status === 'missing'" icon="i-lucide-folder-search" size="xs" variant="solid"
-                        color="warning" :title="t('tmcut.media.relink')" @click.stop="handleRelink(asset)" />
-                      <UButton icon="i-lucide-trash" size="xs" variant="solid" color="error"
-                        :title="t('tmcut.media.remove')" @click.stop="handleRemoveAsset(asset)" />
+                      <UButton
+                        v-if="asset.status !== 'missing'"
+                        icon="i-lucide-plus"
+                        size="xs"
+                        variant="solid"
+                        color="primary"
+                        :title="t('tmcut.media.addToTimeline')"
+                        @click.stop="handleAddToTimeline(asset)"
+                      />
+                      <UButton
+                        v-if="asset.status === 'missing'"
+                        icon="i-lucide-folder-search"
+                        size="xs"
+                        variant="solid"
+                        color="warning"
+                        :title="t('tmcut.media.relink')"
+                        @click.stop="handleRelink(asset)"
+                      />
+                      <UButton
+                        icon="i-lucide-trash"
+                        size="xs"
+                        variant="solid"
+                        color="error"
+                        :title="t('tmcut.media.remove')"
+                        @click.stop="handleRemoveAsset(asset)"
+                      />
                     </div>
                   </div>
 
                   <p class="text-[11px] font-medium text-neutral-200 truncate mt-1" :title="asset.name">
                     {{ asset.name }}
                   </p>
-                  <p class="text-[10px] truncate"
-                    :class="asset.status === 'missing' ? 'text-amber-400' : 'text-neutral-500'">
+                  <p
+                    class="text-[10px] truncate"
+                    :class="asset.status === 'missing' ? 'text-amber-400' : 'text-neutral-500'"
+                  >
                     {{ asset.status === 'missing' ? t('tmcut.media.missing') : assetMetaLabel(asset) }}
                   </p>
                 </div>
@@ -700,11 +888,16 @@ const editorExtraActions = computed(() => [
 
             <!-- Text style presets -->
             <div v-else-if="mediaTab === 'text'" class="space-y-2">
-              <div v-for="preset in textPresets" :key="preset.id"
+              <div
+                v-for="preset in textPresets"
+                :key="preset.id"
                 class="border border-neutral-800 hover:border-primary/60 cursor-pointer rounded-lg p-3 bg-neutral-950/60 transition-colors"
-                @click="handleAddTextPreset(preset)">
-                <p class="font-bold text-center leading-tight truncate"
-                  :style="{ color: preset.color, fontSize: `${Math.min(preset.fontSize, 28)}px` }">
+                @click="handleAddTextPreset(preset)"
+              >
+                <p
+                  class="font-bold text-center leading-tight truncate"
+                  :style="{ color: preset.color, fontSize: `${Math.min(preset.fontSize, 28)}px` }"
+                >
                   {{ preset.text }}
                 </p>
                 <p class="text-[10px] text-neutral-500 text-center mt-1.5">
@@ -733,13 +926,17 @@ const editorExtraActions = computed(() => [
                 {{ t('tmcut.media.clips') }}
               </span>
               <div v-for="track in currentProject.timeline.tracks" :key="track.id">
-                <div v-for="item in track.items" :key="item.id"
-                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-900/80 border border-neutral-800/80 text-xs hover:border-neutral-700 transition-colors">
+                <div
+                  v-for="item in track.items"
+                  :key="item.id"
+                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-900/80 border border-neutral-800/80 text-xs hover:border-neutral-700 transition-colors"
+                >
                   <div class="flex items-center gap-2 min-w-0">
                     <UIcon
                       :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
                       class="size-3.5 shrink-0"
-                      :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'" />
+                      :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
+                    />
                     <span class="truncate font-medium text-neutral-300 text-[11px]" :title="item.name || item.text">
                       {{ item.name || item.text || t('tmcut.project') }}
                     </span>
@@ -750,10 +947,24 @@ const editorExtraActions = computed(() => [
                       {{ (((item.out - item.in) / (item.speed || 1))).toFixed(1) }}s
                     </span>
                     <div class="hidden group-hover/clip:flex items-center gap-1">
-                      <UButton v-if="item.src" icon="i-lucide-eye" size="xs" variant="soft" color="neutral"
-                        :title="t('tmcut.previewFile')" @click.stop="openFilePreview(item.src, item.name)" />
-                      <UButton v-if="item.src" icon="i-lucide-folder" size="xs" variant="soft" color="neutral"
-                        :title="t('tmcut.openInFolder')" @click.stop="showInFolder(item.src)" />
+                      <UButton
+                        v-if="item.src"
+                        icon="i-lucide-eye"
+                        size="xs"
+                        variant="soft"
+                        color="neutral"
+                        :title="t('tmcut.previewFile')"
+                        @click.stop="openFilePreview(item.src, item.name)"
+                      />
+                      <UButton
+                        v-if="item.src"
+                        icon="i-lucide-folder"
+                        size="xs"
+                        variant="soft"
+                        color="neutral"
+                        :title="t('tmcut.openInFolder')"
+                        @click.stop="showInFolder(item.src)"
+                      />
                     </div>
                   </div>
                 </div>
@@ -764,7 +975,8 @@ const editorExtraActions = computed(() => [
 
         <!-- Center Player Preview (compact, CapCut-style) -->
         <main
-          class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-950 relative overflow-hidden min-w-0">
+          class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-950 relative overflow-hidden min-w-0"
+        >
           <div class="w-full max-w-xl">
             <TmcutPreviewPlayer />
           </div>
@@ -787,6 +999,24 @@ const editorExtraActions = computed(() => [
         <TmcutTimeline @open-export="showExportModal = true" />
       </div>
 
+      <!-- Status footer (design #2): honest project/engine info -->
+      <div class="h-7 shrink-0 border-t border-neutral-800 bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="text-neutral-300 font-medium truncate">{{ currentProject?.name }}</span>
+          <span v-if="currentProject?.canvas" class="font-mono shrink-0">
+            {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }} · {{ currentProject.canvas.fps }}fps
+          </span>
+          <span class="font-mono shrink-0">{{ formatTimecode(totalDuration) }}</span>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <span>{{ t('tmcut.workspace.clipCount', { count: clipCount }) }}</span>
+          <span class="flex items-center gap-1">
+            <UIcon name="i-lucide-cpu" class="size-3" />
+            {{ hardwareLabel }}
+          </span>
+        </div>
+      </div>
+
       <!-- Export Modal -->
       <TmcutExportModal v-model:open="showExportModal" />
 
@@ -797,11 +1027,23 @@ const editorExtraActions = computed(() => [
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="text-xs text-neutral-500">{{ t('tmcut.canvas.width') }}</label>
-                <UInput v-model="customCanvas.width" type="number" :min="64" :max="7680" class="w-full mt-1" />
+                <UInput
+                  v-model="customCanvas.width"
+                  type="number"
+                  :min="64"
+                  :max="7680"
+                  class="w-full mt-1"
+                />
               </div>
               <div>
                 <label class="text-xs text-neutral-500">{{ t('tmcut.canvas.height') }}</label>
-                <UInput v-model="customCanvas.height" type="number" :min="64" :max="4320" class="w-full mt-1" />
+                <UInput
+                  v-model="customCanvas.height"
+                  type="number"
+                  :min="64"
+                  :max="4320"
+                  class="w-full mt-1"
+                />
               </div>
             </div>
             <div>
@@ -830,13 +1072,21 @@ const editorExtraActions = computed(() => [
         <template #body>
           <div class="space-y-3">
             <div class="flex justify-end">
-              <UButton icon="i-lucide-camera" size="xs" variant="soft" color="primary" @click="handleSaveSnapshot">
+              <UButton
+                icon="i-lucide-camera"
+                size="xs"
+                variant="soft"
+                color="primary"
+                @click="handleSaveSnapshot"
+              >
                 {{ t('tmcut.snapshot.save') }}
               </UButton>
             </div>
 
-            <div v-if="snapshots.length === 0"
-              class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-6 text-center">
+            <div
+              v-if="snapshots.length === 0"
+              class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-6 text-center"
+            >
               <UIcon name="i-lucide-history" class="w-8 h-8 text-neutral-400 mx-auto mb-2" />
               <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                 {{ t('tmcut.snapshot.empty') }}
@@ -847,8 +1097,11 @@ const editorExtraActions = computed(() => [
             </div>
 
             <div v-else class="space-y-2 max-h-80 overflow-y-auto">
-              <div v-for="snapshot in snapshots" :key="snapshot.ts"
-                class="flex items-center justify-between gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3">
+              <div
+                v-for="snapshot in snapshots"
+                :key="snapshot.ts"
+                class="flex items-center justify-between gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3"
+              >
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                     {{ snapshot.name }}
@@ -861,8 +1114,13 @@ const editorExtraActions = computed(() => [
                   <UButton size="xs" variant="soft" @click="handleRestoreSnapshot(snapshot.ts)">
                     {{ t('tmcut.snapshot.restore') }}
                   </UButton>
-                  <UButton size="xs" variant="soft" color="error" icon="i-lucide-trash"
-                    @click="handleDeleteSnapshot(snapshot.ts)" />
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    color="error"
+                    icon="i-lucide-trash"
+                    @click="handleDeleteSnapshot(snapshot.ts)"
+                  />
                 </div>
               </div>
             </div>

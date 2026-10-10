@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
+import { useI18n } from 'vue-i18n'
+import { propsWithKeyframes, keyframeTimes, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
 
 const props = withDefaults(defineProps<{
   trackType: 'video' | 'text' | 'audio'
@@ -13,9 +16,11 @@ const props = withDefaults(defineProps<{
   locked: false
 })
 
-const { selectedClipId, selectClip, updateClip, pushHistory, currentProject } = useTmcutProject()
+const { t } = useI18n()
+const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl } = useTmcutMedia()
+const { snapOn } = useTmcutUiPrefs()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
@@ -26,6 +31,21 @@ const duration = computed(() => {
 
 const clipLeft = computed(() => (props.clip.offset || 0) * zoom.value)
 const clipWidth = computed(() => Math.max(20, duration.value * zoom.value))
+
+// Keyframe diamonds (Roadmap B1): unique keyframe times across every
+// animated prop, as a percentage of the clip duration (times are
+// clip-local ticks). Nothing renders when the clip has no keyframes —
+// no empty layer. Keyframes are preview-only until Phase K export.
+const keyframePercents = computed<number[]>(() => {
+  if (!props.clip.keyframes?.length) return []
+  const seen = new Set<number>()
+  for (const prop of propsWithKeyframes(props.clip)) {
+    for (const t of keyframeTimes(props.clip, prop)) seen.add(t)
+  }
+  return [...seen]
+    .sort((a, b) => a - b)
+    .map(t => Math.min(100, Math.max(0, (t / TICKS_PER_SECOND) / duration.value * 100)))
+})
 
 // Track color styling
 const trackStyles = computed(() => {
@@ -111,31 +131,18 @@ watch(() => props.clip.src, () => {
   void refreshWaveform()
 })
 
-// Magnetic snap candidates (seconds): playhead + every other clip edge.
-function snapCandidates(): number[] {
-  const points = [0, playhead.value]
-  for (const track of currentProject.value?.timeline?.tracks || []) {
-    for (const item of track.items || []) {
-      if (item.id === props.clip.id) continue
-      const dur = (item.out - item.in) / (item.speed || 1)
-      points.push(item.offset || 0, (item.offset || 0) + dur)
-    }
-  }
-  return points
-}
-
+// Magnetic snap (Roadmap C1/A6): delegates to the core engine through
+// snapTimeSec — candidates are 0, the playhead, every other clip edge
+// and markers, within an 8px radius at the current zoom. Controlled by
+// the Magnet toolbar toggle / N key (snapOn in useTmcutUiPrefs).
 function applySnap(targetSec: number): number {
-  const threshold = 8 / zoom.value // 8px magnetic radius
-  let best = targetSec
-  let bestDist = threshold
-  for (const c of snapCandidates()) {
-    const dist = Math.abs(c - targetSec)
-    if (dist < bestDist) {
-      bestDist = dist
-      best = c
-    }
-  }
-  return Math.max(0, Math.round(best * 100) / 100)
+  if (!snapOn.value) return Math.max(0, Math.round(targetSec * 100) / 100)
+  const thresholdSec = 8 / zoom.value // 8px magnetic radius
+  const snapped = snapTimeSec(targetSec, playhead.value, {
+    ignoreIds: [props.clip.id],
+    thresholdSec
+  })
+  return Math.max(0, Math.round(snapped * 100) / 100)
 }
 
 // Drag to move clip along timeline
@@ -147,12 +154,19 @@ function onDragStart(e: MouseEvent) {
 
   const startX = e.clientX
   const initialOffset = props.clip.offset || 0
+  // Grouped/linked relatives travel with the drag (roadmap B4): their
+  // offsets are captured now and shifted by the same adjusted delta.
+  const relatives = relatedOffsetsFor(props.clip.id)
 
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
     const deltaSec = deltaX / zoom.value
     const newOffset = applySnap(Math.max(0, initialOffset + deltaSec))
+    const moved = newOffset - initialOffset
     updateClip(props.clip.id, { offset: newOffset })
+    for (const [id, base] of Object.entries(relatives)) {
+      updateClip(id, { offset: Math.max(0, Math.round((base + moved) * 100) / 100) })
+    }
   }
 
   function onMouseUp() {
@@ -181,9 +195,19 @@ function onTrimLeftStart(e: MouseEvent) {
     const deltaSec = deltaX / zoom.value
     const deltaSourceSec = deltaSec * speed
 
-    const newIn = Math.max(0, Math.min(props.clip.out - 0.2, initialIn + deltaSourceSec))
+    let newIn = Math.max(0, Math.min(props.clip.out - 0.2, initialIn + deltaSourceSec))
     const actualDeltaIn = newIn - initialIn
-    const newOffset = Math.max(0, initialOffset + actualDeltaIn / speed)
+    let newOffset = Math.max(0, initialOffset + actualDeltaIn / speed)
+    if (snapOn.value) {
+      // Snap the moving left edge (timeline start), then derive the new
+      // source in-point; the clamp keeps the trim inside the source.
+      newOffset = applySnap(newOffset)
+      newIn = initialIn + (newOffset - initialOffset) * speed
+      if (newIn < 0 || newIn > props.clip.out - 0.2) {
+        newIn = Math.max(0, Math.min(props.clip.out - 0.2, newIn))
+        newOffset = Math.max(0, initialOffset + (newIn - initialIn) / speed)
+      }
+    }
 
     updateClip(props.clip.id, {
       in: Math.round(newIn * 100) / 100,
@@ -210,13 +234,22 @@ function onTrimRightStart(e: MouseEvent) {
   const startX = e.clientX
   const initialOut = props.clip.out
   const speed = props.clip.speed || 1
+  const initialEnd = (props.clip.offset || 0) + (initialOut - props.clip.in) / speed
 
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
     const deltaSec = deltaX / zoom.value
     const deltaSourceSec = deltaSec * speed
 
-    const newOut = Math.max(props.clip.in + 0.2, initialOut + deltaSourceSec)
+    let newOut = Math.max(props.clip.in + 0.2, initialOut + deltaSourceSec)
+    if (snapOn.value) {
+      // Snap the moving right edge (timeline end) to nearby candidates.
+      const newEnd = applySnap(Math.max(0, initialEnd + deltaSec))
+      newOut = Math.max(
+        props.clip.in + 0.2,
+        props.clip.in + (newEnd - (props.clip.offset || 0)) * speed
+      )
+    }
     updateClip(props.clip.id, {
       out: Math.round(newOut * 100) / 100
     })
@@ -230,6 +263,106 @@ function onTrimRightStart(e: MouseEvent) {
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
 }
+
+// ===== Right-click transition menu (roadmap B3 / core C5) =====
+// Video clips only: the preview crossfades VIDEO layers (two <video>
+// elements, complementary ramps). Text/audio transitions are omitted —
+// offering them would be a dead control (no preview, export ships in R3,
+// the export modal carries the honest badge). Applying shifts the clip
+// left to overlap its neighbor; "None" restores the original cut.
+const DEFAULT_TRANSITION_SEC = 0.5
+const DURATION_PRESETS = [0.2, 0.5, 1, 2]
+
+const menuOpen = ref(false)
+const menuEl = ref<HTMLElement | null>(null)
+const menuPos = ref({ x: 0, y: 0 })
+// Pending selections — seeded from the clip's current transition on open.
+const menuType = ref<string>(KNOWN_TRANSITIONS[0] ?? 'fade')
+const menuDuration = ref(DEFAULT_TRANSITION_SEC)
+
+const hasTransition = computed(() => (props.clip.transitionIn?.duration ?? 0) > 0)
+
+// Applied-state label in the menu header (truthful: what is saved).
+const appliedLabel = computed(() => {
+  const ti = props.clip.transitionIn
+  if (!ti || !(ti.duration > 0)) return t('tmcut.clipMenu.none')
+  const sec = Number(ticksToSec(ti.duration).toFixed(2))
+  return `${t(`tmcut.clipMenu.types.${ti.type}`)} · ${sec}s`
+})
+
+// Live validation against the CURRENT menu selections — re-runs whenever
+// the timeline changes (reactive through useTmcutProject).
+function reasonFor(type: string, durSec: number): string | null {
+  const check = checkClipTransition(props.clip.id, type, durSec)
+  return check.ok ? null : (check.reason ?? 'no-neighbor')
+}
+
+const menuReason = computed<string | null>(() =>
+  menuOpen.value ? reasonFor(menuType.value, menuDuration.value) : null)
+
+function titleFor(type: string, durSec: number): string | undefined {
+  const reason = reasonFor(type, durSec)
+  return reason ? t(`tmcut.clipMenu.reason.${reason}`) : undefined
+}
+
+function pickType(type: string) {
+  if (props.locked) return
+  menuType.value = type
+  // On refusal nothing changes — menuReason below explains why.
+  applyClipTransition(props.clip.id, type, menuDuration.value)
+}
+
+function pickDuration(durSec: number) {
+  if (props.locked) return
+  menuDuration.value = durSec
+  applyClipTransition(props.clip.id, menuType.value, durSec)
+}
+
+function clearTransitionPick() {
+  if (props.locked) return
+  clearClipTransition(props.clip.id)
+}
+
+function onClipContextMenu(e: MouseEvent) {
+  // Always suppress the browser menu over a clip (select on right-click).
+  e.preventDefault()
+  e.stopPropagation()
+  selectClip(props.clip.id)
+  if (props.locked || props.trackType !== 'video') return
+  menuType.value = props.clip.transitionIn?.type ?? KNOWN_TRANSITIONS[0] ?? 'fade'
+  menuDuration.value = props.clip.transitionIn
+    ? ticksToSec(props.clip.transitionIn.duration)
+    : DEFAULT_TRANSITION_SEC
+  // Keep the panel inside the viewport (rough box size for clamping).
+  menuPos.value = {
+    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
+    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 250))
+  }
+  menuOpen.value = true
+}
+
+// Close on outside mousedown / Escape (capture phase so clicks inside
+// the panel register first).
+function onDocMouseDown(e: MouseEvent) {
+  if (menuEl.value && e.target instanceof Node && menuEl.value.contains(e.target)) return
+  menuOpen.value = false
+}
+function onDocKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape') menuOpen.value = false
+}
+watch(menuOpen, (open) => {
+  if (open) {
+    document.addEventListener('mousedown', onDocMouseDown, true)
+    document.addEventListener('keydown', onDocKeyDown, true)
+  } else {
+    document.removeEventListener('mousedown', onDocMouseDown, true)
+    document.removeEventListener('keydown', onDocKeyDown, true)
+  }
+})
+onUnmounted(() => {
+  document.removeEventListener('mousedown', onDocMouseDown, true)
+  document.removeEventListener('keydown', onDocKeyDown, true)
+})
 </script>
 
 <template>
@@ -247,6 +380,7 @@ function onTrimRightStart(e: MouseEvent) {
       ...filmstripStyle
     }"
     @mousedown="onDragStart"
+    @contextmenu="onClipContextMenu"
   >
     <!-- Left Trim Handle -->
     <div
@@ -281,6 +415,14 @@ function onTrimRightStart(e: MouseEvent) {
       />
     </div>
 
+    <!-- Keyframe diamonds (Roadmap B1): one per unique keyframe time -->
+    <span
+      v-for="(pct, i) in keyframePercents"
+      :key="`kf-${i}`"
+      class="absolute top-1/2 w-1.5 h-1.5 -translate-y-1/2 bg-white/90 rotate-45 z-[5] pointer-events-none"
+      :style="{ left: `calc(${pct}% - 3px)` }"
+    />
+
     <!-- Right Trim Handle -->
     <div
       class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
@@ -290,4 +432,86 @@ function onTrimRightStart(e: MouseEvent) {
       <div class="w-0.5 h-3 bg-black/60 rounded" />
     </div>
   </div>
+
+  <!-- Right-click transition menu (roadmap B3): type + duration presets,
+       live-validated via core C5. Teleported to the body so the timeline's
+       overflow can never clip it. -->
+  <Teleport to="body">
+    <div
+      v-if="menuOpen"
+      ref="menuEl"
+      class="fixed z-[120] w-56 rounded-lg border border-neutral-700 bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-200 select-none"
+      :style="{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }"
+      @contextmenu.prevent
+    >
+      <div class="flex items-center justify-between gap-2 px-1 pb-1.5">
+        <span class="font-semibold text-[11px] uppercase tracking-wide text-neutral-400">
+          {{ t('tmcut.clipMenu.transition') }}
+        </span>
+        <span class="text-[10px] font-mono text-neutral-500 truncate">{{ appliedLabel }}</span>
+      </div>
+
+      <!-- Transition types (core KNOWN_TRANSITIONS — single source) -->
+      <div class="grid grid-cols-3 gap-1">
+        <button
+          v-for="type in KNOWN_TRANSITIONS"
+          :key="type"
+          type="button"
+          class="rounded border px-1 py-1.5 text-[10px] leading-tight transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          :class="clip.transitionIn?.type === type
+            ? 'bg-primary/30 border-primary/60 text-primary-100'
+            : 'bg-neutral-800/70 border-neutral-700 hover:bg-neutral-700/70 text-neutral-300'"
+          :disabled="!!reasonFor(type, menuDuration)"
+          :title="titleFor(type, menuDuration)"
+          @click="pickType(type)"
+        >
+          {{ t(`tmcut.clipMenu.types.${type}`) }}
+        </button>
+      </div>
+
+      <!-- Duration presets (apply with the pending type) -->
+      <div class="mt-1.5 px-1 text-[10px] uppercase tracking-wide text-neutral-500">
+        {{ t('tmcut.clipMenu.duration') }}
+      </div>
+      <div class="mt-1 grid grid-cols-4 gap-1">
+        <button
+          v-for="d in DURATION_PRESETS"
+          :key="d"
+          type="button"
+          class="rounded border px-1 py-1 text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          :class="Math.abs((ticksToSec(clip.transitionIn?.duration ?? 0)) - d) < 0.001
+            ? 'bg-primary/30 border-primary/60 text-primary-100'
+            : 'bg-neutral-800/70 border-neutral-700 hover:bg-neutral-700/70 text-neutral-300'"
+          :disabled="!!reasonFor(menuType, d)"
+          :title="titleFor(menuType, d)"
+          @click="pickDuration(d)"
+        >
+          {{ d }}s
+        </button>
+      </div>
+
+      <!-- Clear + honest scope note (export support ships later) -->
+      <div class="mt-1.5 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          class="rounded border border-neutral-700 bg-neutral-800/70 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          :disabled="!hasTransition"
+          @click="clearTransitionPick"
+        >
+          {{ t('tmcut.clipMenu.none') }}
+        </button>
+        <span class="text-[9px] leading-tight text-neutral-500 text-right">
+          {{ t('tmcut.clipMenu.previewOnly') }}
+        </span>
+      </div>
+
+      <!-- Why the current selection cannot apply -->
+      <p
+        v-if="menuReason"
+        class="mt-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-300"
+      >
+        {{ t(`tmcut.clipMenu.reason.${menuReason}`) }}
+      </p>
+    </div>
+  </Teleport>
 </template>

@@ -3,14 +3,39 @@ import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed } from '@tmcut-core'
 
 const { t } = useI18n()
-const { selectedClip, selectedClipId, selectClip, updateClip, removeClip } = useTmcutProject()
+const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced } = useTmcutProject()
 const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
-const { formatTimecode } = useTmcutPlayback()
+const { formatTimecode, playhead } = useTmcutPlayback()
 
 const clip = computed(() => selectedClip.value?.item)
 const trackType = computed(() => selectedClip.value?.track)
+
+// Clip property tabs (design #2): Video / Audio / Speed — the tab list
+// follows the clip type so no dead (always-empty) tab ever shows.
+const activeTab = ref<'video' | 'audio' | 'speed'>('video')
+
+const availableTabs = computed<Array<'video' | 'audio' | 'speed'>>(() => {
+  if (trackType.value === 'audio') return ['audio', 'speed']
+  if (trackType.value === 'text') return ['video', 'speed']
+  return ['video', 'audio', 'speed']
+})
+
+const currentTab = computed(() => (
+  availableTabs.value.includes(activeTab.value) ? activeTab.value : availableTabs.value[0]
+))
+
+const tabItems = computed(() => availableTabs.value.map(key => ({
+  key,
+  label: key === 'video'
+    ? t('tmcut.inspectorProps.tabVideo')
+    : key === 'audio'
+      ? t('tmcut.inspectorProps.tabAudio')
+      : t('tmcut.inspectorProps.tabSpeed'),
+  icon: key === 'video' ? 'i-lucide-film' : key === 'audio' ? 'i-lucide-volume-2' : 'i-lucide-gauge'
+})))
 
 // Speed options
 const speedOptions = computed(() => [
@@ -20,7 +45,8 @@ const speedOptions = computed(() => [
   { label: '1.25x', value: 1.25 },
   { label: '1.5x', value: 1.5 },
   { label: '2.0x', value: 2.0 },
-  { label: '3.0x', value: 3.0 }
+  { label: '3.0x', value: 3.0 },
+  { label: '4.0x', value: 4.0 }
 ])
 
 // Media fitting options (Phase 2)
@@ -37,11 +63,118 @@ const isCropFit = computed(() => (clip.value?.fit || 'fit') === 'crop' && trackT
 
 function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, value: NonNullable<typeof clip.value>[K]) {
   if (!selectedClipId.value) return
+  // Roadmap B8: bursts of the same field (typing a text, dragging a
+  // slider) record ONE undo entry through the coalescing history.
+  pushHistoryCoalesced(`${selectedClipId.value}:${String(field)}`)
   updateClip(selectedClipId.value, { [field]: value })
+}
+
+// Keyframes (roadmap B1): the ⏱ buttons toggle a keyframe of the
+// CURRENT field value at the playhead. Times are clip-local ticks
+// (0 = clip start), so keyframes travel with the clip when it moves.
+// The array is copied before mutation so updateClip receives one field
+// patch, and pushHistory() below records exactly one discrete undo
+// entry (roadmap B8). Keyframes are PREVIEW ONLY until the render
+// pipeline supports them (Phase K roadmap item); the chip in the
+// section headers says so.
+type KfProp = 'scale' | 'x' | 'y' | 'opacity' | 'volume'
+
+const clipLocalTicks = computed(() => {
+  const c = clip.value
+  if (!c) return 0
+  return Math.round((playhead.value - (c.offset || 0)) * TICKS_PER_SECOND)
+})
+
+const clipHasKeyframes = computed(() => propsWithKeyframes(clip.value).length > 0)
+
+function hasKfAtPlayhead(prop: KfProp): boolean {
+  return !!keyframeAt(clip.value, prop, clipLocalTicks.value)
+}
+
+function kfTitle(prop: KfProp): string {
+  return hasKfAtPlayhead(prop)
+    ? t('tmcut.inspectorProps.removeKeyframe')
+    : t('tmcut.inspectorProps.addKeyframe')
+}
+
+function kfCurrentValue(c: NonNullable<typeof clip.value>, prop: KfProp): number {
+  if (prop === 'volume') return c.volume ?? 100
+  if (prop === 'opacity') return c.opacity ?? 100
+  if (prop === 'scale') return c.scale ?? 100
+  if (prop === 'x') return c.x ?? 0
+  return c.y ?? 0
+}
+
+function toggleKeyframe(prop: KfProp) {
+  const c = clip.value
+  if (!c || !selectedClipId.value) return
+  const draft = { keyframes: [...(c.keyframes || [])] }
+  if (keyframeAt(draft, prop, clipLocalTicks.value)) {
+    removeKeyframe(draft, prop, clipLocalTicks.value)
+  } else {
+    setKeyframe(draft, prop, clipLocalTicks.value, kfCurrentValue(c, prop))
+  }
+  pushHistory() // discrete op → its own undo entry (roadmap B8)
+  updateClip(selectedClipId.value, { keyframes: draft.keyframes })
+}
+
+// Fade in/out (roadmap C12 / core audio.mjs): the audio tab toggles a
+// 0.5s default envelope per edge, with a slider while active. Values are
+// TICKS on the v1 item (same passthrough heritage as keyframes and
+// transitionIn); the preview ramps video.volume through core gainAt.
+const DEFAULT_FADE_SEC = 0.5
+
+const fadeInTicks = computed(() => clip.value?.fade?.in || 0)
+const fadeOutTicks = computed(() => clip.value?.fade?.out || 0)
+
+// Core clamps each edge to half the clip — the slider mirrors that cap.
+const maxFadeSec = computed(() => {
+  const c = clip.value
+  if (!c) return 0
+  return Math.max(0, Math.min(5, ((c.out - c.in) / (c.speed || 1)) / 2))
+})
+
+function fadePatch(edge: 'in' | 'out', ticks: number) {
+  const c = clip.value
+  if (!c) return { in: 0, out: 0 }
+  return {
+    in: edge === 'in' ? ticks : (c.fade?.in || 0),
+    out: edge === 'out' ? ticks : (c.fade?.out || 0)
+  }
+}
+
+function toggleFade(edge: 'in' | 'out') {
+  const c = clip.value
+  if (!c || !selectedClipId.value) return
+  const current = edge === 'in' ? fadeInTicks.value : fadeOutTicks.value
+  const ticks = current > 0 ? 0 : Math.round(DEFAULT_FADE_SEC * TICKS_PER_SECOND)
+  pushHistory() // discrete toggle → its own undo entry (roadmap B8)
+  updateClip(selectedClipId.value, { fade: fadePatch(edge, ticks) })
+}
+
+function handleFadeUpdate(edge: 'in' | 'out', seconds: number) {
+  if (!selectedClipId.value) return
+  const ticks = Math.max(0, Math.round(seconds * TICKS_PER_SECOND))
+  // Slider bursts coalesce into one undo entry (roadmap B8/C15).
+  pushHistoryCoalesced(`${selectedClipId.value}:fade-${edge}`)
+  updateClip(selectedClipId.value, { fade: fadePatch(edge, ticks) })
+}
+
+// Speed changes go through core C4 (roadmap B2): the speed is validated
+// and the source span keeps the 0.2 s floor — only the touched fields are
+// sent so undo history stays one clean entry. The timeline duration
+// derives from (out - in) / speed everywhere (editor + export R25).
+function handleSpeedUpdate(value: number) {
+  const c = clip.value
+  if (!c || !selectedClipId.value) return
+  const next = withSpeed(c, Number(value))
+  pushHistory() // discrete preset change → its own undo entry (B8)
+  updateClip(selectedClipId.value, { speed: next.speed, out: next.out })
 }
 
 function handleFitUpdate(value: string) {
   if (!selectedClipId.value) return
+  pushHistory() // discrete fit change → its own undo entry (B8)
   const fit = value as 'fit' | 'fill' | 'crop' | 'stretch' | 'smart'
   if (fit === 'smart' && (clip.value?.focusX === undefined || clip.value?.focusY === undefined)) {
     updateClip(selectedClipId.value, { fit, focusX: 0.5, focusY: 0.5 })
@@ -60,7 +193,7 @@ function handleDelete() {
   }
 }
 
-// Project details (CapCut-style "Chi tiết" panel when no clip is selected)
+// Project details (CapCut-style "Details" panel when no clip is selected)
 const storagePath = ref('')
 onMounted(async () => {
   try {
@@ -129,9 +262,24 @@ const saveStateLabel = computed(() => {
       />
     </div>
 
+    <!-- Clip property tabs (design #2): Video / Audio / Speed -->
+    <div class="flex items-center gap-1 bg-neutral-900/60 border border-neutral-800 rounded-lg p-1">
+      <button
+        v-for="tab in tabItems"
+        :key="tab.key"
+        type="button"
+        class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+        :class="currentTab === tab.key ? 'bg-primary/15 text-primary' : 'text-neutral-400 hover:text-neutral-200'"
+        @click="activeTab = tab.key"
+      >
+        <UIcon :name="tab.icon" class="size-3" />
+        {{ tab.label }}
+      </button>
+    </div>
+
     <!-- Text Content Editor (If Text Track) -->
     <div
-      v-if="trackType === 'text'"
+      v-if="currentTab === 'video' && trackType === 'text'"
       class="space-y-2"
     >
       <label class="font-medium text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
@@ -171,7 +319,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Timing & Speed Settings -->
-    <div class="space-y-3 pt-2 border-t border-neutral-800">
+    <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-neutral-800">
       <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.timingAndSpeed') }}</span>
 
       <div class="grid grid-cols-2 gap-2">
@@ -214,15 +362,31 @@ const saveStateLabel = computed(() => {
             :items="speedOptions"
             :model-value="clip.speed || 1"
             size="xs"
-            @update:model-value="handleUpdate('speed', Number($event))"
+            @update:model-value="handleSpeedUpdate(Number($event))"
           />
         </div>
+      </div>
+
+      <!-- Reverse playback (roadmap B2): preview seeks backwards
+           (seek-driven like the J shuttle — the element cannot play
+           native) and export applies reverse/areverse (R25). Hidden for
+           TEXT clips: a text overlay has no directional playback, so the
+           toggle would change nothing anywhere (dead control). -->
+      <div
+        v-if="trackType !== 'text'"
+        class="flex items-center justify-between"
+      >
+        <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</label>
+        <USwitch
+          :model-value="!!clip.reverse"
+          @update:model-value="handleUpdate('reverse', !!$event)"
+        />
       </div>
     </div>
 
     <!-- Media Fitting (Phase 2, video track only) -->
     <div
-      v-if="trackType === 'video'"
+      v-if="currentTab === 'video' && trackType === 'video'"
       class="space-y-3 pt-2 border-t border-neutral-800"
     >
       <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label') }}</span>
@@ -317,14 +481,34 @@ const saveStateLabel = computed(() => {
 
     <!-- Transform Settings (Video & Text) -->
     <div
-      v-if="trackType !== 'audio'"
+      v-if="currentTab === 'video' && trackType !== 'audio'"
       class="space-y-3 pt-2 border-t border-neutral-800"
     >
-      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.transform') }}</span>
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.transform') }}</span>
+        <span
+          v-if="clipHasKeyframes"
+          class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5"
+          :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+        >
+          {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+        </span>
+      </div>
 
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
+            <button
+              type="button"
+              class="rounded p-0.5 transition-colors"
+              :class="hasKfAtPlayhead('scale') ? 'text-primary bg-primary/15' : 'text-neutral-600 hover:text-neutral-300'"
+              :title="kfTitle('scale')"
+              @click="toggleKeyframe('scale')"
+            >
+              <UIcon name="i-lucide-diamond" class="size-3" />
+            </button>
+          </div>
           <UInput
             type="number"
             :min="10"
@@ -335,7 +519,18 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.opacity') }}</label>
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.opacity') }}</label>
+            <button
+              type="button"
+              class="rounded p-0.5 transition-colors"
+              :class="hasKfAtPlayhead('opacity') ? 'text-primary bg-primary/15' : 'text-neutral-600 hover:text-neutral-300'"
+              :title="kfTitle('opacity')"
+              @click="toggleKeyframe('opacity')"
+            >
+              <UIcon name="i-lucide-diamond" class="size-3" />
+            </button>
+          </div>
           <UInput
             type="number"
             :min="0"
@@ -347,9 +542,39 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
 
+      <!-- Rotation: exposed for VIDEO clips only — text rotation is not
+           exported yet (drawtext has no angle; roadmap R12), and showing
+           the slider for text would be a dead control. -->
+      <div v-if="trackType === 'video'">
+        <div class="flex items-center justify-between">
+          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.rotation') }}</label>
+          <span class="text-[10px] font-mono text-neutral-400">{{ clip.rotation || 0 }}°</span>
+        </div>
+        <USlider
+          :model-value="clip.rotation || 0"
+          :min="-180"
+          :max="180"
+          :step="1"
+          :tooltip="true"
+          class="mt-1.5"
+          @update:model-value="handleUpdate('rotation', Number($event))"
+        />
+      </div>
+
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionX') }}</label>
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionX') }}</label>
+            <button
+              type="button"
+              class="rounded p-0.5 transition-colors"
+              :class="hasKfAtPlayhead('x') ? 'text-primary bg-primary/15' : 'text-neutral-600 hover:text-neutral-300'"
+              :title="kfTitle('x')"
+              @click="toggleKeyframe('x')"
+            >
+              <UIcon name="i-lucide-diamond" class="size-3" />
+            </button>
+          </div>
           <UInput
             type="number"
             :model-value="clip.x || 0"
@@ -358,7 +583,18 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionY') }}</label>
+          <div class="flex items-center justify-between">
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionY') }}</label>
+            <button
+              type="button"
+              class="rounded p-0.5 transition-colors"
+              :class="hasKfAtPlayhead('y') ? 'text-primary bg-primary/15' : 'text-neutral-600 hover:text-neutral-300'"
+              :title="kfTitle('y')"
+              @click="toggleKeyframe('y')"
+            >
+              <UIcon name="i-lucide-diamond" class="size-3" />
+            </button>
+          </div>
           <UInput
             type="number"
             :model-value="clip.y || 0"
@@ -371,10 +607,34 @@ const saveStateLabel = computed(() => {
 
     <!-- Audio / Volume Settings -->
     <div
-      v-if="trackType === 'audio' || trackType === 'video'"
+      v-if="currentTab === 'audio'"
       class="space-y-2 pt-2 border-t border-neutral-800"
     >
-      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.volume') }}</span>
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.volume') }}</span>
+        <div class="flex items-center gap-1.5">
+          <span
+            v-if="clipHasKeyframes"
+            class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5"
+            :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+          >
+            {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+          </span>
+          <!-- Keyframe toggle: only for VIDEO clips — a timeline audio
+               clip has no preview engine yet, so a keyframe there would
+               change nothing visible (dead control, roadmap B1). -->
+          <button
+            v-if="trackType === 'video'"
+            type="button"
+            class="rounded p-0.5 transition-colors"
+            :class="hasKfAtPlayhead('volume') ? 'text-primary bg-primary/15' : 'text-neutral-600 hover:text-neutral-300'"
+            :title="kfTitle('volume')"
+            @click="toggleKeyframe('volume')"
+          >
+            <UIcon name="i-lucide-diamond" class="size-3" />
+          </button>
+        </div>
+      </div>
       <div class="flex items-center gap-3">
         <UIcon
           name="i-lucide-volume-2"
@@ -389,6 +649,59 @@ const saveStateLabel = computed(() => {
           @input="handleUpdate('volume', Number(($event.target as HTMLInputElement).value))"
         >
         <span class="font-mono text-xs w-10 text-right">{{ clip.volume ?? 100 }}%</span>
+      </div>
+
+      <!-- Fade in/out (roadmap C12): toggle a 0.5s envelope per edge, the
+           slider appears while active. The preview ramps through core
+           gainAt; export follows with the compiler round (R5), the same
+           gap family as the volume slider above. -->
+      <div class="space-y-1.5 pt-1">
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-[11px] transition-colors shrink-0"
+            :class="fadeInTicks > 0 ? 'text-primary bg-primary/15' : 'text-neutral-400 bg-neutral-800/60 hover:text-neutral-200'"
+            :title="t('tmcut.inspectorProps.fadeIn')"
+            @click="toggleFade('in')"
+          >
+            {{ t('tmcut.inspectorProps.fadeIn') }}
+          </button>
+          <template v-if="fadeInTicks > 0">
+            <input
+              type="range"
+              min="0"
+              :max="maxFadeSec"
+              step="0.1"
+              :value="fadeInTicks / TICKS_PER_SECOND"
+              class="w-full accent-primary cursor-pointer"
+              @input="handleFadeUpdate('in', Number(($event.target as HTMLInputElement).value))"
+            >
+            <span class="font-mono text-xs w-10 text-right">{{ (fadeInTicks / TICKS_PER_SECOND).toFixed(1) }}s</span>
+          </template>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-[11px] transition-colors shrink-0"
+            :class="fadeOutTicks > 0 ? 'text-primary bg-primary/15' : 'text-neutral-400 bg-neutral-800/60 hover:text-neutral-200'"
+            :title="t('tmcut.inspectorProps.fadeOut')"
+            @click="toggleFade('out')"
+          >
+            {{ t('tmcut.inspectorProps.fadeOut') }}
+          </button>
+          <template v-if="fadeOutTicks > 0">
+            <input
+              type="range"
+              min="0"
+              :max="maxFadeSec"
+              step="0.1"
+              :value="fadeOutTicks / TICKS_PER_SECOND"
+              class="w-full accent-primary cursor-pointer"
+              @input="handleFadeUpdate('out', Number(($event.target as HTMLInputElement).value))"
+            >
+            <span class="font-mono text-xs w-10 text-right">{{ (fadeOutTicks / TICKS_PER_SECOND).toFixed(1) }}s</span>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -419,7 +732,7 @@ const saveStateLabel = computed(() => {
       </span>
     </div>
 
-    <!-- Detail rows (CapCut-style Chi tiết panel) -->
+    <!-- Detail rows (CapCut-style details panel) -->
     <div class="py-2 divide-y divide-neutral-800/60">
       <div v-for="row in detailRows" :key="row.label" class="flex items-start justify-between gap-3 py-1.5">
         <span class="text-neutral-500 shrink-0">{{ row.label }}</span>
