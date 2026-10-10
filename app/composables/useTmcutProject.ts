@@ -108,6 +108,13 @@ export interface TmcutProject {
   source: 'manual' | 'autocut' | 'template'
   created_at: string
   updated_at: string
+  /** Last time the project was opened (roadmap J-2): drives the
+   *  "Recently opened" sort. Never bumped by saveProject, so it stays
+   *  independent from updated_at ("Recently edited"). */
+  lastOpenedAt?: string
+  /** Pinned to the top of the home grid (roadmap J-2) — stored in the
+   *  project file itself, no separate index. */
+  pinned?: boolean
 }
 
 // Global project state
@@ -284,6 +291,10 @@ async function loadProject(projectId: string) {
         applyProjectMigration(disk)
         syncProjectIndex(disk)
         await detectRecovery(projectId)
+        // Open-time is metadata: recorded AFTER recovery detection so a
+        // fresh project write can never mask a pending recovery file
+        // (roadmap J-2).
+        await persistProjectMetadata(disk.id, { lastOpenedAt: new Date().toISOString() })
         isLoading.value = false
         return
       }
@@ -300,6 +311,7 @@ async function loadProject(projectId: string) {
         currentProject.value = local
         applyProjectMigration(local)
         syncProjectIndex(local)
+        await persistProjectMetadata(local.id, { lastOpenedAt: new Date().toISOString() })
         isLoading.value = false
         return
       } catch (error) {
@@ -465,6 +477,44 @@ async function renameProject(projectId: string, name: string) {
       console.error('Failed to rename project on disk:', error)
     }
   }
+}
+
+// Metadata-only project write (roadmap J-2): the pin flag and the open
+// time must persist WITHOUT bumping updated_at — otherwise the honest
+// "Recently edited" sort would silently absorb them. Mirrors to
+// localStorage too so the web session (no IPC) survives a reload.
+async function persistProjectMetadata(projectId: string, patch: Partial<TmcutProject>) {
+  const project = projects.value.find(p => p.id === projectId)
+  if (!project) return
+  Object.assign(project, patch)
+  let data = project
+  if (currentProject.value?.id === projectId) {
+    Object.assign(currentProject.value, patch)
+    data = currentProject.value
+  }
+  try {
+    localStorage.setItem(`tmcut_project_${projectId}`, JSON.stringify(data))
+  } catch (error) {
+    console.error('Failed to mirror project metadata:', error)
+  }
+  const ipc = tmcutIpc()
+  if (ipc && !import.meta.server) {
+    try {
+      await ipc.writeProject({ id: projectId, data: JSON.parse(JSON.stringify(data)) })
+    } catch (error) {
+      console.error('Failed to persist project metadata:', error)
+    }
+  }
+}
+
+// Pin / unpin from the dashboard card menu (roadmap J-2): the flag lives
+// in the project file itself. Returns the new state for honest feedback.
+async function togglePinProject(projectId: string): Promise<boolean | null> {
+  const project = projects.value.find(p => p.id === projectId)
+  if (!project) return null
+  const pinned = !project.pinned
+  await persistProjectMetadata(projectId, { pinned })
+  return pinned
 }
 
 // Duplicate a project from the dashboard (full deep copy with a new id).
@@ -643,6 +693,42 @@ function updateClip(clipId: string, patch: Partial<TmcutTimelineItem>) {
       return
     }
   }
+}
+
+// Shared default fade envelope (roadmap D-1 / C12): 0.5s in + out —
+// consumed by the Inspector fade buttons and the Shift+D quick toggle
+// (K8) so the two can never drift apart.
+export const TMCUT_DEFAULT_FADE_SEC = 0.5
+
+// Quick fade toggle for the selected clip (roadmap K8 / D-1): flips BOTH
+// edges at once — the default envelope when none is active, cleared when
+// either edge has one. Text tracks carry no audio, so they are never a
+// fade target; the length clamp mirrors the Inspector slider (half the
+// clip). One undo entry, like the Inspector's discrete toggle (B8).
+function toggleFadeSelection(): 'applied' | 'cleared' | null {
+  if (!selectedClipId.value || !currentProject.value?.timeline?.tracks) return null
+  for (const track of currentProject.value.timeline.tracks) {
+    if (track.type === 'text') continue
+    const idx = track.items?.findIndex(i => i.id === selectedClipId.value)
+    if (idx !== undefined && idx !== -1) {
+      const clip = track.items[idx]!
+      const active = (clip.fade?.in || 0) > 0 || (clip.fade?.out || 0) > 0
+      if (active) {
+        pushHistory()
+        track.items[idx] = { ...clip, fade: { in: 0, out: 0 } }
+        saveProject()
+        return 'cleared'
+      }
+      const clipSec = (clip.out - clip.in) / (clip.speed || 1)
+      const ticks = secToTicks(Math.min(TMCUT_DEFAULT_FADE_SEC, clipSec / 2))
+      if (ticks <= 0) return null // sub-frame clip: no room for an envelope
+      pushHistory()
+      track.items[idx] = { ...clip, fade: { in: ticks, out: ticks } }
+      saveProject()
+      return 'applied'
+    }
+  }
+  return null
 }
 
 // Remove clip
@@ -1347,6 +1433,7 @@ export function useTmcutProject() {
     deleteProject,
     renameProject,
     duplicateProject,
+    togglePinProject,
     selectClip,
     addClipToTrack,
     updateClip,
@@ -1383,6 +1470,7 @@ export function useTmcutProject() {
     removeTrackFromProject,
     updateClipsSrc,
     trimSelectedEdgeAt,
+    toggleFadeSelection,
     groupSelection,
     ungroupSelection,
     toggleLinkSelection,

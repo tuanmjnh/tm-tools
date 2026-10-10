@@ -5,6 +5,7 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
+import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useI18n } from 'vue-i18n'
 import { propsWithKeyframes, keyframeTimes, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
 
@@ -21,6 +22,7 @@ const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relate
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
+const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
@@ -113,6 +115,48 @@ const filmstripStyle = computed(() => {
     backgroundSize: `${stripWidth}px 100%`,
     backgroundPosition: `-${offset}px center`
   }
+})
+
+// Per-clip filmstrip (roadmap G-1/R42): 8 frames sampled from THIS
+// clip's own [in, out] source range (core C14 filmstripTimes through
+// useTmcutFrames), drawn over the asset-level strip background above.
+// Trims debounce 300ms so dragging never floods the frame cache, and
+// stale resolutions drop via a request id. Failed slots stay empty so
+// the asset-level fallback shows through; web sessions keep the
+// fallback entirely (no extraction IPC there).
+const STRIP_COUNT = 8
+const stripFrames = ref<string[]>([])
+let stripRequest = 0
+let stripTimer: ReturnType<typeof setTimeout> | null = null
+
+async function refreshClipStrip() {
+  const request = ++stripRequest
+  if (props.trackType !== 'video' || !props.clip.src || !canExtractFrames.value) {
+    stripFrames.value = []
+    return
+  }
+  const frames = await clipFilmstrip(props.clip.src, props.clip.in || 0, props.clip.out, STRIP_COUNT)
+  if (request !== stripRequest) return // superseded by a newer src/range
+  stripFrames.value = frames
+}
+
+function scheduleClipStrip() {
+  if (stripTimer) clearTimeout(stripTimer)
+  stripTimer = setTimeout(() => {
+    stripTimer = null
+    void refreshClipStrip()
+  }, 300)
+}
+
+watch(() => props.clip.src, () => {
+  stripFrames.value = []
+  scheduleClipStrip()
+}, { immediate: true })
+watch(() => [props.clip.in, props.clip.out], scheduleClipStrip, { immediate: true })
+onUnmounted(() => {
+  if (stripTimer) clearTimeout(stripTimer)
+  stripTimer = null
+  stripRequest += 1
 })
 
 // Audio waveform bars rendered inside the clip body.
@@ -391,8 +435,28 @@ onUnmounted(() => {
       <div class="w-0.5 h-3 bg-black/60 rounded" />
     </div>
 
-    <!-- Clip Content Body -->
-    <div class="flex-1 px-2.5 flex items-center gap-1.5 min-w-0 overflow-hidden pointer-events-none">
+    <!-- Per-clip filmstrip layer (roadmap G-1/R42): frames from this
+         clip's own source range, over the asset-level strip behind.
+         Empty slots stay transparent so the fallback shows through. -->
+    <div
+      v-if="trackType === 'video' && stripFrames.length > 0"
+      class="absolute inset-0 flex pointer-events-none"
+    >
+      <template v-for="(frame, index) in stripFrames" :key="index">
+        <img
+          v-if="frame"
+          :src="mediaUrl(frame)"
+          class="h-full flex-1 min-w-0 object-cover"
+          draggable="false"
+          alt=""
+        >
+        <div v-else class="h-full flex-1 min-w-0" />
+      </template>
+    </div>
+
+    <!-- Clip Content Body (z-[1]: above the strip layers, below the
+         keyframe diamonds z-5 and trim handles z-10) -->
+    <div class="relative z-[1] flex-1 px-2.5 flex items-center gap-1.5 min-w-0 overflow-hidden pointer-events-none">
       <UIcon :name="trackStyles.icon" class="size-3.5 shrink-0 opacity-80" />
       <span class="truncate font-medium text-[11px] leading-tight">
         {{ clip.text || clip.name || 'Clip' }}

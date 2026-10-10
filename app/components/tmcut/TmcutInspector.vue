@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useTmcutProject } from '~/composables/useTmcutProject'
+import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed } from '@tmcut-core'
 
@@ -122,7 +122,7 @@ function toggleKeyframe(prop: KfProp) {
 // 0.5s default envelope per edge, with a slider while active. Values are
 // TICKS on the v1 item (same passthrough heritage as keyframes and
 // transitionIn); the preview ramps video.volume through core gainAt.
-const DEFAULT_FADE_SEC = 0.5
+const DEFAULT_FADE_SEC = TMCUT_DEFAULT_FADE_SEC
 
 const fadeInTicks = computed(() => clip.value?.fade?.in || 0)
 const fadeOutTicks = computed(() => clip.value?.fade?.out || 0)

@@ -69,6 +69,11 @@ const items = computed<ShortcutItem[]>(() => [
     keywords: 'zoom timeline scroll wheel ctrl cuộn phóng to thu nhỏ'
   },
   {
+    id: 'zoomKeys', category: 'editing', label: t('tmcut.hotkeys.zoomKeys'),
+    desc: t('tmcut.hotkeys.desc.zoomKeys'), keys: ['Ctrl + =', 'Ctrl + -'], keySep: true,
+    keywords: 'zoom keyboard equals minus ctrl equal cộng trừ phím tắt phóng thu'
+  },
+  {
     id: 'snapMagnet', category: 'editing', label: t('tmcut.hotkeys.snapMagnet'),
     desc: t('tmcut.hotkeys.desc.snapMagnet'), keys: ['N'], keySep: false,
     keywords: 'snap magnet magnetic bám dính từ tính toggle n'
@@ -94,6 +99,11 @@ const items = computed<ShortcutItem[]>(() => [
     keywords: 'link unlink pair audio video liên kết ctrl l'
   },
   {
+    id: 'fadeToggle', category: 'editing', label: t('tmcut.hotkeys.fadeToggle'),
+    desc: t('tmcut.hotkeys.desc.fadeToggle'), keys: ['Shift + D'], keySep: false,
+    keywords: 'fade in out envelope audio volume shift d mờ nhạt rung cảm'
+  },
+  {
     id: 'playPause', category: 'playback', label: t('tmcut.hotkeys.playPause'),
     desc: t('tmcut.hotkeys.desc.playPause'), keys: ['Space'], keySep: false,
     keywords: 'play pause space spacebar'
@@ -107,6 +117,11 @@ const items = computed<ShortcutItem[]>(() => [
     id: 'step', category: 'playback', label: t('tmcut.hotkeys.step'),
     desc: t('tmcut.hotkeys.desc.step'), keys: ['←', '→'], keySep: false,
     keywords: 'step arrow left right second shift'
+  },
+  {
+    id: 'jumpStartEnd', category: 'playback', label: t('tmcut.hotkeys.jumpStartEnd'),
+    desc: t('tmcut.hotkeys.desc.jumpStartEnd'), keys: ['Home', 'End'], keySep: true,
+    keywords: 'home end jump start beginning cuối đầu nhảy về đầu cuối'
   },
   {
     id: 'inOut', category: 'playback', label: t('tmcut.hotkeys.inOut'),
@@ -130,8 +145,8 @@ const items = computed<ShortcutItem[]>(() => [
   },
   {
     id: 'help', category: 'project', label: t('tmcut.hotkeys.help'),
-    desc: t('tmcut.hotkeys.desc.help'), keys: ['?', 'F1'], keySep: true,
-    keywords: 'help shortcuts question f1'
+    desc: t('tmcut.hotkeys.desc.help'), keys: ['?', 'F1', 'Ctrl + K'], keySep: true,
+    keywords: 'help shortcuts question f1 ctrl k'
   },
   {
     id: 'aiSilence', category: 'ai', label: t('tmcut.hotkeys.aiSilence'),

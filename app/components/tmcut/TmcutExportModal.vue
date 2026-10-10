@@ -14,6 +14,7 @@ const { t } = useI18n()
 const { currentProject, totalDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl } = useTmcutMedia()
+const { pickFile } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const toast = useToast()
 
@@ -27,6 +28,34 @@ const encoder = ref('libx264')
 const quality = ref('medium') // fast | medium | high → CRF map
 const audioFormat = ref<'mp3' | 'wav'>('mp3')
 const audioBitrate = ref(320)
+// Noise reduction (roadmap D-3): export-only option — the compiler maps
+// ONE global afftdn; there is no browser preview of denoised audio, so
+// the checkbox lives here and nowhere else.
+const denoise = ref(false)
+
+// Color LUT (roadmap E-4): export-only .cube graded onto the footage —
+// a browser cannot render an arbitrary 3D LUT, so the picker lives only
+// here (session-scoped, like every other option in this modal).
+const lut3dPath = ref<string | null>(null)
+const lut3dName = computed(() =>
+  lut3dPath.value ? (lut3dPath.value.split(/[\\/]/).pop() || lut3dPath.value) : ''
+)
+
+async function pickLutFile() {
+  const path = await pickFile({
+    title: t('tmcut.export.lutChoose'),
+    filters: [{ name: 'LUT', extensions: ['cube'] }]
+  })
+  if (!path || typeof path !== 'string') return
+  // Apostrophes cannot be escaped through the filtergraph's two parse
+  // levels (verified against ffmpeg) — reject now with a clear message
+  // rather than failing mid-export with a cryptic graph error.
+  if (path.includes('\'')) {
+    toast.add({ title: t('tmcut.export.lutBadPath'), color: 'warning' })
+    return
+  }
+  lut3dPath.value = path
+}
 
 // ---- Progress / result state (unchanged pipeline) ----
 const isExporting = ref(false)
@@ -230,6 +259,44 @@ const fpsOptions = computed(() => {
 
 const fpsValue = computed(() => String(effectiveFps.value))
 
+// ---- Social presets (roadmap R8) ----
+// Quick resolution+fps targets — only what the pipeline can REALLY
+// produce: output resolution is canvas × outScale (the compiler's
+// scale= filter scales, it never reframes), so a preset applies only
+// when the canvas aspect matches the target within the ±2px rounding
+// the compiler applies. Mismatched chips stay disabled with the exact
+// reason instead of silently letterboxing/distorting the video.
+type SocialPreset = { id: string, labelKey: string, w: number, h: number, ratio: string, fps: number }
+
+const socialPresets: SocialPreset[] = [
+  { id: 'vertical', labelKey: 'tmcut.export.presetVertical', w: 1080, h: 1920, ratio: '9:16', fps: 30 },
+  { id: 'youtube', labelKey: 'tmcut.export.presetYoutube', w: 1920, h: 1080, ratio: '16:9', fps: 30 },
+  { id: 'square', labelKey: 'tmcut.export.presetSquare', w: 1080, h: 1080, ratio: '1:1', fps: 30 }
+]
+
+function presetFit(p: SocialPreset): boolean {
+  if (!canvasW.value || !canvasH.value) return false
+  const out = scaledSize(p.w / canvasW.value)
+  // The compiler forces EVEN output dimensions, so a chip claiming
+  // 1080×1920 must land on it exactly — a "close enough" 1080×1918
+  // would be a 2px lie in the label.
+  return out.w === p.w && out.h === p.h
+}
+
+function applyPreset(p: SocialPreset) {
+  if (!presetFit(p)) return
+  outScale.value = p.w / canvasW.value
+  // Keep "follow canvas" when the target already equals it — the
+  // selector then keeps showing the honest canvas label.
+  fps.value = p.fps === canvasFps.value ? 0 : p.fps
+}
+
+function presetActive(p: SocialPreset): boolean {
+  return presetFit(p)
+    && Math.abs(outScale.value - p.w / canvasW.value) < 1e-9
+    && effectiveFps.value === p.fps
+}
+
 const hwInfo = computed(() => ({
   label: encoder.value === 'h264_nvenc'
     ? t('tmcut.export.encoderGpu')
@@ -319,7 +386,9 @@ async function startExport() {
       range: activeRange.value,
       outScale: outScale.value,
       outFps: mode.value === 'video' ? effectiveFps.value : undefined,
-      audioBitrate: audioBitrate.value
+      audioBitrate: audioBitrate.value,
+      denoise: denoise.value,
+      lut3dPath: lut3dPath.value || undefined
     })
 
     const task: ToolTask = {
@@ -586,6 +655,36 @@ function previewResultDirectly() {
 
             <!-- VIDEO settings -->
             <template v-if="mode === 'video'">
+              <!-- Social presets (roadmap R8): one-click resolution+fps
+                   targets the pipeline truly supports — disabled (with
+                   the needed canvas ratio as the reason) when the
+                   canvas aspect differs, because the compiler scales
+                   and never reframes. -->
+              <div class="flex flex-col gap-1.5">
+                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</label>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button
+                    v-for="p in socialPresets"
+                    :key="p.id"
+                    type="button"
+                    :disabled="!presetFit(p)"
+                    :title="presetFit(p)
+                      ? `${t(p.labelKey)} — ${p.w}×${p.h} · ${p.fps}fps`
+                      : `${t(p.labelKey)} — ${t('tmcut.export.presetNeedsCanvas', { ratio: p.ratio })}`"
+                    class="py-1.5 px-2 rounded-lg border text-center transition-colors"
+                    :class="presetFit(p)
+                      ? (presetActive(p)
+                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200')
+                      : 'bg-neutral-900/50 border-neutral-800/50 text-neutral-600 cursor-not-allowed'"
+                    @click="applyPreset(p)"
+                  >
+                    <span class="block text-[11px] font-medium truncate">{{ t(p.labelKey) }}</span>
+                    <span class="block text-[9px] font-mono opacity-70">{{ p.w }}×{{ p.h }} · {{ p.fps }}</span>
+                  </button>
+                </div>
+              </div>
+
               <!-- Output resolution -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
@@ -667,6 +766,38 @@ function previewResultDirectly() {
                   </button>
                 </div>
               </div>
+
+              <!-- Color LUT (roadmap E-4): export-only .cube, graded onto
+                   the footage before drawtext. Desktop only — the picker
+                   needs the Electron dialog (and a web session cannot
+                   export at all, so the control would be dead). -->
+              <div v-if="isDesktop" class="flex flex-col gap-1.5">
+                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</label>
+                <div class="flex items-center gap-1.5">
+                  <UButton
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    icon="i-lucide-palette"
+                    :class="lut3dPath ? 'flex-1 justify-start min-w-0' : ''"
+                    @click="pickLutFile"
+                  >
+                    <span class="truncate">{{ lut3dPath ? lut3dName : t('tmcut.export.lutChoose') }}</span>
+                  </UButton>
+                  <UButton
+                    v-if="lut3dPath"
+                    icon="i-lucide-x"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    :title="t('tmcut.export.lutClear')"
+                    @click="lut3dPath = null"
+                  />
+                </div>
+                <p class="text-[10px] text-neutral-600 leading-snug">
+                  {{ t('tmcut.export.lutNote') }}
+                </p>
+              </div>
             </template>
 
             <!-- AUDIO settings -->
@@ -727,6 +858,17 @@ function previewResultDirectly() {
                 </p>
               </div>
             </template>
+
+            <!-- Noise reduction (roadmap D-3): export-only, ONE global
+                 afftdn on the final audio bus. Hidden for GIF (the
+                 compiler maps it for video/audio modes only). -->
+            <label v-if="mode !== 'gif'" class="flex items-center gap-2.5 cursor-pointer select-none">
+              <UCheckbox v-model="denoise" :disabled="isExporting" size="sm" />
+              <UIcon name="i-lucide-waves" class="size-3.5 text-primary" />
+              <span class="text-xs text-neutral-300 font-medium">
+                {{ t('tmcut.export.denoiseLabel') }} · {{ t('tmcut.export.denoiseNote') }}
+              </span>
+            </label>
           </div>
         </div>
 

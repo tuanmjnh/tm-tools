@@ -11,8 +11,9 @@ import { toURL } from '~/utils/ffmpegHelper'
 const { t } = useI18n()
 const toast = useToast()
 const { pickFile, pickWebFiles } = useFileSystem()
-const { assets, isDesktop, importFiles, importWebFiles, findAssetBySrc, getThumbUrl } = useTmcutMedia()
+const { assets, isDesktop, importFiles, importWebFiles, findAssetBySrc, getThumbUrl, mediaUrl } = useTmcutMedia()
 const { analyzing, stageKey, analysisError, analyzeSource, applyDraft } = useTmcutAutocut()
+const { available: canExtractFrames, extractFrames } = useTmcutFrames()
 
 const currentStep = ref(1)
 const selectedProfile = ref<AutocutProfile>('viral-shorts')
@@ -188,6 +189,36 @@ function handleChooseFromMedia() {
 
 // ===== Analysis (step 3) =====
 
+// Per-segment thumbnails (roadmap G-1, core C14 plans the timestamps):
+// one cached still per segment at its representative time (EDL thumb,
+// falling back to the midpoint), extracted with bounded concurrency.
+// Web sessions keep the shared source poster (no IPC there).
+const segmentThumbs = ref<Record<number, string>>({})
+let thumbRequest = 0
+
+async function loadSegmentThumbs() {
+  const asset = sourceAsset.value
+  const result = edlResult.value
+  if (!asset || !result || !canExtractFrames.value) return
+  const request = ++thumbRequest
+  segmentThumbs.value = {}
+  const jobs = result.edl.segments.map((segment, index) => ({
+    id: index,
+    src: asset.path,
+    atSec: Number.isFinite(segment.thumb) ? Number(segment.thumb) : (segment.start + segment.end) / 2,
+    width: 224
+  }))
+  const frames = await extractFrames(jobs)
+  if (request !== thumbRequest) return // a newer analysis superseded this batch
+  const next: Record<number, string> = {}
+  frames.forEach((path, id) => {
+    // extractFrames returns cache file paths; display needs the
+    // privileged media:// URL builder (mediaUrl → toURL).
+    next[Number(id)] = mediaUrl(path)
+  })
+  segmentThumbs.value = next
+}
+
 async function startAnalysis() {
   if (!sourceAsset.value) return
   currentStep.value = 3
@@ -198,6 +229,7 @@ async function startAnalysis() {
   edlResult.value = result
   included.value = result.edl.segments.map((_, index) => index)
   activeSegmentIndex.value = result.edl.segments.length > 0 ? 0 : null
+  void loadSegmentThumbs()
 }
 
 // Re-score with another profile (real re-run of the analysis pipeline)
@@ -644,15 +676,17 @@ async function handleAccept() {
                     </span>
                   </div>
 
-                  <!-- Thumbnail with In/Out chip (source poster: per-segment frame
-                       extraction needs a new extractFrame IPC — docs §78.6) -->
+                  <!-- Thumbnail with In/Out chip: a per-segment frame at
+                       its representative time (roadmap G-1 extractFrame),
+                       falling back to the shared source poster while the
+                       batch extracts / on web sessions. -->
                   <div
                     class="relative w-28 h-16 rounded-lg overflow-hidden shrink-0 bg-neutral-200 dark:bg-neutral-800"
                     :class="{ grayscale: !included.includes(index) }"
                   >
                     <img
-                      v-if="sourceThumbUrl"
-                      :src="sourceThumbUrl"
+                      v-if="segmentThumbs[index] || sourceThumbUrl"
+                      :src="segmentThumbs[index] || sourceThumbUrl"
                       class="w-full h-full object-cover"
                       alt=""
                     >

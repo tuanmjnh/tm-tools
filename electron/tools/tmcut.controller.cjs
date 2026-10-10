@@ -15,13 +15,14 @@ function getDirs() {
     assetsFile: path.join(base, 'assets.json'),
     cache: path.join(base, 'cache'),
     thumbs: path.join(base, 'cache', 'thumbnails'),
-    waveforms: path.join(base, 'cache', 'waveforms')
+    waveforms: path.join(base, 'cache', 'waveforms'),
+    frames: path.join(base, 'cache', 'frames')
   }
 }
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -156,6 +157,21 @@ function probeDuration(filePath) {
   })
 }
 
+// Session duration cache keyed by (path, mtime, size): frame batches
+// probe the same file once per job otherwise (timeline filmstrips ask
+// for dozens of seeks on one source). Negative results are not cached.
+const durationCache = new Map()
+
+function probeDurationCached(filePath, stat) {
+  const key = `${filePath}|${stat.mtimeMs}|${stat.size}`
+  const hit = durationCache.get(key)
+  if (hit !== undefined) return hit
+  return probeDuration(filePath).then((value) => {
+    if (value > 0) durationCache.set(key, value)
+    return value
+  })
+}
+
 async function extractThumbnail(filePath) {
   ensureDirs()
   const stat = getFileStat(filePath)
@@ -228,6 +244,44 @@ async function extractThumbnail(filePath) {
     cachePath: toPosix(coverOut),
     filmstripPath: fs.existsSync(stripOut) ? toPosix(stripOut) : null
   }
+}
+
+// Cap for timestamps when the duration cannot be probed (roadmap G-1).
+const MAX_FRAME_TIME_SEC = 24 * 3600
+
+// Single-frame extractor (roadmap G-1, core C14 plans the timestamps):
+// seeks to `atSec` and returns a small PNG in the frames cache, keyed per
+// (path, mtime, size, time, width) so the same seek never decodes twice.
+// The timestamp is limited: finite, >= 0 and inside the media when the
+// duration is known (otherwise capped at MAX_FRAME_TIME_SEC).
+async function extractFrameAt(filePath, atSec, width) {
+  ensureDirs()
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const wanted = Number(atSec)
+  if (!Number.isFinite(wanted) || wanted < 0) return { ok: false, error: 'Invalid timestamp' }
+  const px = Math.min(1280, Math.max(16, Math.round(Number(width) || 320)))
+  const key = `${cacheKeyFor(filePath, stat)}-f${Math.round(wanted * 1000)}-w${px}`
+  const out = path.join(getDirs().frames, `${key}.png`)
+  if (fs.existsSync(out)) return { ok: true, path: toPosix(out), cached: true }
+  const duration = await probeDurationCached(filePath, stat)
+  const at = duration > 0
+    ? Math.min(wanted, Math.max(0, duration - 0.05))
+    : Math.min(wanted, MAX_FRAME_TIME_SEC)
+  const args = [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-ss', String(at),
+    '-i', filePath,
+    '-map', '0:v:0',
+    '-frames:v', '1',
+    '-vf', `scale=${px}:-2`,
+    out
+  ]
+  const res = await runFfmpeg(args, 30 * 1000)
+  if (!res.ok || !fs.existsSync(out)) {
+    return { ok: false, error: res.error || 'Frame extraction failed' }
+  }
+  return { ok: true, path: toPosix(out), cached: false }
 }
 
 async function extractWaveform(filePath, buckets = 200) {
@@ -650,6 +704,11 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:extractThumbnail`, async (_event, { filePath }) => {
     if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
     return extractThumbnail(filePath)
+  })
+
+  ipcMain.handle(`${moduleName}:extractFrame`, async (_event, { src, atSec, width }) => {
+    if (typeof src !== 'string' || !src) return { ok: false, error: 'Invalid path' }
+    return extractFrameAt(src, atSec, width)
   })
 
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {

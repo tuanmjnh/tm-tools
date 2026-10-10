@@ -203,6 +203,78 @@ async function handleImportMedia() {
   }
 }
 
+// ===== External file drop (roadmap G-2) =====
+// Explorer/Finder → media library panel. Internal asset drags carry no
+// 'Files' type (the grid owns those), so they fall through untouched;
+// non-media files filter out inside importFiles / importWebFiles via
+// classifyAssetKind. dragenter/leave bubble per child element, so a
+// depth counter keeps the highlight stable across the panel.
+const dropActive = ref(false)
+let dropDepth = 0
+
+function isFileDrag(e: DragEvent) {
+  return !!e.dataTransfer?.types.includes('Files')
+}
+
+function onMediaPanelDragEnter(e: DragEvent) {
+  if (!isFileDrag(e)) return
+  e.preventDefault()
+  dropDepth += 1
+  dropActive.value = true
+}
+
+function onMediaPanelDragOver(e: DragEvent) {
+  if (!isFileDrag(e)) return
+  e.preventDefault()
+  e.dataTransfer!.dropEffect = 'copy'
+}
+
+function onMediaPanelDragLeave() {
+  dropDepth = Math.max(0, dropDepth - 1)
+  if (dropDepth === 0) dropActive.value = false
+}
+
+async function onMediaPanelDrop(e: DragEvent) {
+  if (!isFileDrag(e)) return
+  e.preventDefault()
+  dropDepth = 0
+  dropActive.value = false
+  const files = Array.from(e.dataTransfer?.files ?? [])
+  if (files.length === 0) return
+  try {
+    if (!isDesktop.value) {
+      const added = await importWebFiles(files)
+      if (added.length > 0) {
+        toast.add({ title: `${t('global.success')}: ${added.length}`, color: 'success' })
+      } else {
+        toast.add({ title: t('tmcut.media.dropNoMedia'), color: 'warning' })
+      }
+      return
+    }
+    const paths = files
+      .map(file => window.electronAPI?.getPathForFile?.(file) ?? '')
+      .filter(path => path.length > 0)
+    if (paths.length === 0) return
+    const result = await importFiles(paths)
+    if (result.added > 0) {
+      toast.add({ title: `${t('global.success')}: ${result.added}`, color: 'success' })
+    } else if (result.duplicates === 0 && result.failed === 0) {
+      // Everything was filtered out as non-media — say so instead of
+      // importing nothing in silence.
+      toast.add({ title: t('tmcut.media.dropNoMedia'), color: 'warning' })
+    }
+    if (result.duplicates > 0) {
+      toast.add({ title: t('tmcut.media.alreadyInLibrary'), color: 'info' })
+    }
+    if (result.failed > 0) {
+      toast.add({ title: t('tmcut.media.analysisFailed'), color: 'error' })
+    }
+  } catch (error) {
+    console.error('Dropped media import failed:', error)
+    toast.add({ title: t('tmcut.media.importFailed'), color: 'error' })
+  }
+}
+
 async function handleRelink(asset: TmcutAsset) {
   if (!isDesktop.value) {
     const ext = asset.kind === 'video' ? mediaFilters[0]! : asset.kind === 'audio' ? mediaFilters[1]! : mediaFilters[2]!
@@ -693,8 +765,16 @@ const editorExtraActions = computed(() => [
 
       <!-- Center Workspace -->
       <div class="flex-1 flex overflow-hidden min-h-0">
-        <!-- Left Media Library Panel (CapCut-style: category tabs + thumbnail grid) -->
-        <aside class="w-80 border-r border-neutral-800 bg-neutral-900/50 flex flex-col shrink-0">
+        <!-- Left Media Library Panel (CapCut-style: category tabs + thumbnail grid).
+             Whole panel is the external-drop target (roadmap G-2). -->
+        <aside
+          class="w-80 border-r border-neutral-800 bg-neutral-900/50 flex flex-col shrink-0"
+          :class="dropActive ? 'ring-2 ring-primary/60' : ''"
+          @dragenter="onMediaPanelDragEnter"
+          @dragover="onMediaPanelDragOver"
+          @dragleave="onMediaPanelDragLeave"
+          @drop="onMediaPanelDrop"
+        >
           <div class="p-3 border-b border-neutral-800 flex items-center justify-between">
             <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
               {{ t('tmcut.media.library') }}

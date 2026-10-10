@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND, parseSrt, serializeSrt } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -41,6 +41,7 @@ const {
   updateMarker,
   removeMarkerById,
   trimSelectedEdgeAt,
+  toggleFadeSelection,
   groupSelection,
   ungroupSelection,
   toggleLinkSelection,
@@ -61,7 +62,7 @@ const {
   clearRenderMarks
 } = useTmcutPlayback()
 
-const { pickFile, pickWebFiles } = useFileSystem()
+const { pickFile, pickWebFiles, selectSaveFile, readText, writeText } = useFileSystem()
 const { isDesktop, importWebFiles, addAssetToTimeline } = useTmcutMedia()
 const { tip, shortcutsOpen, snapOn } = useTmcutUiPrefs()
 const toast = useToast()
@@ -97,6 +98,37 @@ function onTracksWheel(event: WheelEvent) {
   zoom.value = Math.round(Math.min(200, Math.max(15, zoom.value + direction * 10)))
   nextTick(() => {
     container.scrollLeft = Math.max(0, timeAtCursor * zoom.value - offsetX)
+  })
+}
+
+// Keyboard twin of the Ctrl+wheel zoom (roadmap K6): the same ±10 step
+// and 15..200 clamp, anchored at the PLAYHEAD (a keypress has no cursor
+// position) so the edit point stays pixel-locked on screen.
+function stepZoomKeyboard(direction: 1 | -1) {
+  const container = tracksContainerRef.value
+  const prev = zoom.value
+  const next = Math.round(Math.min(200, Math.max(15, prev + direction * 10)))
+  if (next === prev) return
+  const screenX = container ? playhead.value * prev - container.scrollLeft : 0
+  zoom.value = next
+  if (container) {
+    nextTick(() => {
+      container.scrollLeft = Math.max(0, playhead.value * next - screenX)
+    })
+  }
+}
+
+// Bring the playhead into view after a keyboard jump (roadmap K7) —
+// seek() only moves time, never the horizontal scroll position.
+function scrollPlayheadIntoView() {
+  nextTick(() => {
+    const container = tracksContainerRef.value
+    if (!container) return
+    const x = playhead.value * zoom.value
+    const margin = 40
+    if (x < container.scrollLeft + margin || x > container.scrollLeft + container.clientWidth - margin) {
+      container.scrollLeft = Math.max(0, x - container.clientWidth / 2)
+    }
   })
 }
 
@@ -444,6 +476,20 @@ function handleLinkToggle() {
   }
 }
 
+// Shift+D quick fade in/out (roadmap K8 / D-1): toggles the default
+// 0.5s envelope on the selected media clip; every outcome gets an
+// honest toast (nothing selected / a text clip cannot fade).
+function handleFadeToggle() {
+  const result = toggleFadeSelection()
+  if (result === 'applied') {
+    toast.add({ title: t('tmcut.timelineActions.fadeApplied'), color: 'success' })
+  } else if (result === 'cleared') {
+    toast.add({ title: t('tmcut.timelineActions.fadeCleared'), color: 'success' })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.fadeNoTarget'), color: 'warning' })
+  }
+}
+
 // Close gaps (roadmap B9 — core C2): pull every unlocked track together.
 function handleCloseGaps() {
   const closed = closeProjectGaps()
@@ -575,6 +621,76 @@ function handleAddText() {
   toast.add({ title: t('tmcut.timelineActions.textAdded'), color: 'success' })
 }
 
+// ===== SRT import / export (roadmap C-4, core C11) =====
+// Desktop only: both flows need the Electron dialog + file IPC, so the
+// dropdown never renders on web sessions (no dead control). Cue times
+// are absolute timeline seconds; text clips carry duration in in/out.
+async function handleImportSrt() {
+  const path = await pickFile({
+    title: t('tmcut.timelineActions.srtImport'),
+    filters: [{ name: 'SRT', extensions: ['srt'] }]
+  })
+  if (!path || typeof path !== 'string') return
+  try {
+    const content = await readText(path)
+    const cues = parseSrt(content)
+    if (cues.length === 0) {
+      toast.add({ title: t('tmcut.timelineActions.srtEmpty'), color: 'warning' })
+      return
+    }
+    for (const cue of cues) {
+      addClipToTrack('text', {
+        name: cue.text.replace(/\s+/g, ' ').trim().slice(0, 24),
+        text: cue.text,
+        in: 0,
+        out: Math.max(0.1, cue.end - cue.start),
+        offset: Math.max(0, cue.start),
+        fontSize: 42,
+        color: '#ffffff'
+      })
+    }
+    toast.add({ title: t('tmcut.timelineActions.srtImported', { n: cues.length }), color: 'success' })
+  } catch (error) {
+    console.error('SRT import failed:', error)
+    toast.add({ title: t('tmcut.timelineActions.srtFailed'), color: 'error' })
+  }
+}
+
+async function handleExportSrt() {
+  const textItems = currentProject.value?.timeline?.tracks.find(tr => tr.type === 'text')?.items || []
+  const cues = textItems
+    .filter(item => (item.text || '').trim().length > 0)
+    .map(item => ({
+      text: item.text || '',
+      start: item.offset || 0,
+      end: (item.offset || 0) + (item.out - item.in) / (item.speed || 1)
+    }))
+    .filter(cue => cue.end > cue.start)
+    .sort((a, b) => a.start - b.start)
+  if (cues.length === 0) {
+    toast.add({ title: t('tmcut.timelineActions.srtNoText'), color: 'warning' })
+    return
+  }
+  const path = await selectSaveFile({
+    title: t('tmcut.timelineActions.srtExport'),
+    defaultPath: 'subtitles.srt',
+    filters: [{ name: 'SRT', extensions: ['srt'] }]
+  })
+  if (!path) return
+  try {
+    await writeText({ filePath: path, data: serializeSrt(cues) })
+    toast.add({ title: t('tmcut.timelineActions.srtExported', { n: cues.length }), description: path, color: 'success' })
+  } catch (error) {
+    console.error('SRT export failed:', error)
+    toast.add({ title: t('tmcut.timelineActions.srtFailed'), color: 'error' })
+  }
+}
+
+const srtMenuItems = computed(() => [
+  { label: t('tmcut.timelineActions.srtImport'), icon: 'i-lucide-upload', onSelect: () => void handleImportSrt() },
+  { label: t('tmcut.timelineActions.srtExport'), icon: 'i-lucide-download', onSelect: () => void handleExportSrt() }
+])
+
 // Add audio file
 async function handleAddAudio() {
   if (!isDesktop.value) {
@@ -693,6 +809,15 @@ function handleGlobalKeydown(e: KeyboardEvent) {
       // Ctrl+L links / Ctrl+Shift+L unlinks overlapping clips (B4)
       e.preventDefault()
       handleLinkToggle()
+    } else if (key === '=' || key === '+' || key === 'add') {
+      // Ctrl+= (also Ctrl++ / numpad +) zooms in, Ctrl+-/-Subtract zooms
+      // out — keyboard twin of the Ctrl+wheel step (roadmap K6).
+      // preventDefault keeps Chromium from page-zooming the window.
+      e.preventDefault()
+      stepZoomKeyboard(1)
+    } else if (key === '-' || key === 'subtract') {
+      e.preventDefault()
+      stepZoomKeyboard(-1)
     }
     return
   }
@@ -723,6 +848,19 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     setRenderMark('in')
   } else if (key === 'o') {
     setRenderMark('out')
+  } else if (key === 'd' && e.shiftKey) {
+    // Shift+D toggles the default fade in/out on the selected clip
+    // (roadmap K8 / D-1 — plain Ctrl+D stays duplicate above)
+    handleFadeToggle()
+  } else if (key === 'home') {
+    // Jump to the start / end of content (roadmap K7)
+    e.preventDefault()
+    seek(0)
+    scrollPlayheadIntoView()
+  } else if (key === 'end') {
+    e.preventDefault()
+    seek(totalDuration.value)
+    scrollPlayheadIntoView()
   } else if (e.altKey && (key === '[' || key === ']')) {
     // Alt+[ / Alt+] cut the selected clip's In/Out edge to the
     // playhead (roadmap B7)
@@ -868,6 +1006,24 @@ onUnmounted(() => {
         >
           + {{ t('tmcut.addAudio') }}
         </UButton>
+
+        <!-- SRT import/export (roadmap C-4): desktop only — the dialog
+             + file IPC do not exist on web sessions. -->
+        <UDropdownMenu
+          v-if="isDesktop"
+          :items="srtMenuItems"
+          :content="{ align: 'start' }"
+        >
+          <UButton
+            icon="i-lucide-captions"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :title="t('tmcut.timelineActions.srtMenu')"
+          >
+            SRT
+          </UButton>
+        </UDropdownMenu>
       </div>
 
       <!-- Center: Timecode Info -->

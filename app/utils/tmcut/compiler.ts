@@ -1,5 +1,6 @@
 import type { TmcutProject } from '~/composables/useTmcutProject'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '~/utils/tmcut/canvas'
+import { volumeExpr } from '@tmcut-core'
 
 export type TmcutCompileMode = 'video' | 'audio' | 'gif'
 
@@ -22,6 +23,10 @@ export interface CompileOptions {
   outFps?: number
   /** MP3 bitrate in kbps (audio mode only). */
   audioBitrate?: number
+  /** Export-time noise reduction: ONE global afftdn on the final audio bus (roadmap D-3). */
+  denoise?: boolean
+  /** Color LUT: absolute path of a .cube file graded onto the footage before drawtext (roadmap E-4). */
+  lut3dPath?: string
 }
 
 export interface CompileResult {
@@ -54,6 +59,47 @@ function ffmpegColor(color: string | undefined): string {
 }
 
 /**
+ * Fade envelope for one clip's audio chain (roadmap R5, core C12):
+ * `volumeExpr` builds a clip-LOCAL expression (t = seconds since clip
+ * start), so the filter must run while timestamps still begin at 0 —
+ * BEFORE any adelay positions background audio on the timeline. No
+ * fades -> '1' -> the chain stays byte-identical to before. The static
+ * volume percent remains its own `volume=` filter (core contract).
+ * `eval=frame` is REQUIRED: the volume filter defaults to eval=once,
+ * which freezes the expression at init (verified against ffmpeg — a
+ * constant-1 evaluation left the fade completely silent-less).
+ */
+function fadeFilter(clip: {
+  in: number
+  out: number
+  speed?: number
+  volume?: number
+  fade?: { in: number, out: number }
+}): string {
+  const expr = volumeExpr(clip)
+  return expr === '1' ? '' : `,volume='${expr}':eval=frame`
+}
+
+/**
+ * lut3d file argument (roadmap E-4). Two parse levels, verified against
+ * ffmpeg: the filtergraph scan honors single quotes only while SPLITTING
+ * (protecting , ; [ ] and spaces from the chain split) and then STRIPS
+ * them, so the option parser below would die on a drive-letter ':' — the
+ * colons must be backslash-escaped (backslashes inside level-1 quotes
+ * pass through literally). Forward slashes keep the path portable and
+ * dodge Windows backslash rules entirely. Apostrophes cannot survive the
+ * two-level quoting at all: reject loudly instead of emitting a filter
+ * FFmpeg would choke on mid-export.
+ */
+function lutFileFilter(filePath: string): string {
+  if (filePath.includes('\'')) {
+    throw new Error('LUT file path cannot contain an apostrophe')
+  }
+  const normalized = filePath.replace(/\\/g, '/').replace(/:/g, '\\:')
+  return `lut3d=file='${normalized}'`
+}
+
+/**
  * Audio-only compile path (design #3 "Audio only" mode): renders the audio
  * of every video clip plus background audio clips at a uniform 48 kHz,
  * honoring the In/Out range. Output codec follows the file extension
@@ -61,8 +107,8 @@ function ffmpegColor(color: string | undefined): string {
  */
 function compileAudioOnly(
   outputPath: string,
-  videoClips: Array<{ src?: string, in: number, out: number, volume?: number, speed?: number, reverse?: boolean }>,
-  audioClips: Array<{ src?: string, in: number, out: number, offset?: number, volume?: number, speed?: number, reverse?: boolean }>,
+  videoClips: Array<{ src?: string, in: number, out: number, volume?: number, speed?: number, reverse?: boolean, fade?: { in: number, out: number } }>,
+  audioClips: Array<{ src?: string, in: number, out: number, offset?: number, volume?: number, speed?: number, reverse?: boolean, fade?: { in: number, out: number } }>,
   options: CompileOptions,
   outputDuration: number,
   range: TmcutCompileRange | null
@@ -88,7 +134,7 @@ function compileAudioOnly(
     const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
     const aReverse = clip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},aresample=48000,volume=${vol}${out}`
+      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},aresample=48000,volume=${vol}${fadeFilter(clip)}${out}`
     )
     trackAuds.push(out)
     inputIdx++
@@ -114,7 +160,7 @@ function compileAudioOnly(
     const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
     const aReverse = aClip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts},aresample=48000,adelay=${delayMs}|${delayMs},volume=${vol}${out}`
+      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,adelay=${delayMs}|${delayMs},volume=${vol}${out}`
     )
     bgmAuds.push(out)
     inputIdx++
@@ -134,6 +180,14 @@ function compileAudioOnly(
 
   if (!current) {
     throw new Error('Timeline has no audio to export')
+  }
+
+  // Noise reduction (roadmap D-3): ONE global afftdn on the mixed bus —
+  // denoising per clip would rebuild the noise profile N times for no
+  // audible gain over a single pass on the summed result.
+  if (options.denoise) {
+    chains.push(`${current}afftdn=nr=12[a_denoised]`)
+    current = '[a_denoised]'
   }
 
   if (range) {
@@ -317,7 +371,7 @@ export function compileTimelineToFfmpeg(
         const aReverse = clip.reverse ? 'areverse,' : ''
         const aTrimmed = `[a_trim_${currentInputIdx}]`
         filterChains.push(
-          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},volume=${vol}${aTrimmed}`
+          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},volume=${vol}${fadeFilter(clip)}${aTrimmed}`
         )
         aStreams.push(aTrimmed)
       }
@@ -332,6 +386,15 @@ export function compileTimelineToFfmpeg(
       filterChains.push(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[v_concat]`)
     }
     currentVideoStream = '[v_concat]'
+
+    // Color LUT (roadmap E-4): grade the FOOTAGE before drawtext so
+    // titles/graphics keep their authored colors (grading graphics is a
+    // classic "why is my white title yellow" bug). Also before outScale,
+    // so the LUT samples the full-resolution signal.
+    if (options.lut3dPath) {
+      filterChains.push(`${currentVideoStream}${lutFileFilter(options.lut3dPath)}[v_graded]`)
+      currentVideoStream = '[v_graded]'
+    }
 
     // Apply text overlays if any
     for (let i = 0; i < textClips.length; i++) {
@@ -370,7 +433,7 @@ export function compileTimelineToFfmpeg(
         const aReverse = aClip.reverse ? 'areverse,' : ''
 
         filterChains.push(
-          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts},adelay=${delayMs}|${delayMs},volume=${vol}${aProcessed}`
+          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},adelay=${delayMs}|${delayMs},volume=${vol}${aProcessed}`
         )
         audioMixStreams.push(aProcessed)
       }
@@ -379,6 +442,15 @@ export function compileTimelineToFfmpeg(
       filterChains.push(`${mixInputs}amix=inputs=${audioMixStreams.length}:duration=longest:dropout_transition=2[a_mixed]`)
       currentAudioStream = '[a_mixed]'
     }
+  }
+
+  // Noise reduction (roadmap D-3): one global afftdn on the final audio
+  // bus — after concat/mix and BEFORE the range trim below, so a ranged
+  // export still feeds the noise profile warmed-up audio. GIF never
+  // builds an audio stream (null), so this doubles as the mode gate.
+  if (currentAudioStream && options.denoise) {
+    filterChains.push(`${currentAudioStream}afftdn=nr=12[a_denoised]`)
+    currentAudioStream = '[a_denoised]'
   }
 
   // ---- Shared tail (video & GIF): output scale, In/Out range, terminal ----
