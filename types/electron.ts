@@ -530,6 +530,7 @@ export interface TmcutFrameResult {
   error?: string
 }
 
+<<<<<<< HEAD
 /** One system font face (roadmap C-1): `path` feeds drawtext fontfile= so the export renders the very file the preview family shows. */
 export interface TmcutFontEntry {
   family: string
@@ -540,6 +541,8 @@ export interface TmcutFontEntry {
   monospace: boolean
 }
 
+=======
+>>>>>>> 07fdb1719d44b4c96c6ff236b55eb7ceddf0cefa
 export interface TmcutAnalyzeResult {
   ok: boolean
   stat?: { size: number, mtimeMs: number }

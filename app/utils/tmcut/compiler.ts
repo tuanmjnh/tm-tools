@@ -91,6 +91,7 @@ function fadeFilter(clip: {
  * two-level quoting at all: reject loudly instead of emitting a filter
  * FFmpeg would choke on mid-export.
  */
+<<<<<<< HEAD
 function filterPathArg(filePath: string): string {
   if (filePath.includes('\'')) {
     throw new Error('File path cannot contain an apostrophe')
@@ -122,6 +123,14 @@ function textOverlayFilter(clip: TextOverlayClip): string {
   const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
   const fontFileArg = clip.fontFile ? `fontfile='${filterPathArg(clip.fontFile)}':` : ''
   return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2+(${xOffset}):y=(h-text_h)/2+(${yOffset}):enable='between(t,${tStart},${tEnd})'`
+=======
+function lutFileFilter(filePath: string): string {
+  if (filePath.includes('\'')) {
+    throw new Error('LUT file path cannot contain an apostrophe')
+  }
+  const normalized = filePath.replace(/\\/g, '/').replace(/:/g, '\\:')
+  return `lut3d=file='${normalized}'`
+>>>>>>> 07fdb1719d44b4c96c6ff236b55eb7ceddf0cefa
 }
 
 /**
