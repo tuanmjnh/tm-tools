@@ -482,6 +482,8 @@
       "textPlaceholder": "Enter text content...",
       "fontSize": "Font Size (px)",
       "textColor": "Text Color",
+      "font": "Font",
+      "fontDefault": "Default font",
       "timingAndSpeed": "Timing & Speed",
       "inPoint": "In Point",
       "outPoint": "Out Point",

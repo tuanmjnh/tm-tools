@@ -8,6 +8,7 @@ import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_
 const { t } = useI18n()
 const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced } = useTmcutProject()
 const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
+const { choices: fontChoices, ensureFonts } = useTmcutFonts()
 const { formatTimecode, playhead } = useTmcutPlayback()
 
 const clip = computed(() => selectedClip.value?.item)
@@ -67,6 +68,18 @@ function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, 
   // slider) record ONE undo entry through the coalescing history.
   pushHistoryCoalesced(`${selectedClipId.value}:${String(field)}`)
   updateClip(selectedClipId.value, { [field]: value })
+}
+
+// Font family (roadmap C-1): family (CSS preview) and file (drawtext
+// fontfile= export) always travel together, so ONE coalesced history
+// entry covers the pair — preview and export can never drift onto
+// different faces.
+function handleFontUpdate(family: string) {
+  if (!selectedClipId.value || !family || family === 'null') return
+  const choice = fontChoices.value.find(c => c.family === family)
+  if (!choice) return
+  pushHistoryCoalesced(`${selectedClipId.value}:font`)
+  updateClip(selectedClipId.value, { fontFamily: choice.family, fontFile: choice.file })
 }
 
 // Keyframes (roadmap B1): the ⏱ buttons toggle a keyframe of the
@@ -196,6 +209,7 @@ function handleDelete() {
 // Project details (CapCut-style "Details" panel when no clip is selected)
 const storagePath = ref('')
 onMounted(async () => {
+  void ensureFonts()
   try {
     const dirs = await window.electronAPI?.tmcut?.getPaths()
     storagePath.value = dirs?.projects || ''
@@ -315,6 +329,24 @@ const saveStateLabel = computed(() => {
             <span class="font-mono text-[10px] text-neutral-400">{{ clip.color || '#ffffff' }}</span>
           </div>
         </div>
+      </div>
+
+      <!-- Font family (roadmap C-1): one choice per family from the
+           main-process font scanner. Empty on web (no IPC) or when the
+           addon fails — hidden rather than a fake or dead list. -->
+      <div v-if="fontChoices.length" class="pt-1">
+        <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.font') }}</label>
+        <USelectMenu
+          :items="fontChoices"
+          value-key="family"
+          label-key="family"
+          class="w-full"
+          :model-value="clip.fontFamily ?? null"
+          :placeholder="t('tmcut.inspectorProps.fontDefault')"
+          size="xs"
+          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+          @update:model-value="handleFontUpdate(String($event))"
+        />
       </div>
     </div>
 

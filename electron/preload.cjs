@@ -77,7 +77,7 @@ const tmcut = exposeNamespace('tmcut', {
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
     'statFiles', 'extractThumbnail', 'extractFrame', 'extractWaveform', 'analyzeAsset',
-    'analyzeScenes', 'analyzeSilence',
+    'analyzeScenes', 'analyzeSilence', 'listFonts',
     'watchOutput', 'unwatchOutput'
   ],
   on: ['renderDone']

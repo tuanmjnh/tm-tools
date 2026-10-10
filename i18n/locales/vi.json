@@ -482,6 +482,8 @@
       "textPlaceholder": "Nhập nội dung văn bản...",
       "fontSize": "Cỡ chữ (px)",
       "textColor": "Màu chữ",
+      "font": "Phông chữ",
+      "fontDefault": "Phông mặc định",
       "timingAndSpeed": "Thời gian & Tốc độ",
       "inPoint": "Điểm bắt đầu (In)",
       "outPoint": "Điểm kết thúc (Out)",

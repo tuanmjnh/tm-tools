@@ -530,6 +530,16 @@ export interface TmcutFrameResult {
   error?: string
 }
 
+/** One system font face (roadmap C-1): `path` feeds drawtext fontfile= so the export renders the very file the preview family shows. */
+export interface TmcutFontEntry {
+  family: string
+  path: string
+  style: string
+  weight: number
+  italic: boolean
+  monospace: boolean
+}
+
 export interface TmcutAnalyzeResult {
   ok: boolean
   stat?: { size: number, mtimeMs: number }
@@ -603,6 +613,8 @@ export interface TmcutNamespace {
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
   analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>
+  /** System font faces with file paths (roadmap C-1). Empty array when the scanner addon cannot load. */
+  listFonts(): Promise<TmcutFontEntry[]>
   watchOutput(args: { filePath: string }): Promise<boolean>
   unwatchOutput(args: { filePath: string }): Promise<boolean>
   onRenderDone(callback: (payload: { filePath: string, size: number }) => void): () => void

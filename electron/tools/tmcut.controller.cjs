@@ -2,7 +2,7 @@ const { ipcMain, app } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
-const { getToolsBinaries } = require('./paths.cjs')
+const { getToolsBinaries, getResourcesDir } = require('./paths.cjs')
 
 const moduleName = 'tmcut'
 
@@ -54,6 +54,47 @@ function readJsonSafe(filePath) {
   } catch {
     return null
   }
+}
+
+// System font enumeration (roadmap C-1): resources/fontmanager.node is the
+// font-scanner Node-API addon (ABI-stable — verified loading under
+// Electron 43 / Node 24), and it returns each face WITH its file path, so
+// the renderer picker previews a family while drawtext exports the very
+// same file. Loaded lazily and cached for the session (one scan, ~50ms;
+// only changes when fonts are installed). A missing/corrupt addon yields
+// [] — the picker then stays hidden instead of listing faces it cannot
+// resolve (honesty rule: no dead or lying controls).
+let fontScanner = null
+let systemFontsCache = null
+
+function listSystemFonts() {
+  if (systemFontsCache) return systemFontsCache
+  if (fontScanner === null) {
+    try {
+      fontScanner = require(path.join(getResourcesDir(), 'fontmanager.node'))
+    } catch (error) {
+      console.error('fontmanager.node failed to load:', error.message)
+      fontScanner = false
+    }
+  }
+  if (!fontScanner) return []
+  try {
+    const faces = fontScanner.getAvailableFontsSync()
+    systemFontsCache = (Array.isArray(faces) ? faces : [])
+      .filter(f => f && typeof f.family === 'string' && typeof f.path === 'string' && f.family && f.path)
+      .map(f => ({
+        family: f.family,
+        path: f.path,
+        style: typeof f.style === 'string' && f.style ? f.style : 'Regular',
+        weight: Number(f.weight) || 400,
+        italic: !!f.italic,
+        monospace: !!f.monospace
+      }))
+  } catch (error) {
+    console.error('System font scan failed:', error.message)
+    systemFontsCache = []
+  }
+  return systemFontsCache
 }
 
 function writeJsonAtomic(filePath, data) {
@@ -730,6 +771,8 @@ function registerTmcutController() {
     if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
     return analyzeSilence(filePath, noiseDb, minDuration)
   })
+
+  ipcMain.handle(`${moduleName}:listFonts`, () => listSystemFonts())
 }
 
 module.exports = { registerTmcutController }

@@ -469,6 +469,7 @@ function textOverlayStyle(textClip: {
   id: string
   color?: string
   fontSize?: number
+  fontFamily?: string
   offset?: number
   x?: number
   y?: number
@@ -487,6 +488,10 @@ function textOverlayStyle(textClip: {
   const ts = evalKeyframe(textClip, 'scale', at) ?? textClip.scale ?? 100
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
   return {
+    // Font family (roadmap C-1): the CSS twin of the export's
+    // fontfile= — quoted via JSON.stringify so multi-word families
+    // ("Segoe UI") stay one valid family token.
+    ...(textClip.fontFamily ? { fontFamily: `${JSON.stringify(textClip.fontFamily)}, sans-serif` } : {}),
     color: textClip.color || '#ffffff',
     fontSize: `${(textClip.fontSize || 36) * scale}px`,
     transform: `translate(${tx * scale}px, ${ty * scale}px) scale(${ts / 100}) rotate(${textClip.rotation || 0}deg)`,

@@ -1,4 +1,4 @@
-import type { TmcutProject } from '~/composables/useTmcutProject'
+import type { TmcutProject, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '~/utils/tmcut/canvas'
 import { volumeExpr } from '@tmcut-core'
 
@@ -91,12 +91,37 @@ function fadeFilter(clip: {
  * two-level quoting at all: reject loudly instead of emitting a filter
  * FFmpeg would choke on mid-export.
  */
-function lutFileFilter(filePath: string): string {
+function filterPathArg(filePath: string): string {
   if (filePath.includes('\'')) {
-    throw new Error('LUT file path cannot contain an apostrophe')
+    throw new Error('File path cannot contain an apostrophe')
   }
-  const normalized = filePath.replace(/\\/g, '/').replace(/:/g, '\\:')
-  return `lut3d=file='${normalized}'`
+  return filePath.replace(/\\/g, '/').replace(/:/g, '\\:')
+}
+
+function lutFileFilter(filePath: string): string {
+  return `lut3d=file='${filterPathArg(filePath)}'`
+}
+
+/** Structural fields a text overlay reads — shared by both compile paths. */
+type TextOverlayClip = Pick<TmcutTimelineItem, 'text' | 'fontSize' | 'color' | 'x' | 'y' | 'offset' | 'in' | 'out' | 'speed' | 'fontFile'>
+
+/**
+ * drawtext filter for ONE text clip (roadmap C-1): the color-source path
+ * and the footage path used to duplicate this string verbatim — it lives
+ * here so the two can never drift. `fontFile` is the very file the
+ * preview's fontFamily points at (same face on both ends) and goes
+ * through the shared two-level filtergraph escaping documented above.
+ */
+function textOverlayFilter(clip: TextOverlayClip): string {
+  const escaped = escapeDrawText(clip.text || '')
+  const fontSize = clip.fontSize || 36
+  const fontColor = clip.color || 'white'
+  const xOffset = clip.x || 0
+  const yOffset = clip.y || 0
+  const tStart = clip.offset || 0
+  const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
+  const fontFileArg = clip.fontFile ? `fontfile='${filterPathArg(clip.fontFile)}':` : ''
+  return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2+(${xOffset}):y=(h-text_h)/2+(${yOffset}):enable='between(t,${tStart},${tEnd})'`
 }
 
 /**
@@ -290,18 +315,8 @@ export function compileTimelineToFfmpeg(
     // Apply text overlays if any
     for (let i = 0; i < textClips.length; i++) {
       const textClip = textClips[i]!
-      const escaped = escapeDrawText(textClip.text || '')
-      const fontSize = textClip.fontSize || 36
-      const fontColor = textClip.color || 'white'
-      const xOffset = textClip.x || 0
-      const yOffset = textClip.y || 0
-      const tStart = textClip.offset || 0
-      const tEnd = tStart + (textClip.out - textClip.in) / (textClip.speed || 1)
       const nextVideoStream = `[v_txt_${i}]`
-
-      filterChains.push(
-        `${currentVideoStream}drawtext=text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2+(${xOffset}):y=(h-text_h)/2+(${yOffset}):enable='between(t,${tStart},${tEnd})'${nextVideoStream}`
-      )
+      filterChains.push(`${currentVideoStream}${textOverlayFilter(textClip)}${nextVideoStream}`)
       currentVideoStream = nextVideoStream
     }
   } else {
@@ -399,18 +414,8 @@ export function compileTimelineToFfmpeg(
     // Apply text overlays if any
     for (let i = 0; i < textClips.length; i++) {
       const textClip = textClips[i]!
-      const escaped = escapeDrawText(textClip.text || '')
-      const fontSize = textClip.fontSize || 36
-      const fontColor = textClip.color || 'white'
-      const xOffset = textClip.x || 0
-      const yOffset = textClip.y || 0
-      const tStart = textClip.offset || 0
-      const tEnd = tStart + (textClip.out - textClip.in) / (textClip.speed || 1)
       const nextVideoStream = `[v_txt_${i}]`
-
-      filterChains.push(
-        `${currentVideoStream}drawtext=text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2+(${xOffset}):y=(h-text_h)/2+(${yOffset}):enable='between(t,${tStart},${tEnd})'${nextVideoStream}`
-      )
+      filterChains.push(`${currentVideoStream}${textOverlayFilter(textClip)}${nextVideoStream}`)
       currentVideoStream = nextVideoStream
     }
 

@@ -36,6 +36,10 @@ export interface TmcutTimelineItem {
   text?: string
   color?: string
   fontSize?: number
+  /** Font family (roadmap C-1): CSS name rendered by the preview overlay;
+      fontFile is the SAME face's file so drawtext fontfile= exports it. */
+  fontFamily?: string
+  fontFile?: string
   in: number
   out: number
   offset: number
