@@ -77,8 +77,10 @@
 
 - [x] **Playhead màu đỏ** → đổi `bg-primary` (2 chỗ TmcutTimeline) —
       **đã làm R13 (§80)**.
-- [ ] **Transform handles trên canvas** cho video clip (chỉ text kéo được).
-- [ ] **Drag & drop media → timeline** (hiện chỉ click/hover "+" ).
+- [x] **Transform handles trên canvas** cho video clip (chỉ text kéo được)
+      → **đã làm A3 R18 ✅** (xem Phase A).
+- [x] **Drag & drop media → timeline** (hiện chỉ click/hover "+" )
+      → **đã làm A4 R17 ✅** (xem Phase A).
 - [x] **Minimap timeline** — **đã làm R19 (§86)**.
 - [x] **Track V2/A2** (design có 4 track) — **đã làm R16 (§83)**: nút
       "+" dropdown (Video/Text/Audio) + 🗑 per header.
@@ -467,6 +469,17 @@ export function clampFrameTime(atTicks, startTicks, durationTicks): number
   "để round sau"), filmstrip timeline (thay cover 1 frame), nút snapshot
   HUD. Core chỉ tính **danh sách timestamp** (giây qua `ticksToSec`);
   FFmpeg `-ss` runtime thuộc Electron.
+- **✅ R40 (§108)**: `src/frames.mjs` (module mới — `cache.mjs` là
+  cache-key/proxy, không dính frame timing) — `filmstripTimes` (count
+  mốc đều, mỗi mốc ở giữa slice riêng, lùi ≥2% 2 đầu; duration ≤ 0 /
+  count invalid → `[]`; count lẻ floors) · `frameTimesForSegments`
+  (dual-shape: v3 clip `timeline.*` ticks + v1 flat `offset/in/out`
+  SECONDS; entry thiếu id → drop, span unusable → slot
+  `{ id, times: [] }` giữ chỗ zip 1:1) · `clampFrameTime` (pin seek
+  về [start, start+duration]; duration ≤ 0 / time NaN → start) ·
+  +4 test → **core 151/151** · **round core-only** — consumer IPC
+  `tmcut:extractFrame` + filmstrip UI làm ở **G1** (round sau,
+  main + preload → full restart).
 
 ### C15 — History: batch + coalesce · P2 · S
 
@@ -631,18 +644,34 @@ consumer) + `npx eslint <file app chạm>`.
   (đã có, Round 12 bắt được `transcript[]`) → core **C11** `cuesToCaptionClips`
   → text clips track riêng · M — deps: AI gateway `transcribe` (đã có),
   cách tách audio (ffmpeg `-vn` runtime).
-- [ ] **C-4 · Import/Export SRT** (core **C11** parse/serialize; file qua
-  IPC dialog) · S.
+- [x] **C-4 · Import/Export SRT** (core **C11** parse/serialize; file qua
+  IPC dialog) · S → **R46 ✅ (§114)**: dropdown "SRT" trong timeline
+  toolbar (sau +Audio, **desktop-only** — web không có dialog IPC →
+  không render) · Import: `pickFile` → `readText` → `parseSrt` →
+  `addClipToTrack('text')` per cue (offset = cue.start tuyệt đối,
+  out = duration, defaults 42px/trắng) · Export: text clips → cues
+  (end = offset + (out−in)/speed) → `serializeSrt` → `selectSaveFile`
+  · toast đếm cue + lỗi riêng · i18n +8 → 2455.
 - [ ] **C-5 · Text animation in/out** (fade/slide/pop) — cần keyframes
   **C3** + render **R2** trước · M.
 
 ### Phase D — Audio (P2)
 
-- [ ] **D-1 · Fade in/out** (core **C12** + Inspector buttons + preview
-  gain) · S · render **R5**.
+- [x] **D-1 · Fade in/out** (core **C12** + Inspector buttons + preview
+  gain) · S · render **R5** → **R38 ✅ (§106)** phần core + UI + preview;
+  phần export đã đóng ở **R5 ✅ (R45, §113)** — D-1 hoàn tất.
 - [ ] **D-2 · Volume keyframes** (C3 + C12 expression) · M.
-- [ ] **D-3 · Noise reduction**: exporter option `afftdn` / `anlmdn`
-  (checkbox trung thực — chỉ hiện khi đã map trong compiler) · S.
+- [x] **D-3 · Noise reduction**: exporter option `afftdn` / `anlmdn`
+  (checkbox trung thực — chỉ hiện khi đã map trong compiler) · S
+  → **R47 ✅ (§115)**: `CompileOptions.denoise` → **1 afftdn global**
+  `afftdn=nr=12` trên bus cuối (audio-only: sau amix/trước range ·
+  video: sau concat+amix, trước range trim — GIF không build audio
+  stream → null check = mode gate) · checkbox "Giảm nhiễu" trong
+  export modal (`v-if mode !== 'gif'`, icon `i-lucide-waves` — đã
+  verify trong `@iconify-json/lucide`) · **export-only** (không có
+  preview giảm nhiễu trên browser → không đặt chỗ nào khác) · test
+  FFmpeg thật: tone sạch không đổi -21.1dB, chain+range 4.00s ✓ ·
+  i18n +2 → 2457.
 - [ ] **D-4 · Ghi voiceover** (media bin nút mic → `getUserMedia` +
   `MediaRecorder` → blob → import asset; đã có pattern record?) · M —
   web+electron đều chạy được (mic permission).
@@ -662,8 +691,18 @@ consumer) + `npx eslint <file app chạm>`.
 - [ ] **E-3 · Chroma key (xóa phông xanh)**: FFmpeg `chromakey` +
   slider similarity/blend; preview CSS approximation · M — v1 không cần
   AI (khác "smart cutout").
-- [ ] **E-4 · LUT**: `lut3d` (.cube) — chọn file .cube · S (render sẵn
-  có trong ffmpeg build).
+- [x] **E-4 · LUT**: `lut3d` (.cube) — chọn file .cube · S (render sẵn
+  có trong ffmpeg build) → **R48 ✅ (§116)**: `CompileOptions.lut3dPath`
+  → `lut3d` trên bus footage SAU concat, **TRƯỚC drawtext** (title giữ
+  màu gốc) + trước outScale · helper `lutFileFilter` — 2 tầng parse
+  (filtergraph strip quotes khi split → option level cần `C\:` escape;
+  verify 4 biến thể với FFmpeg: quotes-đơn + colon-escape pass,
+  path space+comma+colon pass) · apostrophe path không escape được →
+  **throw ở compiler + toast ở picker** (từ chối rõ ràng thay vì lỗi
+  FFmpeg giữa chừng) · UI: row "LUT màu (.cube)" trong export modal
+  (video+GIF, `v-if isDesktop` — web không có dialog → ẩn) ·
+  **export-only** (browser không render 3D LUT tùy ý → không có
+  preview, ghi rõ trong note) · i18n +5 → 2462.
 - [ ] **E-5 · Stabilizer**: `vidstabdetect` + `vidstabtransform` (2 pass,
   cần file trung gian — runtime Electron) · L.
 - [ ] **E-6 · AI cutout (người/phông)**: cần model (rembg/ONNX) —
@@ -671,10 +710,18 @@ consumer) + `npx eslint <file app chạm>`.
 
 ### Phase F — Preview & Canvas (P1–P2)
 
-- [ ] **F-1 · Safe area presets** (core **C13**; overlay 90%/80% thay
-  hardcode) · S.
-- [ ] **F-2 · Canvas zoom controls** (fit/100%/± trong header player —
-  design #2 có "100% Fit"; hiện auto-fit) · S.
+- [x] **F-1 · Safe area presets** (core **C13**; overlay 90%/80% thay
+  hardcode) · S → **R39 ✅ (§107)**: `safeAreaRects` centered fractions
+  + `SAFE_AREA_PRESETS` 7 tỷ lệ · overlay preview dùng core rect ·
+  HUD dropdown "Frame guide".
+- [x] **F-2 · Canvas zoom controls** (fit/100%/± trong header player —
+  design #2 có "100% Fit"; hiện auto-fit) · S → **R44 ✅ (§112)**:
+  `canvasZoom` ref (`'fit' | 0.25..2`) — fit giữ nguyên layout cũ ·
+  menu dropdown HUD (icon zoom, `Fit` + 6 step ± thay 2 nút rời) ·
+  zoomed: stage cố định 40vh + `overflow-auto`, monitor `m-auto`
+  (center khi vừa, thả top-left khi tràn — flex center cắt mất đầu
+  khi scroll) · `monitorStageHeight` dùng chung cho fit constraint ·
+  HUD + transport luôn pin · i18n +2 → 2447.
 - [ ] **F-3 · Mask / crop on canvas** (kéo khung crop trực tiếp —
   inspector đã có cropRect sliders) · M.
 - [ ] **F-4 · Proxy preview**: core đã có `buildProxyArgs` → runtime
@@ -684,11 +731,44 @@ consumer) + `npx eslint <file app chạm>`.
 
 ### Phase G — Media & Runtime IPC (P1)
 
-- [ ] **G-1 · IPC `tmcut:extractFrame`** (main + preload + giới hạn
+- [x] **G-1 · IPC `tmcut:extractFrame`** (main + preload + giới hạn
   timestamp; **full restart**) → thumbnail segment AutoCut (§78.6),
   filmstrip timeline thật, snapshot HUD · M. Core: **C14** plan.
-- [ ] **G-2 · Media bin drag & drop file ngoài** (kéo file từ Explorer
-  vào panel → import; web: DataTransfer file) · S.
+  - **✅ R41 (§109) — 2/3 consumer**: IPC `tmcut:extractFrame` (main
+    handler `extractFrameAt` — cache `cache/frames/`, key
+    `(path, mtime, size, time, width)`, timestamp finite ≥ 0 + clamp
+    vào duration khi probe được / cap 24h khi không; preload invoke +
+    `types/electron.ts` `TmcutFrameResult`) · composable
+    `useTmcutFrames` (`extractFrame` + `extractFrames` bounded
+    concurrency 3, `available` flag ẩn control trên web) ·
+    **AutoCut segment thumbnails** (§78.6 — mỗi segment 1 frame tại
+    `segment.thumb` fallback midpoint, 224px, poster cũ làm fallback)
+    · **snapshot HUD** (nút camera — frame tại media time của clip
+    active, 1280px, toast trả path; ẩn khi không có IPC) · i18n +3 →
+    **2444/2444** · **cần FULL RESTART** (main + preload).
+  - **✅ R42 (§110) — filmstrip timeline thật**: consumer còn lại.
+    `clipFilmstrip(src, in, out, count)` trong `useTmcutFrames` —
+    core C14 `filmstripTimes` tính 8 timestamp theo range NGUỒN của
+    clip (ticks → `ticksToSec` tại call site), extract 160px/帧 ·
+    **global slot pool 3** (module-level — N clip mount đồng thời
+    không spawn N×3 ffmpeg) · session cache `(src, in, out)` share
+    copy/remount · `TmcutTimelineClip`: layer `<img>` row (flex-1
+    slots, slot lỗi trong suốt → hiện strip asset phía sau),
+    debounce 300ms khi trim + request-id bỏ kết quả cũ · content
+    body lên `z-[1]` (trên strip auto-z, dưới diamonds z-5/handles
+    z-10) · controller thêm `probeDurationCached` (batch frame không
+    ffprobe lại cùng file) · fix R41: autocut thumb wrap `mediaUrl`
+    (raw path không render được) · i18n giữ **2444/2444** ·
+    **cần FULL RESTART**.
+- [x] **G-2 · Media bin drag & drop file ngoài** (kéo file từ Explorer
+  vào panel → import; web: DataTransfer file) · S → **R43 ✅ (§111)**:
+  preload `webUtils.getPathForFile` (Electron 32+ bỏ `File.path`) +
+  type `electronAPI.getPathForFile` · aside media làm drop zone
+  (dragenter/over/leave/drop, depth counter + ring highlight; chỉ
+  nhận `Files` type — DnD nội bộ asset không bị nhiễu) · desktop
+  `importFiles(paths)` / web `importWebFiles(files)` · toast
+  `dropNoMedia` khi mọi file bị lọc (không phải media) · i18n +1 →
+  2445.
 - [ ] **G-3 · Album/folder trong media bin** (nhóm asset) · M · P2.
 - [ ] **G-4 · Camera record / quay màn hình** — blocked (không backend
   ghi màn hình; ghi cam = getUserMedia D-4 pattern) · P3.
@@ -720,7 +800,17 @@ consumer) + `npx eslint <file app chạm>`.
   chuỗi clip liền nhau) · L.
 - [ ] **R4 · Effects graph** (map registry **C6** → filter chain, thứ tự
   ổn định: fit → effect → keyframe → text → zone-trim) · L.
-- [ ] **R5 · Fade → `volume` expression** (**C12**) · S.
+- [x] **R5 · Fade → `volume` expression** (**C12**) · S → **R45 ✅
+  (§113)**: helper `fadeFilter` trong `compiler.ts` — core
+  `volumeExpr` (mốc A/D-B/D theo fade ticks đã clamp nửa duration)
+  → `,volume='EXPR':eval=frame` · **`eval=frame` BẮT BUỘC** (volume
+  filter default `eval=once` — expression đóng băng at init, fade
+  không hiệu lực; test FFmpeg thật: -91dB silence / ramp
+  -39.9→-21.1→-34.5)
+  · 4 chuỗi audio (video-track ×2 path, BGM ×2) — BGM chèn fade
+  TRƯỚC `adelay` (t phải là clip-local) · không fade → chuỗi byte-
+  identical · volume tĩnh vẫn `volume=` riêng (hợp đồng core) ·
+  keyframed volume chờ **R2**.
 - [ ] **R6 · Export form đầy đủ theo design #3**: bitrate options
   (CRF/MBps), format & codec selector (libx264/libx265/h264_qsv/
   h264_nvenc — detect HW thật), destination picker (đã có?), advanced
@@ -728,8 +818,19 @@ consumer) + `npx eslint <file app chạm>`.
   encoder/quality/audio đã có).
 - [ ] **R7 · Export queue** (hàng đợi nhiều tác vụ —
   `useToolTaskManager('ffmpeg')` đã có task system, thêm UI queue) · M.
-- [ ] **R8 · Social presets** (TikTok 1080×1920 30fps, YouTube 1080p,
-  Reels…) — chỉ chọn preset có thật của pipeline · S.
+- [x] **R8 · Social presets** (TikTok 1080×1920 30fps, YouTube 1080p,
+  Reels…) — chỉ chọn preset có thật của pipeline · S
+  → **R51 ✅ (§119)**: row 3 chip trong export modal (video mode):
+  `TikTok·Reels·Shorts 1080×1920` / `YouTube 1080p 1920×1080` /
+  `Instagram 1:1 1080×1080` @30fps — **`presetFit` exact**: output =
+  canvas×scale theo đúng công thức compiler `trunc(iw*s/2)*2` phải
+  ra ĐÚNG target (output luôn chẵn → ±2px sẽ là nói dối) · sai
+  aspect → chip **disabled + tooltip "cần canvas {ratio}"** (compiler
+  scale, không reframe — không letterbox ngầm) · click = set
+  `outScale = targetW/canvasW` (float bất kỳ — compiler nhận) +
+  fps30 (bằng canvas fps → giữ "follow canvas") · chip sáng khi
+  khớp ✓ · test 9 case (720p/4K/iPhone 750×1334 fit, sai aspect +
+  canvas lẻ 1919 disabled) · i18n +5 → 2480.
 - [ ] **R9 · Refactor `compiler.ts` → `render/` graph** (architecture
   Phase 6: `graph/normalize/resolver/ffmpeg/plan/adapters`) · L — làm khi
   R1–R5 tích lũy đủ.
@@ -752,18 +853,37 @@ consumer) + `npx eslint <file app chạm>`.
 
 - [ ] **J-1 · Template engine**: JSON template (layout text+media placeholder)
   áp vào project thật (thay card "Coming soon" honest hiện tại) · M.
-- [ ] **J-2 · Theo design #1 còn lại**: Recently opened sort thật (đã
-  sort?), pin project (lưu flag trong project file) · S.
+- [x] **J-2 · Theo design #1 còn lại**: Recently opened sort thật (đã
+  sort?), pin project (lưu flag trong project file) · S
+  → **R50 ✅ (§118)**: audit — sort `recent` hiện có = "Recently
+  edited" theo `updated_at` ✓ trung thực (không đổi) · thêm field
+  `lastOpenedAt` ghi trong `loadProject` qua
+  `persistProjectMetadata` (**metadata write không bump
+  `updated_at`** — nếu bump thì "Recently edited" thành "mở gần đây")
+  + sort option "Mở gần đây" (`sortOpened`) · pin: `pinned?: boolean`
+  trong project file + `togglePinProject` (cùng no-bump path) + menu
+  card Pin/Unpin (icon `pin`/`pin-off` đã verify) + **pinned luôn
+  lên đầu trong MỌI sort mode** + badge pin ở grid/list · mở project
+  ghi `lastOpenedAt` SAU `detectRecovery` (không được che recovery
+  file) · i18n +4 → 2475.
 - [ ] **J-3 · Cloud widget/Share** — vẫn bỏ (không backend) · giữ §77.
 
 ### Phase K — Shortcut (song song, luôn cập nhật help modal)
 
 - [x] Ctrl+scroll zoom (§79) · dòng help đã thêm (**A2** · R13).
-- [ ] K1: `N` magnet (A6) · K2: `M` marker (B5) · K3: `Ctrl+G`/
+- [x] K1: `N` magnet (A6) · K2: `M` marker (B5) · K3: `Ctrl+G`/
       `Ctrl+Shift+G` (B4) · K4: `Ctrl+L` link · K5: `Alt+[`/`Alt+]` trim
       (B7) · K6: `Ctrl+=`/`Ctrl+-` zoom · K7: `Home`/`End` nhảy đầu/cuối ·
       K8: `Shift+D` fade (D-1) — **mỗi shortcut thêm lúc feature thật
-      hoạt động**, sửa help modal cùng round (trung thực).
+      hoạt động**, sửa help modal cùng round (trung thực)
+      → **R49 ✅ (§117)**: audit — K1–K5 đã bound + có help từ trước
+      (N/M/Ctrl+G/Ctrl+L/Alt+[]) · thêm **K6** (zoom ±10 step y hệt
+      Ctrl+wheel, neo tại playhead, preventDefault chặn page-zoom
+      Chromium) · **K7** (Home/End → seek + `scrollPlayheadIntoView`) ·
+      **K8** Shift+D (`toggleFadeSelection` trong useTmcutProject —
+      bật/tắt fade 0.5s CẢ 2 cạnh, clamp nửa clip, text track =
+      no-op, hằng số chung `TMCUT_DEFAULT_FADE_SEC` với Inspector) ·
+      help modal +3 item + `Ctrl+K` vào item Help · i18n +9 → 2471.
 
 ### Phase L — Architecture Phases 4–6 (nối docs, song song dần)
 
@@ -826,7 +946,7 @@ fade.
 [ ] Phase K  — Shortcuts (K1..K8)
 [ ] Phase L  — Architecture Phases 4–6
 [x] Core Phase 1–3 (66 tests)
-[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C15 (R32) ✅ · [ ] Core C14,C16,C17 (section 3)
+[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) ✅ · [ ] Core C16,C17 (section 3)
 ```
 
 ---

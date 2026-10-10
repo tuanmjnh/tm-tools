@@ -522,6 +522,14 @@ export interface TmcutExtractResult {
   error?: string
 }
 
+/** Single-frame extraction (roadmap G-1): cached PNG per seek/width. */
+export interface TmcutFrameResult {
+  ok: boolean
+  path?: string
+  cached?: boolean
+  error?: string
+}
+
 export interface TmcutAnalyzeResult {
   ok: boolean
   stat?: { size: number, mtimeMs: number }
@@ -590,6 +598,7 @@ export interface TmcutNamespace {
   deleteSnapshot(args: { id: string, ts: number }): Promise<boolean>
   statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
   extractThumbnail(args: { filePath: string }): Promise<TmcutExtractResult>
+  extractFrame(args: { src: string, atSec: number, width?: number }): Promise<TmcutFrameResult>
   extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
@@ -748,6 +757,8 @@ export interface ElectronAPI {
     electron: string
   }
   isElectron: boolean
+  /** External file drop (roadmap G-2): dropped File → absolute path (Electron 32+ removed File.path). */
+  getPathForFile(file: File): string
   getConfig(): Promise<Record<string, string>>
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
   verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>

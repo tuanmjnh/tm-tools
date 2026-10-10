@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 function exposeNamespace(namespace, channels) {
   const api = {}
@@ -76,7 +76,7 @@ const tmcut = exposeNamespace('tmcut', {
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractWaveform', 'analyzeAsset',
+    'statFiles', 'extractThumbnail', 'extractFrame', 'extractWaveform', 'analyzeAsset',
     'analyzeScenes', 'analyzeSilence',
     'watchOutput', 'unwatchOutput'
   ],
@@ -119,6 +119,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     electron: process.versions.electron
   },
   isElectron: true,
+  // External Explorer/Finder drop (roadmap G-2): resolve a dropped File
+  // to its absolute path (File.path was removed in Electron 32).
+  getPathForFile: file => webUtils.getPathForFile(file),
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: values => ipcRenderer.invoke('set-config', values),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),

@@ -10,6 +10,7 @@ const {
   deleteProject,
   renameProject,
   duplicateProject,
+  togglePinProject,
   refreshProjects
 } = useTmcutProject()
 const router = useRouter()
@@ -121,7 +122,7 @@ function applyTemplatePreset(preset: { canvas: string, name: string, fps: number
 // ===== Filter / sort / view =====
 
 type AspectFilter = 'all' | 'vertical' | 'horizontal' | 'square'
-type SortKey = 'recent' | 'name' | 'duration'
+type SortKey = 'recent' | 'opened' | 'name' | 'duration'
 
 const search = ref('')
 const aspectFilter = ref<AspectFilter>('all')
@@ -143,6 +144,7 @@ const filterChips = computed(() => [
 
 const sortOptions = computed(() => [
   { label: t('tmcut.home.sortRecent'), value: 'recent' },
+  { label: t('tmcut.home.sortOpened'), value: 'opened' },
   { label: t('tmcut.home.sortName'), value: 'name' },
   { label: t('tmcut.home.sortDuration'), value: 'duration' }
 ])
@@ -154,13 +156,20 @@ const filteredProjects = computed(() => {
     if (aspectFilter.value !== 'all' && aspectKey(project) !== aspectFilter.value) return false
     return true
   })
+  // Pinned projects ride on top in EVERY sort mode (roadmap J-2).
+  const rank = (p: TmcutProject) => (p.pinned ? 0 : 1)
+  const openedAt = (p: TmcutProject) =>
+    new Date(p.lastOpenedAt || p.updated_at || p.created_at).getTime()
   list = [...list]
   if (sortBy.value === 'name') {
-    list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+    list.sort((a, b) => rank(a) - rank(b) || (a.name || '').localeCompare(b.name || ''))
   } else if (sortBy.value === 'duration') {
-    list.sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0))
+    list.sort((a, b) => rank(a) - rank(b) || (b.durationMs || 0) - (a.durationMs || 0))
+  } else if (sortBy.value === 'opened') {
+    list.sort((a, b) => rank(a) - rank(b) || openedAt(b) - openedAt(a))
   } else {
-    list.sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
+    list.sort((a, b) => rank(a) - rank(b)
+      || new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
   }
   return list
 })
@@ -205,6 +214,11 @@ function handleDuplicate(project: TmcutProject) {
 function cardMenuItems(project: TmcutProject) {
   return [
     { label: t('tmcut.home.menuOpen'), icon: 'i-lucide-rocket', onSelect: () => openProject(project.id) },
+    {
+      label: project.pinned ? t('tmcut.home.menuUnpin') : t('tmcut.home.menuPin'),
+      icon: project.pinned ? 'i-lucide-pin-off' : 'i-lucide-pin',
+      onSelect: () => void togglePinProject(project.id)
+    },
     { label: t('tmcut.home.menuRename'), icon: 'i-lucide-pencil', onSelect: () => openRename(project) },
     { label: t('tmcut.home.menuDuplicate'), icon: 'i-lucide-copy', onSelect: () => handleDuplicate(project) },
     { label: t('tmcut.home.menuDelete'), icon: 'i-lucide-trash', color: 'error' as const, onSelect: () => openDelete(project) }
@@ -507,6 +521,12 @@ const headerActions = computed<HeaderAction[]>(() => [
               >
                 {{ fmtDuration(project) }}
               </span>
+              <UIcon
+                v-if="project.pinned"
+                name="i-lucide-pin"
+                class="absolute top-2 right-2 w-3.5 h-3.5 text-primary drop-shadow"
+                :title="t('tmcut.home.pinnedTitle')"
+              />
 
               <!-- Hover play overlay -->
               <div
@@ -556,6 +576,12 @@ const headerActions = computed<HeaderAction[]>(() => [
             @click="openProject(project.id)"
           >
             <UIcon name="i-lucide-film" class="w-4 h-4 text-neutral-400 shrink-0" />
+            <UIcon
+              v-if="project.pinned"
+              name="i-lucide-pin"
+              class="w-4 h-4 text-primary shrink-0"
+              :title="t('tmcut.home.pinnedTitle')"
+            />
             <span class="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate flex-1">
               {{ project.name }}
             </span>
