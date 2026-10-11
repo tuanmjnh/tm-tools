@@ -8,7 +8,8 @@ definePageMeta({
       const a = useAuth()
       if (!a.isAuthenticated.value) return navigateTo('/login')
     }
-  }
+  },
+  alias: ['/administration/import']
 })
 
 const { t } = useI18n()

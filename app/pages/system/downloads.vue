@@ -3,15 +3,9 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="space-y-6">
-    <UPageCard
-      :title="t('settings.download')"
-      :description="t('settings.downloadDesc')"
-      variant="naked"
-      orientation="horizontal"
-    />
+  <BasePage id="system_downloads" :title="t('settings.download')" :description="t('settings.downloadDesc')">
     <div class="w-full">
       <ToolsDownloadConfigManager />
     </div>
-  </div>
+  </BasePage>
 </template>

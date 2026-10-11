@@ -251,10 +251,7 @@ const saveStateLabel = computed(() => {
 </script>
 
 <template>
-  <div
-    v-if="clip"
-    class="space-y-4 text-xs select-none"
-  >
+  <div v-if="clip" class="space-y-4 text-xs select-none">
     <!-- Header with Name & Deselect -->
     <div class="flex items-center justify-between pb-3 border-b border-neutral-800">
       <div class="flex items-center gap-2 min-w-0">
@@ -292,10 +289,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Text Content Editor (If Text Track) -->
-    <div
-      v-if="currentTab === 'video' && trackType === 'text'"
-      class="space-y-2"
-    >
+    <div v-if="currentTab === 'video' && trackType === 'text'" class="space-y-2">
       <label class="font-medium text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
       <UTextarea
         :model-value="clip.text || ''"
@@ -341,7 +335,7 @@ const saveStateLabel = computed(() => {
           value-key="family"
           label-key="family"
           class="w-full"
-          :model-value="clip.fontFamily ?? null"
+          :model-value="clip.fontFamily ?? undefined"
           :placeholder="t('tmcut.inspectorProps.fontDefault')"
           size="xs"
           :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
@@ -352,7 +346,8 @@ const saveStateLabel = computed(() => {
 
     <!-- Timing & Speed Settings -->
     <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-neutral-800">
-      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.timingAndSpeed') }}</span>
+      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{
+        t('tmcut.inspectorProps.timingAndSpeed') }}</span>
 
       <div class="grid grid-cols-2 gap-2">
         <div>
@@ -404,24 +399,16 @@ const saveStateLabel = computed(() => {
            native) and export applies reverse/areverse (R25). Hidden for
            TEXT clips: a text overlay has no directional playback, so the
            toggle would change nothing anywhere (dead control). -->
-      <div
-        v-if="trackType !== 'text'"
-        class="flex items-center justify-between"
-      >
+      <div v-if="trackType !== 'text'" class="flex items-center justify-between">
         <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</label>
-        <USwitch
-          :model-value="!!clip.reverse"
-          @update:model-value="handleUpdate('reverse', !!$event)"
-        />
+        <USwitch :model-value="!!clip.reverse" @update:model-value="handleUpdate('reverse', !!$event)" />
       </div>
     </div>
 
     <!-- Media Fitting (Phase 2, video track only) -->
-    <div
-      v-if="currentTab === 'video' && trackType === 'video'"
-      class="space-y-3 pt-2 border-t border-neutral-800"
-    >
-      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label') }}</span>
+    <div v-if="currentTab === 'video' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-800">
+      <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label')
+      }}</span>
 
       <div>
         <USelect
@@ -512,12 +499,10 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Transform Settings (Video & Text) -->
-    <div
-      v-if="currentTab === 'video' && trackType !== 'audio'"
-      class="space-y-3 pt-2 border-t border-neutral-800"
-    >
+    <div v-if="currentTab === 'video' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-800">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.transform') }}</span>
+        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{
+          t('tmcut.inspectorProps.transform') }}</span>
         <span
           v-if="clipHasKeyframes"
           class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5"
@@ -638,12 +623,10 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Audio / Volume Settings -->
-    <div
-      v-if="currentTab === 'audio'"
-      class="space-y-2 pt-2 border-t border-neutral-800"
-    >
+    <div v-if="currentTab === 'audio'" class="space-y-2 pt-2 border-t border-neutral-800">
       <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.volume') }}</span>
+        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{
+          t('tmcut.inspectorProps.volume') }}</span>
         <div class="flex items-center gap-1.5">
           <span
             v-if="clipHasKeyframes"
@@ -668,10 +651,7 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <UIcon
-          name="i-lucide-volume-2"
-          class="size-4 text-neutral-400 shrink-0"
-        />
+        <UIcon name="i-lucide-volume-2" class="size-4 text-neutral-400 shrink-0" />
         <input
           type="range"
           min="0"
@@ -752,10 +732,7 @@ const saveStateLabel = computed(() => {
     </div>
   </div>
 
-  <div
-    v-else
-    class="text-xs select-none"
-  >
+  <div v-else class="text-xs select-none">
     <!-- Project details header -->
     <div class="flex items-center gap-2 pb-3 border-b border-neutral-800">
       <UIcon name="i-lucide-clapperboard" class="size-4 shrink-0 text-primary" />
@@ -772,10 +749,7 @@ const saveStateLabel = computed(() => {
       </div>
       <div class="flex items-start justify-between gap-3 py-1.5">
         <span class="text-neutral-500 shrink-0">{{ t('tmcut.details.saveState') }}</span>
-        <span
-          class="text-right text-[11px]"
-          :class="saveStatus === 'error' ? 'text-red-400' : 'text-emerald-400'"
-        >
+        <span class="text-right text-[11px]" :class="saveStatus === 'error' ? 'text-red-400' : 'text-emerald-400'">
           {{ saveStateLabel }}
         </span>
       </div>

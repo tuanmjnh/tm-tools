@@ -10,7 +10,8 @@ definePageMeta({
       const a = useAuth()
       if (!a.isAuthenticated.value) return navigateTo('/login')
     }
-  }
+  },
+  alias: ['/system/connections', '/settings/connections']
 })
 
 const { t } = useI18n()

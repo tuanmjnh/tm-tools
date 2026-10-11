@@ -151,34 +151,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Header -->
-    <UPageCard
-      :title="t('settings.toolsBinaries')"
-      :description="t('settings.toolsBinariesDesc')"
-      variant="naked"
-      orientation="horizontal"
-    >
-      <div class="flex items-center gap-2 lg:ms-auto">
-        <UButton
-          color="primary"
-          variant="soft"
-          icon="i-lucide-save"
-          :loading="saving"
-          :label="t('settings.saveToolsPaths')"
-          @click="onSave"
-        />
-      </div>
-    </UPageCard>
+  <BasePage id="tools_binaries" :title="t('settings.toolsBinaries')" :description="t('settings.toolsBinariesDesc')">
+    <template #right>
+      <UButton color="primary" variant="soft" icon="i-lucide-save" :loading="saving"
+        :label="t('settings.saveToolsPaths')" @click="onSave" />
+    </template>
 
     <!-- Tools List Cards -->
     <div class="space-y-4">
-      <UPageCard
-        v-for="item in tools"
-        :key="item.key"
-        variant="subtle"
-        class="transition-all hover:border-gray-300 dark:hover:border-gray-700"
-      >
+      <UPageCard v-for="item in tools" :key="item.key" variant="subtle"
+        class="transition-all hover:border-gray-300 dark:hover:border-gray-700">
         <div class="space-y-3">
           <!-- Top Row: Icon, Title, Status Badge -->
           <div class="flex items-start justify-between gap-3">
@@ -191,15 +173,10 @@ onMounted(() => {
                   <h3 class="font-semibold text-sm text-gray-900 dark:text-gray-100">
                     {{ item.name }}
                   </h3>
-                  <UBadge
-                    size="xs"
-                    :color="item.verified ? 'success' : (item.path ? 'error' : 'neutral')"
-                    variant="subtle"
-                  >
-                    <UIcon
-                      :name="item.verified ? 'i-lucide-check-circle-2' : 'i-lucide-alert-circle'"
-                      class="size-3 mr-1"
-                    />
+                  <UBadge size="xs" :color="item.verified ? 'success' : (item.path ? 'error' : 'neutral')"
+                    variant="subtle">
+                    <UIcon :name="item.verified ? 'i-lucide-check-circle-2' : 'i-lucide-alert-circle'"
+                      class="size-3 mr-1" />
                     {{ item.verified ? t('settings.verified') : (item.path ? t('settings.binaryInvalid')
                       : t('settings.statusNotConfigured')) }}
                   </UBadge>
@@ -210,38 +187,19 @@ onMounted(() => {
               </div>
             </div>
             <span
-              class="text-[10px] font-mono uppercase tracking-wider text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded"
-            >
+              class="text-[10px] font-mono uppercase tracking-wider text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">
               {{ item.key }}
             </span>
           </div>
 
           <!-- Executable Path Input + Actions -->
           <div class="flex gap-2">
-            <UInput
-              v-model="item.path"
-              class="flex-1 font-mono text-xs"
-              :placeholder="item.placeholder"
-              @change="verifyTool(item)"
-            />
-            <UButton
-              size="sm"
-              variant="soft"
-              color="neutral"
-              icon="i-lucide-folder-open"
-              :label="t('settings.browseFile')"
-              @click="onBrowse(item)"
-            />
-            <UButton
-              size="sm"
-              variant="soft"
-              color="neutral"
-              icon="i-lucide-check-circle"
-              :loading="item.checking"
-              :disabled="!item.path"
-              :label="t('settings.testBinary')"
-              @click="verifyTool(item)"
-            />
+            <UInput v-model="item.path" class="flex-1 font-mono text-xs" :placeholder="item.placeholder"
+              @change="verifyTool(item)" />
+            <UButton size="sm" variant="soft" color="neutral" icon="i-lucide-folder-open"
+              :label="t('settings.browseFile')" @click="onBrowse(item)" />
+            <UButton size="sm" variant="soft" color="neutral" icon="i-lucide-check-circle" :loading="item.checking"
+              :disabled="!item.path" :label="t('settings.testBinary')" @click="verifyTool(item)" />
           </div>
         </div>
       </UPageCard>
@@ -249,15 +207,16 @@ onMounted(() => {
 
     <!-- Instructions note -->
     <div
-      class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 text-xs space-y-2 text-gray-600 dark:text-gray-400"
-    >
+      class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 text-xs space-y-2 text-gray-600 dark:text-gray-400">
       <div class="flex items-center gap-2 font-medium text-gray-800 dark:text-gray-200">
         <UIcon name="i-lucide-info" class="size-4 text-primary" />
         <span>{{ t('settings.emptyForDefault') }}</span>
       </div>
       <p>
-        If left empty, the system will automatically search for default binaries packaged inside the application resources/ directory.
+        If left empty, the system will automatically search for default binaries packaged inside the application
+        resources/
+        directory.
       </p>
     </div>
-  </div>
+  </BasePage>
 </template>

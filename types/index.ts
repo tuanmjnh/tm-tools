@@ -1,5 +1,5 @@
 export type { AuthUser, LoginRequest, RegisterRequest, AuthResponse, TokenPayload, LoginPlatform, AuthProvider } from './auth'
-export type { Role, ModulePermission, UserRole, ModuleDefinition, PermissionCheck, PermissionAction, RBACConfig } from './rbac'
+export type { Role, ModulePermission, UserRole, ModuleDefinition, PermissionCheck, PermissionAction, RBACConfig, SystemRoute, RouteTreeNode } from './rbac'
 export type { ApiResponse, PaginationParams } from './api'
 export type { ElectronAPI } from './electron'
 export type {

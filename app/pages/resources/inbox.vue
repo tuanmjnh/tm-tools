@@ -4,6 +4,10 @@ import type { InboxDetail, InboxItem, InboxProfile } from '~/types/inbox'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { parseAddress } from '~/utils/inboxHtml'
 
+definePageMeta({
+  alias: ['/inbox']
+})
+
 const { t } = useI18n()
 const notify = useNotify()
 const { hubFetch, appId: hubAppId } = useHub()
@@ -419,7 +423,7 @@ useHead({ title })
           :description="t('inbox.notConnectedDesc')" class="max-w-lg shadow-xs">
           <template #actions>
             <UButton :label="t('inbox.goToConnections')" icon="i-lucide-plug" size="sm" color="primary" variant="soft"
-              @click="navigateTo('/system/connections')" />
+              @click="navigateTo('/resources/connections')" />
           </template>
         </UAlert>
       </div>

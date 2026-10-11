@@ -1,34 +1,9 @@
-<script setup lang="ts">
-import { useEditorType } from '~/composables/useEditorType'
-
-const { editorType, setEditorType } = useEditorType()
-const { t } = useI18n()
-const content = ref('')
-
-function copyContent() {
-  navigator.clipboard.writeText(content.value)
-}
-
-function downloadContent() {
-  const blob = new Blob([content.value], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'editor-content-' + new Date().toISOString().split('T')[0] + '.html'
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-function clearContent() {
-  content.value = ''
-}
-
-const { currentUtility } = useUtilitiesMeta()
-</script>
-
 <template>
-  <BasePage id="utilities-editor" :title="currentUtility.title" :description="currentUtility.description">
-    <template #right>
+  <div class="space-y-4">
+    <div class="flex items-center justify-between gap-4">
+      <h2 class="text-xl font-bold">{{ t('utilities.editor.title') }}</h2>
+
+      <!-- Editor Type Switcher -->
       <div class="flex items-center gap-2">
         <UButton
           v-if="editorType === 'tiptap'"
@@ -49,9 +24,10 @@ const { currentUtility } = useUtilitiesMeta()
           <UIcon name="i-lucide-text" class="mr-1" /> Tiptap
         </UButton>
       </div>
-    </template>
+    </div>
 
     <div class="space-y-4">
+      <!-- Tiptap Editor -->
       <template v-if="editorType === 'tiptap'">
         <EditorTiptap
           v-model="content"
@@ -60,6 +36,7 @@ const { currentUtility } = useUtilitiesMeta()
         />
       </template>
 
+      <!-- TinyMCE Editor -->
       <template v-else>
         <EditorTinymce
           v-model="content"
@@ -67,6 +44,7 @@ const { currentUtility } = useUtilitiesMeta()
         />
       </template>
 
+      <!-- Controls -->
       <div class="flex gap-2">
         <UButton
           size="sm"
@@ -91,5 +69,31 @@ const { currentUtility } = useUtilitiesMeta()
         />
       </div>
     </div>
-  </BasePage>
+  </div>
 </template>
+
+<script setup lang="ts">
+import { useEditorType } from '~/composables/useEditorType'
+
+const { editorType, setEditorType } = useEditorType()
+const { t } = useI18n()
+const content = ref('')
+
+function copyContent() {
+  navigator.clipboard.writeText(content.value)
+}
+
+function downloadContent() {
+  const blob = new Blob([content.value], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'editor-content-' + new Date().toISOString().split('T')[0] + '.html'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function clearContent() {
+  content.value = ''
+}
+</script>

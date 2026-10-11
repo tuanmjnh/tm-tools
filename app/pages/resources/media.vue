@@ -3,6 +3,10 @@ import { useModuleExport, buildExportChildren } from '~/composables/useModuleExp
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import MediaCloudinaryIndex from '~/components/media/cloudinary/Index.vue'
 
+definePageMeta({
+  alias: ['/media']
+})
+
 const { t } = useI18n()
 const mediaStore = useMediaStore()
 const isConfirmClearHistory = ref(false)
