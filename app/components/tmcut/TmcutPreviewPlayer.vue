@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle } from '~/utils/tmcut/canvas'
+import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { toURL } from '~/utils/ffmpegHelper'
 import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND } from '@tmcut-core'
 import type { TmcutKeyframe } from '@tmcut-core'
@@ -470,6 +471,11 @@ function textOverlayStyle(textClip: {
   color?: string
   fontSize?: number
   fontFamily?: string
+  bold?: boolean
+  italic?: boolean
+  align?: 'left' | 'center' | 'right'
+  shadow?: boolean
+  stroke?: boolean
   offset?: number
   x?: number
   y?: number
@@ -487,14 +493,36 @@ function textOverlayStyle(textClip: {
   const ty = evalKeyframe(textClip, 'y', at) ?? textClip.y ?? 0
   const ts = evalKeyframe(textClip, 'scale', at) ?? textClip.scale ?? 100
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
+  const fontSize = textClip.fontSize || 36
+  // Anchor (roadmap C-2) mirrors the export x expression exactly:
+  // left = 0+x, center = (w−tw)/2+x, right = w−tw+x — the block's EDGE
+  // lands at that point; vertical anchoring is always centered (export
+  // y is always (h−th)/2+y). The old top-left anchor lied about where
+  // the export placed the text.
+  const align = textClip.align || 'center'
+  const anchorX = align === 'left' ? '0%' : align === 'right' ? '100%' : '50%'
   return {
     // Font family (roadmap C-1): the CSS twin of the export's
     // fontfile= — quoted via JSON.stringify so multi-word families
     // ("Segoe UI") stay one valid family token.
     ...(textClip.fontFamily ? { fontFamily: `${JSON.stringify(textClip.fontFamily)}, sans-serif` } : {}),
+    // Style flags (roadmap C-2): the CSS twin of the export's face
+    // file + drawtext shadow/border options — shared metrics keep the
+    // pixel numbers in step (utils/tmcut/textStyle.ts).
+    ...(textClip.bold ? { fontWeight: '700' } : {}),
+    ...(textClip.italic ? { fontStyle: 'italic' } : {}),
+    ...(textClip.shadow ? { textShadow: `${textShadowOffset(fontSize) * scale}px ${textShadowOffset(fontSize) * scale}px 0 rgba(0, 0, 0, 0.85)` } : {}),
+    ...(textClip.stroke
+      ? {
+          paintOrder: 'stroke fill',
+          WebkitTextStroke: `${textStrokeWidth(fontSize) * scale}px rgba(0, 0, 0, 0.85)`
+        }
+      : {}),
     color: textClip.color || '#ffffff',
-    fontSize: `${(textClip.fontSize || 36) * scale}px`,
-    transform: `translate(${tx * scale}px, ${ty * scale}px) scale(${ts / 100}) rotate(${textClip.rotation || 0}deg)`,
+    fontSize: `${fontSize * scale}px`,
+    left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
+    top: '50%',
+    transform: `translate(${tx * scale}px, ${ty * scale}px) translate(${anchorX}, -50%) scale(${ts / 100}) rotate(${textClip.rotation || 0}deg)`,
     opacity: to / 100
   }
 }
@@ -983,13 +1011,13 @@ onUnmounted(() => {
           />
         </div>
 
-        <!-- Text Overlays (draggable in preview; explicit top-left anchor:
-           absolute-without-offsets would collapse to the static position
-           and get clipped by overflow-hidden) -->
+        <!-- Text Overlays (draggable in preview; anchor + style flags
+             mirror the export math — roadmap C-2; whitespace-pre-line
+             honors the same \\n line breaks drawtext renders) -->
         <div
           v-for="textClip in activeTextClips"
           :key="textClip.id"
-          class="absolute left-0 top-0 font-bold text-center leading-tight drop-shadow-md select-none cursor-move hover:ring-1 hover:ring-primary/60 rounded"
+          class="absolute leading-tight whitespace-pre-line select-none cursor-move hover:ring-1 hover:ring-primary/60 rounded"
           :style="textOverlayStyle(textClip)"
           @mousedown="onTextMouseDown($event, textClip)"
         >

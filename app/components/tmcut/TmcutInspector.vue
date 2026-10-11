@@ -8,7 +8,7 @@ import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_
 const { t } = useI18n()
 const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced } = useTmcutProject()
 const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
-const { choices: fontChoices, ensureFonts } = useTmcutFonts()
+const { choices: fontChoices, ensureFonts, resolveFace } = useTmcutFonts()
 const { formatTimecode, playhead } = useTmcutPlayback()
 
 const clip = computed(() => selectedClip.value?.item)
@@ -73,14 +73,53 @@ function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, 
 // Font family (roadmap C-1): family (CSS preview) and file (drawtext
 // fontfile= export) always travel together, so ONE coalesced history
 // entry covers the pair — preview and export can never drift onto
-// different faces.
+// different faces. C-2: the file respects the CURRENT bold/italic flags
+// (drawtext rasterizes one real face — no faux bold).
 function handleFontUpdate(family: string) {
   if (!selectedClipId.value || !family || family === 'null') return
   const choice = fontChoices.value.find(c => c.family === family)
   if (!choice) return
   pushHistoryCoalesced(`${selectedClipId.value}:font`)
-  updateClip(selectedClipId.value, { fontFamily: choice.family, fontFile: choice.file })
+  updateClip(selectedClipId.value, {
+    fontFamily: choice.family,
+    fontFile: faceFileFor(choice, clip.value?.bold, clip.value?.italic)
+  })
 }
+
+// Text style toggles (roadmap C-2): discrete switches record ONE undo
+// entry each (B8). Bold/italic re-resolve fontFile in the SAME patch so
+// export picks the real bold/italic face — desktop only; web has no
+// faces and keeps the preview CSS flag (web cannot export anyway).
+async function handleStyleToggle(field: 'bold' | 'italic' | 'shadow' | 'stroke') {
+  if (!selectedClipId.value || !clip.value) return
+  const next = !clip.value[field]
+  pushHistory()
+  const patch: Partial<NonNullable<typeof clip.value>> = { [field]: next }
+  if (field === 'bold' || field === 'italic') {
+    const bold = field === 'bold' ? next : !!clip.value.bold
+    const italic = field === 'italic' ? next : !!clip.value.italic
+    const face = await resolveFace(bold, italic, clip.value.fontFamily)
+    if (face) {
+      patch.fontFamily = face.family
+      patch.fontFile = face.file
+    }
+  }
+  updateClip(selectedClipId.value, patch)
+}
+
+// Align (roadmap C-2): block anchor — default center matches the legacy
+// export x expression byte-for-byte.
+function handleAlign(align: 'left' | 'center' | 'right') {
+  if (!selectedClipId.value || (clip.value?.align || 'center') === align) return
+  pushHistory()
+  updateClip(selectedClipId.value, { align })
+}
+
+const alignOptions = [
+  { key: 'left', icon: 'i-lucide-align-left', title: 'alignLeft' },
+  { key: 'center', icon: 'i-lucide-align-center', title: 'alignCenter' },
+  { key: 'right', icon: 'i-lucide-align-right', title: 'alignRight' }
+] as const
 
 // Keyframes (roadmap B1): the ⏱ buttons toggle a keyframe of the
 // CURRENT field value at the playhead. Times are clip-local ticks
@@ -342,6 +381,59 @@ const saveStateLabel = computed(() => {
           @update:model-value="handleFontUpdate(String($event))"
         />
       </div>
+
+      <!-- Text style (roadmap C-2): every toggle maps 1:1 to export —
+           bold/italic switch the REAL face file (drawtext has no faux
+           bold), align anchors the block, shadow/stroke toggle drawtext
+           shadow/border options. -->
+      <div class="flex items-center gap-1 pt-1 flex-wrap">
+        <UButton
+          icon="i-lucide-bold"
+          size="xs"
+          :color="clip.bold ? 'primary' : 'neutral'"
+          :variant="clip.bold ? 'soft' : 'ghost'"
+          :title="t('tmcut.inspectorProps.bold')"
+          @click="handleStyleToggle('bold')"
+        />
+        <UButton
+          icon="i-lucide-italic"
+          size="xs"
+          :color="clip.italic ? 'primary' : 'neutral'"
+          :variant="clip.italic ? 'soft' : 'ghost'"
+          :title="t('tmcut.inspectorProps.italic')"
+          @click="handleStyleToggle('italic')"
+        />
+        <div class="flex items-center gap-0.5 bg-neutral-900/60 border border-neutral-800 rounded-md p-0.5">
+          <button
+            v-for="option in alignOptions"
+            :key="option.key"
+            type="button"
+            class="px-1.5 py-1 rounded cursor-pointer transition-colors"
+            :class="(clip.align || 'center') === option.key ? 'bg-primary/15 text-primary' : 'text-neutral-400 hover:text-neutral-200'"
+            :title="t(`tmcut.inspectorProps.${option.title}`)"
+            @click="handleAlign(option.key)"
+          >
+            <UIcon :name="option.icon" class="size-3" />
+          </button>
+        </div>
+        <div class="w-px h-4 bg-neutral-800 mx-0.5" />
+        <UButton
+          icon="i-lucide-moon"
+          size="xs"
+          :color="clip.shadow ? 'primary' : 'neutral'"
+          :variant="clip.shadow ? 'soft' : 'ghost'"
+          :title="t('tmcut.inspectorProps.shadow')"
+          @click="handleStyleToggle('shadow')"
+        />
+        <UButton
+          icon="i-lucide-blend"
+          size="xs"
+          :color="clip.stroke ? 'primary' : 'neutral'"
+          :variant="clip.stroke ? 'soft' : 'ghost'"
+          :title="t('tmcut.inspectorProps.stroke')"
+          @click="handleStyleToggle('stroke')"
+        />
+      </div>
     </div>
 
     <!-- Timing & Speed Settings -->
@@ -505,9 +597,10 @@ const saveStateLabel = computed(() => {
           t('tmcut.inspectorProps.transform') }}</span>
         <span
           v-if="clipHasKeyframes"
-          class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5"
+          class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
           :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
         >
+          <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
           {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
         </span>
       </div>
@@ -559,10 +652,11 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
 
-      <!-- Rotation: exposed for VIDEO clips only — text rotation is not
-           exported yet (drawtext has no angle; roadmap R12), and showing
-           the slider for text would be a dead control. -->
-      <div v-if="trackType === 'video'">
+      <!-- Rotation (A8 unlock by R12): exported for both tracks — video
+           via the fit chain, text via the rotate+overlay pipeline. The
+           export REQUIRES center align for rotated text (compiler guard
+           + modal toast). -->
+      <div>
         <div class="flex items-center justify-between">
           <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.rotation') }}</label>
           <span class="text-[10px] font-mono text-neutral-400">{{ clip.rotation || 0 }}°</span>
@@ -630,9 +724,10 @@ const saveStateLabel = computed(() => {
         <div class="flex items-center gap-1.5">
           <span
             v-if="clipHasKeyframes"
-            class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5"
+            class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
             :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
           >
+            <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
             {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
           </span>
           <!-- Keyframe toggle: only for VIDEO clips — a timeline audio

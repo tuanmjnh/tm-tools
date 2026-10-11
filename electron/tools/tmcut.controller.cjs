@@ -16,13 +16,14 @@ function getDirs() {
     cache: path.join(base, 'cache'),
     thumbs: path.join(base, 'cache', 'thumbnails'),
     waveforms: path.join(base, 'cache', 'waveforms'),
-    frames: path.join(base, 'cache', 'frames')
+    frames: path.join(base, 'cache', 'frames'),
+    recordings: path.join(base, 'recordings')
   }
 }
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.recordings]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -211,6 +212,23 @@ function probeDurationCached(filePath, stat) {
     if (value > 0) durationCache.set(key, value)
     return value
   })
+}
+
+// Roadmap C-3: Whisper transcription needs an AUDIO input (provider
+// endpoints take audio containers). One-shot 16kHz mono MP3 into the
+// cache dir, keyed like thumbnails — re-captioning the same source
+// version reuses the file and skips extraction entirely.
+async function extractCaptionAudio(filePath) {
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  ensureDirs()
+  const key = cacheKeyFor(filePath, stat)
+  const out = path.join(getDirs().cache, `caption-${key}.mp3`)
+  if (getFileStat(out).exists) return { ok: true, path: out }
+  // 16kHz mono matches Whisper's native rate — no wasted bandwidth.
+  const result = await runFfmpeg(['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '48k', out], 120_000)
+  if (!result.ok || !getFileStat(out).exists) return { ok: false, error: result.error || 'Audio extraction failed' }
+  return { ok: true, path: out }
 }
 
 async function extractThumbnail(filePath) {
@@ -750,6 +768,32 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:extractFrame`, async (_event, { src, atSec, width }) => {
     if (typeof src !== 'string' || !src) return { ok: false, error: 'Invalid path' }
     return extractFrameAt(src, atSec, width)
+  })
+
+  ipcMain.handle(`${moduleName}:extractAudio`, async (_event, { filePath }) => {
+    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
+    return extractCaptionAudio(filePath)
+  })
+
+  // Roadmap D-4: MediaRecorder blobs must land on disk for the desktop
+  // pipeline (FFmpeg export reads real paths). Saved under
+  // <base>/recordings/ with a timestamped name — no dialog friction.
+  ipcMain.handle(`${moduleName}:saveRecording`, async (_event, { data, ext }) => {
+    try {
+      const bytes = data instanceof Uint8Array
+        ? data
+        : data instanceof ArrayBuffer
+          ? new Uint8Array(data)
+          : null
+      if (!bytes || bytes.length === 0) return { ok: false, error: 'Empty recording' }
+      ensureDirs()
+      const safeExt = /^[a-z0-9]{1,8}$/i.test(String(ext || '')) ? String(ext) : 'webm'
+      const filePath = path.join(getDirs().recordings, `voiceover-${Date.now()}.${safeExt}`)
+      fs.writeFileSync(filePath, Buffer.from(bytes))
+      return { ok: true, path: filePath }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
   })
 
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {

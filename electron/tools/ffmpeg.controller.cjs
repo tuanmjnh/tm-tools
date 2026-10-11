@@ -55,7 +55,11 @@ function initTaskManager(event, args) {
   send(event, `${moduleName}:managerInitialized`, args)
 }
 
+let cachedGpuSupport = null
+
 function detectGpuSupport() {
+  if (cachedGpuSupport) return cachedGpuSupport
+
   try {
     const ffmpegExe = resolveExecutable().ffmpeg
     const output = execSync(`"${ffmpegExe}" -hide_banner -encoders`, { encoding: 'utf8', stdio: 'pipe' })
@@ -69,12 +73,38 @@ function detectGpuSupport() {
       // ignore
     }
 
-    return {
-      nvenc: output.includes('h264_nvenc'),
-      amf: output.includes('h264_amf'),
-      qsv: output.includes('h264_qsv'),
+    // Probe real encoder initialization (detect HW thật)
+    let nvenc = false
+    if (output.includes('h264_nvenc')) {
+      try {
+        execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_nvenc -f null -`, { stdio: 'pipe' })
+        nvenc = true
+      } catch (_) { }
+    }
+
+    let amf = false
+    if (output.includes('h264_amf')) {
+      try {
+        execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_amf -f null -`, { stdio: 'pipe' })
+        amf = true
+      } catch (_) { }
+    }
+
+    let qsv = false
+    if (output.includes('h264_qsv')) {
+      try {
+        execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_qsv -f null -`, { stdio: 'pipe' })
+        qsv = true
+      } catch (_) { }
+    }
+
+    cachedGpuSupport = {
+      nvenc,
+      amf,
+      qsv,
       gpus
     }
+    return cachedGpuSupport
   } catch {
     return { nvenc: false, amf: false, qsv: false, gpus: [] }
   }

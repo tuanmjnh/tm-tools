@@ -4,6 +4,7 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useToolTaskManager } from '~/composables/useToolTaskManager'
+import { useFileSystem } from '~/composables/useFileSystem'
 import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
 import type { ToolTask } from '~/types'
@@ -14,7 +15,7 @@ const { t } = useI18n()
 const { currentProject, totalDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl } = useTmcutMedia()
-const { pickFile } = useFileSystem()
+const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const toast = useToast()
 
@@ -24,18 +25,141 @@ const mode = ref<TmcutCompileMode>('video')
 const rangeMode = ref<'full' | 'inout'>('full')
 const outScale = ref(1)
 const fps = ref(0) // 0 = follow the canvas fps
-const encoder = ref('libx264')
-const quality = ref('medium') // fast | medium | high → CRF map
+
+// Format & Codec (design #3)
+type VideoFormatKey = 'mp4-h264' | 'mp4-h265' | 'mov-prores' | 'webm-vp9'
+const videoFormat = ref<VideoFormatKey>('mp4-h264')
+
+// Bitrate options (design #3)
+type BitratePresetKey = 'standard' | 'recommended' | 'high' | 'custom'
+const bitratePreset = ref<BitratePresetKey>('recommended')
+const customBitrate = ref(32)
+
+const effectiveBitrateMbps = computed(() => {
+  if (bitratePreset.value === 'standard') return 22
+  if (bitratePreset.value === 'recommended') return 32
+  if (bitratePreset.value === 'high') return 45
+  return Math.max(1, Math.min(200, Number(customBitrate.value) || 32))
+})
+
+// Hardware Acceleration Engine (§10, §13)
+const hwEngineEnabled = ref(true)
+const autoPreview = ref(true)
+const gpuSupport = ref<{ nvenc: boolean, amf: boolean, qsv: boolean, gpus: string[] }>({
+  nvenc: false,
+  amf: false,
+  qsv: false,
+  gpus: []
+})
+const profileOverride = ref<'nvenc' | 'qsv' | 'amf' | 'cpu' | null>(null)
+
+async function detectHardware() {
+  if (window.electronAPI?.tools?.ffmpeg?.detectGpuSupport) {
+    try {
+      const res = await window.electronAPI.tools.ffmpeg.detectGpuSupport()
+      if (res) {
+        gpuSupport.value = res
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function selectEncoderProfile(p: 'nvenc' | 'qsv' | 'amf' | 'cpu') {
+  if (p === 'nvenc') {
+    if (!gpuSupport.value.nvenc) {
+      toast.add({ title: 'NVIDIA NVENC', description: t('tmcut.export.hwUnsupported'), color: 'warning' })
+      return
+    }
+    profileOverride.value = 'nvenc'
+    hwEngineEnabled.value = true
+  } else if (p === 'qsv') {
+    if (!gpuSupport.value.qsv) {
+      toast.add({ title: 'Intel QSV', description: t('tmcut.export.hwUnsupported'), color: 'warning' })
+      return
+    }
+    profileOverride.value = 'qsv'
+    hwEngineEnabled.value = true
+  } else if (p === 'amf') {
+    if (!gpuSupport.value.amf) {
+      toast.add({ title: 'AMD AMF', description: t('tmcut.export.hwUnsupported'), color: 'warning' })
+      return
+    }
+    profileOverride.value = 'amf'
+    hwEngineEnabled.value = true
+  } else {
+    profileOverride.value = 'cpu'
+    hwEngineEnabled.value = false
+  }
+}
+
+// Active encoder resolution
+const activeEncoder = computed(() => {
+  if (!hwEngineEnabled.value || profileOverride.value === 'cpu') {
+    if (videoFormat.value === 'mp4-h265') return 'libx265'
+    if (videoFormat.value === 'mov-prores') return 'prores_ks'
+    if (videoFormat.value === 'webm-vp9') return 'libvpx-vp9'
+    return 'libx264'
+  }
+
+  const prof = profileOverride.value
+  if (videoFormat.value === 'mp4-h264') {
+    if (prof === 'nvenc' && gpuSupport.value.nvenc) return 'h264_nvenc'
+    if (prof === 'qsv' && gpuSupport.value.qsv) return 'h264_qsv'
+    if (prof === 'amf' && gpuSupport.value.amf) return 'h264_amf'
+    if (!prof) {
+      if (gpuSupport.value.nvenc) return 'h264_nvenc'
+      if (gpuSupport.value.qsv) return 'h264_qsv'
+      if (gpuSupport.value.amf) return 'h264_amf'
+    }
+    return 'libx264'
+  }
+
+  if (videoFormat.value === 'mp4-h265') {
+    if (prof === 'nvenc' && gpuSupport.value.nvenc) return 'hevc_nvenc'
+    if (prof === 'qsv' && gpuSupport.value.qsv) return 'hevc_qsv'
+    if (prof === 'amf' && gpuSupport.value.amf) return 'hevc_amf'
+    if (!prof) {
+      if (gpuSupport.value.nvenc) return 'hevc_nvenc'
+      if (gpuSupport.value.qsv) return 'hevc_qsv'
+      if (gpuSupport.value.amf) return 'hevc_amf'
+    }
+    return 'libx265'
+  }
+
+  if (videoFormat.value === 'mov-prores') return 'prores_ks'
+  if (videoFormat.value === 'webm-vp9') return 'libvpx-vp9'
+
+  return 'libx264'
+})
+
+const detectedGpuName = computed(() => {
+  if (gpuSupport.value.gpus && gpuSupport.value.gpus.length > 0) {
+    return gpuSupport.value.gpus[0]
+  }
+  return 'Standard GPU/CPU Engine'
+})
+
+const hwInfo = computed(() => {
+  const enc = activeEncoder.value
+  const isGpu = enc.includes('nvenc') || enc.includes('qsv') || enc.includes('amf')
+  return {
+    label: isGpu
+      ? `${detectedGpuName.value} (${enc})`
+      : 'CPU Software Engine (libx264)',
+    desc: isGpu
+      ? t('tmcut.export.hwToggleDesc')
+      : t('tmcut.export.hwCpuDesc')
+  }
+})
+
 const audioFormat = ref<'mp3' | 'wav'>('mp3')
 const audioBitrate = ref(320)
-// Noise reduction (roadmap D-3): export-only option — the compiler maps
-// ONE global afftdn; there is no browser preview of denoised audio, so
-// the checkbox lives here and nowhere else.
+// Noise reduction (roadmap D-3)
 const denoise = ref(false)
 
-// Color LUT (roadmap E-4): export-only .cube graded onto the footage —
-// a browser cannot render an arbitrary 3D LUT, so the picker lives only
-// here (session-scoped, like every other option in this modal).
+// Color LUT (roadmap E-4)
 const lut3dPath = ref<string | null>(null)
 const lut3dName = computed(() =>
   lut3dPath.value ? (lut3dPath.value.split(/[\\/]/).pop() || lut3dPath.value) : ''
@@ -47,9 +171,6 @@ async function pickLutFile() {
     filters: [{ name: 'LUT', extensions: ['cube'] }]
   })
   if (!path || typeof path !== 'string') return
-  // Apostrophes cannot be escaped through the filtergraph's two parse
-  // levels (verified against ffmpeg) — reject now with a clear message
-  // rather than failing mid-export with a cryptic graph error.
   if (path.includes('\'')) {
     toast.add({ title: t('tmcut.export.lutBadPath'), color: 'warning' })
     return
@@ -57,7 +178,7 @@ async function pickLutFile() {
   lut3dPath.value = path
 }
 
-// ---- Progress / result state (unchanged pipeline) ----
+// ---- Progress / result state ----
 const isExporting = ref(false)
 const exportDone = ref(false)
 const exportError = ref('')
@@ -97,6 +218,9 @@ function startWatching(filePath: string) {
       isExporting.value = false
       exportDone.value = true
       toast.add({ title: t('tmcut.export.success'), color: 'success' })
+      if (autoPreview.value) {
+        previewModalOpen.value = true
+      }
     }
     stopWatching()
   })
@@ -129,16 +253,10 @@ const effectiveFps = computed(() => (fps.value > 0 ? fps.value : canvasFps.value
 
 const ext = computed(() => {
   if (mode.value === 'audio') return audioFormat.value === 'wav' ? 'wav' : 'mp3'
-  return mode.value === 'gif' ? 'gif' : 'mp4'
-})
-
-const saveFilters = computed(() => {
-  const name = mode.value === 'video'
-    ? 'MP4 Video'
-    : mode.value === 'gif'
-      ? 'GIF Image'
-      : audioFormat.value === 'wav' ? 'WAV Audio' : 'MP3 Audio'
-  return [{ name, extensions: [ext.value] }]
+  if (mode.value === 'gif') return 'gif'
+  if (videoFormat.value === 'mov-prores') return 'mov'
+  if (videoFormat.value === 'webm-vp9') return 'webm'
+  return 'mp4'
 })
 
 // File name / destination split over a single outputPath (design #3 header)
@@ -157,8 +275,19 @@ function joinDir(dir: string, name: string): string {
   return `${dir}${sep}${name}`
 }
 
+async function pickDestinationFolder() {
+  const defaultDir = dirName.value || undefined
+  const picked = await pickFolder({
+    title: t('tmcut.export.browseFolder'),
+    defaultPath: defaultDir
+  })
+  if (picked) {
+    outputPath.value = joinDir(picked, fileName.value)
+  }
+}
+
 // Keep the extension in sync when the output mode/format changes
-watch([mode, audioFormat], () => {
+watch([mode, audioFormat, videoFormat], () => {
   if (!outputPath.value || !fileName.value) return
   const base = fileName.value.replace(/\.(mp4|mov|mkv|webm|avi|m4a|mp3|wav|gif|png)$/i, '')
   const next = `${base}.${ext.value}`
@@ -197,10 +326,7 @@ const estimatedSize = computed<string | null>(() => {
   if (duration <= 0) return null
   let videoMbps = 0
   if (mode.value === 'video') {
-    // Rough pre-render heuristic (~0.07 bits/pixel/frame at CRF22, scaled
-    // by CRF) — always displayed with a "~" prefix in the UI.
-    const crfBits = quality.value === 'high' ? 1.55 : quality.value === 'fast' ? 0.6 : 1
-    videoMbps = ((outputW.value * outputH.value * effectiveFps.value * 0.07) / 1e6) * crfBits
+    videoMbps = effectiveBitrateMbps.value
   }
   const audioMbps = mode.value === 'audio'
     ? (audioFormat.value === 'wav' ? 1.536 : audioBitrate.value / 1000)
@@ -219,7 +345,7 @@ const audioSpecValue = computed(() => {
   return t('tmcut.export.audioVideoSpec')
 })
 
-// ---- Poster preview (first video clip's cached cover thumb) ----
+// ---- Poster preview ----
 const posterUrl = computed(() => {
   const videoTrack = currentProject.value?.timeline?.tracks.find(tr => tr.type === 'video')
   const clip = videoTrack?.items.find(c => !!c.src)
@@ -228,16 +354,11 @@ const posterUrl = computed(() => {
   return asset?.thumbPath ? mediaUrl(asset.thumbPath) : ''
 })
 
-// ---- Select options ----
-const qualityOptions = computed(() => [
-  { label: t('tmcut.export.qualityFast'), value: 'fast', crf: 26 },
-  { label: t('tmcut.export.qualityMedium'), value: 'medium', crf: 22 },
-  { label: t('tmcut.export.qualityHigh'), value: 'high', crf: 18 }
-])
-
-const encoderCards = computed(() => [
-  { value: 'libx264', label: t('tmcut.export.encoderCpu'), icon: 'i-lucide-cpu' },
-  { value: 'h264_nvenc', label: t('tmcut.export.encoderGpu'), icon: 'i-lucide-zap' }
+const formatOptions = computed(() => [
+  { value: 'mp4-h264', label: t('tmcut.export.formatMp4H264') },
+  { value: 'mp4-h265', label: t('tmcut.export.formatMp4H265') },
+  { value: 'mov-prores', label: t('tmcut.export.formatMovProres') },
+  { value: 'webm-vp9', label: t('tmcut.export.formatWebmVp9') }
 ])
 
 const modeTabs = computed(() => [
@@ -260,12 +381,6 @@ const fpsOptions = computed(() => {
 const fpsValue = computed(() => String(effectiveFps.value))
 
 // ---- Social presets (roadmap R8) ----
-// Quick resolution+fps targets — only what the pipeline can REALLY
-// produce: output resolution is canvas × outScale (the compiler's
-// scale= filter scales, it never reframes), so a preset applies only
-// when the canvas aspect matches the target within the ±2px rounding
-// the compiler applies. Mismatched chips stay disabled with the exact
-// reason instead of silently letterboxing/distorting the video.
 type SocialPreset = { id: string, labelKey: string, w: number, h: number, ratio: string, fps: number }
 
 const socialPresets: SocialPreset[] = [
@@ -277,17 +392,12 @@ const socialPresets: SocialPreset[] = [
 function presetFit(p: SocialPreset): boolean {
   if (!canvasW.value || !canvasH.value) return false
   const out = scaledSize(p.w / canvasW.value)
-  // The compiler forces EVEN output dimensions, so a chip claiming
-  // 1080×1920 must land on it exactly — a "close enough" 1080×1918
-  // would be a 2px lie in the label.
   return out.w === p.w && out.h === p.h
 }
 
 function applyPreset(p: SocialPreset) {
   if (!presetFit(p)) return
   outScale.value = p.w / canvasW.value
-  // Keep "follow canvas" when the target already equals it — the
-  // selector then keeps showing the honest canvas label.
   fps.value = p.fps === canvasFps.value ? 0 : p.fps
 }
 
@@ -297,15 +407,6 @@ function presetActive(p: SocialPreset): boolean {
     && effectiveFps.value === p.fps
 }
 
-const hwInfo = computed(() => ({
-  label: encoder.value === 'h264_nvenc'
-    ? t('tmcut.export.encoderGpu')
-    : t('tmcut.export.encoderCpu'),
-  desc: encoder.value === 'h264_nvenc'
-    ? t('tmcut.export.hwGpuDesc')
-    : t('tmcut.export.hwCpuDesc')
-}))
-
 // ---- Current task / progress ----
 const activeTask = computed(() => taskManager.taskList.value[0])
 
@@ -313,7 +414,6 @@ const progressPercent = computed(() => activeTask.value?.progress ?? 0)
 
 const exportSpeed = computed(() => (activeTask.value?.speed ? `${activeTask.value.speed}` : ''))
 
-// Remaining time from the encoder speed reported by the ffmpeg task
 const etaText = computed(() => {
   if (!isExporting.value) return ''
   const speed = parseFloat(String(activeTask.value?.speed ?? ''))
@@ -324,17 +424,18 @@ const etaText = computed(() => {
 
 onMounted(() => {
   taskManager.setupListeners()
+  detectHardware()
 })
 
 onUnmounted(() => {
   stopWatching()
 })
 
-// Initialize default output path when opened
 watch(open, (isOpen) => {
   if (isOpen) {
     exportDone.value = false
     exportError.value = ''
+    detectHardware()
     if (!outputPath.value) {
       const sanitizedName = (currentProject.value?.name || 'TMCut_Video').replace(/[/\\:*?"<>|]/g, '_')
       outputPath.value = `D:/${sanitizedName}.${ext.value}`
@@ -344,7 +445,6 @@ watch(open, (isOpen) => {
   }
 })
 
-// Watch for task completion
 watch(
   () => activeTask.value?.status,
   (status) => {
@@ -353,6 +453,9 @@ watch(
         isExporting.value = false
         exportDone.value = true
         toast.add({ title: t('tmcut.export.success'), color: 'success' })
+        if (autoPreview.value) {
+          previewModalOpen.value = true
+        }
       } else if (status === 'failed') {
         isExporting.value = false
         exportError.value = activeTask.value?.error || t('tmcut.export.errorDesc')
@@ -373,15 +476,29 @@ async function startExport() {
     return
   }
 
+  // Rotated text needs center alignment (roadmap R12)
+  const rotatedConflict = (currentProject.value.timeline?.tracks ?? []).some(
+    track => track.type === 'text'
+      && (track.items ?? []).some(item => (item.rotation || 0) !== 0 && (item.align || 'center') !== 'center')
+  )
+  if (rotatedConflict) {
+    toast.add({
+      title: t('tmcut.export.rotationConflict'),
+      description: t('tmcut.export.rotationConflictDesc'),
+      color: 'warning'
+    })
+    return
+  }
+
   isExporting.value = true
   exportDone.value = false
   exportError.value = ''
 
   try {
-    const qualityItem = qualityOptions.value.find(q => q.value === quality.value)
     const compileResult = compileTimelineToFfmpeg(currentProject.value, outputPath.value, {
-      encoder: encoder.value,
-      crf: qualityItem?.crf || 22,
+      encoder: activeEncoder.value,
+      bitrate: effectiveBitrateMbps.value,
+      crf: 22,
       mode: mode.value,
       range: activeRange.value,
       outScale: outScale.value,
@@ -490,41 +607,43 @@ function previewResultDirectly() {
             </div>
             <div class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
               <UIcon name="i-lucide-folder-open" class="size-4 text-neutral-500 shrink-0" />
-              <BaseFilePicker
-                v-model="outputPath"
-                mode="save"
-                size="sm"
-                readonly
-                class="flex-1 min-w-0"
-                :placeholder="t('tmcut.export.outputPath')"
-                :filters="saveFilters"
-                :title="t('tmcut.export.outputPath')"
-              />
+              <span class="font-mono text-xs text-neutral-400 truncate flex-1 min-w-0" :title="dirName">{{ dirName || 'D:/' }}</span>
+              <UButton
+                size="xs"
+                variant="soft"
+                color="neutral"
+                class="shrink-0"
+                :title="t('tmcut.export.browseFolder')"
+                @click="pickDestinationFolder"
+              >
+                {{ t('tmcut.export.browseFolder') }}
+              </UButton>
             </div>
           </div>
 
           <!-- Watch folder -->
-          <label class="flex items-center gap-2.5 cursor-pointer select-none">
-            <UCheckbox v-model="watchFolder" :disabled="isExporting" size="sm" />
-            <UIcon name="i-lucide-folder-eye" class="size-3.5 text-primary" />
-            <span class="text-xs text-neutral-300 font-medium">
-              {{ t('tmcut.export.watchFolder') }} · {{ t('tmcut.export.watchFolderHint') }}
-            </span>
-          </label>
+          <div class="flex items-center justify-between pt-0.5">
+            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+              <UCheckbox v-model="watchFolder" :disabled="isExporting" size="sm" />
+              <UIcon name="i-lucide-folder-eye" class="size-3.5 text-primary" />
+              <span class="text-xs text-neutral-300 font-medium">
+                {{ t('tmcut.export.watchFolder') }} · {{ t('tmcut.export.watchFolderHint') }}
+              </span>
+            </label>
+            <span class="font-mono text-[10px] text-primary/80 bg-neutral-800 px-2 py-0.5 rounded">media://watch-sync</span>
+          </div>
 
-          <!-- Honest badge (roadmap B3): transitions blend in the editor
-               preview, but export blends them only once the xfade render
-               lands — until then these points export as hard cuts. -->
+          <!-- Transitions confirmation badge (Roadmap R3) -->
           <div
             v-if="timelineTransitionCount > 0 && mode !== 'audio'"
-            class="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+            class="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2"
           >
-            <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400 shrink-0 mt-0.5" />
+            <UIcon name="i-lucide-sparkles" class="size-4 text-primary shrink-0 mt-0.5" />
             <div class="flex flex-col gap-0.5 min-w-0">
-              <span class="text-xs font-medium text-amber-300">
+              <span class="text-xs font-medium text-primary">
                 {{ t('tmcut.export.transitionsTitle', { n: timelineTransitionCount }) }}
               </span>
-              <span class="text-[11px] leading-snug text-amber-200/70">
+              <span class="text-[11px] leading-snug text-neutral-300">
                 {{ t('tmcut.export.transitionsDesc') }}
               </span>
             </div>
@@ -536,7 +655,7 @@ function previewResultDirectly() {
           <!-- LEFT: poster + specs + range + hardware -->
           <div class="lg:col-span-5 p-5 flex flex-col gap-4 bg-neutral-950/60 lg:border-r border-neutral-800">
             <!-- Poster preview -->
-            <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800">
+            <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800 group">
               <img
                 v-if="posterUrl"
                 :src="posterUrl"
@@ -655,11 +774,7 @@ function previewResultDirectly() {
 
             <!-- VIDEO settings -->
             <template v-if="mode === 'video'">
-              <!-- Social presets (roadmap R8): one-click resolution+fps
-                   targets the pipeline truly supports — disabled (with
-                   the needed canvas ratio as the reason) when the
-                   canvas aspect differs, because the compiler scales
-                   and never reframes. -->
+              <!-- Social presets -->
               <div class="flex flex-col gap-1.5">
                 <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</label>
                 <div class="grid grid-cols-3 gap-1.5">
@@ -702,13 +817,13 @@ function previewResultDirectly() {
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
                     @click="outScale = s"
                   >
-                    <span class="block text-xs">{{ s }}×</span>
+                    <span class="block text-xs font-semibold">{{ s }}×</span>
                     <span class="block text-[9px] opacity-70 font-mono">{{ scaledSize(s).w }}×{{ scaledSize(s).h }}</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Frame rate + quality -->
+              <!-- Frame rate & Format & Codec side-by-side -->
               <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1.5">
                   <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.fpsLabel') }}</label>
@@ -721,56 +836,209 @@ function previewResultDirectly() {
                   />
                 </div>
                 <div class="flex flex-col gap-1.5">
-                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.quality') }}</label>
-                  <div class="grid grid-cols-3 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
-                    <button
-                      v-for="q in qualityOptions"
-                      :key="q.value"
-                      type="button"
-                      class="py-1.5 rounded text-[10px] transition-colors"
-                      :class="quality === q.value
-                        ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                        : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
-                      @click="quality = q.value"
-                    >
-                      {{ q.label }}
-                    </button>
-                  </div>
+                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.formatLabel') }}</label>
+                  <USelect
+                    v-model="videoFormat"
+                    :items="formatOptions"
+                    size="sm"
+                    class="w-full"
+                  />
                 </div>
               </div>
 
-              <!-- Encoder profile cards -->
+              <!-- Bitrate Options -->
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.encoderLabel') }}</label>
-                <div class="grid grid-cols-2 gap-1.5">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.bitrateLabel') }}</label>
+                  <span class="font-mono text-[11px] text-primary">{{ effectiveBitrateMbps }} Mbps</span>
+                </div>
+                <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
                   <button
-                    v-for="card in encoderCards"
-                    :key="card.value"
                     type="button"
-                    class="p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-colors text-left"
-                    :class="encoder === card.value
-                      ? 'bg-neutral-800 border-primary/40'
-                      : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700'"
-                    @click="encoder = card.value"
+                    class="py-1.5 rounded text-[11px] text-center transition-colors"
+                    :class="bitratePreset === 'standard'
+                      ? 'bg-primary/15 text-primary font-semibold shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                    @click="bitratePreset = 'standard'"
                   >
-                    <span class="flex items-center gap-2 min-w-0">
-                      <UIcon :name="card.icon" class="size-4 shrink-0" :class="encoder === card.value ? 'text-primary' : 'text-neutral-500'" />
-                      <span class="text-[11px] truncate" :class="encoder === card.value ? 'text-neutral-100' : 'text-neutral-400'">
-                        {{ card.label }}
-                      </span>
-                    </span>
-                    <span
-                      v-if="encoder === card.value"
-                      class="text-[10px] text-primary shrink-0"
-                    >●</span>
+                    {{ t('tmcut.export.bitrateStandard') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="py-1.5 rounded text-[11px] text-center transition-colors"
+                    :class="bitratePreset === 'recommended'
+                      ? 'bg-primary/15 text-primary font-semibold shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                    @click="bitratePreset = 'recommended'"
+                  >
+                    {{ t('tmcut.export.bitrateRecommended') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="py-1.5 rounded text-[11px] text-center transition-colors"
+                    :class="bitratePreset === 'high'
+                      ? 'bg-primary/15 text-primary font-semibold shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                    @click="bitratePreset = 'high'"
+                  >
+                    {{ t('tmcut.export.bitrateHigh') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="py-1.5 rounded text-[11px] text-center transition-colors"
+                    :class="bitratePreset === 'custom'
+                      ? 'bg-primary/15 text-primary font-semibold shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                    @click="bitratePreset = 'custom'"
+                  >
+                    {{ t('tmcut.export.bitrateCustom', { mbps: customBitrate }) }}
                   </button>
                 </div>
+                <div v-if="bitratePreset === 'custom'" class="flex items-center gap-2 pt-1">
+                  <span class="text-xs text-neutral-400">{{ t('tmcut.export.bitrateCustomLabel') }}:</span>
+                  <UInput
+                    v-model.number="customBitrate"
+                    type="number"
+                    size="xs"
+                    min="1"
+                    max="200"
+                    class="w-24 font-mono"
+                  />
+                  <span class="text-xs text-neutral-400 font-mono">Mbps</span>
+                </div>
               </div>
 
-              <!-- Color LUT (roadmap E-4): export-only .cube, graded onto
-                   the footage before drawtext. Desktop only — the picker
-                   needs the Electron dialog (and a web session cannot
-                   export at all, so the control would be dead). -->
+              <!-- Hardware Acceleration Engine (§10, §13) -->
+              <div class="flex flex-col gap-2.5 p-3.5 bg-neutral-900 rounded-lg border border-neutral-800">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-6 h-6 rounded bg-primary/15 flex items-center justify-center text-primary">
+                      <UIcon name="i-lucide-zap" class="size-3.5" />
+                    </div>
+                    <div>
+                      <div class="text-xs font-medium text-neutral-200">
+                        {{ t('tmcut.export.hwToggle') }}
+                      </div>
+                      <div class="text-[10px] text-neutral-500">
+                        {{ t('tmcut.export.hwToggleDesc') }}
+                      </div>
+                    </div>
+                  </div>
+                  <USwitch v-model="hwEngineEnabled" size="sm" />
+                </div>
+
+                <div class="flex flex-col gap-1.5 pt-1">
+                  <label class="text-[11px] text-neutral-400 font-medium">{{ t('tmcut.export.hwEncoderProfiles') }}:</label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <!-- NVENC Profile -->
+                    <div
+                      class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
+                      :class="activeEncoder.includes('nvenc')
+                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        : gpuSupport.nvenc
+                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                      @click="selectEncoderProfile('nvenc')"
+                    >
+                      <div class="flex items-center gap-1.5 truncate">
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
+                          :class="activeEncoder.includes('nvenc') ? 'bg-primary animate-pulse' : gpuSupport.nvenc ? 'bg-emerald-400' : 'bg-neutral-600'"
+                        />
+                        <span class="font-medium truncate">NVIDIA NVENC</span>
+                      </div>
+                      <span
+                        class="text-[10px] shrink-0 font-medium"
+                        :class="activeEncoder.includes('nvenc') ? 'text-primary' : gpuSupport.nvenc ? 'text-neutral-400' : 'text-neutral-600'"
+                      >
+                        {{ activeEncoder.includes('nvenc') ? t('tmcut.export.hwActive') : gpuSupport.nvenc ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
+                      </span>
+                    </div>
+
+                    <!-- Intel QSV Profile -->
+                    <div
+                      class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
+                      :class="activeEncoder.includes('qsv')
+                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        : gpuSupport.qsv
+                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                      @click="selectEncoderProfile('qsv')"
+                    >
+                      <div class="flex items-center gap-1.5 truncate">
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
+                          :class="activeEncoder.includes('qsv') ? 'bg-primary animate-pulse' : gpuSupport.qsv ? 'bg-emerald-400' : 'bg-neutral-600'"
+                        />
+                        <span class="font-medium truncate">Intel QuickSync (QSV)</span>
+                      </div>
+                      <span
+                        class="text-[10px] shrink-0 font-medium"
+                        :class="activeEncoder.includes('qsv') ? 'text-primary' : gpuSupport.qsv ? 'text-neutral-400' : 'text-neutral-600'"
+                      >
+                        {{ activeEncoder.includes('qsv') ? t('tmcut.export.hwActive') : gpuSupport.qsv ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
+                      </span>
+                    </div>
+
+                    <!-- AMD AMF Profile -->
+                    <div
+                      class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
+                      :class="activeEncoder.includes('amf')
+                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        : gpuSupport.amf
+                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                      @click="selectEncoderProfile('amf')"
+                    >
+                      <div class="flex items-center gap-1.5 truncate">
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
+                          :class="activeEncoder.includes('amf') ? 'bg-primary animate-pulse' : gpuSupport.amf ? 'bg-emerald-400' : 'bg-neutral-600'"
+                        />
+                        <span class="font-medium truncate">AMD AMF</span>
+                      </div>
+                      <span
+                        class="text-[10px] shrink-0 font-medium"
+                        :class="activeEncoder.includes('amf') ? 'text-primary' : gpuSupport.amf ? 'text-neutral-400' : 'text-neutral-600'"
+                      >
+                        {{ activeEncoder.includes('amf') ? t('tmcut.export.hwActive') : gpuSupport.amf ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
+                      </span>
+                    </div>
+
+                    <!-- CPU Profile -->
+                    <div
+                      class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
+                      :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf')
+                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        : 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'"
+                      @click="selectEncoderProfile('cpu')"
+                    >
+                      <div class="flex items-center gap-1.5 truncate">
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
+                          :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? 'bg-primary' : 'bg-neutral-500'"
+                        />
+                        <span class="font-medium truncate">CPU / Software Engine</span>
+                      </div>
+                      <span
+                        class="text-[10px] shrink-0 font-medium"
+                        :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? 'text-primary' : 'text-neutral-400'"
+                      >
+                        {{ !activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? t('tmcut.export.hwActive') : t('tmcut.export.hwReady') }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Auto-preview via media:// -->
+                <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
+                  <UCheckbox v-model="autoPreview" size="xs" />
+                  <UIcon name="i-lucide-play-square" class="size-3.5 text-primary shrink-0" />
+                  <span class="text-[11px] text-neutral-300">{{ t('tmcut.export.autoPreview') }}</span>
+                </label>
+              </div>
+
+              <!-- Color LUT (roadmap E-4) -->
               <div v-if="isDesktop" class="flex flex-col gap-1.5">
                 <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</label>
                 <div class="flex items-center gap-1.5">
@@ -859,9 +1127,7 @@ function previewResultDirectly() {
               </div>
             </template>
 
-            <!-- Noise reduction (roadmap D-3): export-only, ONE global
-                 afftdn on the final audio bus. Hidden for GIF (the
-                 compiler maps it for video/audio modes only). -->
+            <!-- Noise reduction (roadmap D-3) -->
             <label v-if="mode !== 'gif'" class="flex items-center gap-2.5 cursor-pointer select-none">
               <UCheckbox v-model="denoise" :disabled="isExporting" size="sm" />
               <UIcon name="i-lucide-waves" class="size-3.5 text-primary" />
@@ -944,6 +1210,7 @@ function previewResultDirectly() {
               </span>
               <span class="hidden sm:block w-1 h-1 rounded-full bg-neutral-700" />
               <span class="hidden sm:flex items-center gap-1.5 text-xs text-neutral-400">
+                <UIcon name="i-lucide-clock" class="size-3.5 text-primary" />
                 {{ t('tmcut.export.specDuration') }}:
                 <strong class="font-mono text-neutral-100">{{ formatTimecode(outputDuration) }}</strong>
               </span>

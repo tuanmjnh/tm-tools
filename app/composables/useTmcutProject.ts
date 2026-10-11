@@ -40,6 +40,14 @@ export interface TmcutTimelineItem {
       fontFile is the SAME face's file so drawtext fontfile= exports it. */
   fontFamily?: string
   fontFile?: string
+  /** Text style (roadmap C-2): bold/italic pick the matching face file
+      (export draws the real glyphs — drawtext has no faux bold); align
+      anchors the block (default = centered, legacy export behavior). */
+  bold?: boolean
+  italic?: boolean
+  align?: 'left' | 'center' | 'right'
+  shadow?: boolean
+  stroke?: boolean
   in: number
   out: number
   offset: number

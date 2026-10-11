@@ -1,6 +1,7 @@
 import type { TmcutProject, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '~/utils/tmcut/canvas'
-import { volumeExpr } from '@tmcut-core'
+import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
+import { volumeExpr, keyframeExpr } from '@tmcut-core'
 
 export type TmcutCompileMode = 'video' | 'audio' | 'gif'
 
@@ -81,6 +82,27 @@ function fadeFilter(clip: {
 }
 
 /**
+ * Maps a TMCut transition type into an FFmpeg xfade transition name (roadmap R3, core C5).
+ */
+function mapXfadeTransition(type: string | undefined): string {
+  switch (type) {
+    case 'dissolve':
+      return 'dissolve'
+    case 'wipe-left':
+      return 'wipeleft'
+    case 'wipe-right':
+      return 'wiperight'
+    case 'slide-left':
+      return 'slideleft'
+    case 'zoom-in':
+      return 'zoomin'
+    case 'fade':
+    default:
+      return 'fade'
+  }
+}
+
+/**
  * lut3d file argument (roadmap E-4). Two parse levels, verified against
  * ffmpeg: the filtergraph scan honors single quotes only while SPLITTING
  * (protecting , ; [ ] and spaces from the chain split) and then STRIPS
@@ -103,7 +125,12 @@ function lutFileFilter(filePath: string): string {
 }
 
 /** Structural fields a text overlay reads — shared by both compile paths. */
-type TextOverlayClip = Pick<TmcutTimelineItem, 'text' | 'fontSize' | 'color' | 'x' | 'y' | 'offset' | 'in' | 'out' | 'speed' | 'fontFile'>
+type TextOverlayClip = Pick<TmcutTimelineItem, 'text' | 'fontSize' | 'color' | 'x' | 'y' | 'offset' | 'in' | 'out' | 'speed' | 'fontFile' | 'bold' | 'italic' | 'align' | 'shadow' | 'stroke' | 'opacity' | 'rotation' | 'keyframes'>
+
+/** Decimal alpha for opacity<100 — short string, no float noise (11/100 → "0.11"). */
+function opacityAlpha(opacityPct: number): string {
+  return String(Number((Math.max(0, opacityPct) / 100).toFixed(4)))
+}
 
 /**
  * drawtext filter for ONE text clip (roadmap C-1): the color-source path
@@ -120,8 +147,101 @@ function textOverlayFilter(clip: TextOverlayClip): string {
   const yOffset = clip.y || 0
   const tStart = clip.offset || 0
   const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
+  // bold/italic never reach this string: the Inspector re-resolves
+  // fontFile to the REAL bold/italic face when those flags toggle —
+  // drawtext rasterizes one file and has no faux bold.
   const fontFileArg = clip.fontFile ? `fontfile='${filterPathArg(clip.fontFile)}':` : ''
-  return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2+(${xOffset}):y=(h-text_h)/2+(${yOffset}):enable='between(t,${tStart},${tEnd})'`
+
+  // Keyframes (roadmap R2, core C3): evaluate x, y, and opacity in clip-local time.
+  const localT = tStart > 0 ? `(t-${tStart})` : 't'
+  const kfX = keyframeExpr(clip, 'x', localT)
+  const kfY = keyframeExpr(clip, 'y', localT)
+  const kfOpacity = keyframeExpr(clip, 'opacity', localT)
+
+  const xVal = kfX ? `(${kfX})` : `(${xOffset})`
+  const yVal = kfY ? `(${kfY})` : `(${yOffset})`
+  // Align (roadmap C-2): the block's edge lands where the preview
+  // anchors it; 'center' reproduces the legacy expression byte-for-byte.
+  const xExpr = clip.align === 'left'
+    ? `0+${xVal}`
+    : clip.align === 'right'
+      ? `w-text_w-${xVal}`
+      : `(w-text_w)/2+${xVal}`
+  // Shadow/stroke (C-2): appended AFTER the legacy options so unset
+  // flags leave the chain byte-identical; pixel numbers come from the
+  // shared metrics (textStyle.ts) the preview also uses. Opacity (R11/R2)
+  // fades the WHOLE glyph — fill, shadow and border share the color
+  // spec's @alpha suffix, matching the preview's element opacity.
+  const opacityPct = clip.opacity ?? 100
+  let alphaSuffix = ''
+  let alphaArg = ''
+  if (kfOpacity) {
+    alphaArg = `:alpha='(${kfOpacity})/100'`
+  } else if (opacityPct < 100) {
+    alphaSuffix = `@${opacityAlpha(opacityPct)}`
+  }
+  const fontColorArg = `${fontColor}${alphaSuffix}`
+  const styleArgs = [
+    clip.shadow ? `shadowx=${textShadowOffset(fontSize)}:shadowy=${textShadowOffset(fontSize)}:shadowcolor=black${alphaSuffix}` : '',
+    clip.stroke ? `borderw=${textStrokeWidth(fontSize)}:bordercolor=black${alphaSuffix}` : ''
+  ].filter(Boolean).join(':')
+  return `drawtext=${fontFileArg}text='${escaped}':fontsize=${fontSize}:fontcolor=${fontColorArg}:x=${xExpr}:y=(h-text_h)/2+${yVal}:enable='between(t,${tStart},${tEnd})'${alphaArg}${styleArgs ? `:${styleArgs}` : ''}`
+}
+
+/**
+ * One text clip's filter chains on top of `bus` (roadmap R12).
+ *
+ * drawtext has no angle: rotation draws the text on a TRANSPARENT
+ * full-canvas layer (`color=@0.0` + `format=rgba`), spins the whole
+ * layer with `rotate` (`fillcolor=none` keeps the corners clear), then
+ * composites it with a CONSTANT counter-translation T = d − R(d) so the
+ * block appears to spin around its own center — the exact semantics of
+ * the preview's transform-origin. Verified against the bundled ffmpeg:
+ * a positive rotate angle is CLOCKWISE (same convention as CSS), and
+ * R maps image coords (y down) as (dx·cos − dy·sin, dx·sin + dy·cos).
+ *
+ * Clips without rotation keep the single-filter chain byte-for-byte.
+ */
+function textOverlayChains(
+  bus: string,
+  clip: TextOverlayClip,
+  index: number,
+  ctx: { canvasW: number, canvasH: number, fps: number }
+): { chains: string[], out: string } {
+  const out = `[v_txt_${index}]`
+  const rotation = clip.rotation || 0
+  if (!rotation) return { chains: [`${bus}${textOverlayFilter(clip)}${out}`], out }
+  // `rotate` spins around the CANVAS center; for the block to appear to
+  // spin around its own anchor, drawtext centers it at
+  // canvas-center+offset and the overlay shifts by the difference.
+  // Center align only: left/right anchors would need text_w, which
+  // cannot cross the filtergraph boundary — fail loudly instead of
+  // exporting a different picture than the preview (the R48 rule). The
+  // export modal catches this with an i18n'd toast first.
+  if ((clip.align || 'center') !== 'center') {
+    throw new Error('Rotated text export needs center alignment — set the clip align to center, or clear its rotation')
+  }
+  const xOffset = clip.x || 0
+  const yOffset = clip.y || 0
+  const tStart = clip.offset || 0
+  const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
+  const rad = rotation * Math.PI / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const rx = xOffset * cos - yOffset * sin
+  const ry = xOffset * sin + yOffset * cos
+  const ovX = Number((xOffset - rx).toFixed(3))
+  const ovY = Number((yOffset - ry).toFixed(3))
+  const layer = `[v_txtl_${index}]`
+  const rotated = `[v_txtr_${index}]`
+  return {
+    chains: [
+      `color=c=black@0.0:s=${ctx.canvasW}x${ctx.canvasH}:r=${ctx.fps}:d=${(tEnd + 1).toFixed(3)},format=rgba,${textOverlayFilter(clip)}${layer}`,
+      `${layer}rotate=a=${rad.toFixed(6)}:fillcolor=none${rotated}`,
+      `${bus}${rotated}overlay=x=${ovX}:y=${ovY}${out}`
+    ],
+    out
+  }
 }
 
 /**
@@ -132,8 +252,8 @@ function textOverlayFilter(clip: TextOverlayClip): string {
  */
 function compileAudioOnly(
   outputPath: string,
-  videoClips: Array<{ src?: string, in: number, out: number, volume?: number, speed?: number, reverse?: boolean, fade?: { in: number, out: number } }>,
-  audioClips: Array<{ src?: string, in: number, out: number, offset?: number, volume?: number, speed?: number, reverse?: boolean, fade?: { in: number, out: number } }>,
+  videoClips: TmcutTimelineItem[],
+  audioClips: TmcutTimelineItem[],
   options: CompileOptions,
   outputDuration: number,
   range: TmcutCompileRange | null
@@ -154,23 +274,57 @@ function compileAudioOnly(
   for (const clip of videoClips) {
     args.push('-i', clip.src!)
     const out = `[aud_${inputIdx}]`
-    const vol = (clip.volume ?? 100) / 100
+    const kfVol = keyframeExpr(clip, 'volume', 't')
+    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
     const speed = clip.speed || 1
     const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
     const aReverse = clip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},aresample=48000,volume=${vol}${fadeFilter(clip)}${out}`
+      `[${inputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},aresample=48000,${volFilter}${fadeFilter(clip)}${out}`
     )
     trackAuds.push(out)
     inputIdx++
   }
 
   let current = ''
-  if (trackAuds.length > 1) {
-    chains.push(`${trackAuds.join('')}concat=n=${trackAuds.length}:v=0:a=1[a_cat]`)
-    current = '[a_cat]'
-  } else if (trackAuds.length === 1) {
-    current = trackAuds[0]!
+  if (trackAuds.length > 0) {
+    const hasTransitions = videoClips.some((c, i) => i > 0 && (c.transitionIn?.duration ?? 0) > 0)
+    if (!hasTransitions || trackAuds.length === 1) {
+      if (trackAuds.length > 1) {
+        chains.push(`${trackAuds.join('')}concat=n=${trackAuds.length}:v=0:a=1[a_cat]`)
+        current = '[a_cat]'
+      } else {
+        current = trackAuds[0]!
+      }
+    } else {
+      let currentA = trackAuds[0]!
+      for (let i = 1; i < videoClips.length; i++) {
+        const prevClip = videoClips[i - 1]!
+        const currClip = videoClips[i]!
+        const prevDur = (prevClip.out - prevClip.in) / (prevClip.speed || 1)
+        const currDur = (currClip.out - currClip.in) / (currClip.speed || 1)
+        const ti = currClip.transitionIn
+        const rawDur = ti?.duration ?? 0
+        const transSec = rawDur > 1000 ? rawDur / 120000 : rawDur
+        const prevEnd = (prevClip.offset || 0) + prevDur
+        const isIntact = (rawDur > 0)
+          && Math.abs(prevEnd - ((currClip.offset || 0) + transSec)) < 0.05
+          && transSec <= Math.min(prevDur, currDur)
+
+        const aOut = `[a_cat_${i}]`
+        if (isIntact) {
+          chains.push(
+            `${currentA}${trackAuds[i]}acrossfade=d=${transSec.toFixed(3)}:c1=tri:c2=tri${aOut}`
+          )
+        } else {
+          chains.push(
+            `${currentA}${trackAuds[i]}concat=n=2:v=0:a=1${aOut}`
+          )
+        }
+        currentA = aOut
+      }
+      current = currentA
+    }
   }
 
   // Background audio clips, delayed to their timeline offset (retime
@@ -180,12 +334,13 @@ function compileAudioOnly(
     args.push('-i', aClip.src!)
     const out = `[bgm_${inputIdx}]`
     const delayMs = Math.round((aClip.offset || 0) * 1000)
-    const vol = (aClip.volume ?? 100) / 100
+    const kfVol = keyframeExpr(aClip, 'volume', 't')
+    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(aClip.volume ?? 100) / 100}`
     const speed = aClip.speed || 1
     const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
     const aReverse = aClip.reverse ? 'areverse,' : ''
     chains.push(
-      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,adelay=${delayMs}|${delayMs},volume=${vol}${out}`
+      `[${inputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
     )
     bgmAuds.push(out)
     inputIdx++
@@ -315,9 +470,9 @@ export function compileTimelineToFfmpeg(
     // Apply text overlays if any
     for (let i = 0; i < textClips.length; i++) {
       const textClip = textClips[i]!
-      const nextVideoStream = `[v_txt_${i}]`
-      filterChains.push(`${currentVideoStream}${textOverlayFilter(textClip)}${nextVideoStream}`)
-      currentVideoStream = nextVideoStream
+      const overlaid = textOverlayChains(currentVideoStream, textClip, i, { canvasW, canvasH, fps })
+      for (const chain of overlaid.chains) filterChains.push(chain)
+      currentVideoStream = overlaid.out
     }
   } else {
     // Case 2: Normal project with video clips — add each video input
@@ -347,60 +502,151 @@ export function compileTimelineToFfmpeg(
         rotation: clip.rotation
       })
       const clipDuration = (clip.out - clip.in) / speed
-      // Clip transform (x/y/scale, roadmap R10): non-identity transforms
-      // compose the canvas-sized stream over a solid background so scaled
+      // Clip transform (x/y/scale, roadmap R10, R2 keyframes): non-identity
+      // transforms compose the canvas-sized stream over a solid background so scaled
       // content larger than the canvas (or gaps below 100%) render like the
-      // preview. Identity clips keep the plain chain.
+      // preview. Keyframes on scale/x/y map to dynamic FFmpeg expressions (eval=frame).
+      const kfScale = keyframeExpr(clip, 'scale', 't')
+      const kfX = keyframeExpr(clip, 'x', 't')
+      const kfY = keyframeExpr(clip, 'y', 't')
       const transform = buildFfmpegTransform({
         canvasW,
         canvasH,
         scale: clip.scale,
         x: clip.x,
         y: clip.y,
+        scaleExpr: kfScale,
+        xExpr: kfX,
+        yExpr: kfY,
         fps,
         duration: clipDuration,
         bgColor
       })
+      // Opacity (roadmap R11, R2 keyframes): fades the clip against the canvas
+      // background — preview has always applied it (clipVisual); export
+      // catches up. Dynamic keyframed opacity maps via geq with time variable T;
+      // static opacity uses colorchannelmixer.
+      const kfOpacity = keyframeExpr(clip, 'opacity', 'T')
+      const opacityPct = clip.opacity ?? 100
+      const faded = opacityPct < 100
+      let alphaArg = ''
+      if (kfOpacity) {
+        alphaArg = `,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*((${kfOpacity})/100)'`
+      } else if (faded) {
+        alphaArg = `,format=rgba,colorchannelmixer=aa=${opacityAlpha(opacityPct)}`
+      }
       const vOut = `[v_scaled_${currentInputIdx}]`
       const clipChain = `[${currentInputIdx}:v]trim=start=${clip.in}:end=${clip.out},${setpts}${reverseStep},${fitFilters.join(',')},setsar=1`
       if (transform) {
         const vBg = `[v_bg_${currentInputIdx}]`
         const vFg = `[v_fg_${currentInputIdx}]`
         filterChains.push(`${transform.bg}${vBg}`)
-        filterChains.push(`${clipChain},${transform.tail}${vFg}`)
+        filterChains.push(`${clipChain},${transform.tail}${alphaArg}${vFg}`)
         filterChains.push(`${vBg}${vFg}${transform.overlay}${vOut}`)
+      } else if (faded || kfOpacity) {
+        const vBg = `[v_obg_${currentInputIdx}]`
+        const vFg = `[v_ofg_${currentInputIdx}]`
+        filterChains.push(`color=c=${bgColor}:s=${canvasW}x${canvasH}:r=${fps}:d=${(clipDuration + 2).toFixed(3)}${vBg}`)
+        filterChains.push(`${clipChain}${alphaArg}${vFg}`)
+        filterChains.push(`${vBg}${vFg}overlay=shortest=1${vOut}`)
       } else {
         filterChains.push(`${clipChain}${vOut}`)
       }
       vStreams.push(vOut)
 
-      // Audio stream processing (atrim, reverse, speed retime, volume).
+      // Audio stream processing (atrim, reverse, speed retime, volume/keyframes).
       // ORDER MATTERS (verified against ffmpeg): areverse rebuilds its
       // output at the nominal sample rate, so it must run BEFORE the
       // speed asetpts — the other order silently undoes the retime.
       // Audio must retime exactly like video (roadmap R1) or the concat
       // segments drift out of sync.
       if (hasAudio) {
-        const vol = (clip.volume ?? 100) / 100
+        const kfVol = keyframeExpr(clip, 'volume', 't')
+        const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
         const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
         const aReverse = clip.reverse ? 'areverse,' : ''
         const aTrimmed = `[a_trim_${currentInputIdx}]`
         filterChains.push(
-          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},volume=${vol}${fadeFilter(clip)}${aTrimmed}`
+          `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
         )
         aStreams.push(aTrimmed)
       }
     }
 
-    // Concatenate video clips (GIF output concatenates video only)
-    if (hasAudio) {
-      const concatInputs = vStreams.map((v, i) => `${v}${aStreams[i]}`).join('')
-      filterChains.push(`${concatInputs}concat=n=${vStreams.length}:v=1:a=1[v_concat][a_concat]`)
-      currentAudioStream = '[a_concat]'
+    // Concatenate video clips (roadmap R3: xfade & acrossfade when transitions exist)
+    const hasTransitions = videoClips.some((c, i) => i > 0 && (c.transitionIn?.duration ?? 0) > 0)
+
+    if (!hasTransitions || videoClips.length === 1) {
+      if (hasAudio) {
+        const concatInputs = vStreams.map((v, i) => `${v}${aStreams[i]}`).join('')
+        filterChains.push(`${concatInputs}concat=n=${vStreams.length}:v=1:a=1[v_concat][a_concat]`)
+        currentAudioStream = '[a_concat]'
+      } else {
+        filterChains.push(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[v_concat]`)
+      }
+      currentVideoStream = '[v_concat]'
     } else {
-      filterChains.push(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[v_concat]`)
+      filterChains.push(`${vStreams[0]}settb=1/${fps},fps=${fps}[v_chain_0]`)
+      let currentV = '[v_chain_0]'
+      let currentA = hasAudio ? aStreams[0]! : ''
+      let runningDuration = (videoClips[0]!.out - videoClips[0]!.in) / (videoClips[0]!.speed || 1)
+
+      for (let i = 1; i < videoClips.length; i++) {
+        const prevClip = videoClips[i - 1]!
+        const currClip = videoClips[i]!
+        const prevDur = (prevClip.out - prevClip.in) / (prevClip.speed || 1)
+        const currDur = (currClip.out - currClip.in) / (currClip.speed || 1)
+        const ti = currClip.transitionIn
+        const rawDur = ti?.duration ?? 0
+        const transSec = rawDur > 1000 ? rawDur / 120000 : rawDur
+        const prevEnd = (prevClip.offset || 0) + prevDur
+        const isIntact = (rawDur > 0)
+          && Math.abs(prevEnd - ((currClip.offset || 0) + transSec)) < 0.05
+          && transSec <= Math.min(prevDur, currDur)
+
+        const nextV = `[v_in_${i}]`
+        filterChains.push(`${vStreams[i]}settb=1/${fps},fps=${fps}${nextV}`)
+
+        if (isIntact) {
+          const transType = mapXfadeTransition(ti?.type)
+          const offset = Math.max(0, runningDuration - transSec)
+          const vOut = `[v_chain_${i}]`
+          filterChains.push(
+            `${currentV}${nextV}xfade=transition=${transType}:duration=${transSec.toFixed(3)}:offset=${offset.toFixed(3)},settb=1/${fps},fps=${fps}${vOut}`
+          )
+          currentV = vOut
+
+          if (hasAudio) {
+            const aOut = `[a_chain_${i}]`
+            filterChains.push(
+              `${currentA}${aStreams[i]}acrossfade=d=${transSec.toFixed(3)}:c1=tri:c2=tri${aOut}`
+            )
+            currentA = aOut
+          }
+          runningDuration = runningDuration + currDur - transSec
+        } else {
+          const vOut = `[v_chain_${i}]`
+          filterChains.push(
+            `${currentV}${nextV}concat=n=2:v=1:a=0,settb=1/${fps},fps=${fps}${vOut}`
+          )
+          currentV = vOut
+
+          if (hasAudio) {
+            const aOut = `[a_chain_${i}]`
+            filterChains.push(
+              `${currentA}${aStreams[i]}concat=n=2:v=0:a=1${aOut}`
+            )
+            currentA = aOut
+          }
+          runningDuration = runningDuration + currDur
+        }
+      }
+
+      currentVideoStream = currentV
+      if (hasAudio) {
+        currentAudioStream = currentA
+      }
     }
-    currentVideoStream = '[v_concat]'
 
     // Color LUT (roadmap E-4): grade the FOOTAGE before drawtext so
     // titles/graphics keep their authored colors (grading graphics is a
@@ -409,14 +655,12 @@ export function compileTimelineToFfmpeg(
     if (options.lut3dPath) {
       filterChains.push(`${currentVideoStream}${lutFileFilter(options.lut3dPath)}[v_graded]`)
       currentVideoStream = '[v_graded]'
-    }
-
-    // Apply text overlays if any
+    } // Apply text overlays if any
     for (let i = 0; i < textClips.length; i++) {
       const textClip = textClips[i]!
-      const nextVideoStream = `[v_txt_${i}]`
-      filterChains.push(`${currentVideoStream}${textOverlayFilter(textClip)}${nextVideoStream}`)
-      currentVideoStream = nextVideoStream
+      const overlaid = textOverlayChains(currentVideoStream, textClip, i, { canvasW, canvasH, fps })
+      for (const chain of overlaid.chains) filterChains.push(chain)
+      currentVideoStream = overlaid.out
     }
 
     // Apply background audio clips if any
@@ -428,7 +672,8 @@ export function compileTimelineToFfmpeg(
         const aInputIdx = inputIdx++
         const aProcessed = `[bgm_${i}]`
         const delayMs = Math.round((aClip.offset || 0) * 1000)
-        const vol = (aClip.volume ?? 100) / 100
+        const kfVol = keyframeExpr(aClip, 'volume', 't')
+        const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(aClip.volume ?? 100) / 100}`
         // Retime before positioning: reverse/speed the clip content first,
         // then adelay places the result at its timeline offset (R1). The
         // areverse-before-asetpts order is required — see the clip audio
@@ -438,7 +683,7 @@ export function compileTimelineToFfmpeg(
         const aReverse = aClip.reverse ? 'areverse,' : ''
 
         filterChains.push(
-          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},adelay=${delayMs}|${delayMs},volume=${vol}${aProcessed}`
+          `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${aProcessed}`
         )
         audioMixStreams.push(aProcessed)
       }
@@ -510,17 +755,68 @@ export function compileTimelineToFfmpeg(
   }
 
   const filterComplex = filterChains.join('; ')
+  const enc = options.encoder || 'libx264'
+  const videoCodecArgs: string[] = ['-c:v', enc]
+
+  // Bitrate vs CRF rate control (roadmap R6)
+  const hasBitrate = typeof options.bitrate === 'number' && options.bitrate > 0
+  const bitrateStr = hasBitrate
+    ? (options.bitrate! >= 1000 ? `${options.bitrate}k` : `${options.bitrate}M`)
+    : ''
+
+  if (enc === 'h264_nvenc' || enc === 'hevc_nvenc') {
+    videoCodecArgs.push('-preset', 'p4', '-pix_fmt', 'yuv420p')
+    if (hasBitrate) {
+      videoCodecArgs.push('-b:v', bitrateStr)
+    } else {
+      videoCodecArgs.push('-cq', String(options.crf || 22))
+    }
+  } else if (enc === 'h264_qsv' || enc === 'hevc_qsv') {
+    videoCodecArgs.push('-pix_fmt', 'nv12')
+    if (hasBitrate) {
+      videoCodecArgs.push('-b:v', bitrateStr)
+    } else {
+      videoCodecArgs.push('-global_quality', String(options.crf || 22))
+    }
+  } else if (enc === 'h264_amf' || enc === 'hevc_amf') {
+    videoCodecArgs.push('-pix_fmt', 'yuv420p')
+    if (hasBitrate) {
+      videoCodecArgs.push('-b:v', bitrateStr)
+    } else {
+      videoCodecArgs.push('-rc', 'cqp', '-qp_i', String(options.crf || 22), '-qp_p', String(options.crf || 22))
+    }
+  } else if (enc === 'prores_ks') {
+    videoCodecArgs.push('-profile:v', '3', '-pix_fmt', 'yuv422p10le')
+  } else if (enc === 'libvpx-vp9') {
+    videoCodecArgs.push('-pix_fmt', 'yuv420p')
+    if (hasBitrate) {
+      videoCodecArgs.push('-b:v', bitrateStr)
+    } else {
+      videoCodecArgs.push('-crf', String(options.crf || 22), '-b:v', '0')
+    }
+  } else {
+    // Standard software libx264 / libx265
+    videoCodecArgs.push('-preset', 'fast', '-pix_fmt', 'yuv420p')
+    if (hasBitrate) {
+      videoCodecArgs.push('-b:v', bitrateStr)
+    } else {
+      videoCodecArgs.push('-crf', String(options.crf || 22))
+    }
+  }
+
+  // Audio codec selection
+  const isWebm = outputPath.toLowerCase().endsWith('.webm')
+  const audioCodecArgs = isWebm
+    ? ['-c:a', 'libopus', '-b:a', '128k']
+    : ['-c:a', 'aac', '-b:a', '192k']
+
   args.push(
     '-filter_complex', filterComplex,
     '-map', currentVideoStream,
     '-map', currentAudioStream!,
-    '-c:v', options.encoder || 'libx264',
-    '-pix_fmt', 'yuv420p',
-    '-preset', 'fast',
-    '-crf', String(options.crf || 22),
+    ...videoCodecArgs,
     '-r', String(outFps),
-    '-c:a', 'aac',
-    '-b:a', '192k',
+    ...audioCodecArgs,
     '-y',
     outputPath
   )

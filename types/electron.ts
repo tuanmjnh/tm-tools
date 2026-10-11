@@ -609,6 +609,10 @@ export interface TmcutNamespace {
   statFiles(paths: string[]): Promise<Record<string, TmcutFileStat>>
   extractThumbnail(args: { filePath: string }): Promise<TmcutExtractResult>
   extractFrame(args: { src: string, atSec: number, width?: number }): Promise<TmcutFrameResult>
+  /** Caption audio for Whisper (roadmap C-3): cached 16kHz mono MP3 extracted in main. */
+  extractAudio(args: { filePath: string }): Promise<{ ok: boolean, path?: string, error?: string }>
+  /** Voiceover blob persistence (roadmap D-4): writes into <base>/recordings/, returns the path. */
+  saveRecording(args: { data: Uint8Array, ext?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
   extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>

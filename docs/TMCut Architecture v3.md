@@ -6773,3 +6773,579 @@ round này đóng K6/K7/K8 + trau chuốt help.
   / C-2 (text style) / D-4 (voiceover).
 • Rounds 8–51 (§77–§119): commit theo xác nhận của user.
 ```
+---
+
+## §120 — Round 52 (R52): C-1 · Bảng font thật (app + core bridge fix)
+
+### 120.1 Bối cảnh round trong
+
+- C-1 app đã code & commit ở 30ff072 (không kèm log) — round này audit
+  lại phần merge 66508df (conflict markers bị commit vào history) + chốt
+  nốt lỗ hổng core.
+- Working copy resolve conflict: giữ CẢ `textOverlayFilter` (C-1, HEAD)
+  LẪN `lutFileFilter` (R48, incoming) — gộp chung helper `filterPathArg`
+  (apostrophe reject + `:` → `\:` escape — 2 tầng parse FFmpeg) → 2
+  filter không còn duplicate logic escape.
+- `TmcutInspector.vue` bị IDE formatter reformat (gộp attributes 1 dòng)
+  → 156 lỗi eslint → `--fix` → 0. Không bật format-on-save khác cấu
+  trúc repo.
+
+### 120.2 Pipeline font (app)
+
+```text
+resources/fontmanager.node (font-scanner, Node-API ABI-stable, đã bundle)
+  → controller listSystemFonts() — lazy require, fail → [] (không throw)
+  → preload 'listFonts' (allow-list invoke)
+  → types/electron.ts TmcutFontEntry { family, path, style, weight, italic, monospace }
+  → useTmcutFonts.ts — session single-flight (facesPromise ??=), pickFamilies:
+    1 face/family, faceRank: Regular(0) < non-400(+1) < non-Regular(+2) < italic(+4)
+  → Inspector USelectMenu (v-if fontChoices.length — web không IPC → ẩn,
+    không dead control) · searchable
+  → handleFontUpdate: guard null/'null', lookup fail → no-op,
+    pushHistoryCoalesced(`${id}:font`) + updateClip({ fontFamily, fontFile })
+    — CẶP đi cùng nhau, 1 entry undo → preview/export không thể lệch face
+  → compiler textOverlayFilter: fontfile='filterPathArg(clip.fontFile)'
+```
+
+- Model: `TmcutTimelineItem.fontFamily?/fontFile?` (interface optional —
+  project cũ không có vẫn mở được, migrate lặng lẽ).
+
+### 120.3 Core fix — v1compat passthrough (phát hiện khi audit round-trip)
+
+- **Bug**: `v1ClipToV3` KHÔNG mang `fontFamily`/`fontFile` sang v3 →
+  `splitClip`/`duplicateClips`/`pasteClips` clone v3 clip verbatim
+  (`JSON.parse(JSON.stringify)`) nhưng v3 clip không có field → nửa thứ
+  hai sau split + các bản paste/duplicate mất font **im lặng**
+  (`v3ClipToV1` cũng không emit → v1 item mới ra mặc định).
+- Item hiện hữu sống sót chỉ nhờ `Object.assign` không ghi đè key vắng
+  mặt trong patch — item MỚI hoàn toàn dựa vào passthrough → bug thật.
+- **Fix** (đúng 5 thành phần contribution rules, roadmap §2):
+  - `types/dsl.ts`: `TmcutTimelineClip` +`fontFamily?` +`fontFile?`
+    (comment C-1); `src/index.d.ts` chỉ re-export → không sửa.
+  - `src/v1compat.mjs`: passthrough cả 2 chiều (`v1ClipToV3`/`v3ClipToV1`)
+    + `COMPARE_STRINGS` +`fontFamily`,`fontFile` (font-only edit sync
+    về được; clone giữ face).
+  - `test/v1compat.test.mjs` +3 tests: round-trip 2 chiều · split +
+    duplicate → `syncV3Result` cả 3 item giữ font (stats added 2 /
+    updated 1 — nửa đầu bị split cắt nên updated=1) · font-only change
+    detect + sync-back. → core 154/154.
+
+### 120.4 Verify
+
+```text
+• Core: test 154/154 (+3) · check-boundaries PASS · typecheck:core 0 ·
+  eslint 3 file round này = 0 (13 lỗi pre-existing ở caption.mjs/effects.mjs/
+  index.d.ts — có từ HEAD, không phải round này; không đụng tới)
+• App: typecheck 0 · parity 2533/2533 · eslint 5 file tmcut = 0 (sau --fix)
+• preload.cjs đổi trong working copy (allow-list listFonts) → FULL
+  RESTART Electron (không phải F5)
+```
+
+### 120.5 Roadmap
+
+```text
+• C-1 ✅. Phase C còn: C-2 (text style), C-3 (auto-captions), C-5
+  (text animation — chờ core C3 + render R2).
+• Bảng shortcut master mục 5 cập nhật: K1–K8 chuyển sang bảng "Đã
+  implement" (trùng help modal, §117) — mục "Dự kiến thêm" chỉ còn
+  Alt+A/Alt+T AI.
+• Round kế (R53): theo thứ tự roadmap — C-2 (text style: bold/italic/
+  align/shadow/stroke, preview CSS + drawtext borderw/shadowx) · M.
+• Rounds 8–52 (§77–§120): commit theo xác nhận của user.
+```
+---
+
+## §121 — Round 53 (R53): C-2 · Text style (bold/italic/align/shadow/stroke)
+
+### 121.1 Audit trước khi làm — 2 "lời nói dối" preview lộ ra
+
+- Overlay text trong `TmcutPreviewPlayer` có **`font-bold` + `drop-shadow-md`
+  hardcode** trong class → preview LUÔN bold + có bóng, trong khi export
+  vẽ regular, không bóng. C-2 biến chúng thành flags thật.
+- **Anchor lệch**: preview đặt top-left block tại (x, y)
+  (`absolute left-0 top-0` + translate) trong khi export luôn
+  `x=(w-text_w)/2+xOffset, y=(h-text_h)/2+yOffset` (center + offset) —
+  clip (0,0) lệch nhau thấy rõ. Round này unify theo **export** (nguồn
+  sự thật): preview đặt EDGE trái/giữa/phải theo `align` tại
+  `left:0/50%/100%`, luôn `top:50%` + `translateY(-50%)` →
+  WYSIWYW. Dự kiến di chuyển vị trí preview của clip cũ về đúng nơi
+  export thật sự đặt (fix, không phải regression).
+- `{{ textClip.text }}` collapse `\n` (không có `whitespace-pre-line`)
+  trong khi drawtext xuống dòng thật → thêm `whitespace-pre-line`
+  (C-11 caption nhiều dòng cũng lợi).
+
+### 121.2 Model & bridge (core)
+
+- `TmcutTimelineItem` +`bold? italic? align? shadow? stroke?` ·
+  `TmcutTimelineClip` (core `types/dsl.ts`) tương ứng.
+- `v1compat`: passthrough 5 field cả 2 chiều · `COMPARE_STRINGS`
+  +`align` · **`COMPARE_FLAGS` mới** `['bold','italic','shadow','stroke']`
+  so `(item??false)===(patch??false)` — file project cũ thiếu key không
+  bị rewrite hàng loạt khi mở · +2 tests → core **156/156**.
+
+### 121.3 Font face thật cho bold/italic (export truth)
+
+- drawtext **không có faux bold** (rasterize 1 file) → `useTmcutFonts`
+  giờ giữ **face matrix 4 quadrant/family** (regular/bold/italic/
+  boldItalic — `pickFace` closest-weight-to-400/700, Regular style
+  break tie) · `faceFileFor(choice, bold, italic)` fallback
+  boldItalic→bold→italic→regular · `resolveFace(bold, italic, family?)`
+  — family đang dùng thắng, không thì 'Segoe UI' → family đầu có
+  quadrant · web không IPC → `null` (chỉ preview CSS, web không export).
+- `handleFontUpdate` (C-1) giờ resolve theo flags **hiện tại** ·
+  `handleStyleToggle('bold'|'italic')` ghi `fontFamily+fontFile` trong
+  CÙNG 1 patch (1 entry undo, B8 `pushHistory()` discrete).
+- UI Inspector: row icons `bold`/`italic` (soft/ghost toggle) ·
+  segmented `align-left/center/right` (mặc định center = legacy) ·
+  `moon` shadow · `blend` stroke (tất cả verify trong lucide icons.json).
+
+### 121.4 Compiler + metrics dùng chung
+
+- `app/utils/tmcut/textStyle.ts` (mới): `textStrokeWidth(fs)=max(1,
+  round(fs/18))` · `textShadowOffset(fs)=max(1, round(fs/14))` —
+  preview VÀ import chung (bài học C0: không 2 bản đồng tay).
+- `textOverlayFilter`: `x` theo align — `0+(x)` /
+  `(w-text_w)/2+(x)` (byte-identical legacy) / `w-text_w-(x)` ·
+  shadow `shadowx/shadowy/shadowcolor=black` + stroke
+  `borderw/bordercolor=black` append **SAU** options cũ → flag tắt =
+  chuỗi y hệt trước · bold/italic KHÔNG vào string (fontFile đã trỏ
+  face đúng ở Inspector).
+- Preview CSS tương ứng: `fontWeight:700`, `fontStyle:italic`,
+  `text-shadow` 0-blur (khớp drawtext), `-webkit-text-stroke` +
+  `paintOrder:'stroke fill'`; shadow/stroke color cố định **black**
+  (chọn không picker — phạm vi trung thực, biết trước).
+
+### 121.5 Verify
+
+```text
+• Core: 156/156 (+2) · boundaries PASS · typecheck:core 0 · eslint 3 file core = 0
+• App: typecheck 0 · eslint 6 file chạm = 0 (--fix multiline-ternary;
+  thêm explicit import textStyle.ts — repo không auto-import subdirectory)
+• parity 2540/2540 (+7: bold/italic/alignLeft/alignCenter/alignRight/shadow/stroke)
+• FFmpeg thật (bundled): arialbd + left-align + shadow + border → exit 0 ·
+  ariali + right-align (x=w-text_w-(10)) → exit 0
+• Renderer-only (không đụng main/preload) → F5 (R52 preload vẫn chờ full restart 1 lần)
+```
+
+### 121.6 Giới hạn đã biết (trung thực)
+
+- Family hiếm thiếu bold/italic face → `faceFileFor` fallback về face
+  gần nhất trong CÙNG family; preview browser có thể vẫn hiển thị
+  synthesized bold/italic — export vẽ face thật fallback. (Windows
+  family hầu như luôn đủ 4 quadrant.)
+- Shadow/stroke color cố định black — không picker (scope tối thiểu);
+  thêm màu riêng là round sau nếu bạn muốn.
+- Rotation của text vẫn preview-only (chờ R12) — A8 chỉ expose slider
+  video, giữ nguyên.
+
+### 121.7 Roadmap
+
+```text
+• C-2 ✅. Phase C còn: C-3 (auto-captions — Whisper đã có), C-5
+  (text animation — chờ C3+R2).
+• Round kế (R54): C-3 (auto-captions, M) theo thứ tự.
+• Rounds 8–53 (§77–§121): commit theo xác nhận của user.
+```
+---
+
+## §122 — Round 54 (R54): C-3 · Auto-captions (Whisper → text clips)
+
+### 122.1 Pipeline
+
+```text
+Button "Phụ đề AI" (timeline toolbar, sau dropdown SRT, v-if isDesktop)
+  → clip video dưới playhead (track không hidden, offset ≤ playhead < end)
+    · không có → toast captionNoClip (warning)
+  → IPC tmcut:extractAudio { filePath } — MAIN process:
+    extractCaptionAudio(): getFileStat → cacheKeyFor →
+    cache/caption-<key>.mp3 (runFfmpeg -vn -ac 1 -ar 16000 -b:a 48k,
+    timeout 120s) · file đã có → skip extraction (reuse, keyed như thumbs)
+  → useTmcutAi().transcribe(audioPath, { format: 'verbose_json' })
+    → data.segments [{ start, end, text }] (GIÂY — Whisper native)
+  → cues (trim, drop rỗng) → core cuesToCaptionClips(cues, {
+      fromTicks: clip.offset ticks, rangeTicks: [clip start, clip end] })
+    → split maxChars 42 / maxDur 7s, clamp trong range clip
+    → addClipToTrack('text') per caption
+      (ticksToSec tại v1 boundary — chuẩn bridge)
+  → toast captionCreated { n } · lỗi → toast captionFailed + message
+```
+
+- Busy guard `captionBusy` (loading+disabled trên button) — không re-entry
+  khi Whisper đang chạy (RPM limit của gateway).
+- Clip dưới playhead = clip đang hiện trên preview → phụ đề luôn khớp
+  thứ người dùng thấy · `rangeTicks` chặn cue rò sang clip khác.
+
+### 122.2 Files
+
+- `electron/tools/tmcut.controller.cjs`: `extractCaptionAudio()` + IPC
+  `tmcut:extractAudio` (validate path giống extractFrame).
+- `electron/preload.cjs`: allow-list +'extractAudio'.
+- `types/electron.ts`: `extractAudio()` — `{ ok, path?, error? }`.
+- `TmcutTimeline.vue`: `handleAutoCaptions()` + button `i-lucide-sparkles`
+  (verified) + imports `cuesToCaptionClips/secToTicks/ticksToSec`.
+- i18n +6 → 2546/2546 (captionCreate/captionShort/captionNoClip/
+  captionEmpty/captionCreated/captionFailed).
+
+### 122.3 Verify
+
+```text
+• typecheck app 0 · eslint (timeline, controller, preload, types) 0 ·
+  node --check controller+preload OK · parity 2546/2546
+• FFmpeg thật: testsrc+sine 3s mp4 → -vn 16kHz mono 48k mp3
+  (18KB, duration 3.03s) exit 0 — đúng lệnh controller emit
+• Core không đổi (caption.mjs C11 từ R37) — 156/156 giữ nguyên
+• Whisper thật CHƯA test được: cần API key gateway (Groq) trên máy user
+• Main + preload đổi → FULL RESTART (cộng dồn lệnh R52 preload)
+```
+
+### 122.4 Roadmap
+
+```text
+• C-3 ✅. Phase C còn: C-5 (text animation — chờ core C3 + render R2).
+• Round kế (R55): theo roadmap — S-wins còn lại nếu có, không thì M:
+  D-4 (voiceover) / C-5 blocked → xem §121.7.
+• Rounds 8–54 (§77–§122): commit theo xác nhận của user.
+```
+---
+
+## §123 — Round 55 (R55): D-4 · Ghi voiceover (media bin)
+
+### 123.1 Pipeline
+
+```text
+Mic button (media bin header, cạnh Import — cả web lẫn desktop):
+  → start(): navigator.mediaDevices.getUserMedia({ audio: true })
+    · MediaRecorder mime: 'audio/webm;codecs=opus' → 'audio/webm' →
+      'audio/mp4' (isTypeSupported chain — Chromium luôn có webm/opus)
+    · recorder.start(250) — slice 250ms, crash mất tối đa 250ms
+    · timer 250ms cập nhật elapsedSec → button đỏ hiện mm:ss
+  → stop(): blob → releases mic TƯƠNG ỨNG (indicator tắt ngay)
+    · take < 0.5s → discarded TRƯỚC khi ghi file (không junk)
+    · Desktop: Uint8Array → IPC tmcut:saveRecording →
+      <userData>/tmcut/recordings/voiceover-<ts>.<ext>
+      → importFiles([path]) — reuse nguyên pipeline analysis/
+      waveform/registry
+    · Web: new File([blob], voiceover-<ts>.<ext>) → importWebFiles
+      — session-only (blob: URL, cùng rule G-2)
+  → toast: added / discarded / denied / failed (4 nhánh trung thực)
+  · onUnmounted: stop recorder + releaseMic — rời editor giữa chừng
+    không để mic nóng
+```
+
+- `useTmcutRecorder` (composable mới): state `recording/saving/
+  elapsedSec` + `start()/stop()` trả `{ seconds, added, failed,
+  discarded }`.
+- Controller: `getDirs()` +`recordings` (ensureDirs kèm) ·
+  `saveRecording` IPC — validate Uint8Array/ArrayBuffer, ext whitelist
+  `/^[a-z0-9]{1,8}$/i`, writeFileSync, lỗi trả `{ ok:false, error }`.
+- Preload allow-list +'saveRecording' · `types/electron.ts` +
+  `saveRecording()`.
+- Icon `i-lucide-mic` + `i-lucide-square-stop` (verify trong lucide).
+
+### 123.2 Verify
+
+```text
+• typecheck app 0 · eslint (recorder, editor, controller, preload, types) 0
+  (1 fix: bỏ import type TmcutAsset không dùng) · node --check controller
+  +preload OK · parity 2552/2552 (+6 voiceover*)
+• FFmpeg thật: libopus encode webm OK + ffprobe đọc duration 2.008s —
+  output MediaRecorder (webm/opus) được pipeline phân tích/export đọc
+  trọn vẹn · mic THẬT chờ user test (cần hardware)
+• Core không đổi
+• Main + preload đổi → FULL RESTART (cộng dồn R52 + R54)
+```
+
+### 123.3 Roadmap
+
+```text
+• D-4 ✅. Phase D còn: D-2 (volume keyframes — cần R2), D-5 (TTS —
+  blocked: gateway chưa có endpoint speech).
+• Round kế (R56): ứng viên theo thứ tự — R2 (keyframes → FFmpeg
+  expression, L — mở khóa D-2 + C-5) hoặc S-wins còn lại trong
+  Phases E–G. Chọn khi vào round.
+• Rounds 8–55 (§77–§123): commit theo xác nhận của user.
+```
+---
+
+## §124 — Round 56 (R56): R11 · Opacity → export
+
+### 124.1 Nguyên tắc
+
+- Preview + Inspector + canvas handles đã ghi `opacity` từ lâu (R10
+  ghi chú "preview-only → thêm R11") — round này export CATCH-UP, không
+  đổi model (v1 `opacity` 0–100; v3 `transform.opacity` 0–1 đã bridge
+  từ đầu).
+- **100% = chuỗi byte-identical** (nguyên tắc mọi round R5): mọi nhánh
+  mới chỉ kích hoạt khi `opacity < 100`.
+
+### 124.2 Video — fade against canvas background
+
+- `colorchannelmixer=aa=` + `format=rgba` trên fg, composite trên nền
+  `bgColor` — hai nhánh:
+  - **Có transform** (R10): cặp bg+overlay đã sẵn — fg chain thêm
+    `,format=rgba,colorchannelmixer=aa={o}` sau `transform.tail` là xong.
+  - **Không transform + faded**: build inline ĐÚNG shape đã verify từ
+    §87.2: `color=c={bg}:s=WxH:r={fps}:d={clipDuration+2}` +
+    `overlay=shortest=1` (+2s headroom hấp thụ trim quantization).
+- `opacityAlpha()` helper: `String(Number((o/100).toFixed(4)))` — không
+  float noise (11/100 → "0.11").
+- GIF mode: chain video giống hệt (trước palettegen) ✓ · audio-only:
+  không có video bus → không ảnh hưởng · keyframed opacity vẫn
+  preview-only chờ **R2** (cùng hợp đồng với keyframed volume).
+
+### 124.3 Text — drawtext color-spec @alpha
+
+- `fontcolor={color}@{o}` (color spec FFmpeg hỗ trợ sẵn
+  `white@0.5`, `#ff0000@0.5`) — SHADOW + BORDER cùng nhận suffix
+  (preview opacity là element-wide; stroke/border không fade theo sẽ
+  lệch) → `shadowcolor=black@{o}` / `bordercolor=black@{o}`.
+
+### 124.4 Verify — FFmpeg thật, kiểm chứng cả BLEND MATH
+
+```text
+• T1 fade video (white fg aa=0.5 → nền red, chuỗi y hệt compiler emit):
+  exit 0 · pixel center = fd807f ≈ blend(0.5) của (ff0000,ffffff)
+  = (ff8080) — lệch 2/255 do yuv420p round-trip → aa HOẠT ĐỘNG đúng
+• T2 text fontcolor=white@0.5 trên nền red: exit 0 · pixel = fe7e7e ✓
+• T3 shape có transform (scale tail + aa + overlay x/y): exit 0
+• typecheck app 0 · eslint compiler.ts 0 · parity 2552/2552 (không đổi
+  i18n — không có UI mới) · core không đổi (transform.opacity bridge
+  sẵn) → 156/156 giữ nguyên
+• Renderer-only → F5
+```
+
+### 124.5 Roadmap
+
+```text
+• R11 ✅. Export còn: R2 (keyframes expr, L — mở khóa D-2/C-5), R3
+  (xfade, L), R4 (effects graph, L — mở khóa E-1/E-2/E-3), R6 (export
+  form design #3, M), R7 (queue, M), R9 (refactor render/, L), R12
+  (text rotation, M).
+• Round kế (R57): ứng viên — R12 (text rotation → export, M; preview
+  đã xoay, cần render text ra ảnh + rotate/overlay) hoặc R6 (export
+  form đầy đủ, M). Chọn khi vào round.
+• Rounds 8–56 (§77–§124): commit theo xác nhận của user.
+```
+---
+
+## §125 — Round 57 (R57): R12 · Text rotation → export (A8 unlock)
+
+### 125.1 Bài toán
+
+- drawtext **không có góc quay** — preview đã xoay từ đầu (transform
+  `rotate()` quanh tâm khối chữ, transform-origin 50% 50%). Export phải
+  mô phỏng đúng semantics đó.
+- A8 (R22) ngày đó chỉ expose slider rotation cho **video** vì item
+  này còn treo — round này mở cho text.
+
+### 125.2 Pipeline (`textOverlayChains` trong compiler.ts)
+
+```text
+rotation = 0 → 1 chuỗi drawtext cũ (byte-identical, mọi option C-1/C-2/R11)
+rotation ≠ 0 →
+  color=c=black@0.0:s=WxH:r=fps:d=tEnd+1,format=rgba,drawtext=[...][v_txtl]
+  [v_txtl]rotate=a=rad:fillcolor=none[v_txtr]
+  [bus][v_txtr]overlay=x=T_x:y=T_y[v_txt]
+  với T = d − R(d), d = (xOffset, yOffset)
+```
+
+- **Vì sao T = d − R(d)**: `rotate` quay layer quanh TÂM CANVAS, trong
+  khi preview quay quanh TÂM KHỐI CHỮ (đang ở canvas-center + offset).
+  Hai phép quay cùng góc khác nhau đúng bằng một dịch chuyển — dịch
+  chính xác là T, hằng số tính sẵn bằng JS (không phụ thuộc frame).
+- **Chiều góc — đo, không đoán** (FFmpeg thật, box 8×8 tại TL):
+  `rotate=PI/2` đẩy box sang **TR** → góc dương = **CW = cùng CSS** ·
+  map toạ độ ảnh (y xuống): (dx,dy) → (dx·cos − dy·sin, dx·sin + dy·cos).
+  Test cuối: glyph 'I' + Xoff=8 + xoay 90° + overlay T=(8,−8) → bar
+  nằm x 23..56, y 30..33 — center đúng P(40, 32) từng pixel.
+- **`fillcolor=none`** giữ góc trong suốt · layer trong suốt trước
+  `tStart` (drawtext `enable`) → overlay vô hại · KHÔNG dùng
+  `shortest=1` (sẽ cắt output theo layer).
+- Ghi nhận phụ: `drawbox` KHÔNG ghi alpha trên rgba (test A: 0 pixel
+  opaque) — chuỗi dùng drawtext (đã honor alpha từ R11) nên không vướng.
+
+### 125.3 Ràng buộc trung thực — align center ONLY
+
+- Anchor left/right cần `text_w` — số đo không crosses được ranh giới
+  filtergraph (drawtext biết text_w bên trong, không export ra ngoài).
+  Dự đoán approximate = nói dối → **throw loud** tại compiler:
+  align≠center + rotation≠0 → `Error(...)`.
+- Export modal pre-check TRƯỚC khi compile → toast i18n
+  `rotationConflict` (+Desc) — pattern R48 (UI guard i18n + compiler
+  throw làm backstop).
+
+### 125.4 Verify
+
+```text
+• FFmpeg thật: 3 test hình học (hướng CW xác định bằng pixel scan ·
+  alpha qua rotate (drawbox là thủ phạm, drawtext OK) · counter-translate
+  đúng từng pixel) — exit 0 cả 3
+• typecheck app 0 (rerun sau eslint --fix) · eslint 3 file = 0 ·
+  parity 2554/2554 (+2) · core không đổi 156/156
+• Renderer-only → F5
+```
+
+### 125.5 Roadmap
+
+```text
+• R12 ✅ + A8 hoàn toàn mở (text có slider rotation). Export Phase I
+  còn: R2 (keyframes expr, L), R3 (xfade, L), R4 (effects graph, L),
+  R6 (export form, M), R7 (queue, M), R9 (refactor, L).
+• Round kế (R58): ứng viên — R6 (export form design #3, M) hoặc R2
+  (L, mở khóa D-2 + C-5). Chọn khi vào round.
+• Rounds 8–57 (§77–§125): commit theo xác nhận của user.
+```
+
+---
+
+## §126 — Round 58 (R58): R6 · Export form đầy đủ theo design #3
+
+### 126.1 Mục tiêu & Phạm vi
+
+- Triển khai toàn diện modal xuất video TmcutExportModal.vue theo đúng mockup private/tmcut/3 (DESIGN.md, code.html, screen.png).
+- Tách bạch tên tệp (fileName) và thư mục đích (dirName) với nút duyệt thư mục thật qua pickFolder (useFileSystem / tools:dialog).
+- Lựa chọn Định dạng & Codec video đầy đủ:
+  - mp4-h264: MP4 (H.264 / AVC - Tương thích tối đa).
+  - mp4-h265: MP4 (H.265 / HEVC - Nén cao, 4K sắc nét).
+  - mov-prores: MOV (Apple ProRes 422 HQ).
+  - webm-vp9: WEBM (VP9 Web Engine).
+- Điều khiển Bitrate (VBR):
+  - Tiêu chuẩn (22 Mbps).
+  - Khuyến nghị (32 Mbps).
+  - Chất lượng cao (45 Mbps).
+  - Tuỳ chỉnh (Custom Mbps).
+- Tăng tốc phần cứng GPU Hardware Acceleration Engine (§10, §13):
+  - Toggle bật/tắt tăng tốc phần cứng.
+  - Bảng 4 hồ sơ Render Engine (NVIDIA NVENC, Intel QSV, AMD AMF, CPU Software Engine).
+  - Probing phần cứng thật (detectGpuSupport) với dry-run execution trong electron/tools/ffmpeg.controller.cjs tránh crash trên driver GPU cũ (ví dụ Kepler NVENC API 11.1 < 13.1).
+  - Trạng thái trung thực (Active / Ready / Unavailable), không nút chết.
+- Tự động mở xem trước qua giao thức media:// (autoPreview) ngay khi render hoàn tất.
+- Theo dõi thư mục xuất Watch Folder (media://watch-sync) qua Electron IPC.
+
+### 126.2 Pipeline & Compiler (compiler.ts)
+
+- Hỗ trợ rate control -b:v ${bitrate}M hoặc fallback CRF/CQ theo từng encoder (libx264, libx265, h264_nvenc, hevc_nvenc, h264_qsv, hevc_qsv, h264_amf, prores_ks, libvpx-vp9).
+- Tự động map codec âm thanh thích hợp: libopus 128k cho .webm, aac 192k cho .mp4/.mov.
+- Tính toán dung lượng ước tính chính xác theo bitrate và thời lượng render thực tế.
+
+### 126.3 Verify
+
+```text
+• typecheck app 0 · eslint TmcutExportModal.vue = 0
+• i18n parity 2573/2573 (+18 keys) · 0 duplicate keys
+• detectGpuSupport probe dry-run exit 0, cache memory hợp lệ
+• Renderer-only → F5
+```
+
+### 126.4 Roadmap
+
+```text
+• R6 ✅ (Export form design #3 hoàn tất).
+• Export Phase I còn: R2 (keyframes expr, L), R3 (xfade, L), R4 (effects graph, L), R7 (queue, M), R9 (refactor render/, L).
+• Round kế (R59): ứng viên — R2 (keyframes expr, L) hoặc các round AutoCut (design #4) / Home (design #1).
+```
+
+## §127 — Round 59 (R59): R3 · Transitions render qua xfade + acrossfade
+
+### 127.1 Bối cảnh & Yêu cầu
+
+- **Vấn đề**: Trước R59, compiler chỉ hỗ trợ hard-cut concat (`concat=n=...`). Khi người dùng thêm chuyển cảnh (Transitions: fade, dissolve, wipe, slide, zoom) trên timeline, modal xuất cảnh báo `transitionsWarning` và fallback sang concat phẳng, làm mất hiệu ứng chuyển cảnh trong video xuất ra.
+- **Mục tiêu**:
+  - Hỗ trợ đầy đủ 6 loại chuyển cảnh trong `KNOWN_TRANSITIONS` (`fade`, `dissolve`, `wipe-left` → `wipeleft`, `wipe-right` → `wiperight`, `slide-left` → `slideleft`, `zoom-in` → `zoomin`).
+  - Video render qua filter `xfade` của FFmpeg.
+  - Audio tương ứng render qua filter `acrossfade` (đường cong tam giác `c1=tri:c2=tri`).
+  - Hỗ trợ cả chế độ xuất thông thường (video + audio) lẫn audio-only (`compileAudioOnly`).
+  - Nhận diện chính xác cặp clip có transition hợp lệ và liền nhau (`Math.abs(prevEnd - (currOffset + transSec)) < 0.05`). Cặp clip không có transition hoặc hở thời gian vẫn fallback an toàn sang hard cut `concat`.
+  - Thay thế cảnh báo hạn chế trong `TmcutExportModal.vue` bằng huy hiệu xác nhận tính năng đã hoạt động trung thực (`i-lucide-sparkles`).
+
+### 127.2 Kiến trúc Filtergraph & Timebase Normalization
+
+1. **Mapping Transition**:
+   - `fade` → `fade`
+   - `dissolve` → `dissolve`
+   - `wipe-left` → `wipeleft`
+   - `wipe-right` → `wiperight`
+   - `slide-left` → `slideleft`
+   - `zoom-in` → `zoomin`
+   - Fallback an toàn: `fade`.
+
+2. **Khắc phục lỗi Timebase Mismatch trong FFmpeg**:
+   - Khi kết nối ngõ ra của chuỗi filter hoặc concat vào `xfade`, FFmpeg thường báo lỗi:
+     `First input link main timebase (1/1000000) do not match the corresponding second input link xfade timebase (1/fps)`.
+   - **Giải pháp**: Chuẩn hóa timebase bằng cách thêm `settb=1/${fps},fps=${fps}` cho cả input lẫn ngõ ra trung gian của mỗi bước chuyển cảnh:
+     `[v_in0][v_in1]xfade=transition=${trans}:duration=${dur}:offset=${offset},settb=1/${fps},fps=${fps}[v_chain1]`.
+
+3. **Tính toán Cumulative Offset**:
+   - Trong chuỗi xfade tuần tự, offset phải tính theo thời lượng thực tế của luồng trước đó:
+     `offset = runningDuration - transSec`
+   - Cập nhật thời lượng luồng sau mỗi mắt xích:
+     - Có transition: `runningDuration += currDur - transSec`
+     - Không có transition: `runningDuration += currDur`
+
+### 127.3 Verify & Quality Gate
+
+```text
+• typecheck app 0 errors · eslint 0 errors
+• @tmcut/core: 156/156 tests passing (29 test suites)
+• FFmpeg real dry-run test: cả 6 kiểu transition xfade + acrossfade exit code 0
+• i18n: en.json & vi.json parity 2573/2573 keys, 0 duplicate keys
+• UI: TmcutExportModal hiển thị badge xác nhận chuyển cảnh mượt mà
+```
+
+### 127.4 Roadmap
+
+```text
+• R3 ✅ (Transitions render qua xfade + acrossfade hoàn tất).
+• Export Phase I còn: R2 (keyframes expr, L), R4 (effects graph, L), R7 (queue, M), R9 (refactor render/, L).
+• Round kế (R60): ứng viên — R2 (Keyframes expression render, L) hoặc F-4 (Proxy preview / offline editing).
+```
+
+## §128 — Round 60 (R60): R2 · Keyframes render qua FFmpeg expressions
+
+### 128.1 Bối cảnh & Yêu cầu
+
+- **Vấn đề**: Trước R60, tính năng Keyframe (scale, position x/y, opacity, volume) chỉ hoạt động trên giao diện Preview Canvas (`evalKeyframe` trong `TmcutPreviewPlayer.vue`). Khi xuất video qua FFmpeg, toàn bộ thuộc tính chỉ lấy giá trị tĩnh đầu clip, bỏ qua các điểm biến đổi chuyển động của keyframe, và hiển thị nhãn hạn chế `previewOnlyKeyframes` ("Chỉ xem trước — chưa xuất ra file").
+- **Mục tiêu**:
+  - Biên dịch toàn bộ các điểm keyframe của clip (scale, x, y, opacity, volume) thành biểu thức toán học tương thích bộ phân tích biểu thức của FFmpeg (`eval=frame`).
+  - Hỗ trợ đầy đủ 5 kiểu nội suy gia tốc (Easing) theo chuẩn core C3: `linear`, `ease-in`, `ease-out`, `ease-in-out`, `step`.
+  - Giữ nguyên tính chất kẹp biên (Clamping): trước keyframe đầu lấy giá trị đầu, sau keyframe cuối giữ giá trị cuối.
+  - Tích hợp mượt mà vào cả luồng xuất video đầy đủ lẫn luồng xuất audio-only (`compileAudioOnly`).
+  - Cập nhật huy hiệu Inspector thành trạng thái hoạt động thực tế (`i-lucide-sparkles` + `text-primary`).
+
+### 128.2 Kiến trúc Filtergraph & Biểu thức Toán học
+
+1. **Sinh biểu thức nội suy (`keyframeExpr` trong `tmcut-core/src/keyframes.mjs`)**:
+   - Chuyển đổi mốc thời gian từ ticks (`120000/s`) sang giây (`sa = a.t / 120000`).
+   - Chuẩn hóa tiến độ $u = (t - sa) / span$.
+   - Công thức gia tốc trong FFmpeg:
+     - `linear`: $u$
+     - `ease-in`: $u^2$ $\to$ `((u)*(u))`
+     - `ease-out`: $1 - (1-u)^2$ $\to$ `(1-(1-u)*(1-u))`
+     - `ease-in-out`: `if(lt(u,0.5), 2*u*u, 1 - 2*(1-u)*(1-u))`
+     - `step`: giữ nguyên giá trị trước cho đến biên điểm kế tiếp.
+   - Ghép nối đa phân đoạn qua hàm `if(lt(t, s_b), segExpr, expr)` lồng nhau.
+
+2. **Ánh xạ vào các bộ lọc Video & Audio**:
+   - **Scale động**: `scale=w='trunc(W*(scaleExpr)/100/2)*2':h='trunc(H*(scaleExpr)/100/2)*2':eval=frame`.
+   - **Vị trí X/Y động**: `overlay=x='(W-w)/2+(xExpr)':y='(H-h)/2+(yExpr)':eval=frame:shortest=1`.
+   - **Opacity video động**: Sử dụng `geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*((opacityExpr)/100)'` với biến thời gian `T` (giây), sau đó overlay tự động hòa trộn kênh Alpha lên nền canvas.
+   - **Âm lượng Audio động**: `volume='(volumeExpr)/100':eval=frame`. Hoạt động đồng thời và nối tiếp với bộ lọc mờ dần fade in/out (`fadeFilter`).
+   - **Text Overlays**: `drawtext` tự động tính `x`, `y` và `alpha='(opacityExpr)/100'` theo thời gian clip-local `(t - tStart)`.
+
+### 128.3 Verify & Quality Gate
+
+```text
+• typecheck app 0 errors · eslint 0 errors
+• @tmcut/core: 161/161 tests passing (30 test suites, +5 tests cho keyframeExpr)
+• FFmpeg real dry-run E2E: Toàn bộ chuỗi video scale + position + geq alpha + audio volume + drawtext x/y/alpha exit code 0
+• i18n: en.json & vi.json parity 2573/2573 keys, 0 duplicate keys
+• UI: TmcutInspector chuyển sang huy hiệu active "Keyframes active — renders on export"
+```
+
+### 128.4 Roadmap
+
+```text
+• R2 ✅ (Keyframes render qua FFmpeg expressions hoàn tất).
+• Export Phase I còn: R4 (effects graph, L), R7 (queue, M), R9 (refactor render/, L).
+• Round kế (R61): ứng viên — R4 (Effects graph compiler, L) hoặc F-4 (Proxy preview / offline editing).
+```

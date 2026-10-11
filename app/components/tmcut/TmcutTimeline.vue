@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TICKS_PER_SECOND, parseSrt, serializeSrt } from '@tmcut-core'
+import { TICKS_PER_SECOND, parseSrt, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -64,6 +64,7 @@ const {
 
 const { pickFile, pickWebFiles, selectSaveFile, readText, writeText } = useFileSystem()
 const { isDesktop, importWebFiles, addAssetToTimeline } = useTmcutMedia()
+const { transcribe } = useTmcutAi()
 const { tip, shortcutsOpen, snapOn } = useTmcutUiPrefs()
 const toast = useToast()
 
@@ -691,6 +692,75 @@ const srtMenuItems = computed(() => [
   { label: t('tmcut.timelineActions.srtExport'), icon: 'i-lucide-download', onSelect: () => void handleExportSrt() }
 ])
 
+// ===== Auto-captions (roadmap C-3, core C11) =====
+// Desktop only: audio extraction (FFmpeg) and Whisper (AI gateway) both
+// live in main-process IPC. Captions the video clip under the playhead,
+// anchored to that clip's timeline position and clamped to its range —
+// cues outside the clip never leak onto other clips' time.
+const captionBusy = ref(false)
+
+async function handleAutoCaptions() {
+  if (captionBusy.value || !isDesktop.value) return
+  const tracks = currentProject.value?.timeline?.tracks || []
+  const clip = tracks
+    .filter(track => track.type === 'video' && !track.hidden)
+    .flatMap(track => track.items || [])
+    .find(item => item.src
+      && playhead.value >= (item.offset || 0)
+      && playhead.value < (item.offset || 0) + (item.out - item.in) / (item.speed || 1))
+  if (!clip?.src) {
+    toast.add({ title: t('tmcut.timelineActions.captionNoClip'), color: 'warning' })
+    return
+  }
+  captionBusy.value = true
+  try {
+    const audio = await window.electronAPI?.tmcut.extractAudio({ filePath: clip.src })
+    if (!audio?.ok || !audio.path) throw new Error(audio?.error || 'Audio extraction failed')
+    const data = await transcribe(audio.path, { format: 'verbose_json' })
+    const cues = (data.segments || [])
+      .map(segment => ({
+        text: String(segment.text || '').trim(),
+        start: Number(segment.start) || 0,
+        end: Number(segment.end) || 0
+      }))
+      .filter(cue => cue.text.length > 0 && cue.end > cue.start)
+    if (cues.length === 0) {
+      toast.add({ title: t('tmcut.timelineActions.captionEmpty'), color: 'warning' })
+      return
+    }
+    // Core works in TICKS; the app v1 model is seconds — convert at the
+    // boundary (established bridge convention). Cue times are relative
+    // to the clip, so fromTicks anchors at the clip start.
+    const fromTicks = Math.round(secToTicks(clip.offset || 0))
+    const durationTicks = Math.max(1, Math.round(secToTicks((clip.out - clip.in) / (clip.speed || 1))))
+    const captions = cuesToCaptionClips(cues, {
+      fromTicks,
+      rangeTicks: { start: fromTicks, end: fromTicks + durationTicks }
+    })
+    for (const caption of captions) {
+      addClipToTrack('text', {
+        name: caption.text.slice(0, 24),
+        text: caption.text,
+        in: 0,
+        out: Math.max(0.1, ticksToSec(caption.out)),
+        offset: ticksToSec(caption.offset),
+        fontSize: 42,
+        color: '#ffffff'
+      })
+    }
+    toast.add({ title: t('tmcut.timelineActions.captionCreated', { n: captions.length }), color: 'success' })
+  } catch (error) {
+    console.error('Auto-captions failed:', error)
+    toast.add({
+      title: t('tmcut.timelineActions.captionFailed'),
+      description: String((error as Error)?.message || error),
+      color: 'error'
+    })
+  } finally {
+    captionBusy.value = false
+  }
+}
+
 // Add audio file
 async function handleAddAudio() {
   if (!isDesktop.value) {
@@ -1024,6 +1094,22 @@ onUnmounted(() => {
             SRT
           </UButton>
         </UDropdownMenu>
+
+        <!-- Auto-captions (roadmap C-3): desktop only — FFmpeg audio
+             extraction + Whisper both live in main-process IPC. -->
+        <UButton
+          v-if="isDesktop"
+          icon="i-lucide-sparkles"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :loading="captionBusy"
+          :disabled="captionBusy"
+          :title="t('tmcut.timelineActions.captionCreate')"
+          @click="handleAutoCaptions"
+        >
+          {{ t('tmcut.timelineActions.captionShort') }}
+        </UButton>
       </div>
 
       <!-- Center: Timecode Info -->

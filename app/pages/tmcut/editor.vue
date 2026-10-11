@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import type { TmcutAsset } from '~/types/tmcut'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useFileSystem } from '~/composables/useFileSystem'
@@ -201,6 +202,41 @@ async function handleImportMedia() {
     console.error('Media import failed:', error)
     toast.add({ title: t('tmcut.media.importFailed'), color: 'error' })
   }
+}
+
+// ===== Voiceover recording (roadmap D-4) =====
+// Mic button in the media bin header: getUserMedia + MediaRecorder
+// (web + desktop); the blob lands through the normal import pipeline
+// (desktop writes a real file via IPC — FFmpeg export needs paths).
+const {
+  recording: recordingVoiceover,
+  saving: savingVoiceover,
+  elapsedSec: voiceoverElapsed,
+  start: startVoiceover,
+  stop: stopVoiceover
+} = useTmcutRecorder()
+
+async function handleVoiceoverToggle() {
+  if (recordingVoiceover.value) {
+    const result = await stopVoiceover()
+    if (result.discarded) {
+      toast.add({ title: t('tmcut.media.voiceoverDiscarded'), color: 'warning' })
+    } else if (result.failed > 0 || result.added === 0) {
+      toast.add({ title: t('tmcut.media.voiceoverFailed'), color: 'error' })
+    } else {
+      toast.add({ title: t('tmcut.media.voiceoverAdded', { n: result.added }), color: 'success' })
+    }
+    return
+  }
+  const started = await startVoiceover()
+  if (!started) {
+    toast.add({ title: t('tmcut.media.voiceoverDenied'), color: 'warning' })
+  }
+}
+
+function formatVoiceoverTime(sec: number): string {
+  const whole = Math.max(0, Math.floor(sec))
+  return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`
 }
 
 // ===== External file drop (roadmap G-2) =====
@@ -788,6 +824,30 @@ const editorExtraActions = computed(() => [
               @click="handleImportMedia"
             >
               {{ t('tmcut.media.import') }}
+            </UButton>
+            <!-- Voiceover (roadmap D-4): mic toggles record; while
+                 recording the button becomes a red stop with the live
+                 elapsed time. -->
+            <UButton
+              v-if="!recordingVoiceover"
+              icon="i-lucide-mic"
+              size="xs"
+              variant="soft"
+              color="neutral"
+              :disabled="savingVoiceover"
+              :title="t('tmcut.media.voiceoverStart')"
+              @click="handleVoiceoverToggle"
+            />
+            <UButton
+              v-else
+              icon="i-lucide-square-stop"
+              size="xs"
+              variant="soft"
+              color="error"
+              :title="t('tmcut.media.voiceoverStop')"
+              @click="handleVoiceoverToggle"
+            >
+              {{ formatVoiceoverTime(voiceoverElapsed) }}
             </UButton>
           </div>
 
