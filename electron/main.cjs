@@ -370,6 +370,16 @@ function scheduleRenderNotify(key) {
 
 ipcMain.handle('tmcut:watch-output', (_event, { filePath }) => {
   if (typeof filePath !== 'string' || !filePath) return false
+  // Path traversal protection: resolve and check against allowed roots
+  try {
+    const resolved = path.resolve(filePath)
+    const userDataRoot = path.resolve(app.getPath('userData'))
+    if (!resolved.startsWith(userDataRoot + path.sep) && resolved !== userDataRoot) {
+      return false
+    }
+  } catch {
+    return false
+  }
   const key = path.normalize(filePath)
   stopOutputWatcher(key)
   const dir = path.dirname(key)

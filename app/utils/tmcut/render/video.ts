@@ -1,0 +1,226 @@
+import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
+import type { RenderGraph } from './graph'
+import { opacityAlpha } from './graph'
+import { fadeFilter } from './audio'
+import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
+import { keyframeExpr, buildFfmpegEffectFilters } from '@tmcut-core'
+
+/**
+ * Maps a TMCut transition type into an FFmpeg xfade transition name (roadmap R3, core C5).
+ */
+export function mapXfadeTransition(type: string | undefined): string {
+  switch (type) {
+    case 'dissolve':
+      return 'dissolve'
+    case 'wipe-left':
+      return 'wipeleft'
+    case 'wipe-right':
+      return 'wiperight'
+    case 'slide-left':
+      return 'slideleft'
+    case 'zoom-in':
+      return 'zoomin'
+    case 'fade':
+    default:
+      return 'fade'
+  }
+}
+
+export interface VideoPipelineContext {
+  canvasW: number
+  canvasH: number
+  fps: number
+  bgColor: string
+  hasAudio: boolean
+  /** Base background stream label for image backgrounds (Phase 4). */
+  bgBase?: string
+}
+
+/**
+ * Compiles normal video clips, fitting, effects, transform/opacity, and concatenates them with transitions.
+ */
+export function compileVideoPipeline(
+  graph: RenderGraph,
+  videoClips: TmcutTimelineItem[],
+  ctx: VideoPipelineContext
+): { videoStream: string, audioStream: string | null } {
+  const vStreams: string[] = []
+  const aStreams: string[] = []
+
+  for (const clip of videoClips) {
+    const footagePath = (clip.stabilize && clip.stabilizedPath) ? clip.stabilizedPath : clip.src!
+    const currentInputIdx = graph.addInput(footagePath)
+
+    const speed = clip.speed || 1
+    const setpts = speed !== 1 ? `setpts=(PTS-STARTPTS)/${speed}` : 'setpts=PTS-STARTPTS'
+    const reverseStep = clip.reverse ? ',reverse' : ''
+
+    const fitFilters = buildFfmpegFitFilters(clip.fit || 'fit', ctx.canvasW, ctx.canvasH, {
+      focusX: clip.focusX ?? 0.5,
+      focusY: clip.focusY ?? 0.5,
+      cropRect: clip.cropRect,
+      padColor: ctx.bgColor,
+      rotation: clip.rotation
+    })
+    const clipDuration = (clip.out - clip.in) / speed
+
+    const kfScale = keyframeExpr(clip, 'scale', 't')
+    const kfX = keyframeExpr(clip, 'x', 't')
+    const kfY = keyframeExpr(clip, 'y', 't')
+    const transform = buildFfmpegTransform({
+      canvasW: ctx.canvasW,
+      canvasH: ctx.canvasH,
+      scale: clip.scale,
+      x: clip.x,
+      y: clip.y,
+      scaleExpr: kfScale,
+      xExpr: kfX,
+      yExpr: kfY,
+      fps: ctx.fps,
+      duration: clipDuration,
+      bgColor: ctx.bgColor,
+      bgInput: ctx.bgBase
+    })
+
+    const kfOpacity = keyframeExpr(clip, 'opacity', 'T')
+    const opacityPct = clip.opacity ?? 100
+    const faded = opacityPct < 100
+    let alphaArg = ''
+    if (kfOpacity) {
+      alphaArg = `,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*((${kfOpacity})/100)'`
+    } else if (faded) {
+      alphaArg = `,format=rgba,colorchannelmixer=aa=${opacityAlpha(opacityPct)}`
+    }
+
+    const effectFilters = buildFfmpegEffectFilters(clip.effects)
+    const effectChain = effectFilters.length > 0 ? `,${effectFilters.join(',')}` : ''
+    const vOut = `[v_scaled_${currentInputIdx}]`
+    const clipChain = `[${currentInputIdx}:v]trim=start=${clip.in}:end=${clip.out},${setpts}${reverseStep},${fitFilters.join(',')}${effectChain},setsar=1`
+
+    if (transform) {
+      const vBg = `[v_bg_${currentInputIdx}]`
+      const vFg = `[v_fg_${currentInputIdx}]`
+      if (transform.bg) {
+        graph.addFilterChain(`${transform.bg}${vBg}`)
+      } else if (ctx.bgBase) {
+        // Re-use the shared image background for this clip's transform.
+        const bgTrimLabel = `[v_bg_trim_${currentInputIdx}]`
+        graph.addFilterChain(`${ctx.bgBase},trim=start=${clip.in}:end=${clip.out + 2},setpts=PTS-STARTPTS${bgTrimLabel}`)
+        // Pad vBg for the overlay so the label exists even if we don't
+        // emit a separate color source (overlay expects two inputs).
+        graph.addFilterChain(`[${bgTrimLabel}]${vBg}`)
+      } else {
+        // Fallback: emit empty node to keep the graph valid.
+        graph.addFilterChain(`[${currentInputIdx}:v]null${vBg}`)
+      }
+      graph.addFilterChain(`${clipChain},${transform.tail}${alphaArg}${vFg}`)
+      graph.addFilterChain(`${vBg}${vFg}${transform.overlay}${vOut}`)
+    } else if (faded || kfOpacity) {
+      const vBg = `[v_obg_${currentInputIdx}]`
+      const vFg = `[v_ofg_${currentInputIdx}]`
+      const bgSrc = ctx.bgBase
+        ? `${ctx.bgBase},trim=start=${clip.in}:end=${clip.out + 2},setpts=PTS-STARTPTS[${vBg}]`
+        : `color=c=${ctx.bgColor}:s=${ctx.canvasW}x${ctx.canvasH}:r=${ctx.fps}:d=${(clipDuration + 2).toFixed(3)}${vBg}`
+      graph.addFilterChain(bgSrc)
+      graph.addFilterChain(`${clipChain}${alphaArg}${vFg}`)
+      graph.addFilterChain(`${vBg}${vFg}overlay=shortest=1${vOut}`)
+    } else {
+      graph.addFilterChain(`${clipChain}${vOut}`)
+    }
+    vStreams.push(vOut)
+
+    if (ctx.hasAudio) {
+      const kfVol = keyframeExpr(clip, 'volume', 't')
+      const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
+      const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
+      const aReverse = clip.reverse ? 'areverse,' : ''
+      const aTrimmed = `[a_trim_${currentInputIdx}]`
+      graph.addFilterChain(
+        `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
+      )
+      aStreams.push(aTrimmed)
+    }
+  }
+
+  // Concatenate video clips (roadmap R3: xfade & acrossfade when transitions exist)
+  const hasTransitions = videoClips.some((c, i) => i > 0 && (c.transitionIn?.duration ?? 0) > 0)
+  let currentVideoStream: string
+  let currentAudioStream: string | null = null
+
+  if (!hasTransitions || videoClips.length === 1) {
+    if (ctx.hasAudio) {
+      const concatInputs = vStreams.map((v, i) => `${v}${aStreams[i]}`).join('')
+      graph.addFilterChain(`${concatInputs}concat=n=${vStreams.length}:v=1:a=1[v_concat][a_concat]`)
+      currentAudioStream = '[a_concat]'
+    } else {
+      graph.addFilterChain(`${vStreams.join('')}concat=n=${vStreams.length}:v=1:a=0[v_concat]`)
+    }
+    currentVideoStream = '[v_concat]'
+  } else {
+    graph.addFilterChain(`${vStreams[0]}settb=1/${ctx.fps},fps=${ctx.fps}[v_chain_0]`)
+    let currentV = '[v_chain_0]'
+    let currentA = ctx.hasAudio ? aStreams[0]! : ''
+    let runningDuration = (videoClips[0]!.out - videoClips[0]!.in) / (videoClips[0]!.speed || 1)
+
+    for (let i = 1; i < videoClips.length; i++) {
+      const prevClip = videoClips[i - 1]!
+      const currClip = videoClips[i]!
+      const prevDur = (prevClip.out - prevClip.in) / (prevClip.speed || 1)
+      const currDur = (currClip.out - currClip.in) / (currClip.speed || 1)
+      const ti = currClip.transitionIn
+      const rawDur = ti?.duration ?? 0
+      const transSec = rawDur > 1000 ? rawDur / 120000 : rawDur
+      const prevEnd = (prevClip.offset || 0) + prevDur
+      const isIntact = (rawDur > 0)
+        && Math.abs(prevEnd - ((currClip.offset || 0) + transSec)) < 0.05
+        && transSec <= Math.min(prevDur, currDur)
+
+      const nextV = `[v_in_${i}]`
+      graph.addFilterChain(`${vStreams[i]}settb=1/${ctx.fps},fps=${ctx.fps}${nextV}`)
+
+      if (isIntact) {
+        const transType = mapXfadeTransition(ti?.type)
+        const offset = Math.max(0, runningDuration - transSec)
+        const vOut = `[v_chain_${i}]`
+        graph.addFilterChain(
+          `${currentV}${nextV}xfade=transition=${transType}:duration=${transSec.toFixed(3)}:offset=${offset.toFixed(3)},settb=1/${ctx.fps},fps=${ctx.fps}${vOut}`
+        )
+        currentV = vOut
+
+        if (ctx.hasAudio) {
+          const aOut = `[a_chain_${i}]`
+          graph.addFilterChain(
+            `${currentA}${aStreams[i]}acrossfade=d=${transSec.toFixed(3)}:c1=tri:c2=tri${aOut}`
+          )
+          currentA = aOut
+        }
+        runningDuration = runningDuration + currDur - transSec
+      } else {
+        const vOut = `[v_chain_${i}]`
+        graph.addFilterChain(
+          `${currentV}${nextV}concat=n=2:v=1:a=0,settb=1/${ctx.fps},fps=${ctx.fps}${vOut}`
+        )
+        currentV = vOut
+
+        if (ctx.hasAudio) {
+          const aOut = `[a_chain_${i}]`
+          graph.addFilterChain(
+            `${currentA}${aStreams[i]}concat=n=2:v=0:a=1${aOut}`
+          )
+          currentA = aOut
+        }
+        runningDuration = runningDuration + currDur
+      }
+    }
+
+    currentVideoStream = currentV
+    if (ctx.hasAudio) {
+      currentAudioStream = currentA
+    }
+  }
+
+  return {
+    videoStream: currentVideoStream,
+    audioStream: currentAudioStream
+  }
+}

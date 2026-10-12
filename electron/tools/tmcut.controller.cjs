@@ -17,13 +17,38 @@ function getDirs() {
     thumbs: path.join(base, 'cache', 'thumbnails'),
     waveforms: path.join(base, 'cache', 'waveforms'),
     frames: path.join(base, 'cache', 'frames'),
+    proxies: path.join(base, 'cache', 'proxies'),
+    stabilized: path.join(base, 'cache', 'stabilized'),
+    stabilizedTrf: path.join(base, 'cache', 'stabilized_trf'),
     recordings: path.join(base, 'recordings')
+  }
+}
+
+/**
+ * Validate that a file path is within allowed roots (prevent path traversal).
+ * Allowed roots: tmcut userData directory and resources directory.
+ * Returns normalized path if safe, null if unsafe.
+ */
+function isPathSafe(filePath) {
+  if (typeof filePath !== 'string' || !filePath) return null
+  try {
+    const normalized = path.normalize(filePath)
+    const resolved = path.resolve(normalized)
+    const allowedRoots = [
+      path.resolve(app.getPath('userData')),
+      path.resolve(getResourcesDir())
+    ]
+    // Check if resolved path starts with any allowed root
+    const safe = allowedRoots.some(root => resolved.startsWith(root + path.sep) || resolved === root)
+    return safe ? resolved : null
+  } catch {
+    return null
   }
 }
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.recordings]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -142,7 +167,8 @@ function runFfmpeg(args, timeoutMs) {
     let child
     try {
       const exe = getToolsBinaries().ffmpeg
-      child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      // maxBuffer: 10 MB per stream to prevent OOM on malicious/huge output
+      child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 10 * 1024 * 1024 })
     } catch (err) {
       return resolve({ ok: false, error: String((err && err.message) || err), stdout: null, stderr: '' })
     }
@@ -404,13 +430,14 @@ function probeMediaJson(filePath) {
     let child = null
     try {
       const exe = getToolsBinaries().ffprobe
+      // maxBuffer: 10 MB to prevent OOM
       child = spawn(exe, [
         '-v', 'quiet',
         '-print_format', 'json',
         '-show_format',
         '-show_streams',
         filePath
-      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      ], { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 10 * 1024 * 1024 })
     } catch {
       resolve(null)
       return
@@ -457,7 +484,8 @@ function runFfmpegLog(args, timeoutMs) {
     let child = null
     try {
       const exe = getToolsBinaries().ffmpeg
-      child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      // maxBuffer: 10 MB to prevent OOM on malicious/huge stderr output
+      child = spawn(exe, args, { stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 10 * 1024 * 1024 })
     } catch {
       resolve({ code: -1, log: '' })
       return
@@ -612,6 +640,128 @@ function listSnapshots(id) {
   return items
 }
 
+// Lightweight preview proxy generator (Roadmap F-4):
+// Converts heavy 4K / camera footage to 540p/720p H.264 + AAC in the proxies cache,
+// keyed per (path, mtime, size, width). Cached copies return instantly.
+async function generateProxy(filePath, width = 960) {
+  ensureDirs()
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const targetWidth = Math.max(320, Math.min(1920, Math.floor(Number(width) || 960)))
+  const key = `${cacheKeyFor(filePath, stat)}-w${targetWidth}`
+  const out = path.join(getDirs().proxies, `proxy-${key}.mp4`)
+  if (getFileStat(out).exists) {
+    return { ok: true, path: toPosix(out), cached: true }
+  }
+  const args = [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    filePath,
+    '-vf',
+    `scale=${targetWidth}:-2`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '28',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '128k',
+    out
+  ]
+  const res = await runFfmpeg(args, 15 * 60 * 1000)
+  if (!res.ok || !getFileStat(out).exists) {
+    return { ok: false, error: res.error || 'Proxy generation failed' }
+  }
+  return { ok: true, path: toPosix(out), cached: false }
+}
+
+const STABILIZE_PRESETS = {
+  mild: { smoothing: 10, shakiness: 4, accuracy: 10, stepsize: 6, zoom: 0 },
+  medium: { smoothing: 20, shakiness: 6, accuracy: 15, stepsize: 6, zoom: 0 },
+  aggressive: { smoothing: 35, shakiness: 8, accuracy: 15, stepsize: 4, zoom: 0 }
+}
+
+function escapeFilterPath(filePath) {
+  return String(filePath || '').replace(/\\/g, '/').replace(/:/g, '\\:')
+}
+
+// 2-pass video stabilization (Roadmap E-5):
+// Pass 1: vidstabdetect extracts camera motion vectors into a .trf file in cache/stabilized_trf
+// Pass 2: vidstabtransform applies smoothing to produce a stable .mp4 in cache/stabilized
+async function stabilizeVideo(filePath, options = {}) {
+  ensureDirs()
+  const stat = getFileStat(filePath)
+  if (!stat.exists) return { ok: false, error: 'File not found' }
+  const level = options.level && STABILIZE_PRESETS[options.level] ? options.level : 'medium'
+  const preset = STABILIZE_PRESETS[level]
+  const key = `${cacheKeyFor(filePath, stat)}-${level}`
+  const out = path.join(getDirs().stabilized, `stab-${key}.mp4`)
+  if (getFileStat(out).exists) {
+    return { ok: true, path: toPosix(out), cached: true }
+  }
+  const trf = path.join(getDirs().stabilizedTrf, `trf-${key}.trf`)
+  const escapedTrf = escapeFilterPath(trf)
+
+  // Pass 1: vidstabdetect
+  const detectArgs = [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    filePath,
+    '-vf',
+    `vidstabdetect=stepsize=${preset.stepsize}:shakiness=${preset.shakiness}:accuracy=${preset.accuracy}:result='${escapedTrf}'`,
+    '-f',
+    'null',
+    '-'
+  ]
+  const res1 = await runFfmpeg(detectArgs, 15 * 60 * 1000)
+  if (!res1.ok || !getFileStat(trf).exists) {
+    return { ok: false, error: res1.error || 'Stabilization Pass 1 (detection) failed' }
+  }
+
+  // Pass 2: vidstabtransform
+  const transformArgs = [
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    filePath,
+    '-vf',
+    `vidstabtransform=input='${escapedTrf}':smoothing=${preset.smoothing}:optalgo=gauss:zoom=${preset.zoom}`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '18',
+    '-c:a',
+    'copy',
+    out
+  ]
+  const res2 = await runFfmpeg(transformArgs, 15 * 60 * 1000)
+
+  // Cleanup temporary .trf file
+  try {
+    if (fs.existsSync(trf)) fs.unlinkSync(trf)
+  } catch {
+    // ignore
+  }
+
+  if (!res2.ok || !getFileStat(out).exists) {
+    return { ok: false, error: res2.error || 'Stabilization Pass 2 (transform) failed' }
+  }
+  return { ok: true, path: toPosix(out), cached: false }
+}
+
 function registerTmcutController() {
   ipcMain.handle(`${moduleName}:getPaths`, () => {
     ensureDirs()
@@ -623,7 +773,8 @@ function registerTmcutController() {
       assetsFile: toPosix(d.assetsFile),
       cache: toPosix(d.cache),
       thumbs: toPosix(d.thumbs),
-      waveforms: toPosix(d.waveforms)
+      waveforms: toPosix(d.waveforms),
+      proxies: toPosix(d.proxies)
     }
   })
 
@@ -753,8 +904,9 @@ function registerTmcutController() {
     const result = {}
     if (!Array.isArray(paths)) return result
     for (const p of paths.slice(0, 500)) {
-      if (typeof p === 'string' && p.length > 0 && p.length < 1024) {
-        result[p] = getFileStat(p)
+      const safePath = isPathSafe(p)
+      if (safePath) {
+        result[p] = getFileStat(safePath)
       }
     }
     return result
@@ -766,13 +918,15 @@ function registerTmcutController() {
   })
 
   ipcMain.handle(`${moduleName}:extractFrame`, async (_event, { src, atSec, width }) => {
-    if (typeof src !== 'string' || !src) return { ok: false, error: 'Invalid path' }
-    return extractFrameAt(src, atSec, width)
+    const safePath = isPathSafe(src)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return extractFrameAt(safePath, atSec, width)
   })
 
   ipcMain.handle(`${moduleName}:extractAudio`, async (_event, { filePath }) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
-    return extractCaptionAudio(filePath)
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return extractCaptionAudio(safePath)
   })
 
   // Roadmap D-4: MediaRecorder blobs must land on disk for the desktop
@@ -797,23 +951,39 @@ function registerTmcutController() {
   })
 
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
-    return extractWaveform(filePath, buckets)
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return extractWaveform(safePath, buckets)
   })
 
   ipcMain.handle(`${moduleName}:analyzeAsset`, async (_event, { filePath, kind }) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
-    return analyzeAsset(filePath, kind)
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return analyzeAsset(safePath, kind)
   })
 
   ipcMain.handle(`${moduleName}:analyzeScenes`, async (_event, { filePath, threshold }) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
-    return analyzeScenes(filePath, threshold)
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return analyzeScenes(safePath, threshold)
   })
 
   ipcMain.handle(`${moduleName}:analyzeSilence`, async (_event, { filePath, noiseDb, minDuration }) => {
-    if (typeof filePath !== 'string' || !filePath) return { ok: false, error: 'Invalid path' }
-    return analyzeSilence(filePath, noiseDb, minDuration)
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return analyzeSilence(safePath, noiseDb, minDuration)
+  })
+
+  ipcMain.handle(`${moduleName}:generateProxy`, async (_event, { filePath, width }) => {
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return generateProxy(safePath, width)
+  })
+
+  ipcMain.handle(`${moduleName}:stabilizeVideo`, async (_event, { filePath, options }) => {
+    const safePath = isPathSafe(filePath)
+    if (!safePath) return { ok: false, error: 'Invalid path' }
+    return stabilizeVideo(safePath, options)
   })
 
   ipcMain.handle(`${moduleName}:listFonts`, () => listSystemFonts())

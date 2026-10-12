@@ -614,6 +614,10 @@ export interface TmcutNamespace {
   /** Voiceover blob persistence (roadmap D-4): writes into <base>/recordings/, returns the path. */
   saveRecording(args: { data: Uint8Array, ext?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
   extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
+  /** Preview proxy generator (roadmap F-4): converts video to lightweight 540p/720p H.264 preview in cache. */
+  generateProxy(args: { filePath: string, width?: number }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
+  /** 2-pass video stabilization (roadmap E-5): motion vector analysis + smoothing via vidstab. */
+  stabilizeVideo(args: { filePath: string, options?: { level?: 'mild' | 'medium' | 'aggressive' } }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
   analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>

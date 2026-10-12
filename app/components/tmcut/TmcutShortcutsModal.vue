@@ -149,9 +149,9 @@ const items = computed<ShortcutItem[]>(() => [
     keywords: 'help shortcuts question f1 ctrl k'
   },
   {
-    id: 'aiSilence', category: 'ai', label: t('tmcut.hotkeys.aiSilence'),
-    desc: t('tmcut.hotkeys.desc.aiSilence'), keys: ['Alt + A'], keySep: false,
-    keywords: 'autocut ai silence speech cut alt a', badge: 'planned'
+    id: 'aiScript', category: 'ai', label: t('tmcut.hotkeys.aiScript'),
+    desc: t('tmcut.hotkeys.desc.aiScript'), keys: ['Alt + A'], keySep: false,
+    keywords: 'ai script scriptwriter storyboard prompt autocut alt a', badge: 'ai'
   },
   {
     id: 'smartMask', category: 'ai', label: t('tmcut.hotkeys.smartMask'),

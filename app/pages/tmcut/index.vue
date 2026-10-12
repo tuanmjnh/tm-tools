@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import type { TmcutProject } from '~/composables/useTmcutProject'
-import { normalizeCanvas } from '~/utils/tmcut/canvas'
+import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
 
 const { t, locale } = useI18n()
 const {
@@ -101,7 +101,7 @@ const quickPresets: QuickPreset[] = [
 
 function applyQuickPreset(preset: QuickPreset) {
   const project = createProject(t('tmcut.newProject'))
-  project.canvas = normalizeCanvas({ width: preset.width, height: preset.height, fps: preset.fps })
+  project.canvas = normalizeCanvas({ width: preset.width, height: preset.height, fps: { numerator: preset.fps, denominator: 1 } })
   router.push(`/tmcut/editor?project=${project.id}`)
 }
 
@@ -115,7 +115,7 @@ const templatePresets = computed(() => [
 function applyTemplatePreset(preset: { canvas: string, name: string, fps: number }) {
   const parts = preset.canvas.split('x').map(Number)
   const project = createProject(`${t('tmcut.project')} ${preset.name}`)
-  project.canvas = normalizeCanvas({ width: parts[0] || 1920, height: parts[1] || 1080, fps: preset.fps })
+  project.canvas = normalizeCanvas({ width: parts[0] || 1920, height: parts[1] || 1080, fps: { numerator: preset.fps, denominator: 1 } })
   router.push(`/tmcut/editor?project=${project.id}`)
 }
 
@@ -561,7 +561,7 @@ const headerActions = computed<HeaderAction[]>(() => [
                 <span class="truncate">{{ editedLabel(project) }}</span>
               </p>
               <p v-if="project.canvas?.fps" class="text-[10px] font-mono text-neutral-400 mt-0.5">
-                {{ project.canvas.fps }} FPS · {{ project.canvas.width }}x{{ project.canvas.height }}
+                {{ canvasFpsValue(project.canvas) }} FPS · {{ project.canvas.width }}x{{ project.canvas.height }}
               </p>
             </div>
           </div>

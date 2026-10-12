@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { TmcutAsset, TmcutAssetKind } from '~/types/tmcut'
+import type { TmcutAsset, TmcutAssetKind, TmcutMediaFolder } from '~/types/tmcut'
 import { createEmptyTmcutAssetMeta } from '~/types/tmcut'
 import {
   classifyAssetKind,
@@ -10,14 +10,39 @@ import {
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
-import { fnv1aHex, normalizeProbe } from '@tmcut-core'
+import {
+  fnv1aHex,
+  normalizeProbe,
+  createFolder as coreCreateFolder,
+  renameFolder as coreRenameFolder,
+  updateFolderColor as coreUpdateFolderColor,
+  removeFolder as coreRemoveFolder,
+  setAssetFolder as coreSetAssetFolder,
+  getAssetFolder as coreGetAssetFolder,
+  getFolderCounts as coreGetFolderCounts,
+  FOLDER_TAG_COLORS
+
+} from '@tmcut-core'
 
 const ASSET_STORAGE_KEY = 'tmcut_assets_v1'
+const FOLDER_STORAGE_KEY = 'tmcut_folders_v1'
+const PROXY_PREVIEW_KEY = 'tmcut.proxyPreview'
 
 const assets = ref<TmcutAsset[]>([])
+const folders = ref<TmcutMediaFolder[]>([])
+const selectedFolderId = ref<string | null>(null)
 const libraryLoaded = ref(false)
 const importing = ref(false)
 const importError = ref<string | null>(null)
+const proxyPreview = ref(true)
+
+if (import.meta.client && typeof window !== 'undefined') {
+  const stored = window.localStorage.getItem(PROXY_PREVIEW_KEY)
+  if (stored !== null) proxyPreview.value = stored === '1'
+  watch(proxyPreview, (v) => {
+    window.localStorage.setItem(PROXY_PREVIEW_KEY, v ? '1' : '0')
+  })
+}
 
 const waveformCache = new Map<string, number[]>()
 
@@ -42,6 +67,17 @@ export function useTmcutMedia() {
     return assets.value.filter(a => a.usedBy.includes(pid))
   })
 
+  const projectFolders = computed(() => {
+    const pid = currentProject.value?.id
+    if (!pid) return folders.value
+    return folders.value.filter(f => !f.projectId || f.projectId === pid)
+  })
+
+  const folderCounts = computed(() => {
+    const pid = currentProject.value?.id
+    return coreGetFolderCounts(projectFolders.value, projectAssets.value, pid)
+  })
+
   const missingAssets = computed(() => projectAssets.value.filter(a => a.status === 'missing'))
 
   const analyzingCount = computed(() => projectAssets.value.filter(a => a.status === 'analyzing').length)
@@ -64,9 +100,83 @@ export function useTmcutMedia() {
     return assets.value.find(a => mediaFileKey(a.path) === key)
   }
 
+  function loadFolders() {
+    try {
+      const raw = localStorage.getItem(FOLDER_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as TmcutMediaFolder[]
+        if (Array.isArray(parsed)) {
+          folders.value = parsed
+        }
+      }
+    } catch (error) {
+      console.error('Failed to parse folders from localStorage:', error)
+    }
+  }
+
+  function persistFolders() {
+    try {
+      localStorage.setItem(FOLDER_STORAGE_KEY, JSON.stringify(folders.value))
+    } catch (error) {
+      console.error('Failed to persist folders to localStorage:', error)
+    }
+  }
+
+  function addFolder(name: string, color?: string): TmcutMediaFolder {
+    const pid = currentProject.value?.id
+    const folder = coreCreateFolder(folders.value, { name, color, projectId: pid })
+    persistFolders()
+    return folder
+  }
+
+  function editFolder(folderId: string, newName: string): boolean {
+    const ok = coreRenameFolder(folders.value, folderId, newName)
+    if (ok) persistFolders()
+    return ok
+  }
+
+  function changeFolderColor(folderId: string, color: string): boolean {
+    const ok = coreUpdateFolderColor(folders.value, folderId, color)
+    if (ok) persistFolders()
+    return ok
+  }
+
+  function deleteFolder(folderId: string): boolean {
+    const ok = coreRemoveFolder(folders.value, folderId)
+    if (ok) {
+      const pid = currentProject.value?.id
+      for (const a of assets.value) {
+        if (coreGetAssetFolder(a, pid) === folderId) {
+          coreSetAssetFolder(a, null, pid)
+        }
+      }
+      if (selectedFolderId.value === folderId) {
+        selectedFolderId.value = null
+      }
+      persistFolders()
+      persistLibrary()
+    }
+    return ok
+  }
+
+  function moveAssetToFolder(assetId: string, folderId: string | null): boolean {
+    const asset = assets.value.find(a => a.id === assetId)
+    if (!asset) return false
+    const pid = currentProject.value?.id
+    coreSetAssetFolder(asset, folderId, pid)
+    persistLibrary()
+    return true
+  }
+
+  function getAssetFolderId(asset: TmcutAsset): string | null {
+    const pid = currentProject.value?.id
+    return coreGetAssetFolder(asset, pid)
+  }
+
   async function loadLibrary() {
     if (libraryLoaded.value) return
     libraryLoaded.value = true
+    loadFolders()
     const ipc = tmcutIpc()
     // Web runtime is session-only: blob: URLs die on reload, so neither
     // load nor persist the library here (see persistLibrary).
@@ -119,7 +229,11 @@ export function useTmcutMedia() {
 
   function buildAsset(inputPath: string, kind: TmcutAssetKind): TmcutAsset {
     const path = normalizeMediaPath(inputPath)
-    return {
+    const pid = currentProject.value?.id
+    const activeFolder = selectedFolderId.value && selectedFolderId.value !== '__unassigned__'
+      ? selectedFolderId.value
+      : null
+    const asset: TmcutAsset = {
       id: `asset_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       kind,
       name: mediaFileName(path),
@@ -130,8 +244,15 @@ export function useTmcutMedia() {
       thumbPath: null,
       filmstripPath: null,
       waveformPath: null,
+      proxyPath: null,
+      proxyStatus: 'none',
+      folderId: activeFolder,
       addedAt: new Date().toISOString()
     }
+    if (activeFolder && pid) {
+      asset.folderByProject = { [pid]: activeFolder }
+    }
+    return asset
   }
 
   async function analyzeAsset(asset: TmcutAsset) {
@@ -366,6 +487,19 @@ export function useTmcutMedia() {
           changed = true
         }
       }
+
+      // Verify proxy files still exist on disk
+      const proxyPaths = assets.value.filter(a => !!a.proxyPath).map(a => a.proxyPath!)
+      if (proxyPaths.length > 0) {
+        const proxyStats = await ipc.statFiles(proxyPaths)
+        for (const asset of assets.value) {
+          if (asset.proxyPath && !proxyStats[asset.proxyPath]?.exists) {
+            asset.proxyPath = null
+            asset.proxyStatus = 'none'
+            changed = true
+          }
+        }
+      }
       // Cache-key migration (cover + filmstrip layout):
       // records analyzed under the retired schemes still
       // point at the old single-file thumbnail. Re-analyze
@@ -494,6 +628,47 @@ export function useTmcutMedia() {
     return asset.thumbPath ? mediaUrl(asset.thumbPath) : ''
   }
 
+  function resolveMediaSrc(src?: string | null): string {
+    if (!src) return ''
+    if (proxyPreview.value) {
+      const asset = findAssetBySrc(src)
+      if (asset?.proxyPath && asset.proxyStatus === 'ready') {
+        return mediaUrl(asset.proxyPath)
+      }
+    }
+    return mediaUrl(src)
+  }
+
+  async function generateProxy(asset: TmcutAsset, width = 960): Promise<boolean> {
+    if (asset.kind !== 'video' || asset.status === 'missing') return false
+    const ipc = tmcutIpc()
+    if (!ipc || typeof ipc.generateProxy !== 'function') return false
+    asset.proxyStatus = 'generating'
+    try {
+      const res = await ipc.generateProxy({ filePath: asset.path, width })
+      if (res?.ok && res.path) {
+        asset.proxyPath = res.path
+        asset.proxyStatus = 'ready'
+        persistLibrary()
+        return true
+      }
+      asset.proxyStatus = 'error'
+      persistLibrary()
+      return false
+    } catch (err) {
+      console.error('generateProxy error:', err)
+      asset.proxyStatus = 'error'
+      persistLibrary()
+      return false
+    }
+  }
+
+  function removeProxy(asset: TmcutAsset) {
+    asset.proxyPath = null
+    asset.proxyStatus = 'none'
+    persistLibrary()
+  }
+
   return {
     assets,
     projectAssets,
@@ -503,6 +678,10 @@ export function useTmcutMedia() {
     importing,
     importError,
     isDesktop,
+    proxyPreview,
+    resolveMediaSrc,
+    generateProxy,
+    removeProxy,
     loadLibrary,
     importFiles,
     importWebFiles,
@@ -517,6 +696,17 @@ export function useTmcutMedia() {
     getThumbUrl,
     mediaUrl,
     timelineSrcSet,
-    findAssetBySrc
+    findAssetBySrc,
+    folders,
+    projectFolders,
+    selectedFolderId,
+    folderCounts,
+    folderTagColors: FOLDER_TAG_COLORS,
+    createFolder: addFolder,
+    renameFolder: editFolder,
+    updateFolderColor: changeFolderColor,
+    removeFolder: deleteFolder,
+    moveAssetToFolder,
+    getAssetFolderId
   }
 }

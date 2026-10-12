@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import type { TmcutAsset } from '~/types/tmcut'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import type { TmcutAsset, TmcutMediaFolder } from '~/types/tmcut'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
@@ -10,7 +10,8 @@ import { useFileSystem } from '~/composables/useFileSystem'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
-import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel } from '~/utils/tmcut/canvas'
+import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel, canvasFpsValue } from '~/utils/tmcut/canvas'
+import { filterAssetsByFolder } from '@tmcut-core'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -43,6 +44,7 @@ const {
   analyzingCount,
   importing,
   isDesktop,
+  generateProxy,
   loadLibrary,
   importFiles,
   importWebFiles,
@@ -55,7 +57,17 @@ const {
   loadWaveform,
   getThumbUrl,
   timelineSrcSet,
-  findAssetBySrc
+  findAssetBySrc,
+  projectFolders,
+  selectedFolderId,
+  folderCounts,
+  folderTagColors,
+  createFolder,
+  renameFolder,
+  updateFolderColor,
+  removeFolder,
+  moveAssetToFolder,
+  getAssetFolderId
 } = useTmcutMedia()
 
 const { playhead, formatTimecode } = useTmcutPlayback()
@@ -77,6 +89,7 @@ const clipCount = computed(() => (
 ))
 
 const { pickFile, pickWebFiles } = useFileSystem()
+const { activeJobsCount, queueModalOpen } = useTmcutExportQueue()
 const toast = useToast()
 
 const projectId = computed(() => (route.query.project as string) || 'default')
@@ -128,10 +141,133 @@ const filteredAssets = computed(() => {
   const base = mediaTab.value === 'media'
     ? projectAssets.value
     : projectAssets.value.filter(a => a.kind === mediaTab.value)
+  const byFolder = filterAssetsByFolder(base, selectedFolderId.value, currentProject.value?.id)
   const q = assetSearch.value.trim().toLowerCase()
-  if (!q) return base
-  return base.filter(a => (a.name || '').toLowerCase().includes(q))
+  if (!q) return byFolder
+  return byFolder.filter(a => (a.name || '').toLowerCase().includes(q))
 })
+
+// ===== Folder / Album Management (Roadmap G-3) =====
+const createFolderModalOpen = ref(false)
+const newFolderName = ref('')
+const newFolderColor = ref(folderTagColors[0])
+
+const editFolderModalOpen = ref(false)
+const editingFolderId = ref<string | null>(null)
+const editingFolderName = ref('')
+const editingFolderColor = ref(folderTagColors[0])
+
+const moveAssetModalOpen = ref(false)
+const targetMoveAsset = ref<TmcutAsset | null>(null)
+
+function openCreateFolderModal() {
+  newFolderName.value = ''
+  newFolderColor.value = folderTagColors[0]
+  createFolderModalOpen.value = true
+}
+
+function handleCreateFolder() {
+  const name = newFolderName.value.trim()
+  if (!name) return
+  const created = createFolder(name, newFolderColor.value)
+  selectedFolderId.value = created.id
+  createFolderModalOpen.value = false
+  toast.add({
+    title: t('tmcut.folders.created', { name: created.name }),
+    color: 'success'
+  })
+}
+
+function openEditFolderModal(folder: TmcutMediaFolder) {
+  editingFolderId.value = folder.id
+  editingFolderName.value = folder.name
+  editingFolderColor.value = folder.color || folderTagColors[0]
+  editFolderModalOpen.value = true
+}
+
+function handleEditFolder() {
+  if (!editingFolderId.value) return
+  const name = editingFolderName.value.trim()
+  if (!name) return
+  renameFolder(editingFolderId.value, name)
+  updateFolderColor(editingFolderId.value, editingFolderColor.value || folderTagColors[0] || '#3b82f6')
+  editFolderModalOpen.value = false
+  toast.add({
+    title: t('tmcut.folders.renamed', { name }),
+    color: 'success'
+  })
+}
+
+function handleDeleteFolder(folder: TmcutMediaFolder) {
+  const name = folder.name
+  removeFolder(folder.id)
+  toast.add({
+    title: t('tmcut.folders.deleted', { name }),
+    color: 'neutral'
+  })
+}
+
+function openMoveAssetModal(asset: TmcutAsset) {
+  targetMoveAsset.value = asset
+  moveAssetModalOpen.value = true
+}
+
+function handleMoveAsset(assetId: string, folderId: string | null) {
+  moveAssetToFolder(assetId, folderId)
+  moveAssetModalOpen.value = false
+  const targetFolder = projectFolders.value.find(f => f.id === folderId)
+  toast.add({
+    title: folderId && targetFolder
+      ? t('tmcut.folders.moved', { folder: targetFolder.name })
+      : t('tmcut.folders.removedFromFolder'),
+    color: 'success'
+  })
+}
+
+function folderActionItems(folder: TmcutMediaFolder) {
+  return [
+    [
+      {
+        label: t('tmcut.folders.rename'),
+        icon: 'i-lucide-pencil',
+        onSelect: () => openEditFolderModal(folder)
+      },
+      {
+        label: t('tmcut.folders.delete'),
+        icon: 'i-lucide-trash',
+        color: 'error' as const,
+        onSelect: () => handleDeleteFolder(folder)
+      }
+    ]
+  ]
+}
+
+function onFolderDragOver(e: DragEvent) {
+  e.preventDefault()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+}
+
+function onFolderDrop(e: DragEvent, folderId: string | null) {
+  e.preventDefault()
+  const raw = e.dataTransfer?.getData(TMCUT_ASSET_MIME)
+  if (!raw) return
+  try {
+    const payload = JSON.parse(raw) as { id: string }
+    if (payload?.id) {
+      handleMoveAsset(payload.id, folderId)
+    }
+  } catch (error) {
+    console.debug('Invalid asset drop data:', error)
+  }
+}
+
+function getFolderBadge(asset: TmcutAsset): TmcutMediaFolder | undefined {
+  const fid = getAssetFolderId(asset)
+  if (!fid) return undefined
+  return projectFolders.value.find(f => f.id === fid)
+}
 
 function isAssetOnTimeline(asset: TmcutAsset): boolean {
   return timelineSrcSet.value.has(mediaFileKey(asset.path))
@@ -362,6 +498,58 @@ function handleAddToTimeline(asset: TmcutAsset) {
   }
 }
 
+const unproxiedVideos = computed(() =>
+  projectAssets.value.filter(a => a.kind === 'video' && a.status === 'ready' && a.proxyStatus !== 'ready')
+)
+
+const batchProxyBusy = ref(false)
+
+async function handleGenerateAllProxies() {
+  if (batchProxyBusy.value || unproxiedVideos.value.length === 0) return
+  batchProxyBusy.value = true
+  let successCount = 0
+  const targets = [...unproxiedVideos.value]
+  for (const asset of targets) {
+    const ok = await generateProxy(asset)
+    if (ok) successCount++
+  }
+  batchProxyBusy.value = false
+  toast.add({
+    title: t('tmcut.proxy.allGenerated', { count: successCount }),
+    color: 'success'
+  })
+}
+
+async function handleProxyAction(asset: TmcutAsset) {
+  if (asset.proxyStatus === 'generating') return
+  if (asset.proxyStatus === 'ready') {
+    toast.add({
+      title: t('tmcut.proxy.ready'),
+      description: t('tmcut.proxy.readyDesc'),
+      color: 'success'
+    })
+    return
+  }
+  toast.add({
+    title: t('tmcut.proxy.generating'),
+    description: asset.name,
+    color: 'neutral'
+  })
+  const ok = await generateProxy(asset)
+  if (ok) {
+    toast.add({
+      title: t('tmcut.proxy.ready'),
+      description: t('tmcut.proxy.generated', { name: asset.name }),
+      color: 'success'
+    })
+  } else {
+    toast.add({
+      title: t('tmcut.proxy.failed', { name: asset.name }),
+      color: 'error'
+    })
+  }
+}
+
 // Media card → timeline drag payload (Roadmap A4): click keeps appending
 // at the end, dragging lets the timeline place the clip at the drop
 // point. The shared MIME type lives in ~/utils/tmcut/dnd.
@@ -436,11 +624,16 @@ async function handleDeleteSnapshot(ts: number) {
 
 onMounted(async () => {
   hasWebGPU.value = typeof navigator !== 'undefined' && 'gpu' in navigator
+  window.addEventListener('keydown', handleEditorKeydown)
   await loadProject(projectId.value)
   refreshProjects()
   loadLibrary()
   checkMissing()
   loadSnapshots()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleEditorKeydown)
 })
 
 const canvasPresets = computed(() => TMUTCANVAS_PRESETS.map(preset => ({
@@ -501,7 +694,7 @@ function applyCustomCanvas() {
   if (!currentProject.value) return
   switchCanvas(Math.round(width), Math.round(height))
   if (currentProject.value) {
-    currentProject.value.canvas.fps = fps
+    currentProject.value.canvas.fps = { numerator: fps, denominator: 1 }
     saveProject()
   }
   showCustomCanvasModal.value = false
@@ -514,7 +707,7 @@ function applyCustomCanvas() {
 
 function applyFps(fps: number) {
   if (!currentProject.value) return
-  currentProject.value.canvas.fps = fps
+  currentProject.value.canvas.fps = { numerator: fps, denominator: 1 }
   saveProject()
   toast.add({
     title: t('tmcut.fpsUpdated'),
@@ -656,19 +849,52 @@ const editorExtraActions = computed(() => [
       onSelect: () => router.push('/tmcut/templates')
     },
     {
+      label: t('tmcut.templateLibrary.saveAsTemplate'),
+      icon: 'i-lucide-bookmark-plus',
+      onSelect: () => handleSaveAsTemplate()
+    },
+    {
       label: t('nav.tmcut_autocut'),
       icon: 'i-lucide-scissors',
       onSelect: () => router.push('/tmcut/autocut')
     }
   ]
 ])
+
+const { saveCurrentProjectAsTemplate } = useTmcutTemplates()
+
+function handleSaveAsTemplate() {
+  if (!currentProject.value) return
+  const tpl = saveCurrentProjectAsTemplate({
+    name: currentProject.value.name || 'Untitled Template',
+    description: `Template created from ${currentProject.value.name}`,
+    category: 'custom'
+  })
+  if (tpl) {
+    toast.add({
+      title: t('tmcut.templateLibrary.savedAsTemplate', { name: tpl.name }),
+      color: 'success',
+      icon: 'i-lucide-check-circle'
+    })
+  }
+}
+
+const aiScriptModalOpen = ref(false)
+
+function handleEditorKeydown(e: KeyboardEvent) {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+  if (e.altKey && (e.key === 'a' || e.key === 'A')) {
+    e.preventDefault()
+    aiScriptModalOpen.value = true
+  }
+}
 </script>
 
 <template>
   <BasePage
     id="tmcut-editor"
     :title="currentProject?.name || t('tmcut.editor')"
-    :description="currentProject?.canvas ? `${currentProject.canvas.width}x${currentProject.canvas.height} (${currentProject.canvas.fps}fps)` : undefined"
+    :description="currentProject?.canvas ? `${currentProject.canvas.width}x${currentProject.canvas.height} (${canvasFpsValue(currentProject.canvas)}fps)` : undefined"
     flush
   >
     <template #leading>
@@ -712,7 +938,7 @@ const editorExtraActions = computed(() => [
 
       <!-- Honest hardware status chip (WebGPU detection + export engine) -->
       <span
-        class="hidden xl:inline flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-400"
+        class="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-400"
         :title="t('tmcut.workspace.hardwareStatus')"
       >
         <UIcon name="i-lucide-cpu" class="size-3 text-primary" />
@@ -729,7 +955,7 @@ const editorExtraActions = computed(() => [
           color="neutral"
           :title="t('tmcut.canvasRatio')"
         >
-          <span class="font-mono text-xs">{{ currentRatioLabel }} ({{ currentProject.canvas.fps }}fps)</span>
+          <span class="font-mono text-xs">{{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas) }}fps)</span>
           <UIcon name="i-lucide-chevron-down" class="size-3 text-neutral-400" />
         </UButton>
       </UDropdownMenu>
@@ -751,6 +977,37 @@ const editorExtraActions = computed(() => [
       >
         <span class="hidden md:inline">{{ t('global.save') }}</span>
       </UButton>
+      <UButton
+        icon="i-lucide-list-checks"
+        size="sm"
+        variant="soft"
+        :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
+        :title="t('tmcut.queue.title')"
+        @click="queueModalOpen = true"
+      >
+        <span class="hidden xl:inline">{{ t('tmcut.queue.title') }}</span>
+        <UBadge
+          v-if="activeJobsCount > 0"
+          color="primary"
+          variant="solid"
+          size="xs"
+          class="ml-0.5"
+        >
+          {{ activeJobsCount }}
+        </UBadge>
+      </UButton>
+      <!-- AI Scriptwriter & Storyboard modal trigger (Alt+A) -->
+      <UButton
+        icon="i-lucide-sparkles"
+        size="sm"
+        variant="soft"
+        color="primary"
+        :title="t('tmcut.aiScript.buttonTooltip')"
+        @click="aiScriptModalOpen = true"
+      >
+        <span class="hidden xl:inline">{{ t('tmcut.aiScript.buttonLabel') }}</span>
+      </UButton>
+
       <UButton
         icon="i-lucide-download"
         size="sm"
@@ -811,44 +1068,58 @@ const editorExtraActions = computed(() => [
           @dragleave="onMediaPanelDragLeave"
           @drop="onMediaPanelDrop"
         >
-          <div class="p-3 border-b border-neutral-800 flex items-center justify-between">
-            <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+          <div class="p-3 border-b border-neutral-800 flex items-center justify-between gap-1">
+            <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider truncate">
               {{ t('tmcut.media.library') }}
             </span>
-            <UButton
-              icon="i-lucide-plus"
-              size="xs"
-              variant="soft"
-              color="primary"
-              :disabled="importing"
-              @click="handleImportMedia"
-            >
-              {{ t('tmcut.media.import') }}
-            </UButton>
-            <!-- Voiceover (roadmap D-4): mic toggles record; while
-                 recording the button becomes a red stop with the live
-                 elapsed time. -->
-            <UButton
-              v-if="!recordingVoiceover"
-              icon="i-lucide-mic"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              :disabled="savingVoiceover"
-              :title="t('tmcut.media.voiceoverStart')"
-              @click="handleVoiceoverToggle"
-            />
-            <UButton
-              v-else
-              icon="i-lucide-square-stop"
-              size="xs"
-              variant="soft"
-              color="error"
-              :title="t('tmcut.media.voiceoverStop')"
-              @click="handleVoiceoverToggle"
-            >
-              {{ formatVoiceoverTime(voiceoverElapsed) }}
-            </UButton>
+            <div class="flex items-center gap-1 shrink-0">
+              <!-- Batch proxy button when video assets need proxies (roadmap F-4) -->
+              <UButton
+                v-if="isDesktop && unproxiedVideos.length > 0"
+                icon="i-lucide-zap"
+                size="xs"
+                variant="soft"
+                color="warning"
+                :loading="batchProxyBusy"
+                :disabled="batchProxyBusy"
+                :title="t('tmcut.proxy.generateAll')"
+                @click="handleGenerateAllProxies"
+              />
+              <UButton
+                icon="i-lucide-plus"
+                size="xs"
+                variant="soft"
+                color="primary"
+                :disabled="importing"
+                @click="handleImportMedia"
+              >
+                {{ t('tmcut.media.import') }}
+              </UButton>
+              <!-- Voiceover (roadmap D-4): mic toggles record; while
+                   recording the button becomes a red stop with the live
+                   elapsed time. -->
+              <UButton
+                v-if="!recordingVoiceover"
+                icon="i-lucide-mic"
+                size="xs"
+                variant="soft"
+                color="neutral"
+                :disabled="savingVoiceover"
+                :title="t('tmcut.media.voiceoverStart')"
+                @click="handleVoiceoverToggle"
+              />
+              <UButton
+                v-else
+                icon="i-lucide-square-stop"
+                size="xs"
+                variant="soft"
+                color="error"
+                :title="t('tmcut.media.voiceoverStop')"
+                @click="handleVoiceoverToggle"
+              >
+                {{ formatVoiceoverTime(voiceoverElapsed) }}
+              </UButton>
+            </div>
           </div>
 
           <div
@@ -883,6 +1154,80 @@ const editorExtraActions = computed(() => [
               class="w-full"
               :placeholder="t('tmcut.media.search')"
             />
+          </div>
+
+          <!-- Folder / Album management bar (roadmap G-3) -->
+          <div v-if="isAssetTab" class="px-2 pt-2 pb-1.5 space-y-1.5 border-b border-neutral-800/80">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                <UIcon name="i-lucide-folder" class="size-3.5 text-primary" />
+                <span>{{ t('tmcut.folders.title') }}</span>
+              </div>
+              <UButton
+                icon="i-lucide-folder-plus"
+                size="xs"
+                variant="ghost"
+                color="primary"
+                :title="t('tmcut.folders.create')"
+                @click="openCreateFolderModal"
+              >
+                {{ t('tmcut.folders.create') }}
+              </UButton>
+            </div>
+
+            <!-- Folder pills (horizontal scrollable) -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <!-- All -->
+              <button
+                type="button"
+                class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
+                :class="selectedFolderId === null ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'"
+                @click="selectedFolderId = null"
+              >
+                <UIcon name="i-lucide-layers" class="size-3" />
+                <span>{{ t('tmcut.folders.all') }}</span>
+                <span class="text-[10px] opacity-75 font-mono">({{ folderCounts.total }})</span>
+              </button>
+
+              <!-- Specific Folders -->
+              <div
+                v-for="folder in projectFolders"
+                :key="folder.id"
+                class="group/fchip relative rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors pl-2 pr-1 py-1 cursor-pointer border"
+                :class="selectedFolderId === folder.id ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'"
+                @click="selectedFolderId = folder.id"
+                @dragover.prevent="onFolderDragOver($event)"
+                @drop.prevent="onFolderDrop($event, folder.id)"
+              >
+                <span class="size-2 rounded-full shrink-0" :style="{ backgroundColor: folder.color || '#3b82f6' }" />
+                <span class="truncate max-w-22.5" :title="folder.name">{{ folder.name }}</span>
+                <span class="text-[10px] opacity-75 font-mono">({{ folderCounts[folder.id] || 0 }})</span>
+                <UDropdownMenu :items="folderActionItems(folder)" :content="{ side: 'bottom', align: 'start' }">
+                  <button
+                    type="button"
+                    class="p-0.5 rounded hover:bg-neutral-700 text-neutral-400 hover:text-white"
+                    @click.stop
+                  >
+                    <UIcon name="i-lucide-more-vertical" class="size-3" />
+                  </button>
+                </UDropdownMenu>
+              </div>
+
+              <!-- Unassigned (if any exist) -->
+              <button
+                v-if="(folderCounts.unassigned ?? 0) > 0"
+                type="button"
+                class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
+                :class="selectedFolderId === '__unassigned__' ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-400'"
+                @click="selectedFolderId = '__unassigned__'"
+                @dragover.prevent="onFolderDragOver($event)"
+                @drop.prevent="onFolderDrop($event, null)"
+              >
+                <UIcon name="i-lucide-folder-archive" class="size-3 text-neutral-400" />
+                <span>{{ t('tmcut.folders.unassigned') }}</span>
+                <span class="text-[10px] opacity-75 font-mono">({{ folderCounts.unassigned ?? 0 }})</span>
+              </button>
+            </div>
           </div>
 
           <div
@@ -981,9 +1326,58 @@ const editorExtraActions = computed(() => [
                     >
                       {{ t('tmcut.media.addedBadge') }}
                     </span>
+                    <!-- Proxy badge (roadmap F-4) -->
+                    <span
+                      v-if="asset.proxyStatus === 'ready'"
+                      class="absolute px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
+                      :class="isAssetOnTimeline(asset) ? 'top-5 left-1' : 'top-1 left-1'"
+                      :title="t('tmcut.proxy.readyDesc')"
+                    >
+                      <UIcon name="i-lucide-zap" class="size-2.5 text-black" />
+                      <span>PXY</span>
+                    </span>
+                    <span
+                      v-else-if="asset.proxyStatus === 'generating'"
+                      class="absolute px-1 rounded bg-amber-500/30 border border-amber-500/50 text-[9px] font-medium text-amber-200 flex items-center gap-0.5"
+                      :class="isAssetOnTimeline(asset) ? 'top-5 left-1' : 'top-1 left-1'"
+                    >
+                      <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
+                      <span>PXY</span>
+                    </span>
+
+                    <!-- Folder badge (when viewing all assets) -->
+                    <span
+                      v-if="!selectedFolderId && getFolderBadge(asset)"
+                      class="absolute bottom-1 left-1 px-1 py-0.5 rounded bg-black/80 border border-neutral-700 text-[9px] font-medium text-neutral-200 flex items-center gap-1 max-w-21.25 truncate"
+                      :title="getFolderBadge(asset)?.name"
+                    >
+                      <span
+                        class="size-1.5 rounded-full shrink-0"
+                        :style="{ backgroundColor: getFolderBadge(asset)?.color || '#3b82f6' }"
+                      />
+                      <span class="truncate">{{ getFolderBadge(asset)?.name }}</span>
+                    </span>
 
                     <!-- Hover quick actions -->
                     <div class="absolute bottom-1 right-1 hidden group-hover/thumb:flex items-center gap-0.5">
+                      <UButton
+                        icon="i-lucide-folder-input"
+                        size="xs"
+                        variant="solid"
+                        color="neutral"
+                        :title="t('tmcut.folders.moveToFolder')"
+                        @click.stop="openMoveAssetModal(asset)"
+                      />
+                      <UButton
+                        v-if="isDesktop && asset.kind === 'video' && asset.status !== 'missing'"
+                        :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
+                        size="xs"
+                        variant="solid"
+                        :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
+                        :loading="asset.proxyStatus === 'generating'"
+                        :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
+                        @click.stop="handleProxyAction(asset)"
+                      />
                       <UButton
                         v-if="asset.status !== 'missing'"
                         icon="i-lucide-plus"
@@ -1140,11 +1534,13 @@ const editorExtraActions = computed(() => [
       </div>
 
       <!-- Status footer (design #2): honest project/engine info -->
-      <div class="h-7 shrink-0 border-t border-neutral-800 bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500">
+      <div
+        class="h-7 shrink-0 border-t border-neutral-800 bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500"
+      >
         <div class="flex items-center gap-3 min-w-0">
           <span class="text-neutral-300 font-medium truncate">{{ currentProject?.name }}</span>
           <span v-if="currentProject?.canvas" class="font-mono shrink-0">
-            {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }} · {{ currentProject.canvas.fps }}fps
+            {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }} · {{ canvasFpsValue(currentProject.canvas) }}fps
           </span>
           <span class="font-mono shrink-0">{{ formatTimecode(totalDuration) }}</span>
         </div>
@@ -1159,6 +1555,9 @@ const editorExtraActions = computed(() => [
 
       <!-- Export Modal -->
       <TmcutExportModal v-model:open="showExportModal" />
+
+      <!-- Export Queue Modal -->
+      <TmcutExportQueueModal v-model:open="queueModalOpen" />
 
       <!-- Custom Canvas Modal -->
       <UModal v-model:open="showCustomCanvasModal" :title="t('tmcut.canvas.customTitle')">
@@ -1270,6 +1669,165 @@ const editorExtraActions = computed(() => [
 
       <!-- Direct Media Preview Modal -->
       <ToolsVideoPreviewModal v-model:open="previewModalOpen" :file-path="previewFilePath" :title="previewFileTitle" />
+
+      <!-- Create Folder Modal (Roadmap G-3) -->
+      <UModal v-model:open="createFolderModalOpen" :title="t('tmcut.folders.createTitle')">
+        <template #body>
+          <div class="space-y-4">
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
+              <UInput
+                v-model="newFolderName"
+                :placeholder="t('tmcut.folders.namePlaceholder')"
+                class="w-full"
+                autofocus
+                @keydown.enter="handleCreateFolder"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
+              <div class="flex items-center gap-2">
+                <button
+                  v-for="c in folderTagColors"
+                  :key="c"
+                  type="button"
+                  class="size-6 rounded-full transition-transform cursor-pointer border-2"
+                  :class="newFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:scale-105'"
+                  :style="{ backgroundColor: c }"
+                  @click="newFolderColor = c"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex items-center justify-end gap-2 w-full">
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              @click="createFolderModalOpen = false"
+            >
+              {{ t('global.cancel') }}
+            </UButton>
+            <UButton
+              size="xs"
+              variant="solid"
+              color="primary"
+              :disabled="!newFolderName.trim()"
+              @click="handleCreateFolder"
+            >
+              {{ t('tmcut.folders.create') }}
+            </UButton>
+          </div>
+        </template>
+      </UModal>
+
+      <!-- Edit Folder Modal (Roadmap G-3) -->
+      <UModal v-model:open="editFolderModalOpen" :title="t('tmcut.folders.editTitle')">
+        <template #body>
+          <div class="space-y-4">
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
+              <UInput
+                v-model="editingFolderName"
+                :placeholder="t('tmcut.folders.namePlaceholder')"
+                class="w-full"
+                autofocus
+                @keydown.enter="handleEditFolder"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
+              <div class="flex items-center gap-2">
+                <button
+                  v-for="c in folderTagColors"
+                  :key="c"
+                  type="button"
+                  class="size-6 rounded-full transition-transform cursor-pointer border-2"
+                  :class="editingFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:scale-105'"
+                  :style="{ backgroundColor: c }"
+                  @click="editingFolderColor = c"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #footer>
+          <div class="flex items-center justify-end gap-2 w-full">
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              @click="editFolderModalOpen = false"
+            >
+              {{ t('global.cancel') }}
+            </UButton>
+            <UButton
+              size="xs"
+              variant="solid"
+              color="primary"
+              :disabled="!editingFolderName.trim()"
+              @click="handleEditFolder"
+            >
+              {{ t('global.save') }}
+            </UButton>
+          </div>
+        </template>
+      </UModal>
+
+      <!-- Move Asset to Folder Modal (Roadmap G-3) -->
+      <UModal v-model:open="moveAssetModalOpen" :title="t('tmcut.folders.moveToTitle')">
+        <template #body>
+          <div class="space-y-2">
+            <p v-if="targetMoveAsset" class="text-xs text-neutral-400 truncate mb-3">
+              {{ targetMoveAsset.name }}
+            </p>
+            <!-- Unassigned / Clear folder option -->
+            <button
+              type="button"
+              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 transition-colors cursor-pointer text-left"
+              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, null)"
+            >
+              <div class="flex items-center gap-2">
+                <UIcon name="i-lucide-folder-minus" class="size-4 text-neutral-400" />
+                <span class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.clearFolder') }}</span>
+              </div>
+              <UIcon
+                v-if="targetMoveAsset && !getAssetFolderId(targetMoveAsset)"
+                name="i-lucide-check"
+                class="size-4 text-primary"
+              />
+            </button>
+
+            <!-- List of existing folders -->
+            <div v-if="projectFolders.length === 0" class="py-4 text-center text-xs text-neutral-500">
+              {{ t('tmcut.folders.noFolders') }}
+            </div>
+            <button
+              v-for="folder in projectFolders"
+              :key="folder.id"
+              type="button"
+              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 transition-colors cursor-pointer text-left"
+              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, folder.id)"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="size-3 rounded-full shrink-0" :style="{ backgroundColor: folder.color || '#3b82f6' }" />
+                <span class="text-xs font-medium text-neutral-200 truncate">{{ folder.name }}</span>
+                <span class="text-[10px] text-neutral-500 font-mono">({{ folderCounts[folder.id] || 0 }})</span>
+              </div>
+              <UIcon
+                v-if="targetMoveAsset && getAssetFolderId(targetMoveAsset) === folder.id"
+                name="i-lucide-check"
+                class="size-4 text-primary shrink-0"
+              />
+            </button>
+          </div>
+        </template>
+      </UModal>
+
+      <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
+      <TmcutAiScriptModal v-model="aiScriptModalOpen" />
     </div>
   </BasePage>
 </template>

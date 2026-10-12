@@ -438,10 +438,7 @@ onUnmounted(() => {
     <!-- Per-clip filmstrip layer (roadmap G-1/R42): frames from this
          clip's own source range, over the asset-level strip behind.
          Empty slots stay transparent so the fallback shows through. -->
-    <div
-      v-if="trackType === 'video' && stripFrames.length > 0"
-      class="absolute inset-0 flex pointer-events-none"
-    >
+    <div v-if="trackType === 'video' && stripFrames.length > 0" class="absolute inset-0 flex pointer-events-none">
       <template v-for="(frame, index) in stripFrames" :key="index">
         <img
           v-if="frame"
@@ -456,10 +453,17 @@ onUnmounted(() => {
 
     <!-- Clip Content Body (z-[1]: above the strip layers, below the
          keyframe diamonds z-5 and trim handles z-10) -->
-    <div class="relative z-[1] flex-1 px-2.5 flex items-center gap-1.5 min-w-0 overflow-hidden pointer-events-none">
+    <div class="relative z-1 flex-1 px-2.5 flex items-center gap-1.5 min-w-0 overflow-hidden pointer-events-none">
       <UIcon :name="trackStyles.icon" class="size-3.5 shrink-0 opacity-80" />
       <span class="truncate font-medium text-[11px] leading-tight">
         {{ clip.text || clip.name || 'Clip' }}
+      </span>
+      <span
+        v-if="clip.stabilize && clip.stabilizedPath"
+        class="px-1 py-0.2 rounded text-[8px] font-semibold bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shrink-0 uppercase tracking-wider"
+        title="Stabilized"
+      >
+        STAB
       </span>
       <span class="ml-auto text-[9px] font-mono opacity-60 shrink-0">
         {{ duration.toFixed(1) }}s
@@ -483,7 +487,7 @@ onUnmounted(() => {
     <span
       v-for="(pct, i) in keyframePercents"
       :key="`kf-${i}`"
-      class="absolute top-1/2 w-1.5 h-1.5 -translate-y-1/2 bg-white/90 rotate-45 z-[5] pointer-events-none"
+      class="absolute top-1/2 w-1.5 h-1.5 -translate-y-1/2 bg-white/90 rotate-45 z-5 pointer-events-none"
       :style="{ left: `calc(${pct}% - 3px)` }"
     />
 
@@ -504,7 +508,7 @@ onUnmounted(() => {
     <div
       v-if="menuOpen"
       ref="menuEl"
-      class="fixed z-[120] w-56 rounded-lg border border-neutral-700 bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-200 select-none"
+      class="fixed z-120 w-56 rounded-lg border border-neutral-700 bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-200 select-none"
       :style="{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }"
       @contextmenu.prevent
     >

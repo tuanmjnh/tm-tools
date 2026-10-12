@@ -205,7 +205,7 @@ class TaskProcessManager {
         if (this.beforeRunTask) await this.beforeRunTask(t, nextIdx, task)
         this.log('info', 'Start task', { idx: nextIdx })
 
-        const child = spawn(task.command, task.args || [], task.options || {})
+        const child = spawn(task.command, task.args || [], { ...(task.options || {}), maxBuffer: 10 * 1024 * 1024 })
         this.children.set(nextIdx, child)
 
         const timeoutMs = task.timeout || this.defaultTimeout
@@ -281,7 +281,7 @@ class TaskProcessManager {
 
   runSingleTask(gIdx, tIdx, task) {
     return new Promise((resolve) => {
-      const child = spawn(task.command, task.args || [], task.options || {})
+      const child = spawn(task.command, task.args || [], { ...(task.options || {}), maxBuffer: 10 * 1024 * 1024 })
       this.log('info', `Run group ${gIdx} task ${tIdx}`, task)
 
       let stdoutBuf = Buffer.alloc(0)

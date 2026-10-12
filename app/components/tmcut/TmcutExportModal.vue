@@ -7,6 +7,7 @@ import { useToolTaskManager } from '~/composables/useToolTaskManager'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
+import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import type { ToolTask } from '~/types'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -17,6 +18,7 @@ const { formatTimecode, renderRange } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl } = useTmcutMedia()
 const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
+const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
 const toast = useToast()
 
 // ---- Output configuration (design #3) ----
@@ -229,7 +231,7 @@ function startWatching(filePath: string) {
 // ---- Derived canvas / output info ----
 const canvasW = computed(() => currentProject.value?.canvas?.width || 1920)
 const canvasH = computed(() => currentProject.value?.canvas?.height || 1080)
-const canvasFps = computed(() => currentProject.value?.canvas?.fps || 30)
+const canvasFps = computed(() => canvasFpsValue(currentProject.value?.canvas))
 
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b)
@@ -465,15 +467,15 @@ watch(
   }
 )
 
-async function startExport() {
-  if (!currentProject.value) return
+function validateExportPreconditions(): boolean {
+  if (!currentProject.value) return false
   if (!isDesktop.value) {
     toast.add({ title: t('tmcut.export.desktopOnly'), color: 'warning' })
-    return
+    return false
   }
   if (!outputPath.value || !fileName.value.trim()) {
     toast.add({ title: t('tmcut.export.specifyPath'), color: 'error' })
-    return
+    return false
   }
 
   // Rotated text needs center alignment (roadmap R12)
@@ -487,27 +489,48 @@ async function startExport() {
       description: t('tmcut.export.rotationConflictDesc'),
       color: 'warning'
     })
-    return
+    return false
   }
+  return true
+}
+
+function buildCompileResult() {
+  if (!currentProject.value) {
+    throw new Error('No active project to compile')
+  }
+  return compileTimelineToFfmpeg(currentProject.value, outputPath.value, {
+    encoder: activeEncoder.value,
+    bitrate: effectiveBitrateMbps.value,
+    crf: 22,
+    mode: mode.value,
+    range: activeRange.value,
+    outScale: outScale.value,
+    outFps: mode.value === 'video' ? effectiveFps.value : undefined,
+    audioBitrate: audioBitrate.value,
+    denoise: denoise.value,
+    lut3dPath: lut3dPath.value || undefined
+  })
+}
+
+const specsSummary = computed(() => {
+  if (mode.value === 'audio') {
+    return `Audio ${audioFormat.value.toUpperCase()} · ${audioBitrate.value} kbps`
+  }
+  if (mode.value === 'gif') {
+    return `GIF · ${outputW.value}x${outputH.value} · 15fps`
+  }
+  return `${outputW.value}x${outputH.value} · ${effectiveFps.value}fps · ${effectiveBitrateMbps.value}Mbps · ${activeEncoder.value}`
+})
+
+async function startExport() {
+  if (!validateExportPreconditions()) return
 
   isExporting.value = true
   exportDone.value = false
   exportError.value = ''
 
   try {
-    const compileResult = compileTimelineToFfmpeg(currentProject.value, outputPath.value, {
-      encoder: activeEncoder.value,
-      bitrate: effectiveBitrateMbps.value,
-      crf: 22,
-      mode: mode.value,
-      range: activeRange.value,
-      outScale: outScale.value,
-      outFps: mode.value === 'video' ? effectiveFps.value : undefined,
-      audioBitrate: audioBitrate.value,
-      denoise: denoise.value,
-      lut3dPath: lut3dPath.value || undefined
-    })
-
+    const compileResult = buildCompileResult()
     const task: ToolTask = {
       args: compileResult.args,
       meta: {
@@ -519,15 +542,18 @@ async function startExport() {
       }
     }
 
-    await taskManager.initManager({
-      threads: 1,
-      maxRetry: 0,
-      timeout: 30 * 60 * 1000
-    })
+    enqueueJob({
+      projectId: currentProject.value?.id,
+      projectName: currentProject.value?.name || fileName.value,
+      outputPath: outputPath.value,
+      mode: mode.value,
+      specs: specsSummary.value,
+      duration: compileResult.duration,
+      task,
+      watchFolder: watchFolder.value && isDesktop.value,
+      autoPreview: autoPreview.value
+    }, true)
 
-    await taskManager.setTasks([task])
-    await taskManager.start()
-    await taskManager.refreshStatus()
     if (watchFolder.value && isDesktop.value) {
       startWatching(outputPath.value)
     }
@@ -538,8 +564,50 @@ async function startExport() {
   }
 }
 
+function addToQueue() {
+  if (!validateExportPreconditions()) return
+
+  try {
+    const compileResult = buildCompileResult()
+    const task: ToolTask = {
+      args: compileResult.args,
+      meta: {
+        taskId: `tmcut-${Date.now()}`,
+        output: outputPath.value,
+        duration: compileResult.duration,
+        threads: 1,
+        startedAt: new Date().toISOString()
+      }
+    }
+
+    enqueueJob({
+      projectId: currentProject.value?.id,
+      projectName: currentProject.value?.name || fileName.value,
+      outputPath: outputPath.value,
+      mode: mode.value,
+      specs: specsSummary.value,
+      duration: compileResult.duration,
+      task,
+      watchFolder: watchFolder.value && isDesktop.value,
+      autoPreview: autoPreview.value
+    }, false)
+
+    toast.add({
+      title: t('tmcut.queue.jobAdded', { name: currentProject.value?.name || fileName.value }),
+      color: 'success'
+    })
+  } catch (err: unknown) {
+    exportError.value = err instanceof Error ? err.message : String(err)
+    toast.add({ title: t('tmcut.export.compilerError'), description: exportError.value, color: 'error' })
+  }
+}
+
 async function cancelExport() {
-  await taskManager.stopAll()
+  if (activeJobId.value) {
+    await cancelJob(activeJobId.value)
+  } else {
+    await taskManager.stopAll()
+  }
   stopWatching()
   isExporting.value = false
 }
@@ -584,13 +652,25 @@ function previewResultDirectly() {
                 </span>
               </div>
             </div>
-            <UButton
-              icon="i-lucide-x"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              @click="open = false"
-            />
+            <div class="flex items-center gap-2">
+              <UButton
+                icon="i-lucide-list-checks"
+                size="xs"
+                variant="soft"
+                :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
+                :title="t('tmcut.queue.title')"
+                @click="queueModalOpen = true"
+              >
+                <span>{{ t('tmcut.export.queueCount', { n: activeJobsCount }) }}</span>
+              </UButton>
+              <UButton
+                icon="i-lucide-x"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                @click="open = false"
+              />
+            </div>
           </div>
 
           <!-- File name (7) + destination (5) -->
@@ -1236,12 +1316,32 @@ function previewResultDirectly() {
             </UButton>
             <UButton
               v-if="isExporting"
+              color="primary"
+              variant="soft"
+              icon="i-lucide-list-checks"
+              size="sm"
+              @click="open = false; queueModalOpen = true"
+            >
+              {{ t('tmcut.export.viewQueue') }}
+            </UButton>
+            <UButton
+              v-if="isExporting"
               color="error"
               variant="soft"
               size="sm"
               @click="cancelExport"
             >
               {{ t('tmcut.export.cancelExport') }}
+            </UButton>
+            <UButton
+              v-if="!isExporting && !exportDone"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-list-plus"
+              size="sm"
+              @click="addToQueue"
+            >
+              {{ t('tmcut.export.addToQueue') }}
             </UButton>
             <UButton
               v-if="!isExporting && !exportDone"
@@ -1265,4 +1365,7 @@ function previewResultDirectly() {
     :file-path="outputPath"
     :title="currentProject?.name"
   />
+
+  <!-- Export Queue Modal -->
+  <TmcutExportQueueModal v-model:open="queueModalOpen" />
 </template>

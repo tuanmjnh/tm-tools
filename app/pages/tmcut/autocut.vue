@@ -23,6 +23,16 @@ const included = ref<number[]>([])
 const draftProjectId = ref<string | null>(null)
 const applying = ref(false)
 
+// AutoCut v2: transcript vocabulary analysis options
+const filterFillerWords = ref(true)
+const highlightKeywordsText = ref('')
+const highlightKeywords = computed(() =>
+  highlightKeywordsText.value
+    .split(',')
+    .map(word => word.trim())
+    .filter(Boolean)
+)
+
 // Mini-review player state (design #4 right panel)
 const activeSegmentIndex = ref<number | null>(null)
 const reviewTime = ref(0)
@@ -77,6 +87,9 @@ const speechPct = computed(() => {
   if (!edlResult.value || sourceDuration.value <= 0) return 0
   return Math.min(100, Math.round((edlResult.value.speechSec / sourceDuration.value) * 100))
 })
+
+const fillerCount = computed(() => edlResult.value?.fillerSegmentCount || 0)
+const highlightCount = computed(() => edlResult.value?.highlightSegmentCount || 0)
 
 // Real transcript text per segment (overlapping Whisper lines are joined)
 const transcriptLines = computed(() => segments.value.map((segment) => {
@@ -224,7 +237,10 @@ async function startAnalysis() {
   currentStep.value = 3
   activeSegmentIndex.value = null
   reviewTime.value = 0
-  const result = await analyzeSource(sourceAsset.value, selectedProfile.value)
+  const result = await analyzeSource(sourceAsset.value, selectedProfile.value, {
+    filterFillerWords: filterFillerWords.value,
+    highlightKeywords: highlightKeywords.value
+  })
   if (!result) return
   edlResult.value = result
   included.value = result.edl.segments.map((_, index) => index)
@@ -255,6 +271,19 @@ function bulkSelectHigh() {
     .filter(index => index !== -1)
 }
 
+function bulkDeselectFillers() {
+  included.value = included.value.filter((index) => {
+    const segment = segments.value[index]
+    return !(segment?.hasFillerWords || segment?.reason === 'filler-word')
+  })
+}
+
+function bulkSelectHighlights() {
+  included.value = segments.value
+    .map((segment, index) => (segment.isHighlight || segment.reason === 'highlight' ? index : -1))
+    .filter(index => index !== -1)
+}
+
 function formatRange(start: number, end: number): string {
   return `${formatDurationSec(start)} - ${formatDurationSec(end)}`
 }
@@ -268,7 +297,7 @@ function selectSegment(index: number, autoplay = false) {
   if (!segment || !video) return
   video.currentTime = segment.start
   reviewTime.value = segment.start
-  if (autoplay) video.play().catch(() => {})
+  if (autoplay) video.play().catch(() => { })
 }
 
 function onReviewLoadedMetadata() {
@@ -294,7 +323,7 @@ function toggleReviewPlay() {
     if (video.currentTime >= segment.end || video.currentTime < segment.start) {
       video.currentTime = segment.start
     }
-    video.play().catch(() => {})
+    video.play().catch(() => { })
   } else {
     video.pause()
   }
@@ -358,9 +387,7 @@ async function handleAccept() {
 
     <div class="space-y-4 max-w-7xl">
       <!-- Stepper breadcrumb (design #4) -->
-      <div
-        class="flex items-center gap-3 overflow-x-auto border-b border-neutral-200 dark:border-neutral-800 pb-4"
-      >
+      <div class="flex items-center gap-3 overflow-x-auto border-b border-neutral-200 dark:border-neutral-800 pb-4">
         <template v-for="(s, index) in steps" :key="s.step">
           <div
             class="flex items-center gap-2 shrink-0 transition"
@@ -404,9 +431,7 @@ async function handleAccept() {
         <!-- Honest status chips: real analyzer version + real average score
              (the mockup's "Neural Engine v3.1 / Confidence 97.8%" is fake) -->
         <div v-if="edlResult" class="hidden lg:flex items-center gap-2 ml-auto shrink-0">
-          <span
-            class="px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 font-mono text-[11px] text-neutral-500"
-          >
+          <span class="px-2 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 font-mono text-[11px] text-neutral-500">
             {{ t('tmcut.wizard.analyzer') }} {{ edlResult.edl.analyzerVersion }}
           </span>
           <span class="px-2 py-1 rounded-lg bg-primary/10 font-mono text-[11px] text-primary font-semibold">
@@ -481,6 +506,74 @@ async function handleAccept() {
               </h4>
               <p class="text-xs text-neutral-500">
                 {{ prof.desc }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- AutoCut v2: Vocabulary & Filler Words Card -->
+        <div
+          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-neutral-50 dark:bg-neutral-900/60 space-y-4"
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-primary">
+                <UIcon name="i-lucide-sparkles" class="w-4 h-4" />
+              </div>
+              <h4 class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                {{ t('tmcut.autocutV2.title') }}
+              </h4>
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold">
+              {{ t('tmcut.autocutV2.badge') }}
+            </span>
+          </div>
+
+          <p class="text-xs text-neutral-500">
+            {{ t('tmcut.autocutV2.desc') }}
+          </p>
+
+          <div class="space-y-3 pt-1">
+            <!-- Toggle Filler Words -->
+            <div
+              class="flex items-center justify-between gap-4 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+            >
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5">
+                  <UIcon name="i-lucide-filter-x" class="w-4 h-4 text-amber-500" />
+                  <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">
+                    {{ t('tmcut.autocutV2.filterFillerLabel') }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-neutral-500">
+                  {{ t('tmcut.autocutV2.filterFillerDesc') }}
+                </p>
+              </div>
+              <USwitch v-model="filterFillerWords" />
+            </div>
+
+            <!-- Priority Keywords Input -->
+            <div
+              class="space-y-1.5 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <UIcon name="i-lucide-tag" class="w-4 h-4 text-purple-500" />
+                  <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">
+                    {{ t('tmcut.autocutV2.keywordsLabel') }}
+                  </span>
+                </div>
+                <span class="text-[10px] text-neutral-400">
+                  {{ t('tmcut.autocutV2.keywordsOptional') }}
+                </span>
+              </div>
+              <UInput
+                v-model="highlightKeywordsText"
+                size="sm"
+                :placeholder="t('tmcut.autocutV2.keywordsPlaceholder')"
+              />
+              <p class="text-[10px] text-neutral-400">
+                {{ t('tmcut.autocutV2.keywordsHelp') }}
               </p>
             </div>
           </div>
@@ -601,6 +694,24 @@ async function handleAccept() {
                     :label="t('tmcut.wizard.bulkHigh')"
                     @click="bulkSelectHigh"
                   />
+                  <UButton
+                    v-if="fillerCount > 0"
+                    size="xs"
+                    variant="soft"
+                    color="warning"
+                    icon="i-lucide-filter-x"
+                    :label="t('tmcut.autocutV2.deselectFillers', { count: fillerCount })"
+                    @click="bulkDeselectFillers"
+                  />
+                  <UButton
+                    v-if="highlightCount > 0"
+                    size="xs"
+                    variant="soft"
+                    color="primary"
+                    icon="i-lucide-sparkles"
+                    :label="t('tmcut.autocutV2.selectHighlights', { count: highlightCount })"
+                    @click="bulkSelectHighlights"
+                  />
                 </div>
               </div>
 
@@ -649,7 +760,7 @@ async function handleAccept() {
                 </p>
               </div>
 
-              <div v-else class="flex flex-col gap-1.5 max-h-[480px] overflow-y-auto pr-1">
+              <div v-else class="flex flex-col gap-1.5 max-h-120 overflow-y-auto pr-1">
                 <div
                   v-for="(segment, index) in segments"
                   :key="index"
@@ -700,9 +811,7 @@ async function handleAccept() {
                   <div class="flex flex-col flex-1 min-w-0 gap-1">
                     <div class="flex items-center justify-between gap-2">
                       <div class="flex items-center gap-1.5 min-w-0">
-                        <span
-                          class="font-mono text-xs text-neutral-900 dark:text-neutral-100 font-semibold"
-                        >
+                        <span class="font-mono text-xs text-neutral-900 dark:text-neutral-100 font-semibold">
                           {{ formatRange(segment.start, segment.end) }}
                         </span>
                         <span class="font-mono text-[10px] text-neutral-400">
@@ -726,11 +835,27 @@ async function handleAccept() {
                         :style="{ width: `${Math.round(segment.score * 100)}%` }"
                       />
                     </div>
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex flex-wrap items-center gap-1.5">
                       <span
                         class="text-[10px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-500 truncate"
                       >
                         {{ segment.reason }}
+                      </span>
+                      <span
+                        v-if="segment.hasFillerWords || segment.reason === 'filler-word'"
+                        class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
+                      >
+                        <UIcon name="i-lucide-message-square-warning" class="w-3 h-3" />
+                        {{ t('tmcut.autocutV2.fillerTag') }}<template v-if="segment.detectedFillers?.length">: {{
+                          segment.detectedFillers.join(', ') }}</template>
+                      </span>
+                      <span
+                        v-if="segment.isHighlight || segment.reason === 'highlight'"
+                        class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-medium"
+                      >
+                        <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
+                        {{ t('tmcut.autocutV2.highlightTag') }}<template v-if="segment.matchedKeywords?.length">: {{
+                          segment.matchedKeywords.join(', ') }}</template>
                       </span>
                     </div>
                   </div>
@@ -754,12 +879,17 @@ async function handleAccept() {
             <!-- RIGHT: mini player + breakdown + draft notice -->
             <div class="xl:col-span-5 flex flex-col gap-4">
               <!-- Video player mini-review card -->
-              <div class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex flex-col gap-2">
+              <div
+                class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex flex-col gap-2"
+              >
                 <div class="flex items-center justify-between gap-2">
                   <div class="flex items-center gap-1.5 min-w-0">
                     <UIcon name="i-lucide-crop-portrait" class="w-4 h-4 text-primary shrink-0" />
                     <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100 truncate">
-                      {{ t('tmcut.wizard.playerTitle', { index: activeSegmentIndex === null ? '–' : activeSegmentIndex + 1 }) }}
+                      {{ t('tmcut.wizard.playerTitle', {
+                        index: activeSegmentIndex === null ? '–' : activeSegmentIndex
+                          + 1
+                      }) }}
                     </span>
                   </div>
                   <span
@@ -769,7 +899,9 @@ async function handleAccept() {
                   </span>
                 </div>
 
-                <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                <div
+                  class="relative w-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center"
+                >
                   <video
                     ref="reviewVideo"
                     :src="sourceVideoUrl"
@@ -890,7 +1022,10 @@ async function handleAccept() {
                       {{ edlResult.silenceCount }}
                     </span>
                     <span class="text-[10px] text-neutral-500 truncate">
-                      {{ t('tmcut.wizard.metricSilencesSub', { duration: formatDurationSec(edlResult.silenceRemovedSec) }) }}
+                      {{ t('tmcut.wizard.metricSilencesSub', {
+                        duration: formatDurationSec(edlResult.silenceRemovedSec)
+                      })
+                      }}
                     </span>
                   </div>
                   <div class="bg-neutral-50 dark:bg-neutral-900/60 p-2.5 rounded-lg flex flex-col">
@@ -921,7 +1056,9 @@ async function handleAccept() {
 
                 <!-- Safe draft project notice (docs §41) -->
                 <div class="p-2.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-start gap-2">
-                  <div class="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                  <div
+                    class="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5"
+                  >
                     <UIcon name="i-lucide-shield-check" class="w-3 h-3" />
                   </div>
                   <div class="flex flex-col gap-0.5">
@@ -929,9 +1066,7 @@ async function handleAccept() {
                       <span class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
                         {{ t('tmcut.wizard.draftNoticeTitle') }}
                       </span>
-                      <span
-                        class="font-mono text-[9px] bg-white dark:bg-neutral-900 px-1 rounded text-neutral-500"
-                      >
+                      <span class="font-mono text-[9px] bg-white dark:bg-neutral-900 px-1 rounded text-neutral-500">
                         Non-destructive
                       </span>
                     </div>

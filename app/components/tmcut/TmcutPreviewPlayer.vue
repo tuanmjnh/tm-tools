@@ -3,17 +3,18 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
-import { computeFitObjectStyle } from '~/utils/tmcut/canvas'
+import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
-import { toURL } from '~/utils/ffmpegHelper'
 import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND } from '@tmcut-core'
-import type { TmcutKeyframe } from '@tmcut-core'
+import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
+import { useTmcutMedia } from '~/composables/useTmcutMedia'
 
 const { t } = useI18n()
 const toast = useToast()
 const { available: canExtractFrames, extractFrame } = useTmcutFrames()
-const { currentProject, totalDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory } = useTmcutProject()
+const { isDesktop, proxyPreview, resolveMediaSrc, findAssetBySrc } = useTmcutMedia()
+const { currentProject, totalDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
 const {
   playhead,
   isPlaying,
@@ -226,23 +227,46 @@ const monitorBoxStyle = computed(() => {
   }
 })
 
-// Current media URL for active video clip.
-// Reuse the same `toURL` helper as ToolsVideoFramePreview (the proven
-// preview in tools/video.vue): local files are served through the
-// privileged `media://local` protocol registered in electron/main.cjs.
-// A raw `file://` URL is malformed for Windows paths and blocked by
-// the renderer's origin/CSP rules, so the video would never load.
+// Current media URL for active video clip (with proxy preview and video stabilizer support, roadmap F-4/E-5).
+// When proxy preview is enabled and an asset proxy exists, resolveMediaSrc
+// serves the lightweight 540p proxy. When video stabilization is enabled, the stabilized
+// footage is loaded seamlessly.
 const currentMediaSrc = computed(() => {
-  const src = activeVideoClip.value?.clip?.src
+  const clip = activeVideoClip.value?.clip
+  if (!clip) return ''
+  if (clip.stabilize && clip.stabilizedPath) {
+    return resolveMediaSrc(clip.stabilizedPath)
+  }
+  const src = clip.src
   if (!src) return ''
-  return toURL(src)
+  return resolveMediaSrc(src)
 })
 
-// Media URL for the OUTGOING crossfade layer (roadmap B3).
+// Media URL for the OUTGOING crossfade layer (roadmap B3, with proxy & stabilizer support).
 const outgoingMediaSrc = computed(() => {
-  const src = transitionCrossfade.value?.outgoing?.src
+  const outgoing = transitionCrossfade.value?.outgoing
+  if (!outgoing) return ''
+  if (outgoing.stabilize && outgoing.stabilizedPath) {
+    return resolveMediaSrc(outgoing.stabilizedPath)
+  }
+  const src = outgoing.src
   if (!src) return ''
-  return toURL(src)
+  return resolveMediaSrc(src)
+})
+
+// Whether the active clip currently renders via proxy
+const isCurrentClipProxy = computed(() => {
+  if (!proxyPreview.value) return false
+  const src = activeVideoClip.value?.clip?.src
+  if (!src) return false
+  const asset = findAssetBySrc(src)
+  return !!(asset?.proxyPath && asset.proxyStatus === 'ready')
+})
+
+// Whether the active clip currently renders via stabilized footage (roadmap E-5)
+const isCurrentClipStabilized = computed(() => {
+  const clip = activeVideoClip.value?.clip
+  return !!(clip?.stabilize && clip?.stabilizedPath)
 })
 
 // Seek the outgoing layer to its frame once its metadata lands (the rAF
@@ -357,11 +381,60 @@ watch(currentMediaSrc, (newSrc) => {
   }
 })
 
+// --- Canvas Crop & Mask (Roadmap F-3) ---
+const isCropActive = computed(() => {
+  return !!(isCropEditing.value && activeVideoClip.value && activeVideoClip.value.clip.id === selectedClipId.value)
+})
+
+const currentCropRect = computed(() => {
+  const clip = activeVideoClip.value?.clip
+  return clampCropRect(clip?.cropRect || { x: 0.1, y: 0.1, w: 0.8, h: 0.8 })
+})
+
+const activeCropRatio = ref<string>('free')
+const cropRatioPresets = computed(() => CROP_RATIO_PRESETS)
+
+function setCropRatioPreset(presetId: string) {
+  activeCropRatio.value = presetId
+  const clip = activeVideoClip.value?.clip
+  if (!clip) return
+  const preset = CROP_RATIO_PRESETS.find(p => p.id === presetId)
+  const sourceW = internalVideoRef.value?.videoWidth || 1920
+  const sourceH = internalVideoRef.value?.videoHeight || 1080
+  const adjusted = applyCropRatio(currentCropRect.value, preset?.ratio ?? null, sourceW, sourceH)
+  pushHistory()
+  updateClip(clip.id, { cropRect: adjusted })
+}
+
+function resetCropRect() {
+  const clip = activeVideoClip.value?.clip
+  if (!clip) return
+  pushHistory()
+  activeCropRatio.value = 'free'
+  updateClip(clip.id, { cropRect: { x: 0, y: 0, w: 1, h: 1 } })
+}
+
+function triggerCropTool() {
+  const clip = activeVideoClip.value?.clip
+  if (!clip) return
+  if (selectedClipId.value !== clip.id) {
+    selectClip(clip.id)
+  }
+  if (clip.fit !== 'crop') {
+    pushHistory()
+    updateClip(clip.id, { fit: 'crop', cropRect: clip.cropRect || { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } })
+  }
+  toggleCropEditing()
+}
+
 // Media fitting styles (Phase 2): fit/fill/crop/stretch/smart
-const videoObjectStyle = computed(() => {
+const videoObjectStyle = computed<Record<string, string>>(() => {
   const clip = activeVideoClip.value?.clip
   if (!clip) return {}
-  return computeFitObjectStyle(clip.fit || 'fit', clip.focusX ?? 0.5, clip.focusY ?? 0.5, clip.cropRect)
+  if (isCropActive.value) {
+    return { objectFit: 'contain', objectPosition: '50% 50%' }
+  }
+  return computeFitObjectStyle(clip.fit || 'fit', clip.focusX ?? 0.5, clip.focusY ?? 0.5, clip.cropRect) as Record<string, string>
 })
 
 // Text overlays scale with the rendered canvas size (roadmap §65.2):
@@ -415,6 +488,44 @@ function clipVisual(clip: { offset?: number, scale?: number, x?: number, y?: num
   }
 }
 
+function computeEffectsCssFilter(effects: Array<{ type: string, params: Record<string, unknown> }>): string {
+  if (!effects || effects.length === 0) return ''
+  const parts: string[] = []
+  for (const eff of effects) {
+    if (eff.type === 'blur') {
+      const amt = Number(eff.params.amount) || 0
+      if (amt > 0) parts.push(`blur(${((amt / 100) * 12).toFixed(1)}px)`)
+    } else if (eff.type === 'sharpen') {
+      const amt = Number(eff.params.amount) || 0
+      if (amt > 0) parts.push(`contrast(${1 + (amt / 100) * 0.25}) brightness(${1 + (amt / 100) * 0.05})`)
+    } else if (eff.type === 'eq-grade') {
+      const b = (Number(eff.params.brightness) || 0) / 100
+      const c = (Number(eff.params.contrast) || 100) / 100
+      const s = (Number(eff.params.saturation) || 100) / 100
+      parts.push(`brightness(${1 + b * 0.5}) contrast(${c}) saturate(${s})`)
+    } else if (eff.type === 'lut3d') {
+      const preset = String(eff.params.lut || '')
+      if (preset === 'warm') parts.push('sepia(0.2) saturate(1.15) hue-rotate(-5deg)')
+      else if (preset === 'cool') parts.push('saturate(0.9) hue-rotate(10deg)')
+      else if (preset === 'cinematic') parts.push('contrast(1.2) saturate(1.1)')
+      else if (preset === 'vintage') parts.push('sepia(0.35) contrast(0.9) brightness(0.95)')
+    }
+  }
+  return parts.join(' ')
+}
+
+const activeVignetteStyle = computed(() => {
+  const clip = activeVideoClip.value?.clip
+  if (!clip?.effects) return null
+  const vig = clip.effects.find(e => e.type === 'vignette')
+  if (!vig) return null
+  const intensity = (Number(vig.params.intensity) || 50) / 100
+  const alpha = (intensity * 0.85).toFixed(2)
+  return {
+    background: `radial-gradient(circle, transparent 40%, rgba(0, 0, 0, ${alpha}) 100%)`
+  }
+})
+
 // Active video transform styles (scale, position, rotation, opacity).
 // x/y are CANVAS pixels like text overlays: multiplied by the preview
 // scale so the offset stays resolution-independent (they were raw
@@ -426,7 +537,11 @@ const videoTransformStyle = computed(() => {
   // Keyframes (roadmap B1) evaluate at the playhead; the static clip
   // fields are the fallback for props without keyframes.
   const base = clipVisual(clip)
-  const style: { transform: string, opacity: number, clipPath?: string } = { ...base }
+  const style: { transform: string, opacity: number, clipPath?: string, filter?: string } = { ...base }
+  const effectFilter = computeEffectsCssFilter(clip.effects || [])
+  if (effectFilter) {
+    style.filter = effectFilter
+  }
 
   // Transition crossfade (roadmap B3): the main element is the INCOMING
   // clip — ramp it (or wipe/slide/zoom it) over the outgoing layer.
@@ -460,9 +575,9 @@ function toggleFullscreen() {
   const el = monitorRef.value
   if (!el) return
   if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {})
+    document.exitFullscreen().catch(() => { })
   } else {
-    el.requestFullscreen().catch(() => {})
+    el.requestFullscreen().catch(() => { })
   }
 }
 
@@ -477,6 +592,13 @@ function textOverlayStyle(textClip: {
   shadow?: boolean
   stroke?: boolean
   offset?: number
+  in?: number
+  out?: number
+  speed?: number
+  animIn?: TmcutTextAnimationType
+  animInDuration?: number
+  animOut?: TmcutTextAnimationType
+  animOutDuration?: number
   x?: number
   y?: number
   scale?: number
@@ -494,11 +616,43 @@ function textOverlayStyle(textClip: {
   const ts = evalKeyframe(textClip, 'scale', at) ?? textClip.scale ?? 100
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
   const fontSize = textClip.fontSize || 36
+
+  // Text in/out animations (Roadmap C-5): preview simulation matching export math
+  const tStart = textClip.offset || 0
+  const clipDuration = Math.max(0.05, ((textClip.out ?? 1) - (textClip.in ?? 0)) / (textClip.speed || 1))
+  const localTime = Math.max(0, playhead.value - tStart)
+
+  const animIn = textClip.animIn && textClip.animIn !== 'none' ? textClip.animIn : null
+  const dIn = animIn ? Math.max(0.05, Math.min(clipDuration / 2, textClip.animInDuration ?? 0.5)) : 0
+  const pIn = dIn > 0 ? Math.min(1, Math.max(0, localTime / dIn)) : 1
+
+  const animOut = textClip.animOut && textClip.animOut !== 'none' ? textClip.animOut : null
+  const dOut = animOut ? Math.max(0.05, Math.min(clipDuration / 2, textClip.animOutDuration ?? 0.5)) : 0
+  const pOut = dOut > 0 ? Math.min(1, Math.max(0, (clipDuration - localTime) / dOut)) : 1
+
+  // Alpha / Opacity ramp
+  const alphaIn = animIn ? pIn : 1
+  const alphaOut = animOut ? pOut : 1
+  const animAlpha = Math.min(alphaIn, alphaOut)
+
+  // Slide delta offsets (pixels)
+  const inXDir = animIn === 'slide-left' ? 100 : animIn === 'slide-right' ? -100 : 0
+  const outXDir = animOut === 'slide-left' ? -100 : animOut === 'slide-right' ? 100 : 0
+  const animDeltaX = (inXDir * (1 - pIn)) + (outXDir * (1 - pOut))
+
+  const inYDir = animIn === 'slide-up' ? 60 : animIn === 'slide-down' ? -60 : 0
+  const outYDir = animOut === 'slide-up' ? -60 : animOut === 'slide-down' ? 60 : 0
+  const animDeltaY = (inYDir * (1 - pIn)) + (outYDir * (1 - pOut))
+
+  // Zoom scale multiplier
+  const scaleIn = animIn === 'zoom-in' ? (0.3 + 0.7 * pIn) : animIn === 'zoom-out' ? (1.5 - 0.5 * pIn) : 1
+  const scaleOut = animOut === 'zoom-out' ? (0.3 + 0.7 * pOut) : animOut === 'zoom-in' ? (1.5 - 0.5 * pOut) : 1
+  const animScaleMultiplier = scaleIn * scaleOut
+
   // Anchor (roadmap C-2) mirrors the export x expression exactly:
   // left = 0+x, center = (w−tw)/2+x, right = w−tw+x — the block's EDGE
   // lands at that point; vertical anchoring is always centered (export
-  // y is always (h−th)/2+y). The old top-left anchor lied about where
-  // the export placed the text.
+  // y is always (h−th)/2+y).
   const align = textClip.align || 'center'
   const anchorX = align === 'left' ? '0%' : align === 'right' ? '100%' : '50%'
   return {
@@ -522,8 +676,8 @@ function textOverlayStyle(textClip: {
     fontSize: `${fontSize * scale}px`,
     left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
     top: '50%',
-    transform: `translate(${tx * scale}px, ${ty * scale}px) translate(${anchorX}, -50%) scale(${ts / 100}) rotate(${textClip.rotation || 0}deg)`,
-    opacity: to / 100
+    transform: `translate(${(tx + animDeltaX) * scale}px, ${(ty + animDeltaY) * scale}px) translate(${anchorX}, -50%) scale(${(ts / 100) * animScaleMultiplier}) rotate(${textClip.rotation || 0}deg)`,
+    opacity: (to / 100) * animAlpha
   }
 }
 
@@ -709,14 +863,134 @@ function onSelectionRotateMouseDown(e: MouseEvent) {
   window.addEventListener('mouseup', onMouseUp)
 }
 
+// 8 crop resize handles: 4 corners + 4 edges
+const cropHandles = [
+  { key: 'nw', pos: '-top-1.5 -left-1.5', cursor: 'cursor-nwse-resize' },
+  { key: 'ne', pos: '-top-1.5 -right-1.5', cursor: 'cursor-nesw-resize' },
+  { key: 'sw', pos: '-bottom-1.5 -left-1.5', cursor: 'cursor-nesw-resize' },
+  { key: 'se', pos: '-bottom-1.5 -right-1.5', cursor: 'cursor-nwse-resize' },
+  { key: 'n', pos: '-top-1.5 left-1/2 -translate-x-1/2', cursor: 'cursor-ns-resize' },
+  { key: 's', pos: '-bottom-1.5 left-1/2 -translate-x-1/2', cursor: 'cursor-ns-resize' },
+  { key: 'w', pos: '-left-1.5 top-1/2 -translate-y-1/2', cursor: 'cursor-ew-resize' },
+  { key: 'e', pos: '-right-1.5 top-1/2 -translate-y-1/2', cursor: 'cursor-ew-resize' }
+]
+
+function onCropBodyMouseDown(e: MouseEvent) {
+  const clip = activeVideoClip.value?.clip
+  if (!clip || e.button !== 0 || !monitorRef.value) return
+  e.stopPropagation()
+  pushHistory()
+  const clipId = clip.id
+  const startX = e.clientX
+  const startY = e.clientY
+  const init = { ...currentCropRect.value }
+  const monitorRect = monitorRef.value.getBoundingClientRect()
+  const monW = Math.max(1, monitorRect.width)
+  const monH = Math.max(1, monitorRect.height)
+  let moved = false
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
+    moved = true
+    suppressCanvasClickUntil = Date.now() + 250
+    const dx = (moveEvent.clientX - startX) / monW
+    const dy = (moveEvent.clientY - startY) / monH
+    const nextX = Math.max(0, Math.min(1 - init.w, init.x + dx))
+    const nextY = Math.max(0, Math.min(1 - init.h, init.y + dy))
+    updateClip(clipId, {
+      cropRect: clampCropRect({ x: nextX, y: nextY, w: init.w, h: init.h })
+    })
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+function onCropHandleMouseDown(e: MouseEvent, handleKey: string) {
+  const clip = activeVideoClip.value?.clip
+  if (!clip || e.button !== 0 || !monitorRef.value) return
+  e.stopPropagation()
+  pushHistory()
+  const clipId = clip.id
+  const startX = e.clientX
+  const startY = e.clientY
+  const init = { ...currentCropRect.value }
+  const monitorRect = monitorRef.value.getBoundingClientRect()
+  const monW = Math.max(1, monitorRect.width)
+  const monH = Math.max(1, monitorRect.height)
+  let moved = false
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    if (!moved && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 3) return
+    moved = true
+    suppressCanvasClickUntil = Date.now() + 250
+    const dx = (moveEvent.clientX - startX) / monW
+    const dy = (moveEvent.clientY - startY) / monH
+
+    let newX = init.x
+    let newY = init.y
+    let newW = init.w
+    let newH = init.h
+
+    if (handleKey === 'nw') {
+      newX = init.x + dx
+      newY = init.y + dy
+      newW = init.w - dx
+      newH = init.h - dy
+    } else if (handleKey === 'ne') {
+      newY = init.y + dy
+      newW = init.w + dx
+      newH = init.h - dy
+    } else if (handleKey === 'sw') {
+      newX = init.x + dx
+      newW = init.w - dx
+      newH = init.h + dy
+    } else if (handleKey === 'se') {
+      newW = init.w + dx
+      newH = init.h + dy
+    } else if (handleKey === 'n') {
+      newY = init.y + dy
+      newH = init.h - dy
+    } else if (handleKey === 's') {
+      newH = init.h + dy
+    } else if (handleKey === 'w') {
+      newX = init.x + dx
+      newW = init.w - dx
+    } else if (handleKey === 'e') {
+      newW = init.w + dx
+    }
+
+    const clamped = clampCropRect({ x: newX, y: newY, w: newW, h: newH })
+    updateClip(clipId, { cropRect: clamped })
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
 function onCanvasClick() {
-  if (Date.now() < suppressCanvasClickUntil) return
+  if (isCropActive.value || Date.now() < suppressCanvasClickUntil) return
   togglePlayPause()
 }
 
 // Playback shortcuts: Space play/pause, arrow step, J-K-L shuttle
 // (no-op when the timeline is empty)
 function handleKeydown(e: KeyboardEvent) {
+  if (e.code === 'Escape' && isCropActive.value) {
+    e.preventDefault()
+    toggleCropEditing(false)
+    return
+  }
   if (!hasTimelineClips.value) return
   const target = e.target as HTMLElement
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
@@ -787,15 +1061,49 @@ onUnmounted(() => {
         </span>
         <span v-if="aspectLabel" class="font-mono text-neutral-600 shrink-0">({{ aspectLabel }})</span>
         <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
-          {{ currentProject.canvas.fps }} FPS
+          {{ canvasFpsValue(currentProject.canvas) }} FPS
         </span>
         <span
           class="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/25 text-primary text-[10px] font-medium shrink-0"
         >
           {{ t('tmcut.player.engineBadge') }}
         </span>
+        <span
+          v-if="isCurrentClipProxy"
+          class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-medium shrink-0 flex items-center gap-1"
+          :title="t('tmcut.proxy.activeDesc')"
+        >
+          <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
+          <span>{{ t('tmcut.proxy.active') }}</span>
+        </span>
+        <span
+          v-if="isCurrentClipStabilized"
+          class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium shrink-0 flex items-center gap-1"
+          :title="t('tmcut.stabilize.activeDesc')"
+        >
+          <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
+          <span>{{ t('tmcut.stabilize.badge') }}</span>
+        </span>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
+        <UButton
+          v-if="activeVideoClip"
+          icon="i-lucide-crop"
+          size="xs"
+          variant="soft"
+          :color="isCropActive ? 'primary' : 'neutral'"
+          :title="t('tmcut.crop.tool')"
+          @click="triggerCropTool"
+        />
+        <UButton
+          v-if="isDesktop"
+          :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
+          size="xs"
+          variant="soft"
+          :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+          :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
+          @click="proxyPreview = !proxyPreview"
+        />
         <UButton
           v-for="toggle in overlayToggles"
           :key="toggle.key"
@@ -806,10 +1114,7 @@ onUnmounted(() => {
           :title="toggle.label"
           @click="toggle.onSelect()"
         />
-        <UDropdownMenu
-          :items="canvasZoomItems"
-          :content="{ align: 'end' }"
-        >
+        <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
           <UButton
             icon="i-lucide-zoom-in"
             size="xs"
@@ -818,10 +1123,7 @@ onUnmounted(() => {
             :title="t('tmcut.player.zoom')"
           />
         </UDropdownMenu>
-        <UDropdownMenu
-          :items="ratioGuideItems"
-          :content="{ align: 'end' }"
-        >
+        <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
           <UButton
             icon="i-lucide-rectangle-horizontal"
             size="xs"
@@ -901,6 +1203,13 @@ onUnmounted(() => {
           playsinline
           @loadedmetadata="onLoadedMetadata"
           @error="onMediaError"
+        />
+
+        <!-- Vignette overlay effect (Roadmap Phase E) -->
+        <div
+          v-if="activeVignetteStyle"
+          class="absolute inset-0 pointer-events-none z-10"
+          :style="activeVignetteStyle"
         />
 
         <!-- Hidden-track badge (CapCut eye-off state) -->
@@ -987,7 +1296,7 @@ onUnmounted(() => {
            move, drag a corner to scale. Sits BELOW the text overlays so
            text stays clickable on top of it. -->
         <div
-          v-if="selectionBoxClip && selectionBoxStyle"
+          v-if="!isCropActive && selectionBoxClip && selectionBoxStyle"
           ref="selectionBoxRef"
           class="absolute left-0 top-0 w-full h-full border-primary cursor-move"
           :style="selectionBoxStyle"
@@ -1010,6 +1319,119 @@ onUnmounted(() => {
             @mousedown.stop="onSelectionRotateMouseDown"
           />
         </div>
+
+        <!-- Interactive Crop & Mask Overlay (Roadmap F-3) -->
+        <template v-if="isCropActive">
+          <!-- 4 Darkened Mask regions outside the crop rect -->
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              top: 0,
+              left: 0,
+              right: 0,
+              height: `${currentCropRect.y * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              bottom: 0,
+              left: 0,
+              right: 0,
+              top: `${(currentCropRect.y + currentCropRect.h) * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              left: 0,
+              top: `${currentCropRect.y * 100}%`,
+              width: `${currentCropRect.x * 100}%`,
+              height: `${currentCropRect.h * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              right: 0,
+              top: `${currentCropRect.y * 100}%`,
+              left: `${(currentCropRect.x + currentCropRect.w) * 100}%`,
+              height: `${currentCropRect.h * 100}%`
+            }"
+          />
+
+          <!-- Interactive Crop Bounding Box -->
+          <div
+            ref="cropBoxRef"
+            class="absolute border-2 border-primary shadow-2xl cursor-move pointer-events-auto"
+            :style="{
+              left: `${currentCropRect.x * 100}%`,
+              top: `${currentCropRect.y * 100}%`,
+              width: `${currentCropRect.w * 100}%`,
+              height: `${currentCropRect.h * 100}%`
+            }"
+            @mousedown="onCropBodyMouseDown"
+          >
+            <!-- 3x3 Rule-of-Thirds Grid -->
+            <div class="absolute inset-0 pointer-events-none">
+              <div class="absolute left-1/3 top-0 bottom-0 w-px bg-white/30" />
+              <div class="absolute left-2/3 top-0 bottom-0 w-px bg-white/30" />
+              <div class="absolute top-1/3 left-0 right-0 h-px bg-white/30" />
+              <div class="absolute top-2/3 left-0 right-0 h-px bg-white/30" />
+            </div>
+
+            <!-- 8 Handles (Corners + Edges) -->
+            <span
+              v-for="h in cropHandles"
+              :key="h.key"
+              class="absolute w-2.5 h-2.5 bg-white border-2 border-primary rounded-[2px]"
+              :class="[h.pos, h.cursor]"
+              @mousedown.stop="onCropHandleMouseDown($event, h.key)"
+            />
+          </div>
+
+          <!-- Crop Mode Floating Controls Banner -->
+          <div
+            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/95 border border-neutral-700/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
+            @click.stop
+          >
+            <span class="text-[10px] font-semibold text-primary uppercase tracking-wider pl-1 shrink-0">
+              {{ t('tmcut.crop.tool') }}
+            </span>
+            <div class="w-px h-3.5 bg-neutral-700 mx-1 shrink-0" />
+            <UButton
+              v-for="preset in cropRatioPresets"
+              :key="preset.id"
+              size="xs"
+              :variant="activeCropRatio === preset.id ? 'solid' : 'ghost'"
+              :color="activeCropRatio === preset.id ? 'primary' : 'neutral'"
+              class="shrink-0 text-[10px] px-1.5 py-0.5"
+              @click.stop="setCropRatioPreset(preset.id)"
+            >
+              {{ preset.label }}
+            </UButton>
+            <div class="w-px h-3.5 bg-neutral-700 mx-1 shrink-0" />
+            <UButton
+              icon="i-lucide-rotate-ccw"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              class="shrink-0"
+              :title="t('tmcut.crop.reset')"
+              @click.stop="resetCropRect"
+            />
+            <UButton
+              icon="i-lucide-check"
+              size="xs"
+              variant="solid"
+              color="primary"
+              class="font-medium shrink-0"
+              @click.stop="toggleCropEditing(false)"
+            >
+              {{ t('tmcut.crop.done') }}
+            </UButton>
+          </div>
+        </template>
 
         <!-- Text Overlays (draggable in preview; anchor + style flags
              mirror the export math — roadmap C-2; whitespace-pre-line
@@ -1040,7 +1462,7 @@ onUnmounted(() => {
         </span>
         <div class="relative flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
           <div
-            class="h-full bg-gradient-to-r from-primary/60 to-primary rounded-full transition-[width] duration-75"
+            class="h-full bg-linear-to-r from-primary/60 to-primary rounded-full transition-[width] duration-75"
             :style="{ width: scrubProgress + '%' }"
           />
         </div>

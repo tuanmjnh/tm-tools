@@ -24,10 +24,15 @@ export interface TmcutCanvasBackground {
   value?: string
 }
 
+export interface FrameRate {
+  numerator: number
+  denominator: number
+}
+
 export interface TmcutCanvas {
   width: number
   height: number
-  fps: number
+  fps: FrameRate
   aspectRatio: TmcutAspectRatio
   background: TmcutCanvasBackground
 }
@@ -55,7 +60,23 @@ export interface TmcutAsset {
   /** 8-frame filmstrip for timeline clips (desktop only, null elsewhere). */
   filmstripPath: string | null
   waveformPath: string | null
+  /** Lightweight 540p/720p H.264 preview proxy file path (roadmap F-4). */
+  proxyPath?: string | null
+  /** Status of proxy generation. */
+  proxyStatus?: 'none' | 'generating' | 'ready' | 'error'
+  /** Media folder ID (roadmap G-3). */
+  folderId?: string | null
+  /** Project-scoped folder IDs map: projectId -> folderId (roadmap G-3). */
+  folderByProject?: Record<string, string>
   addedAt: string
+}
+
+export interface TmcutMediaFolder {
+  id: string
+  name: string
+  color?: string
+  projectId?: string | null
+  createdAt?: number | string
 }
 
 export interface TmcutProjectFileInfo {
@@ -101,3 +122,9 @@ export function createEmptyTmcutAssetMeta(): TmcutAssetMeta {
     probedAt: null
   }
 }
+
+export type {
+  TmcutTemplate,
+  TmcutTemplatePlaceholder,
+  TmcutTemplateCategory
+} from '@tmcut-core'

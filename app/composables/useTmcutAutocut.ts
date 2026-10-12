@@ -14,6 +14,12 @@ import { useTmcutAi } from '~/composables/useTmcutAi'
 
 export type AutocutProfile = 'viral-shorts' | 'podcast-summary' | 'cinematic-vlog'
 
+export interface AutocutOptions {
+  filterFillerWords?: boolean
+  highlightKeywords?: string[]
+  customFillerWords?: string[]
+}
+
 export interface AutocutAnalysis {
   edl: TmcutEdl
   sceneCount: number
@@ -28,6 +34,10 @@ export interface AutocutAnalysis {
   speechSec: number
   /** raw transcript lines kept so the review UI can show real text */
   transcript: Array<{ start: number, end: number, text?: string }>
+  /** count of segments detected containing filler words */
+  fillerSegmentCount: number
+  /** count of segments boosted with highlight keywords */
+  highlightSegmentCount: number
 }
 
 function tmcutIpc() {
@@ -48,7 +58,11 @@ export function useTmcutAutocut() {
   const stageKey = ref('')
   const analysisError = ref<string | null>(null)
 
-  async function analyzeSource(asset: TmcutAsset, profile: AutocutProfile): Promise<AutocutAnalysis | null> {
+  async function analyzeSource(
+    asset: TmcutAsset,
+    profile: AutocutProfile,
+    options?: AutocutOptions
+  ): Promise<AutocutAnalysis | null> {
     const ipc = tmcutIpc()
     if (!ipc?.analyzeScenes || !ipc?.analyzeSilence) {
       analysisError.value = 'desktop-only'
@@ -95,9 +109,13 @@ export function useTmcutAutocut() {
         scenes: shotList,
         silences: silenceList,
         speech,
+        transcript: transcriptText,
         profile,
         assetId: asset.id,
-        analyzerVersion: 'scene-1'
+        analyzerVersion: 'transcript-v2',
+        filterFillerWords: options?.filterFillerWords,
+        keywords: options?.highlightKeywords,
+        customFillerWords: options?.customFillerWords
       })
       const problems = validateEdl(edl)
       if (problems.length > 0) throw new Error(problems[0])
@@ -109,6 +127,12 @@ export function useTmcutAutocut() {
         (total, range) => total + Math.max(0, range.end - range.start),
         0
       )
+      const fillerSegmentCount = edl.segments.filter(
+        segment => segment.hasFillerWords || segment.reason === 'filler-word'
+      ).length
+      const highlightSegmentCount = edl.segments.filter(
+        segment => segment.isHighlight || segment.reason === 'highlight'
+      ).length
       return {
         edl,
         sceneCount: shotList.length,
@@ -117,7 +141,9 @@ export function useTmcutAutocut() {
         silenceCount: silenceList.length,
         silenceRemovedSec,
         speechSec,
-        transcript: transcriptText
+        transcript: transcriptText,
+        fillerSegmentCount,
+        highlightSegmentCount
       }
     } catch (err: unknown) {
       analysisError.value = err instanceof Error ? err.message : String(err)

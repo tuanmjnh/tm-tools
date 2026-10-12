@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { canvasFpsValue } from '~/utils/tmcut/canvas'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -636,7 +637,7 @@ const moreActions = computed(() => [
                     {{ project.name }}
                   </h4>
                   <p class="text-[11px] text-neutral-500 font-mono">
-                    {{ project.canvas?.width }}x{{ project.canvas?.height }} ({{ project.canvas?.fps }}fps)
+                    {{ project.canvas?.width }}x{{ project.canvas?.height }} ({{ canvasFpsValue(project.canvas) }}fps)
                   </p>
                 </div>
                 <div class="flex items-center justify-between text-[11px] text-neutral-400">

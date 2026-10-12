@@ -1,0 +1,285 @@
+import assert from 'node:assert/strict'
+import {
+  escapeDrawText,
+  RenderGraph,
+  mapXfadeTransition,
+  compileTimelineToFfmpeg
+} from '../../app/utils/tmcut/render'
+import { compileTimelineToFfmpeg as facadeCompile } from '../../app/utils/tmcut/compiler'
+import type { TmcutProject } from '../../app/composables/useTmcutProject'
+
+let passed = 0
+
+function check(label: string, fn: () => void) {
+  fn()
+  passed++
+  console.log(`   ${label} PASSED`)
+}
+
+function main() {
+  console.log('=== [TMCut Render Graph (Round 70 / R9) Test Suite] Starting tests ===\n')
+
+  check('escapeDrawText handles backslashes, colons, single quotes and percent signs', () => {
+    const raw = 'Hello: 100% \'World\' \\ Test'
+    const escaped = escapeDrawText(raw)
+    assert.equal(escaped, 'Hello\\: 100\\% \'\\\'\'World\'\\\'\' \\\\ Test')
+  })
+
+  check('RenderGraph tracks inputs and builds unique labels and chains', () => {
+    const graph = new RenderGraph()
+    const idx0 = graph.addInput('input1.mp4')
+    const idx1 = graph.addInput('input2.mp4')
+    assert.equal(idx0, 0)
+    assert.equal(idx1, 1)
+
+    const label1 = graph.nextLabel('v_node')
+    const label2 = graph.nextLabel('v_node')
+    assert.equal(label1, '[v_node_1]')
+    assert.equal(label2, '[v_node_2]')
+
+    graph.addFilterChain('[0:v]scale=1280:720[v_scaled]')
+    assert.equal(graph.buildFilterComplex(), '[0:v]scale=1280:720[v_scaled]')
+    assert.deepEqual(graph.buildInputArgs(), ['-i', 'input1.mp4', '-i', 'input2.mp4'])
+  })
+
+  check('mapXfadeTransition correctly maps TMCut transitions to FFmpeg names', () => {
+    assert.equal(mapXfadeTransition('fade'), 'fade')
+    assert.equal(mapXfadeTransition('dissolve'), 'dissolve')
+    assert.equal(mapXfadeTransition('wipe-left'), 'wipeleft')
+    assert.equal(mapXfadeTransition('wipe-right'), 'wiperight')
+    assert.equal(mapXfadeTransition('slide-left'), 'slideleft')
+    assert.equal(mapXfadeTransition('zoom-in'), 'zoomin')
+    assert.equal(mapXfadeTransition(undefined), 'fade')
+  })
+
+  check('compileTimelineToFfmpeg builds color canvas when no video clips exist', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Color Canvas Test',
+      canvas: { width: 1920, height: 1080, fps: 30, background: { type: 'color', value: '#123456' } },
+      timeline: {
+        tracks: [
+          { id: 'v1', type: 'video', name: 'Video', items: [] },
+          {
+            id: 't1',
+            type: 'text',
+            name: 'Text',
+            items: [
+              { id: 'c1', trackId: 't1', text: 'Hello Title', offset: 0, in: 0, out: 5, fontSize: 48, color: 'white' }
+            ]
+          }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    assert.ok(result.args.includes('-filter_complex'))
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // R76: base layer now comes from core buildBackgroundSource() — 0x hex, r before d, 3-decimal duration.
+    assert.ok(fc.includes('color=c=0x123456:s=1920x1080:r=30:d=1.000[v_base]'))
+    assert.ok(fc.includes('drawtext=text=\'Hello Title\''))
+    assert.equal(result.duration, 1)
+  })
+
+  check('compileTimelineToFfmpeg compiles video clips with transitions and text overlays', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Video Cut Test',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: 4, speed: 1 },
+              {
+                id: 'vclip2',
+                trackId: 'v1',
+                src: 'clip2.mp4',
+                offset: 3.5,
+                in: 0,
+                out: 4,
+                speed: 1,
+                transitionIn: { type: 'dissolve', duration: 0.5 }
+              }
+            ]
+          },
+          {
+            id: 't1',
+            type: 'text',
+            name: 'Text',
+            items: [
+              { id: 'tclip1', trackId: 't1', text: 'Watermark', offset: 1, in: 0, out: 3 }
+            ]
+          }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'output.mp4', {
+      encoder: 'libx264',
+      crf: 20
+    })
+
+    assert.ok(result.args.includes('-i'))
+    assert.ok(result.args.includes('clip1.mp4'))
+    assert.ok(result.args.includes('clip2.mp4'))
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('xfade=transition=dissolve:duration=0.500:offset=3.500'))
+    assert.ok(fc.includes('acrossfade=d=0.500:c1=tri:c2=tri'))
+    assert.ok(fc.includes('drawtext=text=\'Watermark\''))
+    assert.ok(result.args.includes('-crf'))
+    assert.ok(result.args.includes('20'))
+  })
+
+  check('compileTimelineToFfmpeg supports GIF output with palettegen/paletteuse', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'GIF Test',
+      canvas: { width: 800, height: 600, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              { id: 'g1', trackId: 'v1', src: 'demo.mp4', offset: 0, in: 0, out: 2 }
+            ]
+          }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'anim.gif', { mode: 'gif' })
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('palettegen=stats_mode=diff[gif_pal]'))
+    assert.ok(fc.includes('paletteuse=dither=bayer:bayer_scale=4[gif_out]'))
+    assert.ok(result.args.includes('-loop'))
+    assert.ok(result.args.includes('0'))
+  })
+
+  check('compileTimelineToFfmpeg supports Audio-only mode', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Audio Only Test',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'a1',
+            type: 'audio',
+            name: 'Audio',
+            items: [
+              { id: 's1', trackId: 'a1', src: 'bgm.mp3', offset: 0, in: 0, out: 10, volume: 80 }
+            ]
+          }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'track.mp3', { mode: 'audio' })
+    assert.ok(result.args.includes('-c:a'))
+    assert.ok(result.args.includes('libmp3lame'))
+    assert.equal(result.duration, 10)
+  })
+
+  check('facadeCompile from compiler.ts matches render/ index compileTimelineToFfmpeg', () => {
+    assert.equal(facadeCompile, compileTimelineToFfmpeg)
+  })
+
+  check('compileTimelineToFfmpeg image background registers looping input (R76)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Image BG Test',
+      canvas: { width: 1280, height: 720, fps: 30, background: { type: 'image', value: 'D:/assets/bg.png' } },
+      timeline: {
+        tracks: [
+          { id: 'v1', type: 'video', name: 'Video', items: [] }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    assert.ok(result.args.includes('-loop'))
+    assert.ok(result.args.includes('1'))
+    assert.ok(result.args.includes('D:/assets/bg.png'))
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('scale=1280:720:force_original_aspect_ratio=increase'))
+    assert.ok(fc.includes('crop=1280:720'))
+  })
+
+  check('compileTimelineToFfmpeg transparent background uses alpha codec (R76)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Transparent BG Test',
+      canvas: { width: 1920, height: 1080, fps: 30, background: { type: 'transparent' } },
+      timeline: {
+        tracks: [
+          { id: 'v1', type: 'video', name: 'Video', items: [] }
+        ]
+      }
+    }
+
+    const result = compileTimelineToFfmpeg(project, 'out.webm', { encoder: 'libvpx-vp9' })
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('color=c=0x00000000'))
+    // libvpx-vp9 with transparent should pick alpha pix_fmt
+    assert.ok(result.args.includes('-c:v'))
+    assert.ok(result.args.includes('libvpx-vp9'))
+    assert.ok(result.args.includes('yuva420p'))
+  })
+
+  check('compileTimelineToFfmpeg color background uses 0x hex (R75 regression)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Color BG Hex Test',
+      canvas: { width: 1920, height: 1080, fps: 30, background: { type: 'color', value: '#ff00cc' } },
+      timeline: {
+        tracks: [
+          { id: 'v1', type: 'video', name: 'Video', items: [] }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('color=c=0xff00cc'))
+  })
+
+  check('compileTimelineToFfmpeg image background + scaled clip (R76 per-clip bg)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Image BG With Clip',
+      canvas: { width: 1280, height: 720, fps: 30, background: { type: 'image', value: 'D:/assets/bg.png' } },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              { id: 'c1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: 4, scale: 150, x: 20, y: -10, speed: 1 }
+            ]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    assert.ok(result.args.includes('-loop'))
+    assert.ok(result.args.includes('1'))
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // Image bg registered
+    assert.ok(fc.includes('scale=1280:720:force_original_aspect_ratio=increase'))
+    assert.ok(fc.includes('crop=1280:720'))
+    // Per-clip transform reuses [v_bg] (bgInput supplied)
+    assert.ok(fc.includes('[v_bg]'))
+    // Clip scaling chain present
+    assert.ok(fc.includes('scale=1920:1080'))
+  })
+
+  console.log(`\n=== All ${passed} tests passed successfully! ===`)
+}
+
+main()

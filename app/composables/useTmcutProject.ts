@@ -1,5 +1,5 @@
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
-import { findCanvasPreset, normalizeCanvas, reframeTransform } from '~/utils/tmcut/canvas'
+import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
   addTrack,
@@ -26,7 +26,7 @@ import {
   applyTransition,
   clearTransition
 } from '@tmcut-core'
-import type { CoreClipboard, TmcutTimeline } from '@tmcut-core'
+import type { CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from '@tmcut-core'
 
 // Type definitions for TMCut project
 export interface TmcutTimelineItem {
@@ -48,6 +48,16 @@ export interface TmcutTimelineItem {
   align?: 'left' | 'center' | 'right'
   shadow?: boolean
   stroke?: boolean
+  /** Text animation in (intro) and out (outro) (Roadmap C-5). */
+  animIn?: TmcutTextAnimationType
+  animInDuration?: number
+  animOut?: TmcutTextAnimationType
+  animOutDuration?: number
+  /** Video stabilization (roadmap E-5). */
+  stabilize?: boolean
+  stabilizeLevel?: TmcutStabilizeLevel
+  stabilizedPath?: string | null
+  stabilizeStatus?: TmcutStabilizeStatus
   in: number
   out: number
   offset: number
@@ -113,7 +123,7 @@ export interface TmcutProject {
   timeline: TmcutProjectTimeline
   settings: {
     resolution: string
-    fps: number
+    fps: FrameRate
     format: string
     bitrate: number
   }
@@ -134,10 +144,15 @@ const currentProject = ref<TmcutProject | null>(null)
 const projects = ref<TmcutProject[]>([])
 const isLoading = ref(false)
 const selectedClipId = ref<string | null>(null)
+const isCropEditing = ref(false)
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const lastSavedAt = ref<string | null>(null)
 const pendingRecovery = ref<{ id: string, updatedAt: string } | null>(null)
 const snapshots = ref<Array<{ ts: number, name: string, updatedAt: string }>>([])
+
+function toggleCropEditing(active?: boolean) {
+  isCropEditing.value = typeof active === 'boolean' ? active : !isCropEditing.value
+}
 
 function tmcutIpc() {
   return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
@@ -189,7 +204,7 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
     name,
     cover: '',
     durationMs: 0,
-    canvas: normalizeCanvas({ width: 1920, height: 1080, fps: 30 }),
+    canvas: normalizeCanvas({ width: 1920, height: 1080, fps: { numerator: 30, denominator: 1 } }),
     timeline: {
       version: 1,
       tracks: [
@@ -202,7 +217,7 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
     },
     settings: {
       resolution: '1920x1080',
-      fps: 30,
+      fps: { numerator: 30, denominator: 1 },
       format: 'mp4',
       bitrate: 5000
     },
@@ -215,6 +230,9 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
 // Backward-compat migration for pre-v2 projects (legacy canvas + missing tracks)
 function applyProjectMigration(project: TmcutProject) {
   project.canvas = normalizeCanvas(project.canvas)
+  if (typeof project.settings.fps === 'number') {
+    project.settings.fps = { numerator: project.settings.fps, denominator: 1 }
+  }
   ensureDefaultTracks(project)
   // Pre-B5 projects were saved without a markers array (core addMarker
   // throws on a missing array), so backfill it during migration.
@@ -578,6 +596,9 @@ async function deleteProject(projectId: string) {
 }
 
 function selectClip(clipId: string | null) {
+  if (selectedClipId.value !== clipId) {
+    isCropEditing.value = false
+  }
   selectedClipId.value = clipId
 }
 
@@ -1157,7 +1178,7 @@ function switchCanvas(width: number, height: number) {
   project.canvas = normalizeCanvas({
     width,
     height,
-    fps: project.canvas?.fps || 30,
+    fps: canvasFpsValue(project.canvas),
     background: project.canvas?.background
   })
   for (const track of project.timeline?.tracks || []) {
@@ -1194,7 +1215,7 @@ function duplicateAsProject(presetId: string): TmcutProject | null {
   clone.canvas = normalizeCanvas({
     width: preset.width,
     height: preset.height,
-    fps: project.canvas?.fps || 30,
+    fps: canvasFpsValue(project.canvas),
     background: project.canvas?.background
   })
   for (const track of clone.timeline?.tracks || []) {
@@ -1433,6 +1454,8 @@ export function useTmcutProject() {
     isLoading,
     selectedClipId,
     selectedClip,
+    isCropEditing,
+    toggleCropEditing,
     totalDuration,
     hasTimelineClips,
     saveStatus,

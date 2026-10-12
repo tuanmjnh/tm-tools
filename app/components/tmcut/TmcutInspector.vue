@@ -3,10 +3,15 @@ import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
-import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed } from '@tmcut-core'
+import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
+import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
+import { canvasFpsValue } from '~/utils/tmcut/canvas'
 
 const { t } = useI18n()
-const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced } = useTmcutProject()
+const toast = useToast()
+const { isDesktop } = useTmcutMedia()
+const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced, isCropEditing, toggleCropEditing } = useTmcutProject()
 const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
 const { choices: fontChoices, ensureFonts, resolveFace } = useTmcutFonts()
 const { formatTimecode, playhead } = useTmcutPlayback()
@@ -14,14 +19,15 @@ const { formatTimecode, playhead } = useTmcutPlayback()
 const clip = computed(() => selectedClip.value?.item)
 const trackType = computed(() => selectedClip.value?.track)
 
-// Clip property tabs (design #2): Video / Audio / Speed — the tab list
+// Clip property tabs (design #2): Video / Audio / Speed / Animation — the tab list
 // follows the clip type so no dead (always-empty) tab ever shows.
-const activeTab = ref<'video' | 'audio' | 'speed'>('video')
+type TabKey = 'video' | 'audio' | 'speed' | 'effects' | 'animation'
+const activeTab = ref<TabKey>('video')
 
-const availableTabs = computed<Array<'video' | 'audio' | 'speed'>>(() => {
+const availableTabs = computed<TabKey[]>(() => {
   if (trackType.value === 'audio') return ['audio', 'speed']
-  if (trackType.value === 'text') return ['video', 'speed']
-  return ['video', 'audio', 'speed']
+  if (trackType.value === 'text') return ['video', 'animation', 'speed']
+  return ['video', 'audio', 'speed', 'effects']
 })
 
 const currentTab = computed(() => (
@@ -34,8 +40,20 @@ const tabItems = computed(() => availableTabs.value.map(key => ({
     ? t('tmcut.inspectorProps.tabVideo')
     : key === 'audio'
       ? t('tmcut.inspectorProps.tabAudio')
-      : t('tmcut.inspectorProps.tabSpeed'),
-  icon: key === 'video' ? 'i-lucide-film' : key === 'audio' ? 'i-lucide-volume-2' : 'i-lucide-gauge'
+      : key === 'speed'
+        ? t('tmcut.inspectorProps.tabSpeed')
+        : key === 'effects'
+          ? t('tmcut.inspectorProps.tabEffects')
+          : t('tmcut.animation.tab'),
+  icon: key === 'video'
+    ? 'i-lucide-film'
+    : key === 'audio'
+      ? 'i-lucide-volume-2'
+      : key === 'speed'
+        ? 'i-lucide-gauge'
+        : key === 'effects'
+          ? 'i-lucide-sparkles'
+          : 'i-lucide-wand-sparkles'
 })))
 
 // Speed options
@@ -115,11 +133,153 @@ function handleAlign(align: 'left' | 'center' | 'right') {
   updateClip(selectedClipId.value, { align })
 }
 
+// Text animations in/out (Roadmap C-5)
+const animInOptions = computed(() => [
+  { label: t('tmcut.animation.none'), value: 'none' },
+  { label: t('tmcut.animation.fade'), value: 'fade' },
+  { label: t('tmcut.animation.slideUp'), value: 'slide-up' },
+  { label: t('tmcut.animation.slideDown'), value: 'slide-down' },
+  { label: t('tmcut.animation.slideLeft'), value: 'slide-left' },
+  { label: t('tmcut.animation.slideRight'), value: 'slide-right' },
+  { label: t('tmcut.animation.zoomIn'), value: 'zoom-in' },
+  { label: t('tmcut.animation.zoomOut'), value: 'zoom-out' }
+])
+
+const animOutOptions = computed(() => [
+  { label: t('tmcut.animation.none'), value: 'none' },
+  { label: t('tmcut.animation.fade'), value: 'fade' },
+  { label: t('tmcut.animation.slideUp'), value: 'slide-up' },
+  { label: t('tmcut.animation.slideDown'), value: 'slide-down' },
+  { label: t('tmcut.animation.slideLeft'), value: 'slide-left' },
+  { label: t('tmcut.animation.slideRight'), value: 'slide-right' },
+  { label: t('tmcut.animation.zoomIn'), value: 'zoom-in' },
+  { label: t('tmcut.animation.zoomOut'), value: 'zoom-out' }
+])
+
+function applyAnimPreset(preset: 'fade' | 'slide' | 'pop' | 'reset') {
+  if (!selectedClipId.value) return
+  pushHistory()
+  if (preset === 'fade') {
+    updateClip(selectedClipId.value, {
+      animIn: 'fade',
+      animInDuration: 0.5,
+      animOut: 'fade',
+      animOutDuration: 0.5
+    })
+  } else if (preset === 'slide') {
+    updateClip(selectedClipId.value, {
+      animIn: 'slide-up',
+      animInDuration: 0.5,
+      animOut: 'slide-down',
+      animOutDuration: 0.5
+    })
+  } else if (preset === 'pop') {
+    updateClip(selectedClipId.value, {
+      animIn: 'zoom-in',
+      animInDuration: 0.5,
+      animOut: 'zoom-out',
+      animOutDuration: 0.5
+    })
+  } else {
+    updateClip(selectedClipId.value, {
+      animIn: 'none',
+      animOut: 'none'
+    })
+  }
+}
+
 const alignOptions = [
   { key: 'left', icon: 'i-lucide-align-left', title: 'alignLeft' },
   { key: 'center', icon: 'i-lucide-align-center', title: 'alignCenter' },
   { key: 'right', icon: 'i-lucide-align-right', title: 'alignRight' }
 ] as const
+
+// Video Stabilizer (Roadmap E-5)
+const stabilizeLevelOptions = computed(() => [
+  { label: t('tmcut.stabilize.mild'), value: 'mild' },
+  { label: t('tmcut.stabilize.medium'), value: 'medium' },
+  { label: t('tmcut.stabilize.aggressive'), value: 'aggressive' }
+])
+
+async function handleStabilizeToggle(enabled: boolean) {
+  if (!selectedClipId.value || !clip.value) return
+  pushHistory()
+  if (!enabled) {
+    updateClip(selectedClipId.value, {
+      stabilize: false
+    })
+    return
+  }
+  const currentLevel = clip.value.stabilizeLevel || 'medium'
+  updateClip(selectedClipId.value, {
+    stabilize: true,
+    stabilizeLevel: currentLevel
+  })
+  if (!clip.value.stabilizedPath || clip.value.stabilizeStatus !== 'ready') {
+    await runStabilization(currentLevel)
+  }
+}
+
+async function handleStabilizeLevelChange(level: TmcutStabilizeLevel) {
+  if (!selectedClipId.value || !clip.value) return
+  pushHistory()
+  updateClip(selectedClipId.value, {
+    stabilizeLevel: level,
+    stabilizeStatus: 'none',
+    stabilizedPath: null
+  })
+  await runStabilization(level)
+}
+
+async function runStabilization(forcedLevel?: TmcutStabilizeLevel) {
+  if (!selectedClipId.value || !clip.value || !clip.value.src) return
+  if (!isDesktop.value) return
+  const clipId = selectedClipId.value
+  const src = clip.value.src
+  const level = forcedLevel || clip.value.stabilizeLevel || 'medium'
+
+  if (!window.electronAPI?.tmcut) return
+  updateClip(clipId, {
+    stabilizeStatus: 'processing'
+  })
+
+  try {
+    const res = await window.electronAPI.tmcut.stabilizeVideo({
+      filePath: src,
+      options: { level }
+    })
+    if (res.ok && res.path) {
+      updateClip(clipId, {
+        stabilizedPath: res.path,
+        stabilizeStatus: 'ready'
+      })
+      toast.add({
+        title: t('tmcut.stabilize.ready'),
+        description: t('tmcut.stabilize.readyDesc'),
+        color: 'success'
+      })
+    } else {
+      updateClip(clipId, {
+        stabilizeStatus: 'error'
+      })
+      toast.add({
+        title: t('tmcut.stabilize.error'),
+        description: res.error || 'Stabilization failed',
+        color: 'error'
+      })
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Stabilization failed'
+    updateClip(clipId, {
+      stabilizeStatus: 'error'
+    })
+    toast.add({
+      title: t('tmcut.stabilize.error'),
+      description: msg,
+      color: 'error'
+    })
+  }
+}
 
 // Keyframes (roadmap B1): the ⏱ buttons toggle a keyframe of the
 // CURRENT field value at the playhead. Times are clip-local ticks
@@ -239,6 +399,92 @@ function handleFitUpdate(value: string) {
   updateClip(selectedClipId.value, { fit })
 }
 
+// Effects management (Roadmap Phase E, C6 registry)
+const clipEffects = computed(() => {
+  return normalizeEffects(clip.value?.effects || [])
+})
+
+function effectIcon(type: string): string {
+  switch (type) {
+    case 'blur': return 'i-lucide-droplets'
+    case 'sharpen': return 'i-lucide-wand-sparkles'
+    case 'vignette': return 'i-lucide-circle'
+    case 'grain': return 'i-lucide-film'
+    case 'chromakey': return 'i-lucide-scissors'
+    case 'lut3d': return 'i-lucide-palette'
+    case 'stabilize': return 'i-lucide-shield-check'
+    case 'eq-grade': return 'i-lucide-sliders'
+    default: return 'i-lucide-sparkles'
+  }
+}
+
+function effectLabel(type: string): string {
+  return t('tmcut.effects.' + (type === 'eq-grade' ? 'eqGrade' : type))
+}
+
+function paramLabel(paramName: string): string {
+  return t('tmcut.effects.' + paramName)
+}
+
+function getEffectParams(type: string) {
+  return EFFECT_REGISTRY[type]?.params || []
+}
+
+const effectMenuItems = computed(() => {
+  return Object.values(EFFECT_REGISTRY).map(desc => ({
+    label: effectLabel(desc.type),
+    icon: effectIcon(desc.type),
+    onSelect: () => handleAddEffect(desc.type)
+  }))
+})
+
+function handleAddEffect(type: string) {
+  if (!selectedClipId.value) return
+  const desc = EFFECT_REGISTRY[type]
+  if (!desc) return
+  const params: Record<string, unknown> = {}
+  for (const p of desc.params) {
+    params[p.name] = p.default
+  }
+  const current = [...(clip.value?.effects || [])]
+  current.push({ type, params })
+  pushHistory()
+  updateClip(selectedClipId.value, { effects: current })
+}
+
+function handleRemoveEffect(index: number) {
+  if (!selectedClipId.value) return
+  const current = [...(clip.value?.effects || [])]
+  current.splice(index, 1)
+  pushHistory()
+  updateClip(selectedClipId.value, { effects: current })
+}
+
+function handleResetEffect(index: number) {
+  if (!selectedClipId.value) return
+  const current = [...(clip.value?.effects || [])]
+  const item = current[index]
+  if (!item) return
+  const desc = EFFECT_REGISTRY[item.type]
+  if (!desc) return
+  const params: Record<string, unknown> = {}
+  for (const p of desc.params) {
+    params[p.name] = p.default
+  }
+  current[index] = { type: item.type, params }
+  pushHistory()
+  updateClip(selectedClipId.value, { effects: current })
+}
+
+function handleUpdateEffectParam(effectIndex: number, paramName: string, value: unknown) {
+  if (!selectedClipId.value) return
+  const current = JSON.parse(JSON.stringify(clip.value?.effects || [])) as Array<{ type: string, params: Record<string, unknown> }>
+  if (!current[effectIndex]) return
+  current[effectIndex].params[paramName] = value
+  pushHistoryCoalesced(`${selectedClipId.value}:effect:${effectIndex}:${paramName}`)
+  updateClip(selectedClipId.value, { effects: current })
+}
+
 function handleDelete() {
   if (selectedClipId.value) {
     removeClip(selectedClipId.value)
@@ -269,7 +515,7 @@ const detailRows = computed(() => {
     },
     {
       label: t('tmcut.details.fps'),
-      value: project?.canvas ? `${project.canvas.fps}fps` : '—'
+      value: project?.canvas ? `${canvasFpsValue(project.canvas)}fps` : '—'
     },
     { label: t('tmcut.details.duration'), value: formatTimecode(totalDuration.value) },
     { label: t('tmcut.details.tracks'), value: String(tracks.length) },
@@ -436,6 +682,128 @@ const saveStateLabel = computed(() => {
       </div>
     </div>
 
+    <!-- Tab: Text Animation (Roadmap C-5) -->
+    <div v-if="currentTab === 'animation' && trackType === 'text'" class="space-y-4 pt-2 border-t border-neutral-800">
+      <!-- Quick Presets -->
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-medium text-neutral-400">
+          {{ t('tmcut.animation.presets') }}
+        </label>
+        <div class="grid grid-cols-4 gap-1.5">
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            class="justify-center text-[11px]"
+            @click="applyAnimPreset('fade')"
+          >
+            {{ t('tmcut.animation.fade') }}
+          </UButton>
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            class="justify-center text-[11px]"
+            @click="applyAnimPreset('slide')"
+          >
+            {{ t('tmcut.animation.slide') }}
+          </UButton>
+          <UButton
+            size="xs"
+            variant="soft"
+            color="neutral"
+            class="justify-center text-[11px]"
+            @click="applyAnimPreset('pop')"
+          >
+            {{ t('tmcut.animation.pop') }}
+          </UButton>
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            class="justify-center text-[11px]"
+            @click="applyAnimPreset('reset')"
+          >
+            {{ t('tmcut.animation.reset') }}
+          </UButton>
+        </div>
+      </div>
+
+      <!-- Animation In -->
+      <div class="space-y-2 p-2.5 rounded-lg bg-neutral-900/60 border border-neutral-800/80">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <UIcon name="i-lucide-log-in" class="size-3.5 text-primary" />
+            <span class="text-xs font-medium text-neutral-200">
+              {{ t('tmcut.animation.animIn') }}
+            </span>
+          </div>
+          <span v-if="clip.animIn && clip.animIn !== 'none'" class="text-[11px] font-mono text-neutral-400">
+            {{ clip.animInDuration ?? 0.5 }}s
+          </span>
+        </div>
+        <USelect
+          :model-value="clip.animIn || 'none'"
+          :items="animInOptions"
+          size="xs"
+          class="w-full"
+          @update:model-value="handleUpdate('animIn', $event as TmcutTextAnimationType)"
+        />
+        <div v-if="clip.animIn && clip.animIn !== 'none'" class="space-y-1 pt-1">
+          <div class="flex items-center justify-between text-[11px] text-neutral-400">
+            <span>{{ t('tmcut.animation.duration') }}</span>
+            <span class="font-mono text-neutral-300">{{ clip.animInDuration ?? 0.5 }}s</span>
+          </div>
+          <input
+            type="range"
+            min="0.1"
+            max="2.0"
+            step="0.1"
+            :value="clip.animInDuration ?? 0.5"
+            class="w-full accent-primary cursor-pointer"
+            @input="handleUpdate('animInDuration', Number(($event.target as HTMLInputElement).value))"
+          >
+        </div>
+      </div>
+
+      <!-- Animation Out -->
+      <div class="space-y-2 p-2.5 rounded-lg bg-neutral-900/60 border border-neutral-800/80">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <UIcon name="i-lucide-log-out" class="size-3.5 text-primary" />
+            <span class="text-xs font-medium text-neutral-200">
+              {{ t('tmcut.animation.animOut') }}
+            </span>
+          </div>
+          <span v-if="clip.animOut && clip.animOut !== 'none'" class="text-[11px] font-mono text-neutral-400">
+            {{ clip.animOutDuration ?? 0.5 }}s
+          </span>
+        </div>
+        <USelect
+          :model-value="clip.animOut || 'none'"
+          :items="animOutOptions"
+          size="xs"
+          class="w-full"
+          @update:model-value="handleUpdate('animOut', $event as TmcutTextAnimationType)"
+        />
+        <div v-if="clip.animOut && clip.animOut !== 'none'" class="space-y-1 pt-1">
+          <div class="flex items-center justify-between text-[11px] text-neutral-400">
+            <span>{{ t('tmcut.animation.duration') }}</span>
+            <span class="font-mono text-neutral-300">{{ clip.animOutDuration ?? 0.5 }}s</span>
+          </div>
+          <input
+            type="range"
+            min="0.1"
+            max="2.0"
+            step="0.1"
+            :value="clip.animOutDuration ?? 0.5"
+            class="w-full accent-primary cursor-pointer"
+            @input="handleUpdate('animOutDuration', Number(($event.target as HTMLInputElement).value))"
+          >
+        </div>
+      </div>
+    </div>
+
     <!-- Timing & Speed Settings -->
     <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-neutral-800">
       <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">{{
@@ -538,55 +906,135 @@ const saveStateLabel = computed(() => {
         </div>
       </div>
 
-      <div v-if="isCropFit" class="grid grid-cols-2 gap-2">
-        <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropX') }}</label>
-          <UInput
-            type="number"
-            step="0.05"
-            :min="0"
-            :max="1"
-            :model-value="clip.cropRect?.x ?? 0.1"
+      <div v-if="isCropFit" class="space-y-2">
+        <div class="flex items-center gap-1.5">
+          <UButton
+            :icon="isCropEditing ? 'i-lucide-check' : 'i-lucide-crop'"
             size="xs"
-            @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), x: Number($event) })"
+            :variant="isCropEditing ? 'solid' : 'soft'"
+            :color="isCropEditing ? 'primary' : 'neutral'"
+            class="flex-1 justify-center"
+            @click="toggleCropEditing()"
+          >
+            {{ isCropEditing ? t('tmcut.crop.done') : t('tmcut.crop.editOnCanvas') }}
+          </UButton>
+          <UButton
+            icon="i-lucide-rotate-ccw"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :title="t('tmcut.crop.reset')"
+            @click="handleUpdate('cropRect', { x: 0, y: 0, w: 1, h: 1 })"
           />
         </div>
-        <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropY') }}</label>
-          <UInput
-            type="number"
-            step="0.05"
-            :min="0"
-            :max="1"
-            :model-value="clip.cropRect?.y ?? 0.1"
-            size="xs"
-            @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), y: Number($event) })"
-          />
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropX') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0"
+              :max="1"
+              :model-value="clip.cropRect?.x ?? 0.1"
+              size="xs"
+              @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), x: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropY') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0"
+              :max="1"
+              :model-value="clip.cropRect?.y ?? 0.1"
+              size="xs"
+              @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), y: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropW') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0.05"
+              :max="1"
+              :model-value="clip.cropRect?.w ?? 0.8"
+              size="xs"
+              @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), w: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropH') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0.05"
+              :max="1"
+              :model-value="clip.cropRect?.h ?? 0.8"
+              size="xs"
+              @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), h: Number($event) })"
+            />
+          </div>
         </div>
-        <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropW') }}</label>
-          <UInput
-            type="number"
-            step="0.05"
-            :min="0.05"
-            :max="1"
-            :model-value="clip.cropRect?.w ?? 0.8"
-            size="xs"
-            @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), w: Number($event) })"
-          />
+      </div>
+    </div>
+
+    <!-- Video Stabilizer (Roadmap E-5, desktop only) -->
+    <div v-if="currentTab === 'video' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-neutral-800">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <UIcon name="i-lucide-activity" class="size-3.5 text-primary" />
+          <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">
+            {{ t('tmcut.stabilize.title') }}
+          </span>
         </div>
-        <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropH') }}</label>
-          <UInput
-            type="number"
-            step="0.05"
-            :min="0.05"
-            :max="1"
-            :model-value="clip.cropRect?.h ?? 0.8"
-            size="xs"
-            @update:model-value="handleUpdate('cropRect', { ...(clip.cropRect || { x: 0, y: 0, w: 1, h: 1 }), h: Number($event) })"
-          />
+        <USwitch
+          :model-value="!!clip.stabilize"
+          size="sm"
+          @update:model-value="handleStabilizeToggle"
+        />
+      </div>
+
+      <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg bg-neutral-900/60 border border-neutral-800/80">
+        <div class="flex items-center justify-between text-[11px]">
+          <label class="text-neutral-400">{{ t('tmcut.stabilize.level') }}</label>
+          <span v-if="clip.stabilizeStatus === 'ready'" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
+            <UIcon name="i-lucide-check-circle" class="size-3" />
+            {{ t('tmcut.stabilize.ready') }}
+          </span>
+          <span v-else-if="clip.stabilizeStatus === 'processing'" class="inline-flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+            <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" />
+            {{ t('tmcut.stabilize.processing') }}
+          </span>
+          <span v-else-if="clip.stabilizeStatus === 'error'" class="inline-flex items-center gap-1 text-[10px] text-red-400 font-medium">
+            <UIcon name="i-lucide-alert-circle" class="size-3" />
+            {{ t('tmcut.stabilize.error') }}
+          </span>
         </div>
+
+        <USelect
+          :model-value="clip.stabilizeLevel || 'medium'"
+          :items="stabilizeLevelOptions"
+          :disabled="clip.stabilizeStatus === 'processing'"
+          size="xs"
+          class="w-full"
+          @update:model-value="handleStabilizeLevelChange($event as TmcutStabilizeLevel)"
+        />
+
+        <UButton
+          v-if="clip.stabilizeStatus !== 'ready' || !clip.stabilizedPath"
+          icon="i-lucide-play"
+          size="xs"
+          variant="soft"
+          color="primary"
+          block
+          :loading="clip.stabilizeStatus === 'processing'"
+          :disabled="clip.stabilizeStatus === 'processing'"
+          @click="runStabilization()"
+        >
+          {{ t('tmcut.stabilize.apply') }}
+        </UButton>
       </div>
     </div>
 
@@ -808,6 +1256,142 @@ const saveStateLabel = computed(() => {
             >
             <span class="font-mono text-xs w-10 text-right">{{ (fadeOutTicks / TICKS_PER_SECOND).toFixed(1) }}s</span>
           </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Effects Tab (Roadmap Phase E, C6 registry) -->
+    <div v-if="currentTab === 'effects'" class="space-y-4 pt-2 border-t border-neutral-800">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-neutral-400 uppercase tracking-wider text-[10px]">
+          {{ t('tmcut.effects.title') }}
+        </span>
+        <UDropdownMenu :items="effectMenuItems" :content="{ side: 'bottom', align: 'end' }">
+          <UButton
+            icon="i-lucide-plus"
+            size="xs"
+            color="primary"
+            variant="soft"
+            :label="t('tmcut.effects.addEffect')"
+          />
+        </UDropdownMenu>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-if="clipEffects.length === 0"
+        class="py-8 text-center text-neutral-500 space-y-2 border border-dashed border-neutral-800 rounded-lg p-4"
+      >
+        <UIcon name="i-lucide-sparkles" class="size-6 mx-auto text-neutral-600" />
+        <p class="text-xs text-neutral-300 font-medium">
+          {{ t('tmcut.effects.noEffects') }}
+        </p>
+        <p class="text-[11px] text-neutral-500 leading-relaxed">
+          {{ t('tmcut.effects.noEffectsHint') }}
+        </p>
+      </div>
+
+      <!-- Effects Cards List -->
+      <div v-else class="space-y-3">
+        <div
+          v-for="(eff, idx) in clipEffects"
+          :key="`${eff.type}-${idx}`"
+          class="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3 space-y-3"
+        >
+          <!-- Card Header -->
+          <div class="flex items-center justify-between gap-2 border-b border-neutral-800/80 pb-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <UIcon :name="effectIcon(eff.type)" class="size-4 text-primary shrink-0" />
+              <span class="font-medium text-xs text-neutral-100 truncate">
+                {{ effectLabel(eff.type) }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <UButton
+                icon="i-lucide-rotate-ccw"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :title="t('tmcut.effects.reset')"
+                @click="handleResetEffect(idx)"
+              />
+              <UButton
+                icon="i-lucide-trash"
+                size="xs"
+                color="error"
+                variant="ghost"
+                :title="t('tmcut.effects.remove')"
+                @click="handleRemoveEffect(idx)"
+              />
+            </div>
+          </div>
+
+          <!-- Parameter Controls based on EFFECT_REGISTRY[eff.type].params -->
+          <div class="space-y-2.5">
+            <div
+              v-for="param in getEffectParams(eff.type)"
+              :key="param.name"
+              class="space-y-1"
+            >
+              <div class="flex items-center justify-between text-[11px]">
+                <label class="text-neutral-400">
+                  {{ paramLabel(param.name) }}
+                </label>
+                <span class="font-mono text-neutral-300">
+                  {{ eff.params[param.name] }}
+                </span>
+              </div>
+
+              <!-- Number Param Slider -->
+              <div v-if="param.kind === 'number'" class="flex items-center gap-2">
+                <input
+                  type="range"
+                  :min="param.min ?? 0"
+                  :max="param.max ?? 100"
+                  :step="1"
+                  :value="eff.params[param.name] ?? param.default"
+                  class="w-full accent-primary cursor-pointer"
+                  @input="handleUpdateEffectParam(idx, param.name, Number(($event.target as HTMLInputElement).value))"
+                >
+              </div>
+
+              <!-- Enum Param Select -->
+              <div v-else-if="param.kind === 'enum'" class="pt-0.5">
+                <USelect
+                  :model-value="String(eff.params[param.name] ?? param.default)"
+                  :items="param.options?.map(opt => ({ label: opt, value: opt })) || []"
+                  size="xs"
+                  class="w-full"
+                  @update:model-value="handleUpdateEffectParam(idx, param.name, $event)"
+                />
+              </div>
+
+              <!-- Color Param Input -->
+              <div v-else-if="param.kind === 'color'" class="flex items-center gap-2 pt-0.5">
+                <input
+                  type="color"
+                  :value="String(eff.params[param.name] ?? param.default ?? '#00ff00')"
+                  class="size-6 rounded border border-neutral-700 bg-transparent cursor-pointer p-0 shrink-0"
+                  @input="handleUpdateEffectParam(idx, param.name, ($event.target as HTMLInputElement).value)"
+                >
+                <UInput
+                  :model-value="String(eff.params[param.name] ?? param.default ?? '#00ff00')"
+                  size="xs"
+                  class="flex-1 font-mono"
+                  @update:model-value="handleUpdateEffectParam(idx, param.name, $event)"
+                />
+              </div>
+
+              <!-- Bool Param Switch -->
+              <div v-else-if="param.kind === 'bool'" class="flex items-center justify-between pt-0.5">
+                <USwitch
+                  :model-value="Boolean(eff.params[param.name] ?? param.default)"
+                  size="sm"
+                  @update:model-value="handleUpdateEffectParam(idx, param.name, $event)"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

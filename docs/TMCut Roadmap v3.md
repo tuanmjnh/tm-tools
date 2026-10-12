@@ -519,6 +519,19 @@ export function coalesce(history, entry, windowTicks?): boolean // gộp thao t�
 - **Consumer dự kiến**: `useTmcutMedia` generate beat map → markers (Phase
   D).
 
+### C18 — Vocabulary Analysis & Filler Word Removal (AutoCut v2) · P1 · M · **✅ R72 (§140)**
+
+- **Module**: `analysis.mjs` — pure vocabulary analysis (no deps, no platform calls)
+- **API** (exported from `@tmcut/core`):
+  - `DEFAULT_FILLER_WORDS: string[]` — bilingual list (VN/EN) ~150 entries
+  - `detectFillerWords(text, options?): FillerWordResult[]` — finds filler words with positions
+  - `analyzeTranscriptSegment(text, options?): TranscriptSegmentAnalysis` — tags filler vs highlight
+  - `scoreSegments(input): ScoredSegment[]` — EDL scoring with `filterFillerWords`, `keywords`, `customFillerWords` options
+- **Metadata added to segments**: `hasFillerWords`, `detectedFillers`, `isHighlight`, `matchedKeywords`
+- **Scoring modifiers**: filler words → `* 0.4` (reason: `'filler-word'`), highlight keywords → `+ 0.25` (reason: `'highlight'`)
+- **Tests**: `test/analysis.test.mjs` — 11 tests (filler detection, segment analysis, EDL scoring)
+- **Consumer**: `useTmcutAutocut.ts` (apply filters, deselect filler segments, highlight keywords)
+
 **Verify chung mỗi lần sửa core**: `pnpm test:core && pnpm check:core &&
 pnpm lint:core && pnpm typecheck:core`, sau đó `pnpm typecheck` app (đụng
 consumer) + `npx eslint <file app chạm>`.
@@ -682,15 +695,26 @@ consumer) + `npx eslint <file app chạm>`.
   out = duration, defaults 42px/trắng) · Export: text clips → cues
   (end = offset + (out−in)/speed) → `serializeSrt` → `selectSaveFile`
   · toast đếm cue + lỗi riêng · i18n +8 → 2455.
-- [ ] **C-5 · Text animation in/out** (fade/slide/pop) — cần keyframes
-  **C3** + render **R2** trước · M.
+- [x] **C-5 · Text animation in/out** (fade/slide/pop) · M → **R65 ✅ (§133)**:
+  - `@tmcut-core` (`types/dsl.ts`, `src/v1compat.mjs`, `src/index.d.ts`, `test/v1compat.test.mjs`): kiểu `TmcutTextAnimationType` ('none' | 'fade' | 'slide-up' | 'slide-down' | 'slide-left' | 'slide-right' | 'zoom-in' | 'zoom-out'), lưu trữ `animIn`, `animInDuration`, `animOut`, `animOutDuration` đồng bộ hai chiều qua v1/v3 bridge. 167/167 tests passing.
+  - `compiler.ts`: FFmpeg filter `drawtext` tích hợp ramp alpha (`animAlphaExpr`), trượt ngang `animXExpr` (`slide-left`/`slide-right`), trượt dọc `animYExpr` (`slide-up`/`slide-down`) với cú pháp trích dẫn an toàn `x='...'`, `y='...'` bảo vệ dấu phẩy cho FFmpeg parser.
+  - Preview Player (`TmcutPreviewPlayer.vue`): `textOverlayStyle` mô phỏng realtime alpha ramp, slide offsets và zoom scale (0.3 <-> 1.0) theo vị trí playhead.
+  - Inspector (`TmcutInspector.vue`): Tab "Animation" (`i-lucide-wand-sparkles`) chuyên biệt cho text clips với Quick Presets (Fade, Slide, Pop, Reset), chọn loại animation In/Out và slider thời lượng (0.1–2.0s).
+  - i18n: `tmcut.animation` đầy đủ EN & VI (2666 leaf keys, 0 missing, 0 duplicates).
 
-### Phase D — Audio (P2)
+
+### Phase D — Audio (P2) — HOÀN TẤT (D-1..D-4 ✅, D-5/D-6 blocked)
 
 - [x] **D-1 · Fade in/out** (core **C12** + Inspector buttons + preview
   gain) · S · render **R5** → **R38 ✅ (§106)** phần core + UI + preview;
   phần export đã đóng ở **R5 ✅ (R45, §113)** — D-1 hoàn tất.
-- [ ] **D-2 · Volume keyframes** (C3 + C12 expression) · M.
+- [x] **D-2 · Volume keyframes** (C3 + C12 expression) · M → **R61 ✅ (§129)**:
+  - `@tmcut-core`: `keyframeExpr` sinh biểu thức FFmpeg `volume='(${kfVol})/100':eval=frame` từ keyframes audio ticks với 5 hàm easing (`linear`, `ease-in`, `ease-out`, `ease-in-out`, `step`).
+  - Preview Player (`TmcutPreviewPlayer.vue`): `evalKeyframe(clip, 'volume', localTicks)` kết hợp `gainAt` fade envelope điều chỉnh âm lượng video/audio real-time theo playhead.
+  - Inspector (`TmcutInspector.vue`): nút đồng hồ keyframe âm lượng (`toggleKeyframe('volume')`) tại vị trí con trỏ playhead, tích hợp thanh trượt và chip trạng thái.
+  - Timeline (`TmcutTimelineClip.vue`): hiển thị các điểm kim cương keyframe diamond trên track audio/video.
+  - Compiler (`compiler.ts`): chuỗi âm thanh kết hợp song song cả volume keyframes và fade envelope `fadeFilter` trên bus audio.
+
 - [x] **D-3 · Noise reduction**: exporter option `afftdn` / `anlmdn`
   (checkbox trung thực — chỉ hiện khi đã map trong compiler) · S
   → **R47 ✅ (§115)**: `CompileOptions.denoise` → **1 afftdn global**
@@ -723,14 +747,17 @@ consumer) + `npx eslint <file app chạm>`.
 
 ### Phase E — Effects & Color (P2)
 
-- [ ] **E-1 · Adjust/Color grade** (brightness/contrast/saturation/
-  temperature → FFmpeg `eq`/`colorbalance` + preview CSS filter) · M —
-  registry **C6** + compiler **R4**.
-- [ ] **E-2 · Filters**: blur, sharpen, vignette, grain (FFmpeg
-  `gblur`, `unsharp`, `vignette`, `noise`) · M.
-- [ ] **E-3 · Chroma key (xóa phông xanh)**: FFmpeg `chromakey` +
-  slider similarity/blend; preview CSS approximation · M — v1 không cần
-  AI (khác "smart cutout").
+- [x] **E-1 · Adjust/Color grade** (brightness/contrast/saturation/
+  temperature → FFmpeg `eq`/`colorbalance` + preview CSS filter) · M → **R63 ✅ (§131)**:
+  tab Effects trong `TmcutInspector.vue` với sliders `eq-grade` (brightness/contrast/saturation) +
+  mô phỏng CSS filter thời gian thực trong preview player + xuất video qua FFmpeg R61.
+- [x] **E-2 · Filters**: blur, sharpen, vignette, grain (FFmpeg
+  `gblur`, `unsharp`, `vignette`, `noise`) · M → **R63 ✅ (§131)**:
+  hỗ trợ đầy đủ bộ lọc trong Inspector với thanh trượt cường độ, chọn kích thước hạt grain +
+  radial gradient vignette overlay trên preview player.
+- [x] **E-3 · Chroma key (xóa phông xanh)**: FFmpeg `chromakey` +
+  slider similarity/blend; preview CSS approximation · M → **R63 ✅ (§131)**:
+  bộ chọn màu phông hex/color picker + sliders similarity & blend + switch khử tràn màu spill.
 - [x] **E-4 · LUT**: `lut3d` (.cube) — chọn file .cube · S (render sẵn
   có trong ffmpeg build) → **R48 ✅ (§116)**: `CompileOptions.lut3dPath`
   → `lut3d` trên bus footage SAU concat, **TRƯỚC drawtext** (title giữ
@@ -743,8 +770,14 @@ consumer) + `npx eslint <file app chạm>`.
   (video+GIF, `v-if isDesktop` — web không có dialog → ẩn) ·
   **export-only** (browser không render 3D LUT tùy ý → không có
   preview, ghi rõ trong note) · i18n +5 → 2462.
-- [ ] **E-5 · Stabilizer**: `vidstabdetect` + `vidstabtransform` (2 pass,
-  cần file trung gian — runtime Electron) · L.
+- [x] **E-5 · Stabilizer**: `vidstabdetect` + `vidstabtransform` (2 pass,
+  cần file trung gian — runtime Electron) · L → **R66 ✅ (§134)**:
+  - `@tmcut-core` (`src/stabilize.mjs`, `src/index.d.ts`, `types/dsl.ts`, `test/stabilize.test.mjs`, `test/v1compat.test.mjs`): các hàm tạo arguments `buildVidstabDetectArgs` (Pass 1) và `buildVidstabTransformArgs` (Pass 2) với 3 preset chuẩn CapCut (`mild` smoothing 10, `medium` smoothing 20, `aggressive` smoothing 35) + path colon escaping `D\:/...` an toàn trong filter string. 172/172 tests passing.
+  - Electron Controller (`tmcut.controller.cjs`, `preload.cjs`, `types/electron.ts`): cache `cache/stabilized/` và `cache/stabilized_trf/` với FNV-1a hash key `(path, mtime, size, level)`. Pass 1 trích xuất vector chuyển động camera vào `.trf`, Pass 2 làm mượt chuyển động xuất ra `.mp4`, tự động dọn dẹp file `.trf` tạm.
+  - Inspector (`TmcutInspector.vue`): nhóm "Ổn định hình ảnh / Video Stabilizer" trong tab Video (`isDesktop`), switch bật/tắt, dropdown chọn mức độ, trạng thái xử lý/thành công, nút chạy xử lý một chạm.
+  - Timeline & Preview Player (`TmcutTimelineClip.vue`, `TmcutPreviewPlayer.vue`): badge `STAB` màu lục bảo trên clip timeline và HUD player; trình phát preview tự động load footage đã được ổn định.
+  - Compiler (`compiler.ts`): video export tự động đọc footage đã chống rung làm đầu vào render.
+  - i18n: `tmcut.stabilize` đầy đủ EN & VI (2678 leaf keys, 0 missing, 0 duplicates).
 - [ ] **E-6 · AI cutout (người/phông)**: cần model (rembg/ONNX) —
   **blocked** (dependency nặng) → giữ badge "Sắp ra mắt" · L.
 
@@ -762,12 +795,16 @@ consumer) + `npx eslint <file app chạm>`.
   (center khi vừa, thả top-left khi tràn — flex center cắt mất đầu
   khi scroll) · `monitorStageHeight` dùng chung cho fit constraint ·
   HUD + transport luôn pin · i18n +2 → 2447.
-- [ ] **F-3 · Mask / crop on canvas** (kéo khung crop trực tiếp —
-  inspector đã có cropRect sliders) · M.
-- [ ] **F-4 · Proxy preview**: core đã có `buildProxyArgs` → runtime
-  generate proxy (ffprobe qua `tmcut:analyzeAsset`) + toggle "Dùng proxy"
-  trong preview (thay design #2 proxy toggle — giờ backend **có thật**)
-  · M — cần IPC tạo proxy file + path map trong `useTmcutMedia`.
+- [x] **F-3 · Mask / crop on canvas** (kéo khung crop trực tiếp —
+  inspector đã có cropRect sliders) · M → **R67 ✅ (§135)**:
+  - `@tmcut-core` (`src/canvas.mjs`, `src/v1compat.mjs`, `src/index.d.ts`, `test/canvas.test.mjs`, `test/v1compat.test.mjs`): thêm `CROP_RATIO_PRESETS` (Free, 16:9, 9:16, 1:1, 4:3, 3:4, 21:9), `clampCropRect` (ràng buộc tọa độ chuẩn hóa [0..1] với kích thước tối thiểu an toàn), `applyCropRatio` (tính toán khung crop theo tỷ lệ chuẩn aspect ratio nguồn), và `sameCropRect` trong `v1MatchesV3` (khắc phục lỗi nuốt thay đổi cropRect trên bridge v1/v3). 175/175 tests core PASS.
+  - Preview Player (`TmcutPreviewPlayer.vue`): tích hợp chế độ crop chuyên biệt (`isCropActive`), chuyển video sang `objectFit: 'contain'` để hiển thị trọn vẹn footage gốc, 4 khối mặt nạ đen mờ (`bg-black/65`), khung tương tác crop với lưới 3x3 Rule-of-Thirds, 8 điểm kéo tay cầm (`nw`, `ne`, `sw`, `se`, `n`, `s`, `w`, `e`), và thanh công cụ nổi (floating toolbar) với các chip tỷ lệ một chạm, nút Reset và nút Xong. Hỗ trợ phím Escape thoát nhanh.
+  - Inspector (`TmcutInspector.vue`): nút chuyển đổi "Chỉnh sửa trên Canvas / Xong" và nút "Đặt lại" đồng bộ 2 chiều tức thì với 4 slider số `cropRect` (`x`, `y`, `w`, `h`).
+  - i18n: `tmcut.crop.*` 9 nhãn mô tả hoàn chỉnh, đồng bộ 2687 leaf keys tuyệt đối giữa EN và VI (0 duplicates, 0 missing).
+- [x] **F-4 · Proxy preview**: core `buildProxyArgs` (options + libx264/aac)
+  → IPC `tmcut:generateProxy` (cache `cache/proxies/`) + toggle "Proxy"
+  trong HUD preview (`proxyPreview` ref, badge `PROXY`) + thẻ media library
+  (huy hiệu `PXY`, nút tạo nhanh + nút tạo hàng loạt) · M (§132 R64).
 
 ### Phase G — Media & Runtime IPC (P1)
 
@@ -809,16 +846,40 @@ consumer) + `npx eslint <file app chạm>`.
   `importFiles(paths)` / web `importWebFiles(files)` · toast
   `dropNoMedia` khi mọi file bị lọc (không phải media) · i18n +1 →
   2445.
-- [ ] **G-3 · Album/folder trong media bin** (nhóm asset) · M · P2.
+- [x] **G-3 · Album/folder trong media bin** (nhóm asset, tạo/sửa/xóa thư mục, kéo thả phân loại, lọc danh mục đa chiều) · M · P2 → **R68 ✅ (§136)**:
+  - `@tmcut-core` (`src/folders.mjs`, `src/index.mjs`, `src/index.d.ts`, `types/dsl.ts`, `test/folders.test.mjs`): Pure core module quản lý thư mục media bin: `createFolder`, `renameFolder`, `updateFolderColor`, `removeFolder`, `getFolder`, `setAssetFolder`, `getAssetFolder`, `filterAssetsByFolder`, `getFolderCounts`. Hỗ trợ scoped folder theo từng project (`folderByProject`). 183/183 tests core passing.
+  - Media State (`useTmcutMedia.ts`, `types/tmcut.ts`): Thêm reactive state `folders` (lưu trữ persistent `tmcut_folders_v1`), `selectedFolderId` ('all' | 'unassigned' | folderId), computed `projectFolders` và `folderCounts`. Các hàm `addFolder`, `editFolder`, `changeFolderColor`, `deleteFolder`, `moveAssetToFolder`. Tự động gán folder khi import asset mới.
+  - Media Bin UI (`app/pages/tmcut/editor.vue`): Thanh Folder Bar với các pill cuộn ngang (Tất cả, Thư mục dự án với dot màu & badge số lượng & dropdown context menu, Chưa phân loại). Hỗ trợ kéo thả asset trực tiếp lên chip thư mục (`onFolderDrop`). Badge tag thư mục trên card asset khi xem "Tất cả", nút thao tác nhanh "Chuyển thư mục" trên hover actions. 3 modal: Tạo thư mục mới, Chỉnh sửa thư mục, và Chuyển thư mục asset.
+  - i18n: `tmcut.folders.*` 22 leaf keys đầy đủ EN & VI (2709 leaf keys đồng bộ tuyệt đối giữa en.json và vi.json, 0 missing, 0 duplicates).
 - [ ] **G-4 · Camera record / quay màn hình** — blocked (không backend
   ghi màn hình; ghi cam = getUserMedia D-4 pattern) · P3.
 
-### Phase H — AI (P2–P3, luôn trung thực)
+### Phase H — AI (P2–P3, luôn trung thực) — H-1/H-2 ✅, H-3/H-4/H-5 blocked
 
-- [ ] **H-1 · AutoCut v2 — "theo transcript"**: scoring thêm yếu tố
-  từ vựng (LLM `complete` đã có task `plan`) · M — deps gateway (có).
-- [ ] **H-2 · AI script (ý tưởng → storyboard)**: panel generate →
-  text clips nháp · M — deps `complete` (có).
+- [x] **H-1 · AutoCut v2 — "theo transcript"** (scoring thêm yếu tố từ vựng, nhận diện từ thừa ngập ngừng & từ khóa ưu tiên) · M → **R72 ✅ (§140)**:
+  - `@tmcut-core` (`src/analysis.mjs`, `types/edl.ts`, `src/index.d.ts`, `test/analysis.test.mjs`): Pure module phân tích từ vựng `DEFAULT_FILLER_WORDS` (Việt & Anh), `detectFillerWords`, `analyzeTranscriptSegment`, `scoreSegments` nhận `transcript` text và options (`filterFillerWords`, `keywords`, `customFillerWords`), gán lý do `reason: 'filler-word'` (hạ điểm `* 0.4`) hoặc `reason: 'highlight'` (tăng điểm `+ 0.25`), lưu metadata `hasFillerWords`, `detectedFillers`, `isHighlight`, `matchedKeywords`. 194/194 tests core passing.
+  - Composable (`useTmcutAutocut.ts`): Hỗ trợ `AutocutOptions`, tính toán thống kê tự động `fillerSegmentCount` và `highlightSegmentCount`.
+  - AutoCut Wizard UI (`app/pages/tmcut/autocut.vue`): Bước 2 thêm Card thiết lập AutoCut v2 (Switch toggle lọc từ thừa + Input từ khóa ưu tiên); Bước 3 thêm nút thao tác nhanh "Bỏ chọn từ thừa" và "Chọn đoạn nổi bật", hiển thị badge trực quan trên từng Card phân cảnh (`fillerTag` màu vàng cam, `highlightTag` màu tím).
+  - i18n: `tmcut.autocutV2.*` 13 leaf keys đầy đủ EN & VI (2795 leaf keys đồng bộ tuyệt đối giữa en.json và vi.json, 0 missing, 0 duplicates).
+  - Tests: `test:autocut` 4/4 tests PASS; `test:core` 194/194 tests PASS.
+- [x] **H-2 · AI script (ý tưởng → storyboard)**: panel generate →
+  text clips nháp · M → **R71 ✅ (§139)**:
+  - Utility thuần & models (`app/utils/tmcut/aiScript.ts`): kiểu dữ liệu
+    `TmcutAiScript`, `TmcutAiScriptScene`, các kịch bản mẫu chất lượng cao
+    `CURATED_SCRIPT_PRESETS` (TikTok Hook 30s, Tech Review 60s), chuyển đổi
+    thời lượng `durationToSeconds`, xuất bản Markdown `exportScriptMarkdown`.
+  - Composable (`app/composables/useTmcutAiScript.ts`): kết nối AI gateway
+    (`useTmcutAi().complete` với system prompt storyboard chuyên nghiệp &
+    JSON mode), tự động fallback sang preset gợi ý khi chưa cấu hình API key,
+    tạo project mới từ kịch bản (`createProjectFromScript`), chèn text clips
+    vào timeline (`insertScriptToCurrentTimeline`).
+  - Giao diện Studio Modal (`app/components/tmcut/TmcutAiScriptModal.vue`):
+    2 cột (Thiết lập chủ đề/nền tảng 9:16 & 16:9/thời lượng + Thẻ phân cảnh
+    Storyboard chi tiết B-roll, lời thoại, chữ hiển thị), nút tạo dự án mới,
+    chèn vào timeline, sao chép markdown.
+  - Kích hoạt phím tắt `Alt+A` thật sự: nút công cụ Header Editor, listener
+    toàn cục `Alt+A`, cập nhật `TmcutShortcutsModal.vue` sang badge hoạt động
+    thật `badge: 'ai'`. Parity tuyệt đối 2782/2782 keys.
 - [ ] **H-3 · Auto-reframe 9:16**: core đã có `reframeTransform`; thiếu
   detection subject (cần model) → v1 = manual preset ratio (đã có) · L.
 - [ ] **H-4 · Smart tracking/mask (Alt+T)** — giữ badge "Sắp ra mắt"
@@ -854,8 +915,13 @@ consumer) + `npx eslint <file app chạm>`.
   hỗ trợ cả `compileAudioOnly` · UI `TmcutExportModal` đổi sang active
   confirmation badge (`i-lucide-sparkles`) · i18n parity 2573/2573 ·
   dry-run FFmpeg 6/6 test PASS.
-- [ ] **R4 · Effects graph** (map registry **C6** → filter chain, thứ tự
-  ổn định: fit → effect → keyframe → text → zone-trim) · L.
+- [x] **R4 · Effects graph** (map registry **C6** → filter chain, thứ tự
+  ổn định: fit → effect → keyframe → text → zone-trim) · L → **R61 ✅ (§129)**:
+  cập nhật `renderReady: true` cho 8 effects trong `EFFECT_REGISTRY` (`blur`,
+  `sharpen`, `vignette`, `grain`, `chromakey`, `lut3d`, `stabilize`, `eq-grade`) ·
+  cung cấp `buildFfmpegEffectFilters` trong `@tmcut/core` · tích hợp vào
+  `compiler.ts` theo đúng pipeline (`fit → effects → setsar=1 → transform → opacity`) ·
+  166/166 tests core PASS · dry-run FFmpeg 8/8 effects exit code 0.
 - [x] **R5 · Fade → `volume` expression** (**C12**) · S → **R45 ✅
   (§113)**: helper `fadeFilter` trong `compiler.ts` — core
   `volumeExpr` (mốc A/D-B/D theo fade ticks đã clamp nửa duration)
@@ -876,8 +942,12 @@ consumer) + `npx eslint <file app chạm>`.
   4 encoder profiles với probe HW thật (`detectGpuSupport`) · tách
   fileName & dirName với browse folder thật qua `pickFolder` · autoPreview
   qua `media://` protocol · i18n +18 keys (parity 2573/2573).
-- [ ] **R7 · Export queue** (hàng đợi nhiều tác vụ —
-  `useToolTaskManager('ffmpeg')` đã có task system, thêm UI queue) · M.
+- [x] **R7 · Export queue** (hàng đợi nhiều tác vụ —
+  `useToolTaskManager('ffmpeg')` đã có task system, thêm UI queue) · M → **R62 ✅ (§130)**:
+  composable `useTmcutExportQueue.ts` quản lý hàng đợi xuất nền singleton · tự động
+  chuyển giao tác vụ tuần tự không chặn UI · giao diện `TmcutExportQueueModal.vue` đầy đủ
+  Start/Pause/Resume/Cancel/Retry/Clear · tích hợp nút "Thêm vào hàng đợi" trong modal xuất
+  và nút "Hàng đợi xuất" kèm huy hiệu trên navbar editor · i18n parity 2717/2717 keys.
 - [x] **R8 · Social presets** (TikTok 1080×1920 30fps, YouTube 1080p,
   Reels…) — chỉ chọn preset có thật của pipeline · S
   → **R51 ✅ (§119)**: row 3 chip trong export modal (video mode):
@@ -891,9 +961,16 @@ consumer) + `npx eslint <file app chạm>`.
   fps30 (bằng canvas fps → giữ "follow canvas") · chip sáng khi
   khớp ✓ · test 9 case (720p/4K/iPhone 750×1334 fit, sai aspect +
   canvas lẻ 1919 disabled) · i18n +5 → 2480.
-- [ ] **R9 · Refactor `compiler.ts` → `render/` graph** (architecture
-  Phase 6: `graph/normalize/resolver/ffmpeg/plan/adapters`) · L — làm khi
-  R1–R5 tích lũy đủ.
+- [x] **R9 · Refactor `compiler.ts` → `render/` graph** (architecture
+  Phase 6) · L → **R70 ✅ (§138)**: Tách compiler monolithic (~893 lines)
+  thành kiến trúc RenderGraph mô-đun hóa trong `app/utils/tmcut/render/`
+  (`types.ts`, `graph.ts`, `text.ts`, `audio.ts`, `video.ts`, `encoder.ts`,
+  `index.ts`) · Bảo toàn 100% logic FFmpeg phức tạp (keyframe expressions,
+  xfade/acrossfade, LUT3D grading trước text, areverse trước asetpts, text
+  animations & transparent canvas rotation, GIF palettegen) · `compiler.ts`
+  thành facade re-export tương thích ngược 100% · Bổ sung test suite
+  `test:render` (8/8 tests pass) · 191/191 core tests pass · ESLint 0 errors,
+  Nuxt typecheck 0 errors.
 - [x] **R10 · Video transform → export** — **R20 ✅**: `buildFfmpegTransform`
   (core `canvas.mjs`) — `color` bg + `overlay=x:y:shortest=1` (bg d =
   duration+2s headroom), identity → `null` giữ chain cũ nguyên vẹn;
@@ -929,8 +1006,12 @@ consumer) + `npx eslint <file app chạm>`.
 
 ### Phase J — Home & Templates (P2)
 
-- [ ] **J-1 · Template engine**: JSON template (layout text+media placeholder)
-  áp vào project thật (thay card "Coming soon" honest hiện tại) · M.
+- [x] **J-1 · Template engine & library** (JSON template layout text+media placeholder áp vào project thật, thư viện mẫu studio) · M → **R69 ✅ (§137)**:
+  - `@tmcut-core` (`src/templates.mjs`, `src/index.mjs`, `src/index.d.ts`, `types/dsl.ts`, `test/templates.test.mjs`): Pure core module quản lý template: `BUILTIN_TEMPLATES` (6 templates chuẩn: TikTok Hook Intro 9:16, YouTube Cinematic Title 16:9, Split-Screen Duo 9:16, Instagram Square Promo 1:1, YouTube Outro 16:9, Minimal Vlog Lower-Third 16:9), `getBuiltinTemplates`, `getTemplateById`, `validateTemplate`, `filterTemplates`, `createTemplateFromTimeline`, `instantiateTemplate` (sinh id mới độc nhất, giữ đúng transforms/timing, áp dụng replacements), `replacePlaceholder`. 191/191 tests core passing.
+  - Composable (`useTmcutTemplates.ts`, `types/tmcut.ts`): Quản lý builtin templates + user templates lưu `localStorage` (`tmcut_user_templates_v1`). Hỗ trợ tạo project mới từ template một chạm (`createProjectFromTemplate`), lưu timeline hiện tại thành custom template (`saveCurrentProjectAsTemplate`), xóa template cá nhân.
+  - Template Library UI (`app/pages/tmcut/templates.vue`): Nâng cấp toàn diện thành Studio Template Library với bộ lọc danh mục (Tất cả, Mở đầu, Kết thúc, Màn hình ghép, Quảng cáo, Tối giản, Của tôi), bộ lọc tỷ lệ (9:16, 16:9, 1:1), ô tìm kiếm, card preview tỷ lệ thu nhỏ, thống kê slots video/text/tracks, nút "Dùng mẫu này" tạo ngay, modal tùy biến tiêu đề & placeholder text trước khi tạo, và nút "Lưu thành mẫu dự án" trên Editor.
+  - i18n: `tmcut.templateLibrary.*` 37 leaf keys đầy đủ EN & VI (2749 leaf keys đồng bộ tuyệt đối giữa en.json và vi.json, 0 missing, 0 duplicates).
+
 - [x] **J-2 · Theo design #1 còn lại**: Recently opened sort thật (đã
   sort?), pin project (lưu flag trong project file) · S
   → **R50 ✅ (§118)**: audit — sort `recent` hiện có = "Recently
@@ -946,7 +1027,7 @@ consumer) + `npx eslint <file app chạm>`.
   file) · i18n +4 → 2475.
 - [ ] **J-3 · Cloud widget/Share** — vẫn bỏ (không backend) · giữ §77.
 
-### Phase K — Shortcut (song song, luôn cập nhật help modal)
+### Phase K — Shortcut (song song, luôn cập nhật help modal) — HOÀN TẤT
 
 - [x] Ctrl+scroll zoom (§79) · dòng help đã thêm (**A2** · R13).
 - [x] K1: `N` magnet (A6) · K2: `M` marker (B5) · K3: `Ctrl+G`/
@@ -1003,12 +1084,13 @@ consumer) + `npx eslint <file app chạm>`.
 | Shift+D | Bật/tắt fade 0.5s hai cạnh clip chọn | TmcutTimeline (§117) |
 | F5 | Reload app (main) | electron/main.cjs |
 | Ctrl+Shift+I | DevTools (main) | electron/main.cjs |
-| Alt+A · Alt+T | AI (badge "Sắp ra mắt" — chưa bật) | Help modal planned |
+| Alt+A | AI Scriptwriter & Storyboard | Editor + TmcutAiScriptModal (§139) |
+| Alt+T | Smart mask & tracking (badge "Sắp ra mắt") | Help modal planned |
 
 ### Dự kiến thêm (chỉ khi feature thật — sửa help modal cùng round)
 
-Đã hết: K1–K8 đều implement × help modal (R49/§117). Chỉ còn
-`Alt+A`/`Alt+T` (AI — chờ Phase H, badge "Sắp ra mắt").
+Đã hết: K1–K8 đều implement × help modal (R49/§117) + Alt+A (R71/§139). Chỉ còn
+`Alt+T` (Smart mask & tracking — chờ model).
 
 ---
 
@@ -1019,18 +1101,25 @@ consumer) + `npx eslint <file app chạm>`.
 [x] F5-only reload · Ctrl+scroll zoom · review fixes (§79)   ← chưa commit
 [x] Phase A — Design #2 còn thiếu … A1 ✅ A2 ✅ A3 ✅ A4 ✅ A5 ✅ A6 ✅ A7 ✅ A8 ✅ — HOÀN TẤT
 [x] Phase B  — Timeline power (keyframe/speed/trans/link/marker) — B1 ✅ (R24) · B2 ✅ (R26) · B3 ✅ (R34) · B4 ✅ (R31) · B5 ✅ (R27) · B6 ✅ (R28) · B7 ✅ (R29) · B8 ✅ (R32) · B9 ✅ (R33) — HOÀN TẤT
-[ ] Phase C  — Text & Captions ................... C-1..C-5
-[ ] Phase D  — Audio ............................. D-1..D-6
-[ ] Phase E  — Effects & Color ................... E-1..E-6
-[ ] Phase F  — Preview & Canvas .................. F-1..F-4
-[ ] Phase G  — Media & IPC ....................... G-1..G-4
-[ ] Phase H  — AI ............................... H-1..H-5
-[ ] Phase I  — Export & Render — R1 ✅ (R25) · R2 ✅ (R60) · R3 ✅ (R59) · R5 ✅ (R45) · R6 ✅ (R58) · R8 ✅ (R51) · R10 ✅ (R20) · R11 ✅ (R56) · R12 ✅ (R57)
-[ ] Phase J  — Home & Templates .................. J-1..J-3
-[ ] Phase K  — Shortcuts (K1..K8)
-[ ] Phase L  — Architecture Phases 4–6
+[x] Phase C  — Text & Captions — C-1 ✅ (R41) · C-2 ✅ (R42) · C-3 ✅ (R44) · C-4 ✅ (R46) · C-5 ✅ (R65) — HOÀN TẤT
+[x] Phase D  — Audio — D-1 ✅ (R38/R45) · D-2 ✅ (R61) · D-3 ✅ (R47) · D-4 ✅ (R55) · D-5,D-6 (blocked) — HOÀN TẤT
+[x] Phase E  — Effects & Color — E-1 ✅ (R63) · E-2 ✅ (R63) · E-3 ✅ (R63) · E-4 ✅ (R48) · E-5 ✅ (R66) · E-6 (blocked) — HOÀN TẤT
+[x] Phase F  — Preview & Canvas — F-1 ✅ (R53) · F-2 ✅ (R54) · F-3 ✅ (R55) · F-4 ✅ (R64) — HOÀN TẤT
+[x] Phase G  — Media & IPC — G-1 ✅ (R41/R42) · G-2 ✅ (R43) · G-3 ✅ (R68) · G-4 (blocked) — HOÀN TẤT
+[x] Phase H  — AI — H-1 ✅ (R72) · H-2 ✅ (R71) · H-3..H-5 (blocked)
+[x] Phase I  — Export & Render — R1 ✅ (R25) · R2 ✅ (R60) · R3 ✅ (R59) · R4 ✅ (R61) · R5 ✅ (R45) · R6 ✅ (R58) · R7 ✅ (R62) · R8 ✅ (R51) · R9 ✅ (R70) · R10 ✅ (R20) · R11 ✅ (R56) · R12 ✅ (R57) — HOÀN TẤT
+[x] Phase J  — Home & Templates — J-1 ✅ (R69) · J-2 ✅ (R50) · J-3 (blocked) — HOÀN TẤT
+[x] Phase K  — Shortcuts (K1..K8) — K1–K8 ✅ (R49/§117) + Alt+A ✅ (R71/§139)
+[x] Phase L  — Architecture Phases 4–6  ← NEXT: Core C16,C17 (bridge removal & DSL v3 app migration)
 [x] Core Phase 1–3 (66 tests)
-[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) ✅ · [ ] Core C16,C17 (section 3)
+[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) ✅ · [ ] Core C16,C17 (section 3) · Core C18 ✅ (R72/§140)
+
+> **Round log summary:**
+> - **R73** (§141): P0 security (path traversal + OOM), export queue persist, ESLint clean (190→0), fontmanager.node pack fix.
+> - **R74** (§142): v1compat data-loss fixes (reverse, effects[], keyframes[], track flags), KEYFRAME_EASINGS export, lint:core 0 errors (first time since R62), 198/198 core tests.
+> - **R75** (§143): Phase 4 Canvas Engine — buildBackgroundSource() for image/transparent background, 7 new tests, 205/205 core tests.
+> - **R76** (§144): Render pipeline integration — `buildBackgroundSource()` descriptors wired into base layer + alpha codec (yuva420p), image looping input, transparent exports; 11 render tests (3 new); all gates green.
+> - **R77** (§145): Per-clip transform over shared canvas background — `buildFfmpegTransform` `bgInput` support, shared `[v_bg]` reuse for image backgrounds, headroom trim; 12 render tests; all gates green.
 ```
 
 ---
