@@ -114,6 +114,16 @@ export interface TmcutProjectTimeline {
   markers?: TmcutMarker[]
 }
 
+/**
+ * Project-file schema version (C16). Files written before C16-R1 stored
+ * fps as a bare number; from C16-R1 on, fps is the DSL v3 rational
+ * FrameRate. `applyProjectMigration` runs legacy coercion ONLY when the
+ * file lacks this marker (or holds an older value), then stamps it — so
+ * the migration is one-time per file, matching Roadmap C16 ("v1compat
+ * chỉ còn cho file project cũ — migrate 1 lần khi mở").
+ */
+export const TMCUT_PROJECT_SCHEMA_VERSION = 2
+
 export interface TmcutProject {
   id: string
   name: string
@@ -137,6 +147,8 @@ export interface TmcutProject {
   /** Pinned to the top of the home grid (roadmap J-2) — stored in the
    *  project file itself, no separate index. */
   pinned?: boolean
+  /** Project-file schema version (see TM CUT_PROJECT_SCHEMA_VERSION). */
+  schemaVersion?: number
 }
 
 // Global project state
@@ -222,22 +234,41 @@ function buildDefaultProject(projectId: string, name = 'Untitled Project'): Tmcu
       bitrate: 5000
     },
     source: 'manual',
+    schemaVersion: TMCUT_PROJECT_SCHEMA_VERSION,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
 }
 
-// Backward-compat migration for pre-v2 projects (legacy canvas + missing tracks)
+// Backward-compat migration for pre-v2 projects (legacy canvas + missing
+// tracks). C16: schemaVersion marks files that have passed through this
+// gate once at open — the ONLY place legacy v1-shaped data (bare-number
+// fps) is still accepted, matching Roadmap C16 ("v1compat chỉ còn cho
+// file project cũ — migrate 1 lần khi mở"). Coercion itself runs
+// whenever the stored shape is legacy so the FrameRate type invariant
+// (canvas.fps / settings.fps are always rational) holds on every path.
 function applyProjectMigration(project: TmcutProject) {
+  const isLegacy = (project.schemaVersion ?? 1) < TMCUT_PROJECT_SCHEMA_VERSION
   project.canvas = normalizeCanvas(project.canvas)
-  if (typeof project.settings.fps === 'number') {
-    project.settings.fps = { numerator: project.settings.fps, denominator: 1 }
+  if (!project.settings?.fps || typeof project.settings.fps !== 'object') {
+    const legacyFps = typeof project.settings?.fps === 'number' && project.settings.fps > 0
+      ? project.settings.fps
+      : canvasFpsValue(project.canvas)
+    project.settings = {
+      resolution: project.settings?.resolution || '1920x1080',
+      fps: { numerator: legacyFps, denominator: 1 },
+      format: project.settings?.format || 'mp4',
+      bitrate: project.settings?.bitrate ?? 5000
+    }
   }
   ensureDefaultTracks(project)
   // Pre-B5 projects were saved without a markers array (core addMarker
   // throws on a missing array), so backfill it during migration.
   if (!Array.isArray(project.timeline.markers)) {
     project.timeline.markers = []
+  }
+  if (isLegacy) {
+    project.schemaVersion = TMCUT_PROJECT_SCHEMA_VERSION
   }
 }
 
