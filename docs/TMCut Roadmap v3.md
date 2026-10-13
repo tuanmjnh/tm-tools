@@ -1120,6 +1120,7 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R75** (§143): Phase 4 Canvas Engine — buildBackgroundSource() for image/transparent background, 7 new tests, 205/205 core tests.
 > - **R76** (§144): Render pipeline integration — `buildBackgroundSource()` descriptors wired into base layer + alpha codec (yuva420p), image looping input, transparent exports; 11 render tests (3 new); all gates green.
 > - **R77** (§145): Per-clip transform over shared canvas background — `buildFfmpegTransform` `bgInput` support, shared `[v_bg]` reuse for image backgrounds, headroom trim; 12 render tests; all gates green.
+> - **R78** (§146): C16-R1 (sub-round 1/3) — app model rational fps: `TmcutCanvas.fps: FrameRate` (DSL v3), app `normalizeCanvas` → core version, `canvasFpsValue()` accessor, migration of legacy number fps on open, all UI/render consumers migrated; all gates green. NOTE: Architecture doc §129–§145 reconstructed from this Roadmap after a truncating `write` incident (user restored base doc from backup).
 ```
 
 ---
