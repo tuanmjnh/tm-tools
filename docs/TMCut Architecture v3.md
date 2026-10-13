@@ -7660,7 +7660,8 @@ transform trên nền **image** mất hình nền (gap hiện solid color).
 ### 146.1 Scope (C16 sub-round 1/3)
 Migrate fps từ `number` sang `FrameRate { numerator, denominator }`
 (theo DSL v3 core) — bước đầu của "Đưa app sang DSL v3 đầy đủ".
-`v1compat`/seconds model của timeline CHƯA đổi (sub-round 2).
+Timeline items (seconds, `src`) CHƯA đổi (sub-round 2 — bề mặt lớn
+~270 chỗ đọc field v1, cần tách riêng).
 
 ### 146.2 Changes
 | # | Change | File |
@@ -7668,7 +7669,7 @@ Migrate fps từ `number` sang `FrameRate { numerator, denominator }`
 | 1 | `FrameRate` interface + `TmcutCanvas.fps: FrameRate` | `app/types/tmcut.ts` |
 | 2 | Xóa app-side `normalizeCanvas` — re-export core version (rational fps) | `app/utils/tmcut/canvas.ts` |
 | 3 | `canvasFpsValue(canvas?)` — rational/number → number (3-decimal, NTSC 29.97 an toàn) | `app/utils/tmcut/canvas.ts` |
-| 4 | `TmcutProjectSettings.fps: FrameRate`; `buildDefaultProject` `{30,1}`; `applyProjectMigration` convert legacy number fps | `app/composables/useTmcutProject.ts` |
+| 4 | `TmcutProjectSettings.fps: FrameRate`; `buildDefaultProject` `{30,1}`; `TMCUT_PROJECT_SCHEMA_VERSION = 2` + `schemaVersion?` trên project; `applyProjectMigration` = cổng migrate MỘT LẦN khi mở (bare-number fps → rational, settings thiếu → dựng từ canvas, stamp version) — chỗ DUY NHẤT còn chấp nhận shape v1 cũ | `app/composables/useTmcutProject.ts` |
 | 5 | `reframeCanvas`/`duplicateAsProject` đọc qua `canvasFpsValue` | `useTmcutProject.ts` |
 | 6 | `createTemplateFromTimeline` canvas.fps qua `canvasFpsValue` (core template giữ number) | `app/composables/useTmcutTemplates.ts` |
 | 7 | Render pipeline `fps = canvasFpsValue(project.canvas)` | `app/utils/tmcut/render/index.ts` |
