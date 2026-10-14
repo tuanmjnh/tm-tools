@@ -8030,3 +8030,26 @@ New `composables/useTmcutPreviewEngine.ts` picks one engine per session (the `tm
 `TmcutPreviewPlayer.vue` now reads ONLY the seam: both media-surface computeds, the canvas-background style, and the proxy toggle button (`v-if="previewEngine.capabilities.proxyPreview"` instead of `isDesktop`). The doc-era `WebPreviewEngine` (WebCodecs canvas compositor) remains a named follow-up that implements this same interface — Phase 5 ticked with that scope note.
 
 Gate battery: nuxt prepare+typecheck 0 · eslint 0 · store 14/14 · time-domain 7/7 · render graph 12/12 (behaviour unchanged by construction — same URLs on both runtimes, asserted by reading the old and new resolution paths).
+
+# 155. R91 — Templates spec exposes the reactive-ref defect (QA round)
+
+Roadmap content is backend-blocked, so the chain turned to QA-hardening: fill the last untested seam the flip left behind. `useTmcutTemplates` (save/instantiate/delete + the R88 `_v1`→`_v2` migration) had no test at all — the exact R82 defect family (a repeated or partial re-scale silently corrupting every user template).
+
+## 155.1 The new spec
+
+`tests/unit/tmcut_templates.spec.ts` (4 checks, `pnpm test:templates`, also added: `test:smoke`):
+
+- legacy seconds templates scale to ticks EXACTLY once at import (module-level auto-load), persist under `_v2`, legacy key removed;
+- store (ticks) → `saveCurrentProjectAsTemplate` keeps integer tick geometry and derives `durationTicks` from it;
+- `createProjectFromTemplate` lands ticks back into a fresh project with correct `durationMs`;
+- `deleteUserTemplate` persists.
+
+## 155.2 The real defect it caught on first run
+
+`createProjectFromTemplate` wrote `proj.canvas/.timeline` on the RAW object `createProject()` returned. Raw field writes bypass Vue's dependency tracking, so `totalDuration` kept its empty-project cached value (5s floor) and `saveProject()` stamped a wrong `durationMs` (5000 instead of 6000) into the freshly instantiated project — every template-created project would have persisted a wrong duration until the first edit. Fix: write through `currentProject.value` (the proxy write-throughs to the same raw target, so the returned `proj` stays live). The same raw-write pattern audited app-wide: no other offender (other `createProject` callers only push-route or use store actions).
+
+## 155.3 Sweep results (no defect)
+
+Post-flip epsilon audit: all 6 small-constant comparisons (`0.001/0.005/0.05/1e-9`) sit on already-decoded SECONDS values — correct by construction. Raw `(out-in)/speed` grep outside the oracle + render pipeline: only legitimate tick-math sites (trim drag math, store internals, decoded views). `tsconfig.test.json` is a tsx runtime config, never tsc'd (pre-existing, out of scope).
+
+Gates: templates 4/4 NEW · store 14/14 · time-domain 7/7 · autocut_v2 4/4 · render 12/12 · nuxt typecheck 0 · eslint 0.

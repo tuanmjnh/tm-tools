@@ -135,8 +135,17 @@ export function useTmcutTemplates() {
     const name = options.projectName?.trim() || `${template.name} - Project`
     const proj = createProject(name)
 
+    // Write through the reactive ref, NOT the raw object createProject
+    // returned: raw field writes bypass Vue's dependency tracking, so the
+    // totalDuration computed would keep its stale (empty-project) cache
+    // and saveProject would persist a wrong durationMs (tmcut_templates
+    // spec, R91). Proxy writes write-through to the raw target, so the
+    // returned `proj` still reflects everything.
+    const live = currentProject.value
+    if (!live) return proj
+
     // Set canvas
-    proj.canvas = normalizeCanvas({
+    live.canvas = normalizeCanvas({
       width: instantiated.canvas.width,
       height: instantiated.canvas.height,
       fps: instantiated.canvas.fps
@@ -147,13 +156,12 @@ export function useTmcutTemplates() {
     // app-authored templates carry app items verbatim, so re-asserting the
     // app track type at this boundary is sound (validateTemplate gates the
     // shape at save time; a foreign template would fail there first).
-    proj.timeline = {
+    live.timeline = {
       version: 1,
       tracks: instantiated.timeline.tracks as unknown as TmcutTrack[],
       durationMs: instantiated.durationMs,
       markers: instantiated.timeline.markers || []
     }
-    proj.durationMs = instantiated.durationMs
     saveProject()
     return proj
   }
