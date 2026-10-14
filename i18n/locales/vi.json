@@ -963,7 +963,9 @@
       "bgWhite": "Nền trắng",
       "bgDark": "Nền xám đậm",
       "bgLight": "Nền xám nhạt",
-      "transparent": "Nền trong suốt"
+      "transparent": "Nền trong suốt",
+      "bgImage": "Ảnh nền…",
+      "bgImageFailed": "Không tải được ảnh nền"
     },
     "fit": {
       "label": "Lấp đầy khung hình",

@@ -963,7 +963,9 @@
       "bgWhite": "White background",
       "bgDark": "Dark gray background",
       "bgLight": "Light gray background",
-      "transparent": "Transparent background"
+      "transparent": "Transparent background",
+      "bgImage": "Background image…",
+      "bgImageFailed": "Could not load the background image"
     },
     "fit": {
       "label": "Media Fitting",

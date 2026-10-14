@@ -8004,3 +8004,13 @@ The `Ticks` branded-type idea was deliberately dropped: with the seconds oracle 
 - Playback composable untouched end-to-end — proof the R2 accessor contract paid off exactly as designed.
 - Autocut lost its ticksToSec detour; templates store/replay stays unit-agnostic.
 - Follow-ups observed while flipping (non-blocking): preview ignores text-clip SPEED for the anim window (pre-existing); Inspector timing inputs step in seconds (correct by design).
+
+# 153. R89 — Canvas background image UI (last Phase 4 gap)
+
+Phase 4's only remaining "DSL has it, UI does not" item was the image canvas background (export side shipped with R76's `buildBackgroundSource`): the Canvas menu gains "Background image…" next to the color/transparent presets.
+
+- `editor.vue` `handlePickBackgroundImage`: desktop picks via `pickFile` and stores the absolute path (media:// resolves at play/export, like clip srcs); web mode keeps a session `URL.createObjectURL` blob — the same trade web-imported assets already accept (`isDesktop`-gated).
+- Preview monitor paints the image `cover`-centered behind the clip layers, through `resolveMediaSrc` (absolute → media://, blob passes through), matching the export composite order (background under clips).
+- i18n +2 pairs → 2797/2797.
+
+Preview PAN (F2) stays deliberately undone: the roadmap's own R55 conclusion — fixed preview, per-clip move/scale covers framing; recorded as the standing exception on the Phase 4 tick. Phase 4 ✅ (R89), Phase 6 was already true on content (R9 = R70) → ticked. Gates: typecheck 0 · lint 0 · render 12/12 · store 14/14 · i18n 2797/2797.

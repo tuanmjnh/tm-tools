@@ -219,12 +219,21 @@ const monitorBoxStyle = computed(() => {
   const scale = canvasZoom.value === 'fit'
     ? Math.max(0.05, Math.min(availW / w, availH / h))
     : Math.max(0.05, canvasZoom.value)
+  // Canvas background (roadmap Phase 4): color paints the box, an image
+  // covers it (core exports the same way: bg under the clips); the web
+  // blob object-URL passes through resolveMediaSrc untouched.
+  const bg = canvas?.background
+  const bgStyle: Record<string, string> = {}
+  if (bg?.type === 'color') bgStyle.backgroundColor = bg.value || '#000000'
+  else if (bg?.type === 'image' && bg.value) {
+    bgStyle.backgroundImage = `url("${resolveMediaSrc(bg.value)}")`
+    bgStyle.backgroundSize = 'cover'
+    bgStyle.backgroundPosition = 'center'
+  }
   return {
     width: `${Math.floor(w * scale)}px`,
     height: `${Math.floor(h * scale)}px`,
-    backgroundColor: canvas?.background?.type === 'color'
-      ? canvas.background.value || '#000000'
-      : undefined
+    ...bgStyle
   }
 })
 

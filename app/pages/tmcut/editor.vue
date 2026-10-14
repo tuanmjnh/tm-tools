@@ -341,6 +341,29 @@ async function handleImportMedia() {
   }
 }
 
+// Canvas background image (roadmap Phase 4): the DSL + exporter already
+// support `{ type: 'image' }` (R76); this picks the file. Desktop stores
+// the absolute path (media:// resolves it at play/export time); web mode
+// keeps an object URL for the session, same as web-imported assets.
+async function handlePickBackgroundImage() {
+  const imageFilters = [mediaFilters[2]!]
+  try {
+    if (!isDesktop.value) {
+      const files = await pickWebFiles(imageFilters.flatMap(g => g.extensions), false)
+      if (files.length === 0) return
+      setCanvasBackground('image', URL.createObjectURL(files[0]!))
+      return
+    }
+    const picked = await pickFile({ title: t('tmcut.canvas.bgImage'), filters: imageFilters })
+    const path = Array.isArray(picked) ? picked[0] : picked
+    if (!path) return
+    setCanvasBackground('image', path)
+  } catch (error) {
+    console.error('Background image pick failed:', error)
+    toast.add({ title: t('tmcut.canvas.bgImageFailed'), color: 'error' })
+  }
+}
+
 // ===== Voiceover recording (roadmap D-4) =====
 // Mic button in the media bin header: getUserMedia + MediaRecorder
 // (web + desktop); the blob lands through the normal import pipeline
@@ -785,6 +808,11 @@ const canvasMenuItems = computed(() => {
       label: t('tmcut.canvas.transparent'),
       icon: 'i-lucide-circle-dashed',
       onSelect: () => setCanvasBackground('transparent')
+    },
+    {
+      label: t('tmcut.canvas.bgImage'),
+      icon: 'i-lucide-image',
+      onSelect: () => void handlePickBackgroundImage()
     }
   ]
 
