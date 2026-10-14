@@ -1,5 +1,6 @@
-import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
 import type { RenderGraph } from './graph'
+import type { RenderClip } from './clip'
+import { renderClipDuration } from './clip'
 import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
@@ -37,40 +38,41 @@ export interface VideoPipelineContext {
 }
 
 /**
- * Compiles normal video clips, fitting, effects, transform/opacity, and concatenates them with transitions.
+ * Compiles normal video clips, fitting, effects, transform/opacity, and
+ * concatenates them with transitions. C16-R2: consumes RenderClip —
+ * the render canonical view — never app-model v1 fields directly.
  */
 export function compileVideoPipeline(
   graph: RenderGraph,
-  videoClips: TmcutTimelineItem[],
+  videoClips: RenderClip[],
   ctx: VideoPipelineContext
 ): { videoStream: string, audioStream: string | null } {
   const vStreams: string[] = []
   const aStreams: string[] = []
 
   for (const clip of videoClips) {
-    const footagePath = (clip.stabilize && clip.stabilizedPath) ? clip.stabilizedPath : clip.src!
-    const currentInputIdx = graph.addInput(footagePath)
+    const currentInputIdx = graph.addInput(clip.footagePath!)
 
-    const speed = clip.speed || 1
+    const speed = clip.speed
     const setpts = speed !== 1 ? `setpts=(PTS-STARTPTS)/${speed}` : 'setpts=PTS-STARTPTS'
-    const reverseStep = clip.reverse ? ',reverse' : ''
+    const reverseStep = clip.raw.reverse ? ',reverse' : ''
 
-    const fitFilters = buildFfmpegFitFilters(clip.fit || 'fit', ctx.canvasW, ctx.canvasH, {
-      focusX: clip.focusX ?? 0.5,
-      focusY: clip.focusY ?? 0.5,
-      cropRect: clip.cropRect,
+    const fitFilters = buildFfmpegFitFilters(clip.fit, ctx.canvasW, ctx.canvasH, {
+      focusX: clip.focusX,
+      focusY: clip.focusY,
+      cropRect: clip.raw.cropRect,
       padColor: ctx.bgColor,
       rotation: clip.rotation
     })
-    const clipDuration = (clip.out - clip.in) / speed
+    const clipDuration = renderClipDuration(clip)
 
-    const kfScale = keyframeExpr(clip, 'scale', 't')
-    const kfX = keyframeExpr(clip, 'x', 't')
-    const kfY = keyframeExpr(clip, 'y', 't')
+    const kfScale = keyframeExpr(clip.raw, 'scale', 't')
+    const kfX = keyframeExpr(clip.raw, 'x', 't')
+    const kfY = keyframeExpr(clip.raw, 'y', 't')
     const transform = buildFfmpegTransform({
       canvasW: ctx.canvasW,
       canvasH: ctx.canvasH,
-      scale: clip.scale,
+      scale: clip.scalePct,
       x: clip.x,
       y: clip.y,
       scaleExpr: kfScale,
@@ -82,8 +84,8 @@ export function compileVideoPipeline(
       bgInput: ctx.bgBase
     })
 
-    const kfOpacity = keyframeExpr(clip, 'opacity', 'T')
-    const opacityPct = clip.opacity ?? 100
+    const kfOpacity = keyframeExpr(clip.raw, 'opacity', 'T')
+    const opacityPct = clip.opacityPct
     const faded = opacityPct < 100
     let alphaArg = ''
     if (kfOpacity) {
@@ -92,51 +94,60 @@ export function compileVideoPipeline(
       alphaArg = `,format=rgba,colorchannelmixer=aa=${opacityAlpha(opacityPct)}`
     }
 
-    const effectFilters = buildFfmpegEffectFilters(clip.effects)
+    const effectFilters = buildFfmpegEffectFilters(clip.raw.effects)
     const effectChain = effectFilters.length > 0 ? `,${effectFilters.join(',')}` : ''
     const vOut = `[v_scaled_${currentInputIdx}]`
-    const clipChain = `[${currentInputIdx}:v]trim=start=${clip.in}:end=${clip.out},${setpts}${reverseStep},${fitFilters.join(',')}${effectChain},setsar=1`
+    const clipChain = `[${currentInputIdx}:v]trim=start=${clip.inSec}:end=${clip.outSec},${setpts}${reverseStep},${fitFilters.join(',')}${effectChain},setsar=1`
 
     if (transform) {
-      const vBg = `[v_bg_${currentInputIdx}]`
       const vFg = `[v_fg_${currentInputIdx}]`
+      let vBg: string
       if (transform.bg) {
+        vBg = `[v_bg_${currentInputIdx}]`
         graph.addFilterChain(`${transform.bg}${vBg}`)
       } else if (ctx.bgBase) {
         // Re-use the shared image background for this clip's transform.
-        const bgTrimLabel = `[v_bg_trim_${currentInputIdx}]`
-        graph.addFilterChain(`${ctx.bgBase},trim=start=${clip.in}:end=${clip.out + 2},setpts=PTS-STARTPTS${bgTrimLabel}`)
-        // Pad vBg for the overlay so the label exists even if we don't
-        // emit a separate color source (overlay expects two inputs).
-        graph.addFilterChain(`[${bgTrimLabel}]${vBg}`)
+        // R79 (real-FFmpeg verified): the base label attaches DIRECTLY to
+        // the filter (`[v_bg]trim=…`) — `[v_bg],trim` parses as an EMPTY
+        // filter ("No such filter: ''"), and a bare `[in][out]` relabel
+        // chain has no filter either; both fail graph parsing.
+        vBg = `[v_bg_trim_${currentInputIdx}]`
+        graph.addFilterChain(`${ctx.bgBase}trim=start=${clip.inSec}:end=${clip.outSec + 2},setpts=PTS-STARTPTS${vBg}`)
       } else {
         // Fallback: emit empty node to keep the graph valid.
+        vBg = `[v_bg_null_${currentInputIdx}]`
         graph.addFilterChain(`[${currentInputIdx}:v]null${vBg}`)
       }
+      // With a shared looping-image base the overlay pads negotiate the
+      // SOURCE image size at graph-config time, so concat later rejects the
+      // stream ("Input link … do not match"). An explicit scale locks every
+      // per-clip stream to the canvas size (real-FFmpeg verified, R79).
+      const sizeLock = ctx.bgBase ? `,scale=${ctx.canvasW}:${ctx.canvasH},setsar=1` : ''
       graph.addFilterChain(`${clipChain},${transform.tail}${alphaArg}${vFg}`)
-      graph.addFilterChain(`${vBg}${vFg}${transform.overlay}${vOut}`)
+      graph.addFilterChain(`${vBg}${vFg}${transform.overlay}${sizeLock}${vOut}`)
     } else if (faded || kfOpacity) {
       const vBg = `[v_obg_${currentInputIdx}]`
       const vFg = `[v_ofg_${currentInputIdx}]`
       const bgSrc = ctx.bgBase
-        ? `${ctx.bgBase},trim=start=${clip.in}:end=${clip.out + 2},setpts=PTS-STARTPTS[${vBg}]`
+        ? `${ctx.bgBase}trim=start=${clip.inSec}:end=${clip.outSec + 2},setpts=PTS-STARTPTS${vBg}`
         : `color=c=${ctx.bgColor}:s=${ctx.canvasW}x${ctx.canvasH}:r=${ctx.fps}:d=${(clipDuration + 2).toFixed(3)}${vBg}`
       graph.addFilterChain(bgSrc)
       graph.addFilterChain(`${clipChain}${alphaArg}${vFg}`)
-      graph.addFilterChain(`${vBg}${vFg}overlay=shortest=1${vOut}`)
+      const sizeLock = ctx.bgBase ? `,scale=${ctx.canvasW}:${ctx.canvasH},setsar=1` : ''
+      graph.addFilterChain(`${vBg}${vFg}overlay=shortest=1${sizeLock}${vOut}`)
     } else {
       graph.addFilterChain(`${clipChain}${vOut}`)
     }
     vStreams.push(vOut)
 
     if (ctx.hasAudio) {
-      const kfVol = keyframeExpr(clip, 'volume', 't')
-      const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
+      const kfVol = keyframeExpr(clip.raw, 'volume', 't')
+      const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volumePct) / 100}`
       const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
-      const aReverse = clip.reverse ? 'areverse,' : ''
+      const aReverse = clip.raw.reverse ? 'areverse,' : ''
       const aTrimmed = `[a_trim_${currentInputIdx}]`
       graph.addFilterChain(
-        `[${currentInputIdx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
+        `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip.raw)}${aTrimmed}`
       )
       aStreams.push(aTrimmed)
     }
@@ -160,19 +171,19 @@ export function compileVideoPipeline(
     graph.addFilterChain(`${vStreams[0]}settb=1/${ctx.fps},fps=${ctx.fps}[v_chain_0]`)
     let currentV = '[v_chain_0]'
     let currentA = ctx.hasAudio ? aStreams[0]! : ''
-    let runningDuration = (videoClips[0]!.out - videoClips[0]!.in) / (videoClips[0]!.speed || 1)
+    let runningDuration = renderClipDuration(videoClips[0]!)
 
     for (let i = 1; i < videoClips.length; i++) {
       const prevClip = videoClips[i - 1]!
       const currClip = videoClips[i]!
-      const prevDur = (prevClip.out - prevClip.in) / (prevClip.speed || 1)
-      const currDur = (currClip.out - currClip.in) / (currClip.speed || 1)
+      const prevDur = renderClipDuration(prevClip)
+      const currDur = renderClipDuration(currClip)
       const ti = currClip.transitionIn
       const rawDur = ti?.duration ?? 0
       const transSec = rawDur > 1000 ? rawDur / 120000 : rawDur
-      const prevEnd = (prevClip.offset || 0) + prevDur
+      const prevEnd = prevClip.offsetSec + prevDur
       const isIntact = (rawDur > 0)
-        && Math.abs(prevEnd - ((currClip.offset || 0) + transSec)) < 0.05
+        && Math.abs(prevEnd - (currClip.offsetSec + transSec)) < 0.05
         && transSec <= Math.min(prevDur, currDur)
 
       const nextV = `[v_in_${i}]`

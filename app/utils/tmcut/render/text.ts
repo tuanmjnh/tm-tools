@@ -3,7 +3,7 @@ import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
 import { textStrokeWidth, textShadowOffset } from '../textStyle'
 import { keyframeExpr } from '@tmcut-core'
-import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
+import type { RenderClip } from './clip'
 
 /**
  * Escapes text for FFmpeg drawtext filter
@@ -156,17 +156,19 @@ export function textOverlayChains(
 
 /**
  * Applies all text overlay clips in sequence on top of the video bus.
+ * C16-R2: takes RenderClip views; the drawtext builder still receives the
+ * source item verbatim (v1 shape is exactly TextOverlayClip).
  */
 export function applyTextOverlays(
   graph: RenderGraph,
   busStream: string,
-  textClips: TmcutTimelineItem[],
+  textClips: RenderClip[],
   ctx: { canvasW: number, canvasH: number, fps: number }
 ): string {
   let current = busStream
   for (let i = 0; i < textClips.length; i++) {
     const textClip = textClips[i]!
-    const overlaid = textOverlayChains(current, textClip, i, ctx)
+    const overlaid = textOverlayChains(current, textClip.raw, i, ctx)
     for (const chain of overlaid.chains) {
       graph.addFilterChain(chain)
     }

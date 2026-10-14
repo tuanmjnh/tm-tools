@@ -1121,6 +1121,7 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R76** (§144): Render pipeline integration — `buildBackgroundSource()` descriptors wired into base layer + alpha codec (yuva420p), image looping input, transparent exports; 11 render tests (3 new); all gates green.
 > - **R77** (§145): Per-clip transform over shared canvas background — `buildFfmpegTransform` `bgInput` support, shared `[v_bg]` reuse for image backgrounds, headroom trim; 12 render tests; all gates green.
 > - **R78** (§146): C16-R1 (sub-round 1/3) — app model rational fps: `TmcutCanvas.fps: FrameRate` (DSL v3), app `normalizeCanvas` → core version, `canvasFpsValue()` accessor, migration of legacy number fps on open, all UI/render consumers migrated; all gates green. NOTE: Architecture doc §129–§145 reconstructed from this Roadmap after a truncating `write` incident (user restored base doc from backup).
+> - **R79** (§147): C16-R2 slice 1 — render canonical clip model `RenderClip` + `toRenderClip()` single mapping seam (video/audio/text compile off views, core expr builders keep `raw`); fixed 3 real-FFmpeg graph bugs on image backgrounds (bare relabel, `[label],filter` empty-filter parse, overlay size negotiation vs concat) with `[v_bg]trim` + size-lock; new opt-in real-FFmpeg smoke spec 3/3; render suite 12/12; typecheck/lint 0.
 ```
 
 ---

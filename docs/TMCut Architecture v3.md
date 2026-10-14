@@ -7699,3 +7699,67 @@ có thể ngắn hơn bản gốc — chấp nhận, ghi nhận tại đây.
 - Sub-round 3: `v1compat` retire — chỉ dùng trong `applyProjectMigration`
   (legacy file open), không còn bridge per-edit.
 
+## §147 — Round 79 (R79): C16-R2 slice 1 — render canonical clip model + real-FFmpeg smoke gate
+
+### 147.1 Mục tiêu
+C16-R2 (timeline store → ticks) cần một seam để không phải sửa khắp render
+pipeline khi store flip sang v3. Slice 1: render pipeline **không còn đọc
+thẳng field v1** của timeline item — mọi thứ đi qua canonical view
+`RenderClip`. Đồng thời đóng open issue R77 (filter chain sai) bằng bằng
+chứng chạy FFmpeg thật, không chỉ string assertion.
+
+### 147.2 Canonical clip model — `app/utils/tmcut/render/clip.ts` (mới)
+- `RenderClip`: `id`, `footagePath` (đã resolve stabilized-path), `text`,
+  `inSec`, `outSec`, `offsetSec`, `speed`, `scalePct`, `opacityPct`, `x`, `y`,
+  `rotation`, `volumePct`, `fit`, `focusX/Y`, `transitionIn`, `raw`.
+- `toRenderClip(item)` — **điểm duy nhất** render layer map app-model field;
+  C16-R3 chỉ cần rewrite hàm này khi store thành ticks.
+- `raw` là item gốc, truyền nguyên vẹn cho core expression builders
+  (`keyframeExpr`, `volumeExpr` — contract theo shape v1, gồm `keyframes[]`,
+  `fade`, `effects`, `cropRect`, text props…).
+- Helpers: `renderVideoClips/renderAudioClips/renderTextClips(track)`
+  (filter+sort), `renderClipDuration(c) = (outSec-inSec)/speed`.
+- `video.ts`/`audio.ts` consume `RenderClip`; `text.ts` giữ
+  `TextOverlayClip` (= cấu trúc v1) cho drawtext builder, còn
+  `applyTextOverlays` nhận `RenderClip[]` và truyền `.raw`. `index.ts` map
+  một lần ở compile boundary (filter/sort/totalDuration cũng dồn về đây).
+
+### 147.3 FIX render graph (smoke test FFmpeg thật bắt được)
+Ba lỗi trên đường nền ảnh (canvas background = image), chỉ hiện ra khi chạy
+FFmpeg thật (`resources/ffmpeg.exe`):
+1. Bare relabel `[v_bg_trim_N][v_bg_N]` (chain không có filter) — open issue
+   từ R77 → xóa; label trimmed feed thẳng overlay.
+2. `${ctx.bgBase},trim=…` (label rồi mới dấu phẩy) parse thành filter RỖNG →
+   `No such filter: ''`. Label phải dính thẳng vào filter: `[v_bg]trim=…`
+   (cả transform branch lẫn opacity branch — `text.ts` không dính vì đã
+   đúng dạng).
+3. Overlay trên shared still-image base negotiate frame size từ SIZE ẢNH
+   GỐC (vd 640x480) lúc config → `concat` reject "Input link … do not
+   match". Fix: **size lock** `,scale=${canvasW}:${canvasH},setsar=1` sau
+   overlay khi `ctx.bgBase` tồn tại (cả 2 branch). Graph color-background
+   không đổi.
+
+### 147.4 Smoke gate mới — `tests/unit/tmcut_render_smoke.spec.ts` (opt-in)
+Sinh media thật bằng bundled ffmpeg (testsrc/smptebars/color), compile
+project thật qua `compileTimelineToFfmpeg`, chạy FFmpeg thật, assert exit 0
++ output >1KB. 3 case: shared image bg + 2 transformed clips (R77/R79
+regression), clip scale/opacity over color bg, xfade pipeline. Work dir
+`.smoke-render` xóa sạch mỗi run. KHÔNG nằm trong string-gate hằng round
+(cần binary + ~30s) — chạy khi đụng render graph.
+
+### 147.5 Kết quả gate
+- `tests/unit/tmcut_render_graph.spec.ts`: **12/12** — R76/R77 checks giữ
+  nguyên ngoài assertion mới: `[v_bg]trim=…`, `!fc.includes('[v_bg],trim')`,
+  size-lock `,scale=1280:720,setsar=1[v_scaled_1]`, regex chống bare-relabel.
+- Smoke: **3/3** render thật pass (exit 0, file hợp lệ).
+- `tsc --noEmit -p tsconfig.json`: 0 lỗi. ESLint render/ + 2 specs: 0
+  (xóa import `TmcutTimelineItem` thừa trong `video.ts`).
+- `compileVideoPipeline`/`compileAudioOnly`/`compileBackgroundAudio`/
+  `applyTextOverlays` đổi signature sang `RenderClip[]`; API ngoài của
+  `compileTimelineToFfmpeg` (facade `compiler.ts`) không đổi.
+
+### 147.6 Ghi chú C16
+Seam đã đặt: flip store → ticks chỉ đụng `toRenderClip` (+ tests). Sub-round
+2 tiếp: Inspector/Timeline/Preview đọc `ticksToSec`; sub-round 3: retire
+`v1compat` về file-migration-only.
+

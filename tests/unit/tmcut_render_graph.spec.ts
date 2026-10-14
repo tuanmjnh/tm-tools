@@ -277,6 +277,16 @@ function main() {
     assert.ok(fc.includes('[v_bg]'))
     // Clip scaling chain present
     assert.ok(fc.includes('scale=1920:1080'))
+    // R79 (real-FFmpeg verified): the shared background label attaches
+    // DIRECTLY to trim — `[v_bg],trim` parses as an empty filter and
+    // `[in][out]` bare relabels have no filter; both are invalid graphs.
+    // Input 0 is the looping bg image, so the clip chains live on index 1.
+    assert.ok(fc.includes('[v_bg]trim=start=0:end=6,setpts=PTS-STARTPTS[v_bg_trim_1]'))
+    assert.ok(fc.includes('[v_bg_trim_1][v_fg_1]overlay'))
+    assert.ok(fc.includes(',scale=1280:720,setsar=1[v_scaled_1]'))
+    assert.ok(!fc.includes('[v_bg],trim'))
+    const bareRelabel = fc.split(';').some(chain => /^\[[\w]+\]\[[\w]+\]$/.test(chain.trim()))
+    assert.equal(bareRelabel, false)
   })
 
   console.log(`\n=== All ${passed} tests passed successfully! ===`)

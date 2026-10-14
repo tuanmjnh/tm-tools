@@ -1,4 +1,4 @@
-import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
+import type { RenderClip } from './clip'
 import type { CompileOptions, CompileResult, TmcutCompileRange } from './types'
 import { volumeExpr, keyframeExpr } from '@tmcut-core'
 
@@ -20,12 +20,12 @@ export function fadeFilter(clip: {
  * Audio-only compile path (design #3 "Audio only" mode): renders the audio
  * of every video clip plus background audio clips at a uniform 48 kHz,
  * honoring the In/Out range. Output codec follows the file extension
- * (.wav → PCM, anything else → MP3).
+ * (.wav → PCM, anything else → MP3). C16-R2: RenderClip views.
  */
 export function compileAudioOnly(
   outputPath: string,
-  videoClips: TmcutTimelineItem[],
-  audioClips: TmcutTimelineItem[],
+  videoClips: RenderClip[],
+  audioClips: RenderClip[],
   options: CompileOptions,
   outputDuration: number,
   range: TmcutCompileRange | null
@@ -41,37 +41,36 @@ export function compileAudioOnly(
 
   // Video track audio clips
   for (const clip of videoClips) {
-    const footagePath = (clip.stabilize && clip.stabilizedPath) ? clip.stabilizedPath : clip.src!
-    args.push('-i', footagePath)
+    args.push('-i', clip.footagePath!)
     const idx = inputIdx++
     const out = `[a_v_${idx}]`
-    const delayMs = Math.round((clip.offset || 0) * 1000)
-    const kfVol = keyframeExpr(clip, 'volume', 't')
-    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
-    const aSpeed = clip.speed || 1
+    const delayMs = Math.round(clip.offsetSec * 1000)
+    const kfVol = keyframeExpr(clip.raw, 'volume', 't')
+    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${clip.volumePct / 100}`
+    const aSpeed = clip.speed
     const aSetpts = aSpeed !== 1 ? `asetpts=(PTS-STARTPTS)/${aSpeed}` : 'asetpts=PTS-STARTPTS'
-    const aReverse = clip.reverse ? 'areverse,' : ''
+    const aReverse = clip.raw.reverse ? 'areverse,' : ''
 
     chains.push(
-      `[${idx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts}${fadeFilter(clip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
+      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
     )
     busStreams.push(out)
   }
 
   // Audio track background clips
   for (const clip of audioClips) {
-    args.push('-i', clip.src!)
+    args.push('-i', clip.footagePath!)
     const idx = inputIdx++
     const out = `[a_bg_${idx}]`
-    const delayMs = Math.round((clip.offset || 0) * 1000)
-    const kfVol = keyframeExpr(clip, 'volume', 't')
-    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volume ?? 100) / 100}`
-    const aSpeed = clip.speed || 1
+    const delayMs = Math.round(clip.offsetSec * 1000)
+    const kfVol = keyframeExpr(clip.raw, 'volume', 't')
+    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${clip.volumePct / 100}`
+    const aSpeed = clip.speed
     const aSetpts = aSpeed !== 1 ? `asetpts=(PTS-STARTPTS)/${aSpeed}` : 'asetpts=PTS-STARTPTS'
-    const aReverse = clip.reverse ? 'areverse,' : ''
+    const aReverse = clip.raw.reverse ? 'areverse,' : ''
 
     chains.push(
-      `[${idx}:a]atrim=start=${clip.in}:end=${clip.out},${aReverse}${aSetpts}${fadeFilter(clip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
+      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
     )
     busStreams.push(out)
   }
@@ -118,24 +117,24 @@ export function compileAudioOnly(
 export function compileBackgroundAudio(
   graph: import('./graph').RenderGraph,
   currentAudioStream: string,
-  audioClips: TmcutTimelineItem[]
+  audioClips: RenderClip[]
 ): string {
   if (audioClips.length === 0) return currentAudioStream
 
   const audioMixStreams = [currentAudioStream]
   for (let i = 0; i < audioClips.length; i++) {
     const aClip = audioClips[i]!
-    const aInputIdx = graph.addInput(aClip.src!)
+    const aInputIdx = graph.addInput(aClip.footagePath!)
     const aProcessed = `[bgm_${i}]`
-    const delayMs = Math.round((aClip.offset || 0) * 1000)
-    const kfVol = keyframeExpr(aClip, 'volume', 't')
-    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(aClip.volume ?? 100) / 100}`
-    const aSpeed = aClip.speed || 1
+    const delayMs = Math.round(aClip.offsetSec * 1000)
+    const kfVol = keyframeExpr(aClip.raw, 'volume', 't')
+    const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${aClip.volumePct / 100}`
+    const aSpeed = aClip.speed
     const aSetpts = aSpeed !== 1 ? `asetpts=(PTS-STARTPTS)/${aSpeed}` : 'asetpts=PTS-STARTPTS'
-    const aReverse = aClip.reverse ? 'areverse,' : ''
+    const aReverse = aClip.raw.reverse ? 'areverse,' : ''
 
     graph.addFilterChain(
-      `[${aInputIdx}:a]atrim=start=${aClip.in}:end=${aClip.out},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${aProcessed}`
+      `[${aInputIdx}:a]atrim=start=${aClip.inSec}:end=${aClip.outSec},${aReverse}${aSetpts}${fadeFilter(aClip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${aProcessed}`
     )
     audioMixStreams.push(aProcessed)
   }

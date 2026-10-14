@@ -11,11 +11,13 @@ import { applyTextOverlays } from './text'
 import { compileAudioOnly, compileBackgroundAudio } from './audio'
 import { compileVideoPipeline } from './video'
 import { buildVideoCodecArgs, buildAudioCodecArgs, buildGifPipeline } from './encoder'
+import { renderVideoClips, renderAudioClips, renderTextClips, renderClipDuration } from './clip'
 import { buildBackgroundSource } from '@tmcut-core'
 
 // Re-export all sub-modules for clean consuming
 export * from './types'
 export * from './graph'
+export * from './clip'
 export * from './text'
 export * from './audio'
 export * from './video'
@@ -40,19 +42,18 @@ export function compileTimelineToFfmpeg(
   const textTrack = project.timeline.tracks.find(t => t.type === 'text')
   const audioTrack = project.timeline.tracks.find(t => t.type === 'audio')
 
-  const videoClips = (videoTrack?.items || []).filter(c => !!c.src).sort((a, b) => a.offset - b.offset)
-  const textClips = (textTrack?.items || []).filter(c => !!c.text)
-  const audioClips = (audioTrack?.items || []).filter(c => !!c.src)
+  // C16-R2: single mapping boundary app-model → render canonical view (@see clip.ts).
+  const videoClips = renderVideoClips(videoTrack)
+  const textClips = renderTextClips(textTrack)
+  const audioClips = renderAudioClips(audioTrack)
 
   // Calculate total duration in seconds
   let totalDuration = 0
   for (const clip of videoClips) {
-    const dur = (clip.out - clip.in) / (clip.speed || 1)
-    totalDuration = Math.max(totalDuration, clip.offset + dur)
+    totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
   }
   for (const clip of audioClips) {
-    const dur = (clip.out - clip.in) / (clip.speed || 1)
-    totalDuration = Math.max(totalDuration, clip.offset + dur)
+    totalDuration = Math.max(totalDuration, clip.offsetSec + renderClipDuration(clip))
   }
   totalDuration = Math.max(1, totalDuration)
 

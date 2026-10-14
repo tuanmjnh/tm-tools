@@ -36,3 +36,6 @@ ffmpeg.exe
 ffplay.exe
 ffprobe.exe
 yt-dlp.exe
+
+# TMCut render smoke work dir (R79)
+.smoke-render/
