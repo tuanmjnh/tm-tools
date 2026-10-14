@@ -1047,9 +1047,7 @@ consumer) + `npx eslint <file app chạm>`.
 ### Phase L — Architecture Phases 4–6 (nối docs, song song dần)
 
 - [x] **Phase 4 Canvas Engine** (docs): ratios/custom ✓ · fit modes ✓ · background canvas (color/image/transparent — DSL + UI ✅ R89, export side R76) · safe area (C13/F1 ✓) · zoom preview (F2 ✓; PAN để ngỏ có chủ đích — R55: per-clip move/scale đủ, preview giữ nguyên frame) · smart reframe foundation (reframeTransform ✓).
-- [ ] **Phase 5 Preview Engine**: tách `ElectronPreviewEngine`
-  (HTMLVideoElement + media:// + proxy F4) / `WebPreviewEngine`
-  (WebCodecs/WASM) — preview **không** gọi FFmpeg.
+- [x] **Phase 5 Preview Engine** ✅ (R90/§154): seam `useTmcutPreviewEngine` (`kind` / `capabilities` / `resolveSrc`) — Electron: media:// + proxy/stabilize (F-4); Web: blob/data/https qua `toURL`. Preview không gọi FFmpeg trên cả hai runtime (đúng từ F-4). `WebPreviewEngine` WebCodecs để ngỏ như engine tương lai implement cùng interface.
 - [x] **Phase 6 Render**: R9 ✅ (= R70 — render graph + real-FFmpeg smoke).
 
 ---
@@ -1107,7 +1105,7 @@ consumer) + `npx eslint <file app chạm>`.
 [x] Phase I  — Export & Render — R1 ✅ (R25) · R2 ✅ (R60) · R3 ✅ (R59) · R4 ✅ (R61) · R5 ✅ (R45) · R6 ✅ (R58) · R7 ✅ (R62) · R8 ✅ (R51) · R9 ✅ (R70) · R10 ✅ (R20) · R11 ✅ (R56) · R12 ✅ (R57) — HOÀN TẤT
 [x] Phase J  — Home & Templates — J-1 ✅ (R69) · J-2 ✅ (R50) · J-3 (blocked) — HOÀN TẤT
 [x] Phase K  — Shortcuts (K1..K8) — K1–K8 ✅ (R49/§117) + Alt+A ✅ (R71/§139)
-[x] Phase L  — Architecture Phases 4–6 ✅ — Phase 4 ✅ (R89: bg-image UI; PAN intentionally open per R55) · Phase 6 ✅ (R9=R70) · Phase 5 electron-side done in practice (F4), WebPreviewEngine split = backlog · Core C17 blocked (needs backend)
+[x] Phase L  — Architecture Phases 4–6 ✅ HOÀN TẤT — Phase 4 ✅ (R89; PAN để ngỏ có chủ đích theo R55) · Phase 5 ✅ (R90: engine seam) · Phase 6 ✅ (R9=R70) · Core C17 blocked (needs backend)
 [x] Core Phase 1–3 (66 tests)
 [x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) · C16 (R78–R88) ✅ · C17 (blocked — backend) · Core C18 ✅ (R72/§140)
 
@@ -1127,6 +1125,7 @@ consumer) + `npx eslint <file app chạm>`.
 ```
 > - **R88** (§152): **C16-R3 — THE FLIP LANDED.** Store `in/out/offset` are integer TICKS now (one atomic round per §150.4, nothing in between): schema 3 + one-time ×120000 migration stamped by `schemaVersion` only (no magnitude heuristic anywhere); user-templates key bumped `_v1`→`_v2` with the same one-time rule; core v1compat split into a SECONDS flavor (file migration only) and a TICKS flavor (`ticksTracksToV3`/`syncTicksResult` — identity on time fields, pinned apart by new core tests); `clipTime.ts` now the unit oracle (ticks math + byte-compatible seconds API); `fadeFilter`/preview `gainAt` hand core the v3 shape `{timeline:{duration}}` so the legacy seconds branch never sees ticks; `closeProjectGaps` returns ticks; Inspector/drag/trim/snap/SRT/filmstrip convert exactly once; `toRenderClip` decodes — every FFmpeg string byte-identical (render 12/12, real-FFmpeg smoke 3/3). Branded `Ticks` type deliberately dropped (§152.3). Gates: nuxt prepare+typecheck 0 · core 20/20 files · lint 0/0 · time-domain 7/7 (rewritten) · store 14/14 (rewritten, incl. migrate-once + no-double-scale) · render 12+len · ai 3/3 · i18n 2795/2795.
 > - **R89** (§153): Canvas Workbench final gap — background IMAGE picker in the Canvas menu (desktop absolute path via pickFile, web session blob; preview paints it cover-centered through resolveMediaSrc, matching the R76 export composite). Phase 4 ticked (PAN intentionally open per R55), Phase 6 ticked (R9=R70). Gates: typecheck 0 · lint 0 · render 12/12 · store 14/14 · i18n 2797/2797.
+> - **R90** (§154): Phase 5 done as a BOUNDARY — player media decisions behind `useTmcutPreviewEngine` (`kind`/`capabilities`/`resolveSrc`); electron keeps the proxy-aware `resolveMediaSrc`, web resolves blob/data/https through `toURL` (URLs identical to the pre-seam behaviour on both runtimes). Proxy toggle asks capabilities now, not `isDesktop`. Phase 5 ticked; the WebCodecs canvas compositor stays a named follow-up implementing the same interface. Gates: typecheck 0 · lint 0 · store 14/14 · time-domain 7/7 · render 12/12.
 
 ---
 

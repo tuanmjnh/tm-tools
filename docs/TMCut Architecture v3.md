@@ -8014,3 +8014,19 @@ Phase 4's only remaining "DSL has it, UI does not" item was the image canvas bac
 - i18n +2 pairs → 2797/2797.
 
 Preview PAN (F2) stays deliberately undone: the roadmap's own R55 conclusion — fixed preview, per-clip move/scale covers framing; recorded as the standing exception on the Phase 4 tick. Phase 4 ✅ (R89), Phase 6 was already true on content (R9 = R70) → ticked. Gates: typecheck 0 · lint 0 · render 12/12 · store 14/14 · i18n 2797/2797.
+
+# 154. R90 — Preview engine seam (Phase 5 boundary)
+
+Phase 5's real content was already true (F-4: the preview never calls FFmpeg — HTMLVideoElement + `media://`/blob on both runtimes). What was missing was the *boundary itself*: the player reached into `isDesktop`/`resolveMediaSrc` directly at five places, so a future engine had no seam to implement. This round draws it.
+
+## 154.1 The contract
+
+New `composables/useTmcutPreviewEngine.ts` picks one engine per session (the `tmcutIpc()` bridge cannot appear/disappear mid-session, so the object is stable):
+
+- `kind: 'electron' | 'web'`
+- `capabilities { proxyPreview, stabilize }` — desktop-only media pipelines, feature questions not environment guesses;
+- `resolveSrc(src)` — stored clip src → playable URL. Electron keeps the proxy-aware `resolveMediaSrc`; web resolves through `toURL` (blob:/data:/https: pass through — an absolute path could never load in a tab anyway, identical to prior behaviour).
+
+`TmcutPreviewPlayer.vue` now reads ONLY the seam: both media-surface computeds, the canvas-background style, and the proxy toggle button (`v-if="previewEngine.capabilities.proxyPreview"` instead of `isDesktop`). The doc-era `WebPreviewEngine` (WebCodecs canvas compositor) remains a named follow-up that implements this same interface — Phase 5 ticked with that scope note.
+
+Gate battery: nuxt prepare+typecheck 0 · eslint 0 · store 14/14 · time-domain 7/7 · render graph 12/12 (behaviour unchanged by construction — same URLs on both runtimes, asserted by reading the old and new resolution paths).

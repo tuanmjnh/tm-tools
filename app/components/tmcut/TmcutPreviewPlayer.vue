@@ -14,7 +14,11 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 const { t } = useI18n()
 const toast = useToast()
 const { available: canExtractFrames, extractFrame } = useTmcutFrames()
-const { isDesktop, proxyPreview, resolveMediaSrc, findAssetBySrc } = useTmcutMedia()
+const { proxyPreview, findAssetBySrc } = useTmcutMedia()
+// Phase 5 (R90): runtime media decisions live behind one engine seam —
+// every playable URL and every desktop-only capability question goes
+// through it now (the preview never touches FFmpeg on either runtime).
+const previewEngine = useTmcutPreviewEngine()
 const { currentProject, totalDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
 const {
   playhead,
@@ -221,12 +225,12 @@ const monitorBoxStyle = computed(() => {
     : Math.max(0.05, canvasZoom.value)
   // Canvas background (roadmap Phase 4): color paints the box, an image
   // covers it (core exports the same way: bg under the clips); the web
-  // blob object-URL passes through resolveMediaSrc untouched.
+  // blob object-URL passes through the engine resolver untouched.
   const bg = canvas?.background
   const bgStyle: Record<string, string> = {}
   if (bg?.type === 'color') bgStyle.backgroundColor = bg.value || '#000000'
   else if (bg?.type === 'image' && bg.value) {
-    bgStyle.backgroundImage = `url("${resolveMediaSrc(bg.value)}")`
+    bgStyle.backgroundImage = `url("${previewEngine.resolveSrc(bg.value)}")`
     bgStyle.backgroundSize = 'cover'
     bgStyle.backgroundPosition = 'center'
   }
@@ -240,16 +244,18 @@ const monitorBoxStyle = computed(() => {
 // Current media URL for active video clip (with proxy preview and video stabilizer support, roadmap F-4/E-5).
 // When proxy preview is enabled and an asset proxy exists, resolveMediaSrc
 // serves the lightweight 540p proxy. When video stabilization is enabled, the stabilized
-// footage is loaded seamlessly.
+// footage is loaded seamlessly. (Engine seam: resolveSrc is proxy-aware on
+// the electron engine; the web engine has neither pipeline, so those clip
+// fields never exist there — roadmap Phase 5, R90.)
 const currentMediaSrc = computed(() => {
   const clip = activeVideoClip.value?.clip
   if (!clip) return ''
   if (clip.stabilize && clip.stabilizedPath) {
-    return resolveMediaSrc(clip.stabilizedPath)
+    return previewEngine.resolveSrc(clip.stabilizedPath)
   }
   const src = clip.src
   if (!src) return ''
-  return resolveMediaSrc(src)
+  return previewEngine.resolveSrc(src)
 })
 
 // Media URL for the OUTGOING crossfade layer (roadmap B3, with proxy & stabilizer support).
@@ -257,11 +263,11 @@ const outgoingMediaSrc = computed(() => {
   const outgoing = transitionCrossfade.value?.outgoing
   if (!outgoing) return ''
   if (outgoing.stabilize && outgoing.stabilizedPath) {
-    return resolveMediaSrc(outgoing.stabilizedPath)
+    return previewEngine.resolveSrc(outgoing.stabilizedPath)
   }
   const src = outgoing.src
   if (!src) return ''
-  return resolveMediaSrc(src)
+  return previewEngine.resolveSrc(src)
 })
 
 // Whether the active clip currently renders via proxy
@@ -1120,7 +1126,7 @@ onUnmounted(() => {
           @click="triggerCropTool"
         />
         <UButton
-          v-if="isDesktop"
+          v-if="previewEngine.capabilities.proxyPreview"
           :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
           size="xs"
           variant="soft"
