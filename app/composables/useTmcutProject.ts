@@ -1,5 +1,6 @@
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
+import { clipDurationSec, clipStartSec, clipEndSec, clipSpeed, clipEndTicks } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
   addTrack,
@@ -189,17 +190,16 @@ const selectedClip = computed(() => {
 // Compute total timeline duration in seconds
 const totalDuration = computed(() => {
   if (!currentProject.value?.timeline?.tracks) return 0
-  let maxSec = 0
+  let maxTicks = 0
   for (const track of currentProject.value.timeline.tracks) {
     for (const item of track.items || []) {
-      const dur = (item.out - item.in) / (item.speed || 1)
-      const endSec = (item.offset || 0) + Math.max(0, dur)
-      if (endSec > maxSec) {
-        maxSec = endSec
+      const endTicks = clipEndTicks(item)
+      if (endTicks > maxTicks) {
+        maxTicks = endTicks
       }
     }
   }
-  return Math.max(maxSec, 5) // Minimum 5 seconds ruler
+  return Math.max(5, ticksToSec(maxTicks))
 })
 
 // True when at least one clip exists on any timeline track.
@@ -659,7 +659,7 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
   // Determine offset if not specified
   let offset = partialItem.offset
   if (offset === undefined) {
-    offset = track.items.reduce((max, i) => Math.max(max, (i.offset || 0) + ((i.out - i.in) / (i.speed || 1))), 0)
+    offset = track.items.reduce((max, i) => Math.max(max, clipEndSec(i)), 0)
   }
 
   const newItem: TmcutTimelineItem = {
@@ -697,8 +697,8 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
   // pushed above, so the bridge runs with skipHistory.
   const durationSec = (outPoint - inPoint) / speed
   const collides = track.items.some((i) => {
-    const start = i.offset || 0
-    const end = start + (i.out - i.in) / (i.speed || 1)
+    const start = clipStartSec(i)
+    const end = clipEndSec(i)
     return start < offset + durationSec && end > offset
   })
   if (rippleMode.value && collides) {
@@ -730,15 +730,15 @@ function closeProjectGaps(): number {
   let hasGap = false
   for (const track of tracks) {
     if (track.locked) continue
-    const sorted = [...(track.items || [])].sort((a, b) => (a.offset || 0) - (b.offset || 0))
+    const sorted = [...(track.items || [])].sort((a, b) => clipStartSec(a) - clipStartSec(b))
     let cursor = 0
     for (const item of sorted) {
-      const start = item.offset || 0
+      const start = clipStartSec(item)
       if (start > cursor) {
         hasGap = true
         break
       }
-      cursor = Math.max(cursor, start + (item.out - item.in) / (item.speed || 1))
+      cursor = Math.max(cursor, clipEndSec(item))
     }
     if (hasGap) break
   }
@@ -783,7 +783,7 @@ function toggleFadeSelection(): 'applied' | 'cleared' | null {
         saveProject()
         return 'cleared'
       }
-      const clipSec = (clip.out - clip.in) / (clip.speed || 1)
+      const clipSec = clipDurationSec(clip)
       const ticks = secToTicks(Math.min(TMCUT_DEFAULT_FADE_SEC, clipSec / 2))
       if (ticks <= 0) return null // sub-frame clip: no room for an envelope
       pushHistory()
@@ -1031,10 +1031,9 @@ function splitClip(clipId: string, splitTime: number): boolean {
     if (idx === undefined || idx === -1) continue
 
     const clip = track.items[idx]!
-    const speed = clip.speed || 1
-    const clipStart = clip.offset
-    const clipDuration = (clip.out - clip.in) / speed
-    const clipEnd = clipStart + clipDuration
+    const speed = clipSpeed(clip)
+    const clipStart = clipStartSec(clip)
+    const clipEnd = clipEndSec(clip)
 
     // Ensure split time is within clip boundaries (leave at least 0.1s margin)
     if (splitTime <= clipStart + 0.1 || splitTime >= clipEnd - 0.1) {
@@ -1084,9 +1083,9 @@ function trimSelectedEdgeAt(edge: 'in' | 'out', timeSec: number): boolean {
     const clip = track.items?.find(i => i.id === id)
     if (!clip) continue
     if (track.locked) return false
-    const speed = clip.speed || 1
-    const start = clip.offset
-    const end = start + (clip.out - clip.in) / speed
+    const speed = clipSpeed(clip)
+    const start = clipStartSec(clip)
+    const end = clipEndSec(clip)
     if (timeSec <= start + 0.1 || timeSec >= end - 0.1) return false
     const sourceTicks = Math.round(secToTicks(clip.in + (timeSec - start) * speed))
     return applyV3Edit(v3 => trimClip(v3, id, edge, sourceTicks)) === true
@@ -1149,15 +1148,15 @@ function toggleLinkSelection(): 'linked' | 'unlinked' | 'none' {
     }
   }
   if (!clip || locked) return 'none'
-  const start = clip.offset || 0
-  const end = start + (clip.out - clip.in) / (clip.speed || 1)
+  const start = clipStartSec(clip)
+  const end = clipEndSec(clip)
   const overlaps: TmcutTimelineItem[] = []
   for (const track of tracks) {
     if (track.locked) continue
     for (const item of track.items || []) {
       if (item.id === id) continue
-      const itemStart = item.offset || 0
-      const itemEnd = itemStart + (item.out - item.in) / (item.speed || 1)
+      const itemStart = clipStartSec(item)
+      const itemEnd = clipEndSec(item)
       if (itemStart < end && itemEnd > start) overlaps.push(item)
     }
   }
@@ -1192,7 +1191,7 @@ function relatedOffsetsFor(clipId: string): Record<string, number> {
   for (const track of currentProject.value?.timeline?.tracks || []) {
     if (track.locked) continue
     for (const item of track.items || []) {
-      if (wanted.has(item.id)) out[item.id] = item.offset || 0
+      if (wanted.has(item.id)) out[item.id] = clipStartSec(item)
     }
   }
   return out

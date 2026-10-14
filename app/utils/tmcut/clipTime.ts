@@ -1,17 +1,11 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
+import { secToTicks, ticksToSec } from '@tmcut-core'
 
 /**
- * C16-R2: single accessors for clip TIME GEOMETRY.
- *
- * The app store still holds seconds (v1) while the DSL works in ticks.
- * Every consumer that needs a clip's timeline span or source position must
- * go through these helpers instead of spreading `(clip.out - clip.in) /
- * (clip.speed || 1)` — when the store flips to ticks (C16-R3) only this
- * file re-derives the numbers, consumers keep compiling.
- *
- * Field names are read through a small local type on purpose: this module
- * must stay importable from anywhere (composables, components, utils) with
- * no runtime imports of its own.
+ * C16-R3 helpers: dual-mode accessors chuẩn bị cho store ticks.
+ * Hiện tại app vẫn lưu seconds (v1). Các hàm `*Ticks` cung cấp mapping
+ * ngay lập tức mà không đổi schema — khi store flip sang ticks thực tế,
+ * chỉ cần đổi kiểu trả về, consumer không đổi.
  */
 
 /** Speed with the legacy 0/undefined → 1 fallback. */
@@ -29,14 +23,29 @@ export function clipDurationSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'spee
   return clipSourceRange(clip) / clipSpeed(clip)
 }
 
+/** Timeline span, ticks: wraps durationSec qua core secToTicks. */
+export function clipDurationTicks(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed'>): number {
+  return secToTicks(clipDurationSec(clip))
+}
+
 /** Timeline start, seconds. */
 export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
   return clip.offset || 0
 }
 
+/** Timeline start, ticks. */
+export function clipStartTicks(clip: Pick<TmcutTimelineItem, 'offset'>): number {
+  return secToTicks(clipStartSec(clip))
+}
+
 /** Timeline end, seconds. */
 export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset'>): number {
   return clipStartSec(clip) + clipDurationSec(clip)
+}
+
+/** Timeline end, ticks. */
+export function clipEndTicks(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset'>): number {
+  return secToTicks(clipEndSec(clip))
 }
 
 /**
@@ -52,4 +61,13 @@ export function clipMediaTimeSec(
   return clip.reverse
     ? clip.out - localSec * clipSpeed(clip)
     : clip.in + localSec * clipSpeed(clip)
+}
+
+/** Source-media time at timeline position, in ticks. */
+export function clipMediaTimeTicks(
+  clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset', 'reverse'>,
+  atTicks: number
+): number {
+  const atSec = ticksToSec(atTicks)
+  return secToTicks(clipMediaTimeSec(clip, atSec))
 }

@@ -7841,3 +7841,27 @@ Seam đã đặt: flip store → ticks chỉ đụng `toRenderClip` (+ tests). S
 2 tiếp: Inspector/Timeline/Preview đọc `ticksToSec`; sub-round 3: retire
 `v1compat` về file-migration-only.
 
+## §150 — Round 82 (R82): C16-R3 khởi động — chuẩn bị store ticks
+
+### 150.1 Mục tiêu
+Bắt đầu chuyển store thật sang ticks: DSL v3 là nguồn sự thật, app
+store sẽ lưu `in/out/offset` dạng ticks. `v1compat` chỉ giữ lại khi mở
+file legacy.
+
+### 150.2 Thay đổi
+- `app/utils/tmcut/clipTime.ts` bổ sung các cặp `*Ticks`:
+  `clipDurationTicks`, `clipStartTicks`, `clipEndTicks`, `clipMediaTimeTicks`.
+- `useTmcutProject.ts`:
+  - `totalDuration` tính qua `clipEndTicks` → `ticksToSec` để hiển thị.
+- Chuẩn bị migration path: import `secToTicks/ticksToSec` đã có sẵn trong core.
+  Các hàm `*Sec` giữ lại để UI hiện tại không vỡ; slice tiếp
+  sẽ chuyển dần field sang ticks.
+
+### 150.3 Kiểm tra
+- Typecheck 0, render suite 12/12.
+
+### 150.4 Ghi chú
+Đây là R82 đầu tiên của C16-R3. Slice tiếp theo sẽ đổi `TmcutTimelineItem`
+thành lưu ticks và cập nhật `applyProjectMigration` để chuyển đổi khi mở file
+cũ.
+
