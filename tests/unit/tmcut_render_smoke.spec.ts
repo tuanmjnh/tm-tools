@@ -15,7 +15,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
+import { TICKS_PER_SECOND } from '@tmcut-core'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
+
+// C16-R3: store items are integer TICKS — fixtures follow the store.
+function tk(sec: number): number {
+  return Math.round(sec * TICKS_PER_SECOND)
+}
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const FFMPEG = path.join(repoRoot, 'resources', 'ffmpeg.exe')
@@ -87,11 +93,11 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'c1', src: clip, offset: 0, in: 0, out: 1, speed: 1, scale: 60, x: 10, y: 10, opacity: 100 },
-              { id: 'c2', src: clip2, offset: 1, in: 0, out: 1, speed: 1, scale: 50, x: -20, y: 5, opacity: 100 }
+              { id: 'c1', src: clip, offset: 0, in: 0, out: tk(1), speed: 1, scale: 60, x: 10, y: 10, opacity: 100 },
+              { id: 'c2', src: clip2, offset: tk(1), in: 0, out: tk(1), speed: 1, scale: 50, x: -20, y: 5, opacity: 100 }
             ]
           },
-          { id: 't1', type: 'text', name: 'Text', items: [{ id: 'x1', text: 'SMOKE', offset: 0, in: 0, out: 2, fontSize: 24, color: 'white' }] },
+          { id: 't1', type: 'text', name: 'Text', items: [{ id: 'x1', text: 'SMOKE', offset: 0, in: 0, out: tk(2), fontSize: 24, color: 'white' }] },
           { id: 'a1', type: 'audio', name: 'Audio', items: [] }
         ],
         durationMs: 2000,
@@ -126,8 +132,8 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'c1', src: clip, offset: 0, in: 0, out: 1, speed: 1, scale: 55, x: 15, y: -10, opacity: 45 },
-              { id: 'c2', src: clip2, offset: 1, in: 0, out: 1, speed: 1, scale: 100, x: 0, y: 0, opacity: 100 }
+              { id: 'c1', src: clip, offset: 0, in: 0, out: tk(1), speed: 1, scale: 55, x: 15, y: -10, opacity: 45 },
+              { id: 'c2', src: clip2, offset: tk(1), in: 0, out: tk(1), speed: 1, scale: 100, x: 0, y: 0, opacity: 100 }
             ]
           },
           { id: 't1', type: 'text', name: 'Text', items: [] },
@@ -161,8 +167,8 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'c1', src: clip, offset: 0, in: 0, out: 2, speed: 1 },
-              { id: 'c2', src: clip2, offset: 1.6, in: 0, out: 2, speed: 1, transitionIn: { type: 'dissolve', duration: 0.4 } }
+              { id: 'c1', src: clip, offset: 0, in: 0, out: tk(2), speed: 1 },
+              { id: 'c2', src: clip2, offset: tk(1.6), in: 0, out: tk(2), speed: 1, transitionIn: { type: 'dissolve', duration: tk(0.4) } }
             ]
           },
           { id: 't1', type: 'text', name: 'Text', items: [] },

@@ -9,11 +9,35 @@ import {
   filterTemplates,
   createTemplateFromTimeline,
   validateTemplate,
+  secToTicks,
   TICKS_PER_SECOND
 } from '@tmcut-core'
 import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
 
-const USER_TEMPLATES_STORAGE_KEY = 'tmcut_user_templates_v1'
+// C16-R3: the storage key is the version stamp (same lesson as the
+// project schema — NEVER guess units from magnitudes). v1 payloads carry
+// flat item geometry in SECONDS; they are scaled to ticks once on load
+// and rewritten under the v2 key.
+const USER_TEMPLATES_STORAGE_KEY = 'tmcut_user_templates_v2'
+const LEGACY_USER_TEMPLATES_STORAGE_KEY = 'tmcut_user_templates_v1'
+
+interface UserTemplateItemLike {
+  in?: number
+  out?: number
+  offset?: number
+  [key: string]: unknown
+}
+
+function migrateTemplateItems(template: Record<string, unknown>) {
+  const tracks = Array.isArray(template.tracks) ? template.tracks as Array<{ items?: UserTemplateItemLike[] }> : []
+  for (const track of tracks) {
+    for (const item of track.items || []) {
+      item.in = Math.round(secToTicks(Number(item.in) || 0))
+      item.out = Math.round(secToTicks(Number(item.out) || 0))
+      item.offset = Math.round(secToTicks(Number(item.offset) || 0))
+    }
+  }
+}
 
 // Shared reactive state
 const userTemplates = ref<TmcutTemplate[]>([])
@@ -33,6 +57,20 @@ export function useTmcutTemplates() {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
           userTemplates.value = parsed
+        }
+      } else {
+        // One-time migration from the seconds-era (v1) key.
+        const legacyRaw = localStorage.getItem(LEGACY_USER_TEMPLATES_STORAGE_KEY)
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw)
+          if (Array.isArray(legacy)) {
+            for (const tpl of legacy) {
+              if (tpl && typeof tpl === 'object') migrateTemplateItems(tpl)
+            }
+            userTemplates.value = legacy
+            persistUserTemplates()
+            localStorage.removeItem(LEGACY_USER_TEMPLATES_STORAGE_KEY)
+          }
         }
       }
     } catch (e) {

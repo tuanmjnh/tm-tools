@@ -7965,3 +7965,42 @@ FFmpeg smoke 3/3 · ai-script 3/3 · i18n 2795/2795.
    mà tồn tại nhiều ngày → xác nhận gate cũ chưa từng chạy trên `app/`.
 3. Test composable trong Node dễ hơn tưởng (2 shim); ưu tiên test hành
    vi ở tầng store vì đó là nơi unit-flip (C16-R3) lộ lỗi đầu tiên.
+
+# 152. R88 — C16-R3: the store flip, seconds to ticks (atomic round)
+
+The store flipped: `TmcutTimelineItem.in/out/offset` are INTEGER TICKS (TICKS_PER_SECOND=120000) from this round on. One atomic change per §150.4 — schema bump + migration + truth change + encode/decode seams + spec gate updates landed together, no intermediate commit.
+
+## 152.1 Where the unit lives now
+
+- `clipTime.ts` is the single unit oracle. Ticks helpers (`clipStartTicks`, `clipDurationTicks`, `clipEndTicks`, `clipSourceRangeTicks`) for store-space math; the R2 seconds API (`clipStartSec`, `clipDurationSec`, `clipEndSec`, `clipMediaTimeSec`) is kept byte-compatible so playback, panels and every accessor-based consumer did not change at all.
+- `toRenderClip` (render/clip.ts) is the ONLY decode point into the FFmpeg world: `inSec/outSec/offsetSec` via `ticksToSec`, plus a new exact `durationTicks` field. FFmpeg strings compile identical — the R9 render graph spec and the R77/R79 real-FFmpeg smoke prove it (all expected strings unchanged).
+- Core v1compat split into two flavors over one structural core: SECONDS (`v1TracksToV3`/`syncV3Result`… FILE MIGRATION ONLY) and TICKS (`ticksTracksToV3`/`syncTicksResult`/`ticksClipToV3`/`v3ClipToTicks`/`ticksMatchesV3` — the live per-edit bridge, an exact identity on time fields). `v1compat.test.mjs` pins the two apart so a swap cannot pass silently.
+- `volumeExpr`/`gainAt` legacy flat branch (flat in/out read as SECONDS) must never see a store item: all callers (render fadeFilter, preview gainAt) now pass the v3 shape `{ fade, volume, timeline: { duration } }` with the exact `clipDurationTicks`. `CoreFadeClip` accepts the shortcut shape in d.ts.
+- UI seconds seams: Inspector number inputs (decode display, encode on change), drag/trim px math (px → ticks via zoom, snap boundary keeps the seconds API of `snapTimeSec`), filmstrip args, SRT cues, minimap. Store-facing add sites convert once (`secToTicks`): addClipToTrack callers (media, autocut passes ticks through directly, AI script, captions, SRT import, text presets).
+- `applyClipTransition`/`removeClipTransition` keep a SECONDS duration argument (UI contract) — converted internally; `transitionIn.duration` stays ticks as always, and video.ts dropped its `>1000` magnitude guess for a plain `ticksToSec`.
+- `closeProjectGaps` returns TICKS (core reports seconds; converted at the store boundary).
+
+## 152.2 Migration (schema 3) — version stamp, never magnitude
+
+`TMCUT_PROJECT_SCHEMA_VERSION = 3`. `applyProjectMigration` scales in/out/offset by 120000 exactly once when the file stamp is <3, then re-stamps. No heuristic anywhere (the R82 defect class stays closed): an old file with a 0.4s fade reads as seconds because the STAMP says so. Every entry point already routed through the migration (disk, localStorage mirror, recovery force/apply). Recovery and history snapshots are unit-agnostic JSON; seconds-era recovery files migrate on apply.
+
+User templates persist flat items too: the localStorage key is the version stamp (`tmcut_user_templates_v2`), with a one-time migrate-from-v1 that scales item geometry and removes the old key.
+
+BUILTIN templates (core) carry ticks flat items now; `createTemplateFromTimeline` derives `durationTicks` from tick geometry (was seconds math). `animInDuration`/`animOutDuration` remain SECONDS — they are animation timing, consumed by render/text-builder + preview, deliberately outside the store flip.
+
+## 152.3 Gate battery (all green, R88)
+
+- `nuxt prepare` → `nuxt typecheck` EXIT=**0** (the real gate from R87; it flushed the two real errors this round surfaced in one pass)
+- tmcut_time_domain 7 (rewritten for the ticks era: accessors decode, toRenderClip decodes, ticks bridge is an exact identity, seconds bridge stays migration-only) — same-round per §150.4
+- tmcut_store_behaviour 14 (rewritten to ticks literals; NEW checks: legacy schema-2 file migrates once at open, reopening does NOT double-scale, closeGaps ticks floor)
+- tmcut_render_graph 12, tmcut_render_smoke 3 (real FFmpeg), ai_script 3; core tests 20/20 files (v1compat 25, templates 8)
+- eslint both roots 0; core tsc 0; check-boundaries PASS; i18n 2795/2795
+
+The `Ticks` branded-type idea was deliberately dropped: with the seconds oracle specs plus the exact-identity bridge tests, a brand would add cast noise without catching a class of bug the specs do not already catch, and it would fight the plain-number contract the core keeps on purpose.
+
+## 152.4 Consequences
+
+- v1compat SECONDS flavor is now ONLY file-migration code (Roadmap C16 final state achieved for the store).
+- Playback composable untouched end-to-end — proof the R2 accessor contract paid off exactly as designed.
+- Autocut lost its ticksToSec detour; templates store/replay stays unit-agnostic.
+- Follow-ups observed while flipping (non-blocking): preview ignores text-clip SPEED for the anim window (pre-existing); Inspector timing inputs step in seconds (correct by design).

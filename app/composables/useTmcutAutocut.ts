@@ -5,7 +5,6 @@ import {
   parseSilenceOutput,
   scoreSegments,
   segmentsToClips,
-  ticksToSec,
   validateEdl
 } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
@@ -181,15 +180,15 @@ export function useTmcutAutocut() {
       switchCanvas(asset.meta.width, asset.meta.height)
     }
     linkAssetToProject(asset.id, proj.id)
-    // The editor timeline is the legacy v1 seconds model: convert the core
-    // ticks back at the boundary, like every other core bridge.
+    // C16-R3: the store keeps TICKS natively — the core clip fields
+    // (segmentsToClips output, ticks) pass straight through.
     for (const clip of clips) {
       addClipToTrack('video', {
         name: asset.name,
         src: asset.path,
-        in: ticksToSec(clip.in),
-        out: ticksToSec(clip.out),
-        offset: ticksToSec(clip.offset)
+        in: Math.round(clip.in),
+        out: Math.round(clip.out),
+        offset: Math.round(clip.offset)
       })
     }
     return proj.id

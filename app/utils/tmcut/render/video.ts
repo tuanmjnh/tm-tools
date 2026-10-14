@@ -4,7 +4,7 @@ import { renderClipDuration } from './clip'
 import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
-import { keyframeExpr, buildFfmpegEffectFilters } from '@tmcut-core'
+import { keyframeExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name (roadmap R3, core C5).
@@ -147,7 +147,7 @@ export function compileVideoPipeline(
       const aReverse = clip.raw.reverse ? 'areverse,' : ''
       const aTrimmed = `[a_trim_${currentInputIdx}]`
       graph.addFilterChain(
-        `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip.raw)}${aTrimmed}`
+        `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
       )
       aStreams.push(aTrimmed)
     }
@@ -179,10 +179,12 @@ export function compileVideoPipeline(
       const prevDur = renderClipDuration(prevClip)
       const currDur = renderClipDuration(currClip)
       const ti = currClip.transitionIn
-      const rawDur = ti?.duration ?? 0
-      const transSec = rawDur > 1000 ? rawDur / 120000 : rawDur
+      // transitionIn.duration always lived in ticks (v1compat passes it
+      // through untouched) — C16-R3 drops the old >1000 guess: decode is
+      // a plain ticksToSec now.
+      const transSec = ticksToSec(ti?.duration ?? 0)
       const prevEnd = prevClip.offsetSec + prevDur
-      const isIntact = (rawDur > 0)
+      const isIntact = (ti?.duration ?? 0) > 0
         && Math.abs(prevEnd - (currClip.offsetSec + transSec)) < 0.05
         && transSec <= Math.min(prevDur, currDur)
 

@@ -10,6 +10,7 @@ import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { toURL } from '~/utils/ffmpegHelper'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
+import { clipStartSec, clipEndSec, clipDurationSec, clipStartTicks, clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 const { t } = useI18n()
 
@@ -272,10 +273,10 @@ const minimapClipBlocks = computed(() => {
         ? 'bg-amber-400/50'
         : 'bg-emerald-400/50'
     for (const clip of track.items || []) {
-      const dur = Math.max(0.01, (clip.out - clip.in) / (clip.speed || 1))
+      const dur = clipDurationSec(clip)
       blocks.push({
         id: clip.id,
-        left: ((clip.offset || 0) * zoom.value * w) / denom,
+        left: (clipStartSec(clip) * zoom.value * w) / denom,
         width: Math.max(1, (dur * zoom.value * w) / denom),
         color
       })
@@ -422,8 +423,7 @@ function handleSplit() {
   for (const track of currentProject.value?.timeline?.tracks || []) {
     if (track.locked) continue
     for (const clip of [...(track.items || [])]) {
-      const dur = (clip.out - clip.in) / (clip.speed || 1)
-      if (playhead.value > clip.offset && playhead.value < clip.offset + dur) {
+      if (playhead.value > clipStartSec(clip) && playhead.value < clipEndSec(clip)) {
         if (splitClip(clip.id, playhead.value)) count++
       }
     }
@@ -493,10 +493,10 @@ function handleFadeToggle() {
 
 // Close gaps (roadmap B9 — core C2): pull every unlocked track together.
 function handleCloseGaps() {
-  const closed = closeProjectGaps()
-  if (closed > 0) {
+  const closedTicks = closeProjectGaps()
+  if (closedTicks > 0) {
     toast.add({
-      title: t('tmcut.timelineActions.gapsClosed', { seconds: Math.round(closed * 10) / 10 }),
+      title: t('tmcut.timelineActions.gapsClosed', { seconds: Math.round(ticksToSec(closedTicks) * 10) / 10 }),
       color: 'success'
     })
   } else {
@@ -560,7 +560,7 @@ async function handleAddVideo() {
         name: asset.name,
         src: asset.path,
         in: 0,
-        out: asset.meta.durationSec > 0 ? Math.round(asset.meta.durationSec * 100) / 100 : 10,
+        out: asset.meta.durationSec > 0 ? Math.round(secToTicks(asset.meta.durationSec)) : 10 * TICKS_PER_SECOND,
         speed: 1
       })
       toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: asset.name }), color: 'success' })
@@ -588,7 +588,7 @@ async function handleAddVideo() {
       name: filename,
       src: filePath,
       in: 0,
-      out: Math.round(dur * 100) / 100,
+      out: Math.round(secToTicks(dur)),
       speed: 1
     })
     toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: filename }), color: 'success' })
@@ -601,7 +601,7 @@ async function handleAddVideo() {
       name: filename,
       src: filePath,
       in: 0,
-      out: 10,
+      out: 10 * TICKS_PER_SECOND,
       speed: 1
     })
     toast.add({ title: t('tmcut.timelineActions.videoAdded', { name: filename }), color: 'success' })
@@ -614,8 +614,8 @@ function handleAddText() {
     name: t('tmcut.timelineActions.newText'),
     text: t('tmcut.inspectorProps.textPlaceholder'),
     in: 0,
-    out: 4,
-    offset: playhead.value,
+    out: 4 * TICKS_PER_SECOND,
+    offset: Math.round(secToTicks(playhead.value)),
     fontSize: 42,
     color: '#ffffff'
   })
@@ -644,8 +644,8 @@ async function handleImportSrt() {
         name: cue.text.replace(/\s+/g, ' ').trim().slice(0, 24),
         text: cue.text,
         in: 0,
-        out: Math.max(0.1, cue.end - cue.start),
-        offset: Math.max(0, cue.start),
+        out: Math.max(TICKS_PER_SECOND / 10, Math.round(secToTicks(cue.end - cue.start))),
+        offset: Math.max(0, Math.round(secToTicks(cue.start))),
         fontSize: 42,
         color: '#ffffff'
       })
@@ -663,8 +663,8 @@ async function handleExportSrt() {
     .filter(item => (item.text || '').trim().length > 0)
     .map(item => ({
       text: item.text || '',
-      start: item.offset || 0,
-      end: (item.offset || 0) + (item.out - item.in) / (item.speed || 1)
+      start: clipStartSec(item),
+      end: clipEndSec(item)
     }))
     .filter(cue => cue.end > cue.start)
     .sort((a, b) => a.start - b.start)
@@ -706,8 +706,8 @@ async function handleAutoCaptions() {
     .filter(track => track.type === 'video' && !track.hidden)
     .flatMap(track => track.items || [])
     .find(item => item.src
-      && playhead.value >= (item.offset || 0)
-      && playhead.value < (item.offset || 0) + (item.out - item.in) / (item.speed || 1))
+      && playhead.value >= clipStartSec(item)
+      && playhead.value < clipEndSec(item))
   if (!clip?.src) {
     toast.add({ title: t('tmcut.timelineActions.captionNoClip'), color: 'warning' })
     return
@@ -728,11 +728,12 @@ async function handleAutoCaptions() {
       toast.add({ title: t('tmcut.timelineActions.captionEmpty'), color: 'warning' })
       return
     }
-    // Core works in TICKS; the app v1 model is seconds — convert at the
-    // boundary (established bridge convention). Cue times are relative
+    // Core works in TICKS — like the store now (C16-R3): the clip's
+    // offset/duration read as ticks directly, and the caption items
+    // handed to addClipToTrack carry ticks too. Cue times are relative
     // to the clip, so fromTicks anchors at the clip start.
-    const fromTicks = Math.round(secToTicks(clip.offset || 0))
-    const durationTicks = Math.max(1, Math.round(secToTicks((clip.out - clip.in) / (clip.speed || 1))))
+    const fromTicks = clipStartTicks(clip)
+    const durationTicks = clipDurationTicks(clip)
     const captions = cuesToCaptionClips(cues, {
       fromTicks,
       rangeTicks: { start: fromTicks, end: fromTicks + durationTicks }
@@ -742,8 +743,8 @@ async function handleAutoCaptions() {
         name: caption.text.slice(0, 24),
         text: caption.text,
         in: 0,
-        out: Math.max(0.1, ticksToSec(caption.out)),
-        offset: ticksToSec(caption.offset),
+        out: Math.max(TICKS_PER_SECOND / 10, caption.out),
+        offset: caption.offset,
         fontSize: 42,
         color: '#ffffff'
       })
@@ -773,7 +774,7 @@ async function handleAddAudio() {
         name: asset.name,
         src: asset.path,
         in: 0,
-        out: asset.meta.durationSec > 0 ? Math.round(asset.meta.durationSec * 100) / 100 : 15,
+        out: asset.meta.durationSec > 0 ? Math.round(secToTicks(asset.meta.durationSec)) : 15 * TICKS_PER_SECOND,
         volume: 100
       })
       toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: asset.name }), color: 'success' })
@@ -797,7 +798,7 @@ async function handleAddAudio() {
       name: filename,
       src: filePath,
       in: 0,
-      out: Math.round(dur * 100) / 100,
+      out: Math.round(secToTicks(dur)),
       volume: 100
     })
     toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: filename }), color: 'success' })
@@ -809,7 +810,7 @@ async function handleAddAudio() {
       name: filename,
       src: filePath,
       in: 0,
-      out: 15,
+      out: 15 * TICKS_PER_SECOND,
       volume: 100
     })
     toast.add({ title: t('tmcut.timelineActions.audioAdded', { name: filename }), color: 'success' })

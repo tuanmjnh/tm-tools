@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { TICKS_PER_SECOND } from '@tmcut-core'
 import {
   escapeDrawText,
   RenderGraph,
@@ -7,6 +8,13 @@ import {
 } from '../../app/utils/tmcut/render'
 import { compileTimelineToFfmpeg as facadeCompile } from '../../app/utils/tmcut/compiler'
 import type { TmcutProject } from '../../app/composables/useTmcutProject'
+
+// C16-R3: the store's in/out/offset are integer TICKS now — fixtures
+// mirror that; every expected FFmpeg string above stays in SECONDS
+// because toRenderClip decodes at the boundary.
+function tk(sec: number): number {
+  return Math.round(sec * TICKS_PER_SECOND)
+}
 
 let passed = 0
 
@@ -65,7 +73,7 @@ function main() {
             type: 'text',
             name: 'Text',
             items: [
-              { id: 'c1', trackId: 't1', text: 'Hello Title', offset: 0, in: 0, out: 5, fontSize: 48, color: 'white' }
+              { id: 'c1', trackId: 't1', text: 'Hello Title', offset: 0, in: 0, out: tk(5), fontSize: 48, color: 'white' }
             ]
           }
         ]
@@ -93,16 +101,16 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: 4, speed: 1 },
+              { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), speed: 1 },
               {
                 id: 'vclip2',
                 trackId: 'v1',
                 src: 'clip2.mp4',
-                offset: 3.5,
+                offset: tk(3.5),
                 in: 0,
-                out: 4,
+                out: tk(4),
                 speed: 1,
-                transitionIn: { type: 'dissolve', duration: 0.5 }
+                transitionIn: { type: 'dissolve', duration: tk(0.5) }
               }
             ]
           },
@@ -111,7 +119,7 @@ function main() {
             type: 'text',
             name: 'Text',
             items: [
-              { id: 'tclip1', trackId: 't1', text: 'Watermark', offset: 1, in: 0, out: 3 }
+              { id: 'tclip1', trackId: 't1', text: 'Watermark', offset: tk(1), in: 0, out: tk(3) }
             ]
           }
         ]
@@ -146,7 +154,7 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'g1', trackId: 'v1', src: 'demo.mp4', offset: 0, in: 0, out: 2 }
+              { id: 'g1', trackId: 'v1', src: 'demo.mp4', offset: 0, in: 0, out: tk(2) }
             ]
           }
         ]
@@ -173,7 +181,7 @@ function main() {
             type: 'audio',
             name: 'Audio',
             items: [
-              { id: 's1', trackId: 'a1', src: 'bgm.mp3', offset: 0, in: 0, out: 10, volume: 80 }
+              { id: 's1', trackId: 'a1', src: 'bgm.mp3', offset: 0, in: 0, out: tk(10), volume: 80 }
             ]
           }
         ]
@@ -260,7 +268,7 @@ function main() {
             type: 'video',
             name: 'Video',
             items: [
-              { id: 'c1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: 4, scale: 150, x: 20, y: -10, speed: 1 }
+              { id: 'c1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), scale: 150, x: 20, y: -10, speed: 1 }
             ]
           }
         ]

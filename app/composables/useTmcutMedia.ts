@@ -20,6 +20,7 @@ import {
   setAssetFolder as coreSetAssetFolder,
   getAssetFolder as coreGetAssetFolder,
   getFolderCounts as coreGetFolderCounts,
+  secToTicks,
   FOLDER_TAG_COLORS
 
 } from '@tmcut-core'
@@ -579,7 +580,9 @@ export function useTmcutMedia() {
     return true
   }
 
-  /** `offset` places the clip at that time (drop on timeline); omitted = append at the end. `trackId` targets a specific compatible track. */
+  /** `offset` places the clip at that time in SECONDS (drop on timeline);
+   *  omitted = append at the end. `trackId` targets a specific compatible
+   *  track. C16-R3: seconds are converted to store ticks at this boundary. */
   function addAssetToTimeline(assetId: string, options?: { offset?: number, trackId?: string }): boolean {
     const asset = assets.value.find(a => a.id === assetId)
     const project = currentProject.value
@@ -600,9 +603,9 @@ export function useTmcutMedia() {
       name: asset.name,
       src: asset.path,
       in: 0,
-      out: Math.round(duration * 100) / 100,
+      out: Math.round(secToTicks(duration)),
       speed: 1,
-      offset: options?.offset
+      offset: options?.offset === undefined ? undefined : Math.round(secToTicks(options.offset))
     }, options?.trackId)
     if (clip) persistLibrary()
     return !!clip

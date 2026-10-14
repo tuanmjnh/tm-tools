@@ -4,10 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
-import { clipDurationSec } from '~/utils/tmcut/clipTime'
+import { clipDurationSec, clipStartTicks } from '~/utils/tmcut/clipTime'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -87,6 +87,18 @@ function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, 
   // slider) record ONE undo entry through the coalescing history.
   pushHistoryCoalesced(`${selectedClipId.value}:${String(field)}`)
   updateClip(selectedClipId.value, { [field]: value })
+}
+
+// Timing fields (C16-R3): the store keeps in/out/offset as TICKS; the
+// number inputs speak SECONDS (what the labels mean to the user), so
+// this pair is the component's decode/encode seam.
+const inPointSec = computed(() => Number(ticksToSec(clip.value?.in ?? 0).toFixed(3)))
+const outPointSec = computed(() => Number(ticksToSec(clip.value?.out ?? 0).toFixed(3)))
+const offsetSec = computed(() => Number(ticksToSec(clip.value?.offset ?? 0).toFixed(3)))
+
+function handleTimeUpdate(field: 'in' | 'out' | 'offset', valueSec: number) {
+  const ticks = Math.max(0, Math.round(secToTicks(Number(valueSec) || 0)))
+  handleUpdate(field, ticks)
 }
 
 // Font family (roadmap C-1): family (CSS preview) and file (drawtext
@@ -295,7 +307,9 @@ type KfProp = 'scale' | 'x' | 'y' | 'opacity' | 'volume'
 const clipLocalTicks = computed(() => {
   const c = clip.value
   if (!c) return 0
-  return Math.round((playhead.value - (c.offset || 0)) * TICKS_PER_SECOND)
+  // C16-R3: playhead is SECONDS, clip.offset is store TICKS — snap the
+  // playhead into tick space first, then subtract (both integers).
+  return Math.round(secToTicks(playhead.value) - clipStartTicks(c))
 })
 
 const clipHasKeyframes = computed(() => propsWithKeyframes(clip.value).length > 0)
@@ -816,9 +830,9 @@ const saveStateLabel = computed(() => {
           <UInput
             type="number"
             step="0.1"
-            :model-value="clip.in"
+            :model-value="inPointSec"
             size="xs"
-            @update:model-value="handleUpdate('in', Number($event))"
+            @update:model-value="handleTimeUpdate('in', Number($event))"
           />
         </div>
         <div>
@@ -826,9 +840,9 @@ const saveStateLabel = computed(() => {
           <UInput
             type="number"
             step="0.1"
-            :model-value="clip.out"
+            :model-value="outPointSec"
             size="xs"
-            @update:model-value="handleUpdate('out', Number($event))"
+            @update:model-value="handleTimeUpdate('out', Number($event))"
           />
         </div>
       </div>
@@ -839,9 +853,9 @@ const saveStateLabel = computed(() => {
           <UInput
             type="number"
             step="0.1"
-            :model-value="clip.offset"
+            :model-value="offsetSec"
             size="xs"
-            @update:model-value="handleUpdate('offset', Number($event))"
+            @update:model-value="handleTimeUpdate('offset', Number($event))"
           />
         </div>
         <div>

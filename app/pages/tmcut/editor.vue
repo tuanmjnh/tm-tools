@@ -11,7 +11,8 @@ import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/m
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
 import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { filterAssetsByFolder } from '@tmcut-core'
+import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from '@tmcut-core'
+import { clipDurationSec } from '~/utils/tmcut/clipTime'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -289,8 +290,8 @@ function handleAddTextPreset(preset: { text: string, fontSize: number, color: st
     name: preset.text,
     text: preset.text,
     in: 0,
-    out: 4,
-    offset: Math.round(playhead.value * 100) / 100,
+    out: 4 * TICKS_PER_SECOND,
+    offset: Math.round(secToTicks(playhead.value)),
     fontSize: preset.fontSize,
     color: preset.color
   })
@@ -1479,7 +1480,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
                   <div class="flex items-center gap-1 shrink-0">
                     <span class="text-[9px] font-mono text-neutral-500 group-hover/clip:hidden">
-                      {{ (((item.out - item.in) / (item.speed || 1))).toFixed(1) }}s
+                      {{ clipDurationSec(item).toFixed(1) }}s
                     </span>
                     <div class="hidden group-hover/clip:flex items-center gap-1">
                       <UButton

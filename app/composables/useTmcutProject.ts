@@ -1,6 +1,6 @@
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode, FrameRate } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { clipDurationSec, clipStartSec, clipEndSec } from '~/utils/tmcut/clipTime'
+import { clipDurationSec, clipStartSec, clipEndSec, clipStartTicks, clipEndTicks } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
   addTrack,
@@ -12,8 +12,9 @@ import {
   snapTime,
   secToTicks,
   ticksToSec,
-  v1TracksToV3,
-  syncV3Result,
+  ticksTracksToV3,
+  syncTicksResult,
+  ticksClipToV3,
   expandRelated,
   addMarker,
   removeMarker,
@@ -22,7 +23,7 @@ import {
   ungroupClips,
   insertClipRipple,
   closeGaps,
-  v1ClipToV3,
+  TICKS_PER_SECOND,
   canApplyTransition,
   applyTransition,
   clearTransition
@@ -59,6 +60,11 @@ export interface TmcutTimelineItem {
   stabilizeLevel?: TmcutStabilizeLevel
   stabilizedPath?: string | null
   stabilizeStatus?: TmcutStabilizeStatus
+  /** C16-R3: source in/out and timeline offset are INTEGER TICKS
+   *  (TICKS_PER_SECOND = 120000, @tmcut-core time.mjs). Read them through
+   *  ~/utils/tmcut/clipTime accessors — never assume the unit elsewhere.
+   *  speed stays a multiplier; fade/keyframes/transitionIn were already
+   *  ticks. */
   in: number
   out: number
   offset: number
@@ -118,12 +124,14 @@ export interface TmcutProjectTimeline {
 /**
  * Project-file schema version (C16). Files written before C16-R1 stored
  * fps as a bare number; from C16-R1 on, fps is the DSL v3 rational
- * FrameRate. `applyProjectMigration` runs legacy coercion ONLY when the
- * file lacks this marker (or holds an older value), then stamps it — so
- * the migration is one-time per file, matching Roadmap C16 ("v1compat
+ * FrameRate. C16-R3 (schema 3) flips clip time geometry (in/out/offset)
+ * from float SECONDS to integer TICKS — `applyProjectMigration` scales
+ * such a file's items exactly once at open (never a magnitude guess: the
+ * version stamp is the only unit oracle, R82 lesson), then stamps it —
+ * so the migration is one-time per file, matching Roadmap C16 ("v1compat
  * chỉ còn cho file project cũ — migrate 1 lần khi mở").
  */
-export const TMCUT_PROJECT_SCHEMA_VERSION = 2
+export const TMCUT_PROJECT_SCHEMA_VERSION = 3
 
 export interface TmcutProject {
   id: string
@@ -267,7 +275,18 @@ function applyProjectMigration(project: TmcutProject) {
   if (!Array.isArray(project.timeline.markers)) {
     project.timeline.markers = []
   }
+  // C16-R3: files stamped before schema 3 stored in/out/offset as float
+  // SECONDS. Scale them to ticks ONCE, driven purely by the version stamp
+  // (the R82 lesson: never a magnitude heuristic — an old file with a
+  // 0.4s fade still reads as seconds here because the STAMP says so).
   if (isLegacy) {
+    for (const track of project.timeline.tracks || []) {
+      for (const item of track.items || []) {
+        item.in = Math.round(secToTicks(Number(item.in) || 0))
+        item.out = Math.round(secToTicks(Number(item.out) || 0))
+        item.offset = Math.round(secToTicks(Number(item.offset) || 0))
+      }
+    }
     project.schemaVersion = TMCUT_PROJECT_SCHEMA_VERSION
   }
 }
@@ -652,14 +671,17 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
     currentProject.value.timeline.tracks.push(track)
   }
 
+  // C16-R3: partialItem geometry arrives in TICKS (callers convert at
+  // their own boundary). Defaults: whole seconds expressed as ticks —
+  // 5s media placeholder, 4s text block.
   const speed = partialItem.speed ?? 1
   const inPoint = partialItem.in ?? 0
-  const outPoint = partialItem.out ?? (trackType === 'text' ? 4 : 5)
+  const outPoint = partialItem.out ?? (trackType === 'text' ? 4 : 5) * TICKS_PER_SECOND
 
   // Determine offset if not specified
   let offset = partialItem.offset
   if (offset === undefined) {
-    offset = track.items.reduce((max, i) => Math.max(max, clipEndSec(i)), 0)
+    offset = track.items.reduce((max, i) => Math.max(max, clipEndTicks(i)), 0)
   }
 
   const newItem: TmcutTimelineItem = {
@@ -695,16 +717,16 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
   // right by its duration. Drops into empty gaps keep the plain
   // overlay behaviour, like CapCut's insert mode. History was already
   // pushed above, so the bridge runs with skipHistory.
-  const durationSec = (outPoint - inPoint) / speed
+  const durationTicks = Math.max(1, Math.round((outPoint - inPoint) / speed))
   const collides = track.items.some((i) => {
-    const start = clipStartSec(i)
-    const end = clipEndSec(i)
-    return start < offset + durationSec && end > offset
+    const start = clipStartTicks(i)
+    const end = clipEndTicks(i)
+    return start < offset + durationTicks && end > offset
   })
   if (rippleMode.value && collides) {
     const rippleId = `clip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-    const v3Partial = v1ClipToV3({ ...newItem, id: rippleId }, trackType)
-    const result = applyV3Edit(v3 => insertClipRipple(v3, trackType, v3Partial, secToTicks(offset)), { skipHistory: true })
+    const v3Partial = ticksClipToV3({ ...newItem, id: rippleId }, trackType)
+    const result = applyV3Edit(v3 => insertClipRipple(v3, trackType, v3Partial, Math.max(0, Math.round(offset))), { skipHistory: true })
     if (result) {
       selectedClipId.value = result.clip.id
       return currentProject.value.timeline.tracks
@@ -722,28 +744,29 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
 }
 
 // Close gaps (roadmap B9 — core C2): pull every unlocked track
-// together. A cheap v1 pre-scan avoids pushing a no-op history entry
-// when there is nothing to close; returns the seconds closed.
+// together. A cheap pre-scan avoids pushing a no-op history entry when
+// there is nothing to close; returns the TICKS closed (core reports
+// seconds — converted at this boundary).
 function closeProjectGaps(): number {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return 0
   let hasGap = false
   for (const track of tracks) {
     if (track.locked) continue
-    const sorted = [...(track.items || [])].sort((a, b) => clipStartSec(a) - clipStartSec(b))
+    const sorted = [...(track.items || [])].sort((a, b) => clipStartTicks(a) - clipStartTicks(b))
     let cursor = 0
     for (const item of sorted) {
-      const start = clipStartSec(item)
+      const start = clipStartTicks(item)
       if (start > cursor) {
         hasGap = true
         break
       }
-      cursor = Math.max(cursor, clipEndSec(item))
+      cursor = Math.max(cursor, clipEndTicks(item))
     }
     if (hasGap) break
   }
   if (!hasGap) return 0
-  return applyV3Edit(v3 => closeGaps(v3)) ?? 0
+  return Math.round((applyV3Edit(v3 => closeGaps(v3)) ?? 0) * TICKS_PER_SECOND)
 }
 
 // Update clip
@@ -813,28 +836,29 @@ function removeClip(clipId: string) {
 }
 
 // ===== Core-backed editing (roadmap Phase 2 wiring) =====
-// The v1 state shape stays untouched: conversions run through the
-// dependency-free @tmcut/core bridge, results merge back by clip id, and
-// the app JSON history wraps every op so undo keeps working.
+// C16-R3: the store holds ticks, so the bridge is the TICKS flavor of
+// @tmcut/core v1compat — an identity on time fields, no float
+// round-trips. Results merge back by clip id, and the app JSON history
+// wraps every op so undo keeps working.
 
 const clipboard = ref<CoreClipboard | null>(null)
 const rippleMode = ref(false)
 
 function expandedSelectionIds(): string[] {
   if (!selectedClipId.value || !currentProject.value) return []
-  return expandRelated(v1TracksToV3(currentProject.value.timeline.tracks), [selectedClipId.value])
+  return expandRelated(ticksTracksToV3(currentProject.value.timeline.tracks), [selectedClipId.value])
 }
 
 /** Run a core op on a converted v3 copy, then merge results back by id. */
 function applyV3Edit<T>(operate: (v3: TmcutTimeline) => T, options?: { skipHistory?: boolean }): T | null {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return null
-  const v3 = v1TracksToV3(tracks)
+  const v3 = ticksTracksToV3(tracks)
   // Callers that already pushed history (multi-step gestures) pass
   // skipHistory so one user action stays ONE undo entry.
   if (!options?.skipHistory) pushHistory()
   const result = operate(v3)
-  syncV3Result(tracks, v3)
+  syncTicksResult(tracks, v3)
   saveProject()
   return result
 }
@@ -843,7 +867,7 @@ function copySelectedClips(): boolean {
   const tracks = currentProject.value?.timeline?.tracks
   const ids = expandedSelectionIds()
   if (!tracks || ids.length === 0) return false
-  const data = copyClips(v1TracksToV3(tracks), ids)
+  const data = copyClips(ticksTracksToV3(tracks), ids)
   clipboard.value = data
   return !!data
 }
@@ -894,9 +918,9 @@ function snapTimeSec(
 ): number {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return targetSec
-  const v3 = v1TracksToV3(tracks)
+  const v3 = ticksTracksToV3(tracks)
   // Roadmap B5: real markers join the snap candidates — core snapTime
-  // reads timeline.markers, but v1TracksToV3 always starts it empty.
+  // reads timeline.markers, but the bridge always starts it empty.
   v3.markers = ensureMarkers()
   return ticksToSec(snapTime(v3, Math.round(secToTicks(targetSec)), {
     playheadTicks: Math.round(secToTicks(playheadSec)),
@@ -968,7 +992,7 @@ function removeMarkerById(markerId: string): boolean {
 function checkClipTransition(clipId: string, type: string, durationSec: number): { ok: boolean, reason?: string } {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return { ok: false, reason: 'no-neighbor' }
-  const check = canApplyTransition(v1TracksToV3(tracks), clipId, type, Math.round(secToTicks(durationSec)))
+  const check = canApplyTransition(ticksTracksToV3(tracks), clipId, type, Math.round(secToTicks(durationSec)))
   return check.ok ? { ok: true } : { ok: false, reason: check.reason ?? 'no-neighbor' }
 }
 
@@ -986,7 +1010,7 @@ function clearClipTransition(clipId: string): boolean {
   const tracks = currentProject.value?.timeline?.tracks
   if (!tracks) return false
   // Probe on a throwaway conversion first — a refusal pushes no history.
-  if (!clearTransition(v1TracksToV3(tracks), clipId)) return false
+  if (!clearTransition(ticksTracksToV3(tracks), clipId)) return false
   return applyV3Edit(v3 => clearTransition(v3, clipId)) === true
 }
 
@@ -1022,9 +1046,11 @@ function updateClipsSrc(oldSrc: string, newSrc: string): number {
   return count
 }
 
-// Split clip at timeline splitTime (in seconds)
+// Split clip at timeline splitTime (SECONDS — the UI contract; converted
+// to ticks here, all math runs in the store unit).
 function splitClip(clipId: string, splitTime: number): boolean {
   if (!currentProject.value?.timeline?.tracks) return false
+  const splitTicks = Math.round(secToTicks(splitTime))
 
   for (const track of currentProject.value.timeline.tracks) {
     const idx = track.items?.findIndex(i => i.id === clipId)
@@ -1032,16 +1058,18 @@ function splitClip(clipId: string, splitTime: number): boolean {
 
     const clip = track.items[idx]!
     const speed = clip.speed || 1
-    const clipStart = clipStartSec(clip)
-    const clipEnd = clipEndSec(clip)
+    const clipStart = clipStartTicks(clip)
+    const clipEnd = clipEndTicks(clip)
+    // 0.1s margin, expressed in ticks (roadmap B2: no degenerate slivers)
+    const margin = Math.round(0.1 * TICKS_PER_SECOND)
 
     // Ensure split time is within clip boundaries (leave at least 0.1s margin)
-    if (splitTime <= clipStart + 0.1 || splitTime >= clipEnd - 0.1) {
+    if (splitTicks <= clipStart + margin || splitTicks >= clipEnd - margin) {
       return false
     }
 
-    const elapsedOnTimeline = splitTime - clipStart
-    const splitSourceTime = clip.in + elapsedOnTimeline * speed
+    const elapsedOnTimeline = splitTicks - clipStart
+    const splitSourceTime = Math.round(clip.in + elapsedOnTimeline * speed)
 
     pushHistory()
     // First piece: keep original in, adjust out
@@ -1054,7 +1082,7 @@ function splitClip(clipId: string, splitTime: number): boolean {
       id: `clip_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       in: splitSourceTime,
       out: originalOut,
-      offset: splitTime
+      offset: splitTicks
     }
     // The tail's incoming neighbor changed (roadmap B3): the inherited
     // transition only ever described the ORIGINAL pair (the first half
@@ -1071,23 +1099,26 @@ function splitClip(clipId: string, splitTime: number): boolean {
 }
 
 // Keyboard trim (roadmap B7): cut the selected clip's in/out edge to a
-// timeline position (seconds) via the core trimClip through the v1↔v3
-// bridge. The playhead must sit INSIDE the clip with the same 0.1s
-// margin splitClip uses, so the core never has to clamp the source
-// boundary and no over-extension past the source can happen.
+// timeline position (SECONDS — the UI contract, converted here) via the
+// core trimClip through the ticks bridge. The playhead must sit INSIDE
+// the clip with the same 0.1s margin splitClip uses, so the core never
+// has to clamp the source boundary and no over-extension past the source
+// can happen.
 function trimSelectedEdgeAt(edge: 'in' | 'out', timeSec: number): boolean {
   const id = selectedClipId.value
   const tracks = currentProject.value?.timeline?.tracks
   if (!id || !tracks) return false
+  const timeTicks = Math.round(secToTicks(timeSec))
+  const margin = Math.round(0.1 * TICKS_PER_SECOND)
   for (const track of tracks) {
     const clip = track.items?.find(i => i.id === id)
     if (!clip) continue
     if (track.locked) return false
     const speed = clip.speed || 1
-    const start = clipStartSec(clip)
-    const end = clipEndSec(clip)
-    if (timeSec <= start + 0.1 || timeSec >= end - 0.1) return false
-    const sourceTicks = Math.round(secToTicks(clip.in + (timeSec - start) * speed))
+    const start = clipStartTicks(clip)
+    const end = clipEndTicks(clip)
+    if (timeTicks <= start + margin || timeTicks >= end - margin) return false
+    const sourceTicks = Math.round(clip.in + (timeTicks - start) * speed)
     return applyV3Edit(v3 => trimClip(v3, id, edge, sourceTicks)) === true
   }
   return false
@@ -1180,9 +1211,10 @@ function toggleLinkSelection(): 'linked' | 'unlinked' | 'none' {
 }
 
 /**
- * Relative offsets (id → offset) of the expanded selection WITHOUT the
- * given clip — the drag handler carries them along so grouped/linked
- * clips travel together (roadmap B4). Locked tracks are excluded.
+ * Relative offsets (id → offset, in STORE TICKS) of the expanded
+ * selection WITHOUT the given clip — the drag handler carries them along
+ * so grouped/linked clips travel together (roadmap B4). Locked tracks
+ * are excluded.
  */
 function relatedOffsetsFor(clipId: string): Record<string, number> {
   const wanted = new Set(expandedSelectionIds())
@@ -1191,7 +1223,7 @@ function relatedOffsetsFor(clipId: string): Record<string, number> {
   for (const track of currentProject.value?.timeline?.tracks || []) {
     if (track.locked) continue
     for (const item of track.items || []) {
-      if (wanted.has(item.id)) out[item.id] = clipStartSec(item)
+      if (wanted.has(item.id)) out[item.id] = clipStartTicks(item)
     }
   }
   return out

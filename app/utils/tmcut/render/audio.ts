@@ -4,15 +4,17 @@ import { volumeExpr, keyframeExpr } from '@tmcut-core'
 
 /**
  * Fade envelope for one clip's audio chain (roadmap R5, core C12).
+ * C16-R3: the store's flat in/out are TICKS now, so the clip is handed
+ * to core in the v3 shape (`timeline.duration` ticks from the canonical
+ * view) — core's legacy flat branch (in/out as SECONDS, kept for file
+ * migration) must never see a flipped-store item.
  */
-export function fadeFilter(clip: {
-  in: number
-  out: number
-  speed?: number
-  volume?: number
-  fade?: { in: number, out: number }
-}): string {
-  const expr = volumeExpr(clip)
+export function fadeFilter(clip: RenderClip): string {
+  const expr = volumeExpr({
+    fade: clip.raw.fade,
+    volume: clip.raw.volume,
+    timeline: { duration: clip.durationTicks }
+  })
   return expr === '1' ? '' : `,volume='${expr}':eval=frame`
 }
 
@@ -52,7 +54,7 @@ export function compileAudioOnly(
     const aReverse = clip.raw.reverse ? 'areverse,' : ''
 
     chains.push(
-      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
+      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
     )
     busStreams.push(out)
   }
@@ -70,7 +72,7 @@ export function compileAudioOnly(
     const aReverse = clip.raw.reverse ? 'areverse,' : ''
 
     chains.push(
-      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
+      `[${idx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts}${fadeFilter(clip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${out}`
     )
     busStreams.push(out)
   }
@@ -134,7 +136,7 @@ export function compileBackgroundAudio(
     const aReverse = aClip.raw.reverse ? 'areverse,' : ''
 
     graph.addFilterChain(
-      `[${aInputIdx}:a]atrim=start=${aClip.inSec}:end=${aClip.outSec},${aReverse}${aSetpts}${fadeFilter(aClip.raw)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${aProcessed}`
+      `[${aInputIdx}:a]atrim=start=${aClip.inSec}:end=${aClip.outSec},${aReverse}${aSetpts}${fadeFilter(aClip)},aresample=48000,${volFilter},adelay=${delayMs}|${delayMs}${aProcessed}`
     )
     audioMixStreams.push(aProcessed)
   }

@@ -5,8 +5,9 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
-import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND } from '@tmcut-core'
+import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
+import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 
@@ -330,7 +331,9 @@ const isTrackHidden = computed(() => !!activeVideoTrack.value?.hidden)
 // PREVIEW ONLY: the export pipeline does not render keyframes yet
 // (Phase K roadmap item) — never expose them as exported behavior.
 function localTicks(clip: { offset?: number }): number {
-  return (playhead.value - (clip.offset || 0)) * TICKS_PER_SECOND
+  // C16-R3: playhead is SECONDS, the store offset is TICKS — snap the
+  // playhead into tick space first, then subtract.
+  return Math.round(secToTicks(playhead.value) - (clip.offset || 0))
 }
 
 const isVideoMuted = computed(() => !!activeVideoTrack.value?.muted)
@@ -340,10 +343,16 @@ const videoVolume = computed(() => {
   const v = evalKeyframe(clip, 'volume', localTicks(clip)) ?? clip.volume
   // Fade envelope (roadmap C12 / core audio.mjs): gainAt multiplies the
   // (keyframed) volume by the fade ramp, each edge clamped to half the
-  // clip. Preview only until the compiler round (R5) — the same gap
+  // clip. C16-R3: core's legacy flat branch reads in/out as SECONDS, so
+  // the store item (ticks) is handed over in the v3 shape instead.
+  // Preview only until the compiler round (R5) — the same gap
   // family as the volume slider itself.
-  const withVolume = typeof v === 'number' ? { ...clip, volume: v } : clip
-  return gainAt(withVolume, localTicks(clip))
+  const shaped = {
+    fade: clip.fade,
+    volume: typeof v === 'number' ? v : clip.volume,
+    timeline: { duration: clipDurationTicks(clip) }
+  }
+  return gainAt(shaped, localTicks(clip))
 })
 
 // Re-sync preview after ANY timeline mutation (trim/move/split/add often
@@ -617,9 +626,15 @@ function textOverlayStyle(textClip: {
   const to = evalKeyframe(textClip, 'opacity', at) ?? textClip.opacity ?? 100
   const fontSize = textClip.fontSize || 36
 
-  // Text in/out animations (Roadmap C-5): preview simulation matching export math
-  const tStart = textClip.offset || 0
-  const clipDuration = Math.max(0.05, ((textClip.out ?? 1) - (textClip.in ?? 0)) / (textClip.speed || 1))
+  // Text in/out animations (Roadmap C-5): preview simulation matching export math.
+  // C16-R3: offset/in/out are store TICKS decoded to seconds here; the
+  // animation durations (animInDuration/animOutDuration) stay seconds.
+  const tStart = ticksToSec(textClip.offset || 0)
+  const clipDuration = Math.max(0.05, ticksToSec(clipDurationTicks({
+    in: textClip.in ?? 0,
+    out: textClip.out ?? TICKS_PER_SECOND,
+    speed: textClip.speed || 1
+  })))
   const localTime = Math.max(0, playhead.value - tStart)
 
   const animIn = textClip.animIn && textClip.animIn !== 'none' ? textClip.animIn : null

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { secToTicks } from '@tmcut-core'
 import { useTmcutAi } from './useTmcutAi'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutProject } from './useTmcutProject'
@@ -164,9 +165,9 @@ Target duration: ${options.duration}`
       addClipToTrack('text', {
         name: scene.title,
         text: scene.onScreenText || scene.title,
-        offset: runningOffset,
+        offset: Math.round(secToTicks(runningOffset)),
         in: 0,
-        out: dur,
+        out: Math.round(secToTicks(dur)),
         fontSize: script.platform === 'tiktok-shorts' ? 52 : 44,
         color: '#FFFFFF'
       })
@@ -190,9 +191,9 @@ Target duration: ${options.duration}`
       addClipToTrack('text', {
         name: scene.title,
         text: scene.onScreenText || scene.title,
-        offset: runningOffset,
+        offset: Math.round(secToTicks(runningOffset)),
         in: 0,
-        out: dur,
+        out: Math.round(secToTicks(dur)),
         fontSize: 48,
         color: '#FFFFFF'
       })

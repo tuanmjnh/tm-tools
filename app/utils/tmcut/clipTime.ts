@@ -1,17 +1,18 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
+import { ticksToSec, TICKS_PER_SECOND } from '@tmcut-core'
 
 /**
- * C16-R2: single accessors for clip TIME GEOMETRY.
+ * C16-R2/R3: single accessors for clip TIME GEOMETRY.
  *
- * The app store still holds seconds (v1) while the DSL works in ticks.
- * Every consumer that needs a clip's timeline span or source position must
- * go through these helpers instead of spreading `(clip.out - clip.in) /
- * (clip.speed || 1)` — when the store flips to ticks (C16-R3) only this
- * file re-derives the numbers, consumers keep compiling.
- *
- * Field names are read through a small local type on purpose: this module
- * must stay importable from anywhere (composables, components, utils) with
- * no runtime imports of its own.
+ * C16-R3 flipped the store: `in`/`out`/`offset` are INTEGER TICKS
+ * (TICKS_PER_SECOND = 120000, @tmcut-core time.mjs). This module is the
+ * only place that knows, and it exposes BOTH units on purpose:
+ *  - `*Sec` helpers: SECONDS for the UI/playhead world (unchanged since
+ *    R2 — every pre-flip consumer keeps compiling and behaves the same);
+ *  - `*Ticks` helpers: the store unit, for drag/trim math and core calls
+ *    that must not round-trip through float seconds.
+ * Nothing else may spread `clip.out - clip.in` — that is how a unit bug
+ * becomes impossible to write instead of impossible to review.
  */
 
 /** Speed with the legacy 0/undefined → 1 fallback. */
@@ -19,19 +20,43 @@ export function clipSpeed(clip: Pick<TmcutTimelineItem, 'speed'>): number {
   return clip.speed || 1
 }
 
+// ---- Store-unit helpers (integer ticks) ----
+
+/** Source-range length in ticks. */
+export function clipSourceRangeTicks(clip: Pick<TmcutTimelineItem, 'in' | 'out'>): number {
+  return clip.out - clip.in
+}
+
+/** Timeline span in ticks: source range divided by playback speed. */
+export function clipDurationTicks(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed'>): number {
+  return Math.max(1, Math.round(clipSourceRangeTicks(clip) / clipSpeed(clip)))
+}
+
+/** Timeline start in ticks. */
+export function clipStartTicks(clip: Pick<TmcutTimelineItem, 'offset'>): number {
+  return clip.offset || 0
+}
+
+/** Timeline end in ticks. */
+export function clipEndTicks(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset'>): number {
+  return clipStartTicks(clip) + clipDurationTicks(clip)
+}
+
+// ---- Seconds-facing API (the UI contract from R2) ----
+
 /** Source-range length, source seconds. */
 export function clipSourceRange(clip: Pick<TmcutTimelineItem, 'in' | 'out'>): number {
-  return clip.out - clip.in
+  return ticksToSec(clipSourceRangeTicks(clip))
 }
 
 /** Timeline span, seconds: source range divided by playback speed. */
 export function clipDurationSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed'>): number {
-  return clipSourceRange(clip) / clipSpeed(clip)
+  return ticksToSec(clipDurationTicks(clip))
 }
 
 /** Timeline start, seconds. */
 export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
-  return clip.offset || 0
+  return ticksToSec(clipStartTicks(clip))
 }
 
 /** Timeline end, seconds. */
@@ -42,14 +67,16 @@ export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' 
 /**
  * Source-media time at a timeline position (roadmap B2 retime semantics):
  * forward clips run `in + localSec*speed`, reverse clips run from the
- * source end backwards.
+ * source end backwards. Input and output are SECONDS; the ticks fields are
+ * decoded once here.
  */
 export function clipMediaTimeSec(
   clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset' | 'reverse'>,
   atSec: number
 ): number {
   const localSec = atSec - clipStartSec(clip)
-  return clip.reverse
-    ? clip.out - localSec * clipSpeed(clip)
-    : clip.in + localSec * clipSpeed(clip)
+  const mediaTicks = clip.reverse
+    ? clip.out - localSec * clipSpeed(clip) * TICKS_PER_SECOND
+    : clip.in + localSec * clipSpeed(clip) * TICKS_PER_SECOND
+  return ticksToSec(mediaTicks)
 }

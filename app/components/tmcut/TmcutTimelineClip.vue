@@ -7,8 +7,8 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useI18n } from 'vue-i18n'
-import { propsWithKeyframes, keyframeTimes, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
-import { clipDurationSec, clipStartSec } from '~/utils/tmcut/clipTime'
+import { propsWithKeyframes, keyframeTimes, secToTicks, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
+import { clipDurationSec, clipStartSec, clipEndTicks } from '~/utils/tmcut/clipTime'
 
 const props = withDefaults(defineProps<{
   trackType: 'video' | 'text' | 'audio'
@@ -105,7 +105,7 @@ const filmstripStyle = computed(() => {
     }
   }
   const stripWidth = Math.max(1, Math.round(duration * zoom.value))
-  const offset = Math.round((props.clip.in || 0) * zoom.value)
+  const offset = Math.round(ticksToSec(props.clip.in || 0) * zoom.value)
   return {
     backgroundImage: `url('${mediaUrl(strip)}')`,
     backgroundRepeat: 'no-repeat',
@@ -132,7 +132,8 @@ async function refreshClipStrip() {
     stripFrames.value = []
     return
   }
-  const frames = await clipFilmstrip(props.clip.src, props.clip.in || 0, props.clip.out, STRIP_COUNT)
+  // clipFilmstrip extracts at SECONDS — decode the ticks range.
+  const frames = await clipFilmstrip(props.clip.src, ticksToSec(props.clip.in || 0), ticksToSec(props.clip.out), STRIP_COUNT)
   if (request !== stripRequest) return // superseded by a newer src/range
   stripFrames.value = frames
 }
@@ -176,15 +177,25 @@ watch(() => props.clip.src, () => {
 // snapTimeSec — candidates are 0, the playhead, every other clip edge
 // and markers, within an 8px radius at the current zoom. Controlled by
 // the Magnet toolbar toggle / N key (snapOn in useTmcutUiPrefs).
-function applySnap(targetSec: number): number {
-  if (!snapOn.value) return Math.max(0, Math.round(targetSec * 100) / 100)
+// C16-R3: drag math runs in STORE TICKS end to end; the seconds seam
+// sits here (snapTimeSec speaks seconds) and px converts through zoom
+// (px per second).
+function pxToTicks(px: number): number {
+  return Math.round(secToTicks(px / zoom.value))
+}
+
+function applySnapTicks(targetTicks: number): number {
+  if (!snapOn.value) return Math.max(0, Math.round(targetTicks))
   const thresholdSec = 8 / zoom.value // 8px magnetic radius
-  const snapped = snapTimeSec(targetSec, playhead.value, {
+  const snapped = snapTimeSec(ticksToSec(targetTicks), playhead.value, {
     ignoreIds: [props.clip.id],
     thresholdSec
   })
-  return Math.max(0, Math.round(snapped * 100) / 100)
+  return Math.max(0, Math.round(secToTicks(snapped)))
 }
+
+// Trim floor: a source range never shrinks below 0.2s (store unit).
+const MIN_SOURCE_TICKS = Math.round(0.2 * TICKS_PER_SECOND)
 
 // Drag to move clip along timeline
 function onDragStart(e: MouseEvent) {
@@ -201,12 +212,12 @@ function onDragStart(e: MouseEvent) {
 
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
-    const deltaSec = deltaX / zoom.value
-    const newOffset = applySnap(Math.max(0, initialOffset + deltaSec))
+    const deltaTicks = pxToTicks(deltaX)
+    const newOffset = applySnapTicks(Math.max(0, initialOffset + deltaTicks))
     const moved = newOffset - initialOffset
     updateClip(props.clip.id, { offset: newOffset })
     for (const [id, base] of Object.entries(relatives)) {
-      updateClip(id, { offset: Math.max(0, Math.round((base + moved) * 100) / 100) })
+      updateClip(id, { offset: Math.max(0, base + moved) })
     }
   }
 
@@ -233,26 +244,26 @@ function onTrimLeftStart(e: MouseEvent) {
 
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
-    const deltaSec = deltaX / zoom.value
-    const deltaSourceSec = deltaSec * speed
+    const deltaTicks = pxToTicks(deltaX)
+    const deltaSourceTicks = deltaTicks * speed
 
-    let newIn = Math.max(0, Math.min(props.clip.out - 0.2, initialIn + deltaSourceSec))
+    let newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, initialIn + deltaSourceTicks))
     const actualDeltaIn = newIn - initialIn
-    let newOffset = Math.max(0, initialOffset + actualDeltaIn / speed)
+    let newOffset = Math.max(0, Math.round(initialOffset + actualDeltaIn / speed))
     if (snapOn.value) {
       // Snap the moving left edge (timeline start), then derive the new
       // source in-point; the clamp keeps the trim inside the source.
-      newOffset = applySnap(newOffset)
-      newIn = initialIn + (newOffset - initialOffset) * speed
-      if (newIn < 0 || newIn > props.clip.out - 0.2) {
-        newIn = Math.max(0, Math.min(props.clip.out - 0.2, newIn))
-        newOffset = Math.max(0, initialOffset + (newIn - initialIn) / speed)
+      newOffset = applySnapTicks(newOffset)
+      newIn = Math.round(initialIn + (newOffset - initialOffset) * speed)
+      if (newIn < 0 || newIn > props.clip.out - MIN_SOURCE_TICKS) {
+        newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, newIn))
+        newOffset = Math.max(0, Math.round(initialOffset + (newIn - initialIn) / speed))
       }
     }
 
     updateClip(props.clip.id, {
-      in: Math.round(newIn * 100) / 100,
-      offset: Math.round(newOffset * 100) / 100
+      in: Math.round(newIn),
+      offset: newOffset
     })
   }
 
@@ -275,24 +286,24 @@ function onTrimRightStart(e: MouseEvent) {
   const startX = e.clientX
   const initialOut = props.clip.out
   const speed = props.clip.speed || 1
-  const initialEnd = (props.clip.offset || 0) + (initialOut - props.clip.in) / speed
+  const initialEnd = clipEndTicks(props.clip)
 
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
-    const deltaSec = deltaX / zoom.value
-    const deltaSourceSec = deltaSec * speed
+    const deltaTicks = pxToTicks(deltaX)
+    const deltaSourceTicks = deltaTicks * speed
 
-    let newOut = Math.max(props.clip.in + 0.2, initialOut + deltaSourceSec)
+    let newOut = Math.max(props.clip.in + MIN_SOURCE_TICKS, initialOut + deltaSourceTicks)
     if (snapOn.value) {
       // Snap the moving right edge (timeline end) to nearby candidates.
-      const newEnd = applySnap(Math.max(0, initialEnd + deltaSec))
+      const newEnd = applySnapTicks(Math.max(0, initialEnd + deltaTicks))
       newOut = Math.max(
-        props.clip.in + 0.2,
-        props.clip.in + (newEnd - (props.clip.offset || 0)) * speed
+        props.clip.in + MIN_SOURCE_TICKS,
+        Math.round(props.clip.in + (newEnd - (props.clip.offset || 0)) * speed)
       )
     }
     updateClip(props.clip.id, {
-      out: Math.round(newOut * 100) / 100
+      out: Math.round(newOut)
     })
   }
 

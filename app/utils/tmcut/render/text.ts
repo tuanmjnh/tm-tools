@@ -156,8 +156,11 @@ export function textOverlayChains(
 
 /**
  * Applies all text overlay clips in sequence on top of the video bus.
- * C16-R2: takes RenderClip views; the drawtext builder still receives the
- * source item verbatim (v1 shape is exactly TextOverlayClip).
+ * C16-R2: takes RenderClip views. C16-R3: the drawtext builder still
+ * contracts on SECONDS (enable/between windows), so the ticks store is
+ * decoded through the canonical view here — raw is spread only for the
+ * unit-agnostic style/keyframe fields (keyframes[] carry their own ticks,
+ * converted inside keyframeExpr).
  */
 export function applyTextOverlays(
   graph: RenderGraph,
@@ -168,7 +171,13 @@ export function applyTextOverlays(
   let current = busStream
   for (let i = 0; i < textClips.length; i++) {
     const textClip = textClips[i]!
-    const overlaid = textOverlayChains(current, textClip.raw, i, ctx)
+    const overlay: TextOverlayClip = {
+      ...textClip.raw,
+      offset: textClip.offsetSec,
+      in: textClip.inSec,
+      out: textClip.outSec
+    }
+    const overlaid = textOverlayChains(current, overlay, i, ctx)
     for (const chain of overlaid.chains) {
       graph.addFilterChain(chain)
     }

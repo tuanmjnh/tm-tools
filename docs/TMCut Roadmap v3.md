@@ -498,7 +498,7 @@ export function coalesce(history, entry, windowTicks?): boolean // gộp thao t�
   time) · +3 tests → core 109/109 · app consumer qua
   `pushHistoryCoalesced` trên snapshot stack (B8).
 
-### C16 — Đưa app sang DSL v3 đầy đủ (bỏ bridge v1) · P3 · L
+### C16 — Đưa app sang DSL v3 đầy đủ (bỏ bridge v1) · P3 · L ✅ (R78–R88/§146–§152)
 
 - **Hiện trạng**: model app theo v1 (giây), mỗi thao tác qua
   `applyV3Edit` (v1→v3→op→merge) + `v1compat` sync — thừa lệch & chi phí.
@@ -1110,9 +1110,9 @@ consumer) + `npx eslint <file app chạm>`.
 [x] Phase I  — Export & Render — R1 ✅ (R25) · R2 ✅ (R60) · R3 ✅ (R59) · R4 ✅ (R61) · R5 ✅ (R45) · R6 ✅ (R58) · R7 ✅ (R62) · R8 ✅ (R51) · R9 ✅ (R70) · R10 ✅ (R20) · R11 ✅ (R56) · R12 ✅ (R57) — HOÀN TẤT
 [x] Phase J  — Home & Templates — J-1 ✅ (R69) · J-2 ✅ (R50) · J-3 (blocked) — HOÀN TẤT
 [x] Phase K  — Shortcuts (K1..K8) — K1–K8 ✅ (R49/§117) + Alt+A ✅ (R71/§139)
-[x] Phase L  — Architecture Phases 4–6  ← NEXT: Core C16,C17 (bridge removal & DSL v3 app migration)
+[x] Phase L  — Architecture Phases 4–6 ✅ — Core C16 done (R78–R88); Core C17 blocked (needs backend)
 [x] Core Phase 1–3 (66 tests)
-[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) ✅ · [ ] Core C16,C17 (section 3) · Core C18 ✅ (R72/§140)
+[x] Core C0 (R14) · C1 (R15) · C2 (R33) · C3 (R23) · C4 (R25) · C5 (R34) · C6 (R35) · C7 (R21) · C8 (R16) · C9 (R30) · C10 (R36) · C11 (R37) · C12 (R38) · C13 (R39) · C14 (R40) · C15 (R32) · C16 (R78–R88) ✅ · C17 (blocked — backend) · Core C18 ✅ (R72/§140)
 
 > **Round log summary:**
 > - **R73** (§141): P0 security (path traversal + OOM), export queue persist, ESLint clean (190→0), fontmanager.node pack fix.
@@ -1126,6 +1126,7 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R81** (§149): C16-R2 slice 3 — UI accessor centralisation (Inspector `maxFadeSec`, TimelineClip `duration/left`). ~~retire `v1compat` per-edit; `applyV3Edit` works directly on v3~~ — **CORRECTED in §150.2: that retirement never happened**; `applyV3Edit` still runs `v1TracksToV3 → op → syncV3Result` per edit.
 > - **R82–R85** (§150): **REVERTED** — a partially-done store flip to ticks (read side flipped, write/render/bridge side not) left the app broken in 5 verified ways (missing `secToTicks` export from `clipTime` → white-screen editor; double ×120000 conversion; `toRenderClip` feeding ticks into `trim=`; `v1ClipToV3` re-converting ticks; `< 1_000_000` seconds/ticks heuristic in migration). No gate caught it because `tsc` cannot see a wrong unit.
 > - **R86** (§150): revert `app/` + `docs/` to the last consistent state (R81: seconds store + `clipTime`/`RenderClip` seams), re-apply R80's accessors that had never been committed (playback + project centralisation, Inspector `maxFadeSec`), and add the missing guard: `tests/unit/tmcut_time_domain.spec.ts` pins the unit of every seconds↔ticks boundary (6 checks; proven to fail on the reverted broken semantics). C16-R3 must be ONE atomic round — see §150.4. Gates: vue-tsc 0 · lint 0 · render 12/12 · FFmpeg smoke 3/3 · time-domain 6/6 · i18n 2795/2795.
+> - **R88** (§152): **C16-R3 — THE FLIP LANDED.** Store `in/out/offset` are integer TICKS now (one atomic round per §150.4, nothing in between): schema 3 + one-time ×120000 migration stamped by `schemaVersion` only (no magnitude heuristic anywhere); user-templates key bumped `_v1`→`_v2` with the same one-time rule; core v1compat split into a SECONDS flavor (file migration only) and a TICKS flavor (`ticksTracksToV3`/`syncTicksResult` — identity on time fields, pinned apart by new core tests); `clipTime.ts` now the unit oracle (ticks math + byte-compatible seconds API); `fadeFilter`/preview `gainAt` hand core the v3 shape `{timeline:{duration}}` so the legacy seconds branch never sees ticks; `closeProjectGaps` returns ticks; Inspector/drag/trim/snap/SRT/filmstrip convert exactly once; `toRenderClip` decodes — every FFmpeg string byte-identical (render 12/12, real-FFmpeg smoke 3/3). Branded `Ticks` type deliberately dropped (§152.3). Gates: nuxt prepare+typecheck 0 · core 20/20 files · lint 0/0 · time-domain 7/7 (rewritten) · store 14/14 (rewritten, incl. migrate-once + no-double-scale) · render 12+len · ai 3/3 · i18n 2795/2795.
 > - **R87** (§151): **the typecheck gate was FAKE** — root `tsconfig.json` is solution-style (`files:[]` + references), so every `tsc/vue-tsc -p tsconfig.json` run since R72 exited 0 without checking a single file. Proven by planting a deliberate type error: only `nuxt typecheck` caught it. Fixed all **18 latent type errors** the fake gate had been hiding (missing core type re-exports `TmcutTextAnimationType`/`TmcutStabilizeLevel`/`TmcutStabilizeStatus`, missing `FrameRate`/`canvasFpsValue` imports, 4 malformed `Pick<T,'a','b'>` in clipTime, canvas fps rational vs number in editor.vue, core template d.ts claiming v3 while the runtime reads host-shaped items → loose `TmcutTemplateTrack`, `backgroundStreamLabel` null vs undefined). Added the missing behavioural layer: Node-importable store harness + `tmcut_store_behaviour.spec.ts` (13 checks over split/trim/ripple/undo/transition/fade/save-load; replaying R85's store against it fails instantly — surfacing defect #7 of R82–R85: `addClipToTrack` referenced an undefined `outPoint`). New `pnpm test:store`. Real gates: nuxt typecheck 0 · core 20/20 · lint 0 · time-domain 6/6 · store 13/13 · render 12/12 · smoke 3/3 · i18n 2795/2795.
 ```
 

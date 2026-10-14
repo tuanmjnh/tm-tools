@@ -1,17 +1,20 @@
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
+import { ticksToSec } from '@tmcut-core'
+import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 /**
- * C16-R2: the render pipeline's CANONICAL clip view.
+ * C16-R2/R3: the render pipeline's CANONICAL clip view.
  *
- * The app timeline items are still v1-shaped (float seconds, numeric
- * scale/opacity) while Roadmap C16 migrates the store to DSL v3. The
- * render layer must never read v1 fields directly again — it consumes
- * RenderClip, produced by `toRenderClip` at the compile boundary. When
- * the store flips to v3, only that adapter changes.
+ * C16-R3 flipped the store: in/out/offset are INTEGER TICKS now, and
+ * `toRenderClip` is the SINGLE decode point — everything downstream
+ * (FFmpeg args, preview overlays, SRT) consumes SECONDS through the
+ * *Sec fields plus the exact `durationTicks` (core audio builders take
+ * the v3 shape, never the flat legacy one, so a tick item is never
+ * misread as seconds).
  *
  * `raw` is the source item passed verbatim to core expression builders
- * (`keyframeExpr`, `volumeExpr` — both contract on the v1 clip shape,
- * including the keyframes[] array), so their input never degrades.
+ * that only touch unit-agnostic fields (keyframeExpr reads keyframes[],
+ * already ticks); anything needing duration feeds `durationTicks`.
  */
 export interface RenderClip {
   id: string
@@ -19,12 +22,14 @@ export interface RenderClip {
   footagePath: string | null
   /** Text clip body (text tracks). */
   text: string | null
-  /** Source in-point, media seconds (v1 float — the render boundary). */
+  /** Source in-point, media seconds (decoded from store ticks). */
   inSec: number
-  /** Source out-point, media seconds (v1 float). */
+  /** Source out-point, media seconds (decoded from store ticks). */
   outSec: number
-  /** Timeline position, seconds (v1 float). */
+  /** Timeline position, seconds (decoded from store ticks). */
   offsetSec: number
+  /** Timeline span, whole ticks (clipTime math — no float re-derivation). */
+  durationTicks: number
   speed: number
   /** Percentage 0..100 (v1 scale). */
   scalePct: number
@@ -39,14 +44,14 @@ export interface RenderClip {
   focusX: number
   focusY: number
   transitionIn: { type: string, duration: number } | null
-  /** Source item for core expression builders (keyframeExpr / volumeExpr). */
+  /** Source item for core expression builders (keyframeExpr). */
   raw: TmcutTimelineItem
 }
 
 /**
  * Adapts an app timeline item (any track) to the render canonical view.
- * This is the ONLY place the render layer maps app-model fields — the
- * v1→v3 store flip (C16-R3) rewrites just this function.
+ * This is the ONLY place the render layer maps app-model fields — C16-R3
+ * moved the time fields from seconds to ticks, decoded here once.
  */
 export function toRenderClip(item: TmcutTimelineItem): RenderClip {
   const src = item.src ?? null
@@ -54,9 +59,10 @@ export function toRenderClip(item: TmcutTimelineItem): RenderClip {
     id: item.id,
     footagePath: (item.stabilize && item.stabilizedPath) ? item.stabilizedPath : src,
     text: item.text ?? null,
-    inSec: item.in,
-    outSec: item.out,
-    offsetSec: item.offset || 0,
+    inSec: ticksToSec(item.in || 0),
+    outSec: ticksToSec(item.out || 0),
+    offsetSec: ticksToSec(item.offset || 0),
+    durationTicks: clipDurationTicks(item),
     speed: item.speed || 1,
     scalePct: item.scale ?? 100,
     opacityPct: item.opacity ?? 100,
@@ -90,7 +96,7 @@ export function renderTextClips(track: TmcutTrack | undefined): RenderClip[] {
   return (track?.items || []).filter(c => !!c.text).map(toRenderClip)
 }
 
-/** Timeline span of one clip, seconds: (out−in)/speed. */
+/** Timeline span of one clip, seconds (decoded from the exact tick span). */
 export function renderClipDuration(clip: RenderClip): number {
-  return (clip.outSec - clip.inSec) / clip.speed
+  return ticksToSec(clip.durationTicks)
 }
