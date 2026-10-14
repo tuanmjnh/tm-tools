@@ -8063,3 +8063,17 @@ Follow-up defect from the R91 raw-write audit, now fully diagnosed: `/tmcut` hom
 - Note: the R91 §155.2 audit MISSED these two sites — its grep looked for `.timeline =`/`.durationMs =` mutations, preset pages patch `.canvas`. The correction to the §155.2 claim ("no other offender") is this section: the offenders were exactly the create → patch-raw → push-route flows, where the patch never persisted and no save ever followed. Rule of thumb recorded: anything that mutates a project after `createProject()` must go through a STORE ACTION, or pass data into creation.
 
 Gates: store 15/15 · typecheck 0 · eslint 0.
+
+# 157. R93 — Production build gate + tmcut partition lint-clean
+
+Two gates that had never actually been enforced post-R88, both run for the first time in this round:
+
+## 157.1 `nuxt build` (EXIT 0)
+
+Typecheck proves types; only the bundler proves the whole graph resolves — path aliases, `#imports`, the `@tmcut-core` symlink through Vite, worker entries. After the biggest refactor of the project (R88 ticks flip) the production build had never been run. Result: clean, 32.5 MB output (12.3 MB gzip), no warnings touching tmcut. The Electron packaging path (`build:electron` = esbuild main + nuxt build + electron-builder) inherits this guarantee for its middle step.
+
+## 157.2 Lint partition reality + tmcut cleanup
+
+Full-repo `eslint .` has a PRE-EXISTING baseline of ~4.1 k problems (tools/admin/inbox pages etc.) — out of scope, but the tmcut partition (components/composables/pages/utils/tests) is now the standard: 82 problems found, ALL in `TmcutAiScriptModal.vue`, all pure template formatting (`max-attributes-per-line`, `html-indent`, closing-bracket rules) — the file predates lint awareness. `--fix` reformatted it (verified: attribute re-wrapping only, zero semantic change); tmcut partition is now **0 errors / 0 warnings**. Rule going forward: new tmcut code lints clean per-file (full-repo lint stays red-baselined; do not chase it).
+
+Gates: nuxt build 0 · tmcut-partition eslint 0 · typecheck 0 · all 6 specs green (4/15/7/12/4/3).

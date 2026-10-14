@@ -148,14 +148,18 @@ function closeModal() {
 </script>
 
 <template>
-  <UModal :model-value="modelValue" :ui="{ content: 'max-w-5xl' }"
-    @update:model-value="emit('update:modelValue', $event)">
+  <UModal
+    :model-value="modelValue"
+    :ui="{ content: 'max-w-5xl' }"
+    @update:model-value="emit('update:modelValue', $event)"
+  >
     <template #content>
       <!-- Modal Header -->
       <div class="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div
-            class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500">
+            class="w-9 h-9 rounded-lg bg-primary-500/10 dark:bg-primary-400/10 flex items-center justify-center text-primary-500"
+          >
             <UIcon name="i-lucide-sparkles" class="w-5 h-5" />
           </div>
           <div>
@@ -170,7 +174,13 @@ function closeModal() {
             </p>
           </div>
         </div>
-        <UButton color="neutral" variant="ghost" icon="i-lucide-x" size="sm" @click="closeModal" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-x"
+          size="sm"
+          @click="closeModal"
+        />
       </div>
 
       <!-- Modal Body -->
@@ -181,8 +191,12 @@ function closeModal() {
             <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.aiScript.topicLabel') }}
             </label>
-            <UTextarea v-model="prompt" :placeholder="t('tmcut.aiScript.topicPlaceholder')" :rows="3"
-              class="w-full text-sm" />
+            <UTextarea
+              v-model="prompt"
+              :placeholder="t('tmcut.aiScript.topicPlaceholder')"
+              :rows="3"
+              class="w-full text-sm"
+            />
           </div>
 
           <div>
@@ -190,12 +204,16 @@ function closeModal() {
               {{ t('tmcut.aiScript.platformLabel') }}
             </label>
             <div class="grid grid-cols-2 gap-2">
-              <button v-for="plat in platformOptions" :key="plat.value" type="button"
+              <button
+                v-for="plat in platformOptions"
+                :key="plat.value"
+                type="button"
                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border text-left transition-all"
                 :class="selectedPlatform === plat.value
                   ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400 font-semibold'
                   : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900'"
-                @click="selectedPlatform = plat.value">
+                @click="selectedPlatform = plat.value"
+              >
                 <UIcon :name="plat.icon" class="w-4 h-4 shrink-0" />
                 <span class="truncate">{{ plat.label }}</span>
               </button>
@@ -207,19 +225,30 @@ function closeModal() {
               {{ t('tmcut.aiScript.durationLabel') }}
             </label>
             <div class="flex items-center gap-2">
-              <button v-for="dur in durationOptions" :key="dur.value" type="button"
+              <button
+                v-for="dur in durationOptions"
+                :key="dur.value"
+                type="button"
                 class="flex-1 py-1.5 text-xs font-medium rounded-md border text-center transition-all"
                 :class="selectedDuration === dur.value
                   ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 text-primary-600 dark:text-primary-400'
-                  : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900'" @click="selectedDuration = dur.value">
+                  : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900'"
+                @click="selectedDuration = dur.value"
+              >
                 {{ dur.label }}
               </button>
             </div>
           </div>
 
           <div class="pt-2 flex flex-col gap-2">
-            <UButton color="primary" variant="solid" icon="i-lucide-sparkles" :loading="generating" block
-              @click="handleGenerate">
+            <UButton
+              color="primary"
+              variant="solid"
+              icon="i-lucide-sparkles"
+              :loading="generating"
+              block
+              @click="handleGenerate"
+            >
               {{ t('tmcut.aiScript.generateButton') }}
             </UButton>
           </div>
@@ -230,9 +259,13 @@ function closeModal() {
               {{ t('tmcut.aiScript.samplePresets') }}
             </span>
             <div class="flex flex-col gap-1.5">
-              <button v-for="(preset, idx) in CURATED_SCRIPT_PRESETS" :key="idx" type="button"
+              <button
+                v-for="(preset, idx) in CURATED_SCRIPT_PRESETS"
+                :key="idx"
+                type="button"
                 class="text-left px-2.5 py-1.5 rounded text-xs text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors flex items-center justify-between group"
-                @click="handleLoadPreset(preset)">
+                @click="handleLoadPreset(preset)"
+              >
                 <span class="truncate group-hover:text-primary-500">{{ preset.title }}</span>
                 <span class="text-[10px] text-neutral-400 shrink-0 ml-2">{{ preset.targetDurationSec }}s</span>
               </button>
@@ -244,7 +277,8 @@ function closeModal() {
         <div class="lg:col-span-7 flex flex-col min-h-87.5">
           <template v-if="generatedScript">
             <div
-              class="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800 mb-3">
+              class="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800 mb-3"
+            >
               <div>
                 <h4 class="text-sm font-semibold text-neutral-900 dark:text-white">
                   {{ generatedScript.title }}
@@ -265,12 +299,16 @@ function closeModal() {
 
             <!-- Scene Cards List -->
             <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-              <div v-for="scene in generatedScript.scenes" :key="scene.id"
-                class="p-3.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 text-xs flex flex-col gap-2 transition-all hover:border-neutral-300 dark:hover:border-neutral-700">
+              <div
+                v-for="scene in generatedScript.scenes"
+                :key="scene.id"
+                class="p-3.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 text-xs flex flex-col gap-2 transition-all hover:border-neutral-300 dark:hover:border-neutral-700"
+              >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <span
-                      class="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]">
+                      class="w-5 h-5 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-600 dark:text-primary-400 flex items-center justify-center font-bold text-[10px]"
+                    >
                       {{ scene.order }}
                     </span>
                     <span class="font-semibold text-neutral-800 dark:text-neutral-200">
@@ -287,14 +325,18 @@ function closeModal() {
                   <span class="italic leading-relaxed">{{ scene.visualPrompt }}</span>
                 </div>
 
-                <div v-if="scene.voiceover"
-                  class="flex items-start gap-2 text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-950/60 p-2 rounded border border-neutral-200/60 dark:border-neutral-800/60">
+                <div
+                  v-if="scene.voiceover"
+                  class="flex items-start gap-2 text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-950/60 p-2 rounded border border-neutral-200/60 dark:border-neutral-800/60"
+                >
                   <UIcon name="i-lucide-mic" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary-500" />
                   <span class="leading-relaxed">"{{ scene.voiceover }}"</span>
                 </div>
 
-                <div v-if="scene.onScreenText"
-                  class="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium">
+                <div
+                  v-if="scene.onScreenText"
+                  class="flex items-center gap-2 text-primary-600 dark:text-primary-400 font-medium"
+                >
                   <UIcon name="i-lucide-type" class="w-3.5 h-3.5 shrink-0" />
                   <span>{{ scene.onScreenText }}</span>
                 </div>
@@ -303,10 +345,13 @@ function closeModal() {
           </template>
 
           <!-- Empty State -->
-          <div v-else
-            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center text-neutral-400">
+          <div
+            v-else
+            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center text-neutral-400"
+          >
             <div
-              class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3 text-neutral-400">
+              class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3 text-neutral-400"
+            >
               <UIcon name="i-lucide-film" class="w-6 h-6" />
             </div>
             <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
@@ -321,23 +366,47 @@ function closeModal() {
 
       <!-- Modal Footer -->
       <div
-        class="px-6 py-3.5 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/30">
+        class="px-6 py-3.5 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between bg-neutral-50/50 dark:bg-neutral-900/30"
+      >
         <div>
-          <UButton v-if="generatedScript" color="neutral" variant="ghost" icon="i-lucide-copy" size="sm"
-            @click="handleCopyMarkdown">
+          <UButton
+            v-if="generatedScript"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-copy"
+            size="sm"
+            @click="handleCopyMarkdown"
+          >
             {{ t('tmcut.aiScript.copyMarkdown') }}
           </UButton>
         </div>
         <div class="flex items-center gap-2">
-          <UButton color="neutral" variant="outline" size="sm" @click="closeModal">
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="sm"
+            @click="closeModal"
+          >
             {{ t('global.cancel') }}
           </UButton>
-          <UButton v-if="generatedScript && currentProject" color="neutral" variant="soft" icon="i-lucide-plus"
-            size="sm" @click="handleInsertToTimeline">
+          <UButton
+            v-if="generatedScript && currentProject"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-plus"
+            size="sm"
+            @click="handleInsertToTimeline"
+          >
             {{ t('tmcut.aiScript.insertToTimeline') }}
           </UButton>
-          <UButton v-if="generatedScript" color="primary" variant="solid" icon="i-lucide-folder-plus" size="sm"
-            @click="handleCreateNewProject">
+          <UButton
+            v-if="generatedScript"
+            color="primary"
+            variant="solid"
+            icon="i-lucide-folder-plus"
+            size="sm"
+            @click="handleCreateNewProject"
+          >
             {{ t('tmcut.aiScript.createProject') }}
           </UButton>
         </div>
