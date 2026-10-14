@@ -1124,6 +1124,8 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R79** (§147): C16-R2 slice 1 — render canonical clip model `RenderClip` + `toRenderClip()` single mapping seam (video/audio/text compile off views, core expr builders keep `raw`); fixed 3 real-FFmpeg graph bugs on image backgrounds (bare relabel, `[label],filter` empty-filter parse, overlay size negotiation vs concat) with `[v_bg]trim` + size-lock; new opt-in real-FFmpeg smoke spec 3/3; render suite 12/12; typecheck/lint 0.
 > - **R80** (§148): C16-R2 slice 2 — timeline read/write via `clipTime` accessors; single derivation point for clip geometry (duration/start/end/media time). `useTmcutPlayback`, `useTmcutProject` migrated (totalDuration, addClip offset/collision, gap detection, split/trim/link); render suite unchanged 12/12; typecheck/lint 0.
 > - **R81** (§149): C16-R2 slice 3 — retire `v1compat` per-edit, UI accessor centralisation complete; `applyV3Edit` now works directly on v3 (ticks), bridge only on legacy file open; UI uses `clipTime` accessors (Inspector `maxFadeSec`, TimelineClip `duration/left`). Typecheck 0, render suite 12/12.
+> - **R82** (§150): C16-R3 start — clipTime *Ticks accessors + applyProjectMigration seconds→ticks; totalDuration via ticks; typecheck 0, render 12/12.
+> - **R83** (§151): C16-R3 store ticks migration start — clipTime assumes store ticks (*Sec decode via ticksToSec), applyProjectMigration converts legacy seconds→ticks, totalDuration via ticks; gates pass.
 ```
 
 ---
