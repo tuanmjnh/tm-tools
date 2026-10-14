@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import type { TmcutProject } from '~/composables/useTmcutProject'
-import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
+import { canvasFpsValue } from '~/utils/tmcut/canvas'
 
 const { t, locale } = useI18n()
 const {
@@ -100,8 +100,10 @@ const quickPresets: QuickPreset[] = [
 ]
 
 function applyQuickPreset(preset: QuickPreset) {
-  const project = createProject(t('tmcut.newProject'))
-  project.canvas = normalizeCanvas({ width: preset.width, height: preset.height, fps: { numerator: preset.fps, denominator: 1 } })
+  // Canvas passed AT CREATION: patching the raw object returned by
+  // createProject() never re-saved, and the editor's loadProject() read
+  // the storage mirror (default canvas) — presets silently lost (R92).
+  const project = createProject(t('tmcut.newProject'), { width: preset.width, height: preset.height, fps: { numerator: preset.fps, denominator: 1 } })
   router.push(`/tmcut/editor?project=${project.id}`)
 }
 
@@ -114,8 +116,7 @@ const templatePresets = computed(() => [
 
 function applyTemplatePreset(preset: { canvas: string, name: string, fps: number }) {
   const parts = preset.canvas.split('x').map(Number)
-  const project = createProject(`${t('tmcut.project')} ${preset.name}`)
-  project.canvas = normalizeCanvas({ width: parts[0] || 1920, height: parts[1] || 1080, fps: { numerator: preset.fps, denominator: 1 } })
+  const project = createProject(`${t('tmcut.project')} ${preset.name}`, { width: parts[0] || 1920, height: parts[1] || 1080, fps: { numerator: preset.fps, denominator: 1 } })
   router.push(`/tmcut/editor?project=${project.id}`)
 }
 

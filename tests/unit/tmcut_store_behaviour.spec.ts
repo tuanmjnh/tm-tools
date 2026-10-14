@@ -235,6 +235,19 @@ async function main() {
     assert.equal(same.in, tk(1.5), 'opening twice must NOT double-scale')
   })
 
+  await check('createProject persists a caller-provided canvas to the mirror', async () => {
+    // Quick presets used to patch the raw returned object after creation
+    // and never re-saved — the editor's loadProject then read the default
+    // mirror (R92). The canvas must be in the FIRST save already.
+    const { useTmcutProject } = await import('../../app/composables/useTmcutProject')
+    const store = useTmcutProject()
+    const proj = store.createProject('vertical-preset', { width: 1080, height: 1920, fps: { numerator: 30, denominator: 1 } })
+    const mirrored = JSON.parse(localStorage.getItem(`tmcut_project_${proj.id}`) || '{}')
+    assert.equal(mirrored.canvas.width, 1080, 'the storage mirror carries the preset canvas')
+    assert.equal(mirrored.canvas.height, 1920)
+    assert.deepEqual(mirrored.canvas.fps, { numerator: 30, denominator: 1 }, 'legacy fps number normalized to rational')
+  })
+
   console.log(`\n=== All ${passed} store behaviour checks passed ===`)
 }
 

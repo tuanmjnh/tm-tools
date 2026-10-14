@@ -523,8 +523,18 @@ function saveProject() {
 }
 
 // Create new project
-function createProject(name: string = 'Untitled Project'): TmcutProject {
+function createProject(
+  name: string = 'Untitled Project',
+  canvas?: { width?: number, height?: number, fps?: FrameRate }
+): TmcutProject {
   const newProject = buildDefaultProject(Math.random().toString(36).slice(2, 10), name)
+  // Optional canvas at creation, BEFORE the first save: callers that
+  // create-then-navigate (quick presets) used to patch the raw object
+  // afterwards, which the editor's loadProject() raced against the
+  // storage mirror and lost (default canvas everywhere).
+  if (canvas) {
+    newProject.canvas = normalizeCanvas({ ...newProject.canvas, ...canvas })
+  }
 
   currentProject.value = newProject
   projects.value.unshift(newProject)

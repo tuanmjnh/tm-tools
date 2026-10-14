@@ -8053,3 +8053,13 @@ Roadmap content is backend-blocked, so the chain turned to QA-hardening: fill th
 Post-flip epsilon audit: all 6 small-constant comparisons (`0.001/0.005/0.05/1e-9`) sit on already-decoded SECONDS values — correct by construction. Raw `(out-in)/speed` grep outside the oracle + render pipeline: only legitimate tick-math sites (trim drag math, store internals, decoded views). `tsconfig.test.json` is a tsx runtime config, never tsc'd (pre-existing, out of scope).
 
 Gates: templates 4/4 NEW · store 14/14 · time-domain 7/7 · autocut_v2 4/4 · render 12/12 · nuxt typecheck 0 · eslint 0.
+
+# 156. R92 — Quick-preset canvas lost: create-then-patch was a write race
+
+Follow-up defect from the R91 raw-write audit, now fully diagnosed: `/tmcut` home's quick presets and template-preset strip created a project, then patched `.canvas` on the RAW object `createProject()` returned. Nothing re-saved, and the editor's `loadProject()` on mount reads disk/storage FIRST — it found the default-canvas mirror written by the create-save and showed every preset project as 1920x1080 regardless of the chosen ratio (vertical presets opened horizontal).
+
+- `createProject(name, canvas?)` now takes the canvas AT creation so the first `saveProject()` already carries it; `applyQuickPreset`/`applyTemplatePreset` pass `{ width, height, fps }` and no longer touch the raw object (store spec check #15 pins the mirror contents, rational fps included).
+- Remaining `createProject` callers audited: templates.vue (push-route), AI-script + autocut (`switchCanvas`, proxy path — reactive, saves) — safe.
+- Note: the R91 §155.2 audit MISSED these two sites — its grep looked for `.timeline =`/`.durationMs =` mutations, preset pages patch `.canvas`. The correction to the §155.2 claim ("no other offender") is this section: the offenders were exactly the create → patch-raw → push-route flows, where the patch never persisted and no save ever followed. Rule of thumb recorded: anything that mutates a project after `createProject()` must go through a STORE ACTION, or pass data into creation.
+
+Gates: store 15/15 · typecheck 0 · eslint 0.
