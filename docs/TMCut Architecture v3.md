@@ -7852,16 +7852,13 @@ file legacy.
 - `app/utils/tmcut/clipTime.ts` bổ sung các cặp `*Ticks`:
   `clipDurationTicks`, `clipStartTicks`, `clipEndTicks`, `clipMediaTimeTicks`.
 - `useTmcutProject.ts`:
+  - `applyProjectMigration` chuyển đổi `in/out/offset` từ giây sang ticks khi mở file legacy.
   - `totalDuration` tính qua `clipEndTicks` → `ticksToSec` để hiển thị.
-- Chuẩn bị migration path: import `secToTicks/ticksToSec` đã có sẵn trong core.
-  Các hàm `*Sec` giữ lại để UI hiện tại không vỡ; slice tiếp
-  sẽ chuyển dần field sang ticks.
+- Các accessor `*Sec` giờ giải mã từ ticks → seconds, các accessor `*Ticks` trả về giá trị gốc.
 
 ### 150.3 Kiểm tra
 - Typecheck 0, render suite 12/12.
 
 ### 150.4 Ghi chú
-Đây là R82 đầu tiên của C16-R3. Slice tiếp theo sẽ đổi `TmcutTimelineItem`
-thành lưu ticks và cập nhật `applyProjectMigration` để chuyển đổi khi mở file
-cũ.
+Đây là R82 đầu tiên của C16-R3. Slice tiếp theo sẽ cập nhật các hàm chỉnh sửa timeline để ghi trực tiếp ticks thay vì seconds.
 

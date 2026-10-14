@@ -267,6 +267,41 @@ function applyProjectMigration(project: TmcutProject) {
   if (!Array.isArray(project.timeline.markers)) {
     project.timeline.markers = []
   }
+  // C16-R3: migrate timeline item time fields from seconds to ticks
+  // (and legacy fade/transition durations, which are in seconds)
+  if (isLegacy && project.timeline?.tracks) {
+    for (const track of project.timeline.tracks) {
+      for (const item of track.items || []) {
+        // Source range in / out are seconds in legacy; convert to ticks
+        if (typeof item.in === 'number' && typeof item.out === 'number') {
+          // Detect seconds by heuristic: typical timeline values are < 1e6 seconds.
+          // If values look like ticks (> 1e9) skip conversion.
+          const inLooksSec = item.in < 1_000_000
+          const outLooksSec = item.out < 1_000_000
+          if (inLooksSec && outLooksSec) {
+            item.in = secToTicks(item.in)
+            item.out = secToTicks(item.out)
+          }
+        }
+        if (typeof item.offset === 'number') {
+          if (item.offset < 1_000_000) {
+            item.offset = secToTicks(item.offset)
+          }
+        }
+        // Transition in duration may be legacy seconds
+        if (item.transitionIn?.duration) {
+          if (item.transitionIn.duration < 1_000_000) {
+            item.transitionIn.duration = secToTicks(item.transitionIn.duration)
+          }
+        }
+        // Fade envelope stored in ticks already in core; legacy files had seconds
+        if (item.fade) {
+          if (item.fade.in && item.fade.in < 1_000_000) item.fade.in = secToTicks(item.fade.in)
+          if (item.fade.out && item.fade.out < 1_000_000) item.fade.out = secToTicks(item.fade.out)
+        }
+      }
+    }
+  }
   if (isLegacy) {
     project.schemaVersion = TMCUT_PROJECT_SCHEMA_VERSION
   }
