@@ -7,6 +7,7 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
+import { clipDurationSec, clipStartSec, clipEndSec, secToTicks } from '~/utils/tmcut/clipTime'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -82,10 +83,15 @@ const isCropFit = computed(() => (clip.value?.fit || 'fit') === 'crop' && trackT
 
 function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, value: NonNullable<typeof clip.value>[K]) {
   if (!selectedClipId.value) return
+  // Convert time fields from seconds (UI) to ticks (store)
+  let patchValue: any = value
+  if (field === 'in' || field === 'out' || field === 'offset') {
+    patchValue = secToTicks(Number(value))
+  }
   // Roadmap B8: bursts of the same field (typing a text, dragging a
   // slider) record ONE undo entry through the coalescing history.
   pushHistoryCoalesced(`${selectedClipId.value}:${String(field)}`)
-  updateClip(selectedClipId.value, { [field]: value })
+  updateClip(selectedClipId.value, { [field]: patchValue } as any)
 }
 
 // Font family (roadmap C-1): family (CSS preview) and file (drawtext
@@ -343,7 +349,7 @@ const fadeOutTicks = computed(() => clip.value?.fade?.out || 0)
 const maxFadeSec = computed(() => {
   const c = clip.value
   if (!c) return 0
-  return Math.max(0, Math.min(5, ((c.out - c.in) / (c.speed || 1)) / 2))
+  return Math.max(0, Math.min(5, clipDurationSec(c) / 2))
 })
 
 function fadePatch(edge: 'in' | 'out', ticks: number) {

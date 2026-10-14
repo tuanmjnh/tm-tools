@@ -688,13 +688,14 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
   }
 
   const speed = partialItem.speed ?? 1
-  const inPoint = partialItem.in ?? 0
-  const outPoint = partialItem.out ?? (trackType === 'text' ? 4 : 5)
+  // UI may supply seconds; normalize to ticks for store
+  const inPointTicks = partialItem.in != null ? secToTicks(partialItem.in) : 0
+  const outPointTicks = partialItem.out != null ? secToTicks(partialItem.out) : secToTicks(trackType === 'text' ? 4 : 5)
+  let offsetTicks = partialItem.offset != null ? secToTicks(partialItem.offset) : 0
 
   // Determine offset if not specified
-  let offset = partialItem.offset
-  if (offset === undefined) {
-    offset = track.items.reduce((max, i) => Math.max(max, clipEndSec(i)), 0)
+  if (partialItem.offset === undefined) {
+    offsetTicks = track.items.reduce((max, i) => Math.max(max, clipEndTicks(i)), 0)
   }
 
   const newItem: TmcutTimelineItem = {
@@ -704,9 +705,9 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
     text: partialItem.text,
     color: partialItem.color || '#ffffff',
     fontSize: partialItem.fontSize || 36,
-    in: inPoint,
-    out: outPoint,
-    offset,
+    in: inPointTicks,
+    out: outPointTicks,
+    offset: offsetTicks,
     speed,
     reverse: partialItem.reverse ?? false,
     opacity: partialItem.opacity ?? 100,
