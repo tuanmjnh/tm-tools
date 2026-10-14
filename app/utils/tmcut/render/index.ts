@@ -98,7 +98,8 @@ export function compileTimelineToFfmpeg(
   const hasAudio = mode !== 'gif'
   let currentVideoStream: string
   let currentAudioStream: string | null = null
-  let backgroundStreamLabel: string | null = null
+  // `undefined` (not null) so it feeds the optional `bgBase` ctx directly.
+  let backgroundStreamLabel: string | undefined
 
   // Register image background as a looping INPUT (Phase 4). The descriptor
   // tells the pipeline whether the canvas base is a filter source (color/

@@ -7875,3 +7875,93 @@ lúc, và bắt buộc chạy `vue-tsc` + 3 spec render/time-domain, không ch�
 ### 150.5 Kiểm tra
 `vue-tsc` 0 · ESLint 0 · render suite 12/12 · smoke FFmpeg 3/3 ·
 time-domain 6/6 · ai-script 3/3 · autocut-v2 pass · i18n 2795/2795.
+
+## §151 — Round 87 (R87): Gate typecheck THẬT + tầng test hành vi store
+
+### 151.1 Phát hiện: `typecheck` những round trước là GATE GIẢ
+Cấy một lỗi cố ý (`const x: number = 'str'`) vào `useTmcutPlayback.ts`
+rồi chạy từng lệnh:
+
+| Lệnh | Kết quả | Kết luận |
+|---|---|---|
+| `tsc --noEmit -p tsconfig.json` | exit **0** (lỗi lọt) | Gate sai từ trước tới giờ |
+| `vue-tsc --noEmit -p tsconfig.json` | exit **0** (lỗi lọt) | Cũng gate giả |
+| `vue-tsc --noEmit -p .nuxt/tsconfig.app.json` | exit 0 kèm warning `vue-router/volar/sfc-route-blocks` | plugin path không resolve được dưới pnpm isolation (`@vue/language-core` không thấy `vue-router`) — không đáng tin |
+| **`nuxt typecheck`** | exit **2 — bắt đúng lỗi line 473** | **Gate thật** |
+
+Vì sao lọt: `tsconfig.json` gốc là **solution-style** (`"files": []` +
+4 project references). `tsc`/`vue-tsc` chạy `-p` trên nó **không compile
+file nào** — exit 0 vô điều kiện. Mọi con số "typecheck 0" từ R72→R86
+thực chất kiểm tra… rỗng. (`.nuxt` regenerated bởi `nuxt prepare` cũng
+không đủ nếu vẫn `-p tsconfig.json`.)
+
+→ **Gate chuẩn mới**: `pnpm typecheck` (= `nuxt typecheck`), sau khi sửa
+error thật phải `nuxt prepare` để types kịp cập nhật. Checklist §7 đã
+được cập nhật tương ứng ở R86 vẫn còn đúng tinh thần nhưng câu lệnh phải
+là `nuxt typecheck`, không phải `tsc -p`.
+
+### 151.2 18 lỗi type TỒN ĐỌNG bị gate giả che — đã sửa hết
+`nuxt typecheck` sau khi có gate thật báo 18 lỗi; lần lượt sửa gốc:
+
+- **Core thiếu re-export type** (7 lỗi lan across Inspector/PreviewPlayer/
+  useTmcutProject): `TmcutTextAnimationType`, `TmcutStabilizeLevel`,
+  `TmcutStabilizeStatus` được import từ `@tmcut-core` nhưng `index.d.ts`
+  không re-export từ `types/dsl.ts` → thêm vào cả `import type` lẫn
+  `export type {}` block.
+- **`FrameRate`** dùng trong `useTmcutProject.ts` và `canvas.ts` nhưng
+  không import → import từ `~/types/tmcut` / `@tmcut-core`.
+- **`canvasFpsValue`** dùng trong `TmcutExportModal.vue` không import →
+  thêm import.
+- **`Pick<TmcutTimelineItem, 'a', 'b'>`** trong `clipTime.ts` — cú pháp
+  sai (Pick nhận 2 type args, union bằng `|`): 4 chỗ → `Pick<…, 'a' | 'b'>`.
+- **`canvas.fps` rational vs number** (`editor.vue` 749/792): menu đọc
+  `canvas.fps` (FrameRate) gán vào chỗ cần number → dùng
+  `canvasFpsValue()` đã có sẵn import ở file.
+- **Template engine type-vs-runtime**: `createTemplateFromTimeline` khai
+  báo nhận `TmcutTimeline` (v3 ticks) nhưng body runtime đọc
+  `item.in/out/offset` (v1 seconds — app-hosted). Khai báo ĐÚNG SAI về
+  mặt bản chất là host-agnostic → core d.ts thêm `TmcutTemplateTrack`
+  (items: `unknown[]`) + `TmcutTemplateSourceTimeline`, hàm nhận source
+  loose; app cast `tracks` về `TmcutTrack[]` tại boundary kèm comment
+  giải thích `validateTemplate` là gate thật.
+- **`backgroundStreamLabel: string | null`** trong `render/index.ts` gán
+  vào ctx `bgBase?: string` → đổi khai báo sang `string | undefined`
+  (đúng semantic optional, không đổi hành vi).
+- 1 lỗi `TS1128` syntax do chính mình để lại khi dọn probe → xóa.
+
+### 151.3 Tầng test còn thiếu: hành vi STORE (Node import composable)
+`useTmcutProject.ts` là module ESM thuần logic, chỉ đụng
+`localStorage`/`window` sau guard → import được trong Node với đúng 2
+shim (Vue globals cho auto-import + `localStorage` Map). Harness:
+`tests/unit/helpers/tmcut_store_env.ts` (`freshStore()`, `videoClip()`,
+`TICKS`). Spec: `tests/unit/tmcut_store_behaviour.spec.ts` (`pnpm test:store`) —
+13 checks **bằng chứng hành vi thật**, pin theo ĐƠN VỊ
+STORE (giây hôm nay, ticks sau C16-R3 — helper chuyển raw→ticks để spec
+sống xuyên flip):
+- addClip auto-offset + floor 5s ruler; split bảo toàn nguồn (in/out
+  không rò), split theo speed, split gần biên từ chối no-op;
+- trim một edge giữ edge kia; updateClip chỉ patch field yêu cầu;
+- undo/redo split = 1 entry; ripple delete trượt clip sau; closeGaps;
+  duplicate không dời bản gốc; transition chỉ nhận clip kề + lưu ticks;
+  fade toggle lưu/clear ticks envelope; **save/load round-trip không
+  re-scale** (chính là chữ ký double-conversion của R82–R85).
+- Đã chứng minh đặc tính bắt lỗi của spec: khôi phục bản
+  `useTmcutProject.ts` của R85 → spec fail ngay
+  (`ReferenceError: outPoint is not defined` — phát hiện THÊM lỗi thứ 7
+  của R82–R85: `addClipToTrack` tham chiếu biến không tồn tại, nghĩa là
+  thêm clip nào cũng crash — chưa round nào test tới).
+
+### 151.4 Kết quả gate (lần này là gate THẬT)
+`nuxt typecheck` **0** (sau khi hết 18 lỗi) · core `tsc` 0 · core tests
+**20/20 pass** · core lint 0 · check-boundaries PASS · ESLint app 0 ·
+time-domain 6/6 · store-behaviour 13/13 · render graph 12/12 ·
+FFmpeg smoke 3/3 · ai-script 3/3 · i18n 2795/2795.
+
+### 151.5 Bài học quy trình (đã ghi vào checklist §7)
+1. Gate phải được **chứng minh là bắt được lỗi** (cấy lỗi, thấy fail)
+   trước khi tin là xanh. "exit 0" của một lệnh không kiểm tra gì cả
+   cũng là 0.
+2. `Pick<T, 'a', 'b'>` compile fail ngay cả trong file `.ts` thuần — vậy
+   mà tồn tại nhiều ngày → xác nhận gate cũ chưa từng chạy trên `app/`.
+3. Test composable trong Node dễ hơn tưởng (2 shim); ưu tiên test hành
+   vi ở tầng store vì đó là nơi unit-flip (C16-R3) lộ lỗi đầu tiên.

@@ -7,6 +7,7 @@ import { useToolTaskManager } from '~/composables/useToolTaskManager'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
+import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import type { ToolTask } from '~/types'
 

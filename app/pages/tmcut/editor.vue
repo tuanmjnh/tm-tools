@@ -729,7 +729,8 @@ function handleDuplicateAs(presetId: string) {
 const canvasMenuItems = computed(() => {
   const currentWidth = currentProject.value?.canvas?.width
   const currentHeight = currentProject.value?.canvas?.height
-  const currentFps = currentProject.value?.canvas?.fps
+  // canvas.fps is a rational (C16); the menu and the custom modal speak float.
+  const currentFps = canvasFpsValue(currentProject.value?.canvas)
 
   const presetItems = canvasPresets.value.map(preset => ({
     label: `${preset.ratio} - ${preset.label}`,

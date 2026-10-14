@@ -19,6 +19,7 @@
     "test:core": "node --test \"../tmcut-core/test/*.test.mjs\"",
     "test:render": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_render_graph.spec.ts",
     "test:time": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_time_domain.spec.ts",
+    "test:store": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_store_behaviour.spec.ts",
     "test:ai-script": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_ai_script.spec.ts",
     "test:autocut": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_autocut_v2.spec.ts",
     "test:ai": "node --test electron/tools/ai-gateway.test.mjs",

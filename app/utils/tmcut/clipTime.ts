@@ -20,12 +20,12 @@ export function clipSpeed(clip: Pick<TmcutTimelineItem, 'speed'>): number {
 }
 
 /** Source-range length, source seconds. */
-export function clipSourceRange(clip: Pick<TmcutTimelineItem, 'in', 'out'>): number {
+export function clipSourceRange(clip: Pick<TmcutTimelineItem, 'in' | 'out'>): number {
   return clip.out - clip.in
 }
 
 /** Timeline span, seconds: source range divided by playback speed. */
-export function clipDurationSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed'>): number {
+export function clipDurationSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed'>): number {
   return clipSourceRange(clip) / clipSpeed(clip)
 }
 
@@ -35,7 +35,7 @@ export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
 }
 
 /** Timeline end, seconds. */
-export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset'>): number {
+export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset'>): number {
   return clipStartSec(clip) + clipDurationSec(clip)
 }
 
@@ -45,7 +45,7 @@ export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', '
  * source end backwards.
  */
 export function clipMediaTimeSec(
-  clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset', 'reverse'>,
+  clip: Pick<TmcutTimelineItem, 'in' | 'out' | 'speed' | 'offset' | 'reverse'>,
   atSec: number
 ): number {
   const localSec = atSec - clipStartSec(clip)

@@ -1126,6 +1126,7 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R81** (§149): C16-R2 slice 3 — UI accessor centralisation (Inspector `maxFadeSec`, TimelineClip `duration/left`). ~~retire `v1compat` per-edit; `applyV3Edit` works directly on v3~~ — **CORRECTED in §150.2: that retirement never happened**; `applyV3Edit` still runs `v1TracksToV3 → op → syncV3Result` per edit.
 > - **R82–R85** (§150): **REVERTED** — a partially-done store flip to ticks (read side flipped, write/render/bridge side not) left the app broken in 5 verified ways (missing `secToTicks` export from `clipTime` → white-screen editor; double ×120000 conversion; `toRenderClip` feeding ticks into `trim=`; `v1ClipToV3` re-converting ticks; `< 1_000_000` seconds/ticks heuristic in migration). No gate caught it because `tsc` cannot see a wrong unit.
 > - **R86** (§150): revert `app/` + `docs/` to the last consistent state (R81: seconds store + `clipTime`/`RenderClip` seams), re-apply R80's accessors that had never been committed (playback + project centralisation, Inspector `maxFadeSec`), and add the missing guard: `tests/unit/tmcut_time_domain.spec.ts` pins the unit of every seconds↔ticks boundary (6 checks; proven to fail on the reverted broken semantics). C16-R3 must be ONE atomic round — see §150.4. Gates: vue-tsc 0 · lint 0 · render 12/12 · FFmpeg smoke 3/3 · time-domain 6/6 · i18n 2795/2795.
+> - **R87** (§151): **the typecheck gate was FAKE** — root `tsconfig.json` is solution-style (`files:[]` + references), so every `tsc/vue-tsc -p tsconfig.json` run since R72 exited 0 without checking a single file. Proven by planting a deliberate type error: only `nuxt typecheck` caught it. Fixed all **18 latent type errors** the fake gate had been hiding (missing core type re-exports `TmcutTextAnimationType`/`TmcutStabilizeLevel`/`TmcutStabilizeStatus`, missing `FrameRate`/`canvasFpsValue` imports, 4 malformed `Pick<T,'a','b'>` in clipTime, canvas fps rational vs number in editor.vue, core template d.ts claiming v3 while the runtime reads host-shaped items → loose `TmcutTemplateTrack`, `backgroundStreamLabel` null vs undefined). Added the missing behavioural layer: Node-importable store harness + `tmcut_store_behaviour.spec.ts` (13 checks over split/trim/ripple/undo/transition/fade/save-load; replaying R85's store against it fails instantly — surfacing defect #7 of R82–R85: `addClipToTrack` referenced an undefined `outPoint`). New `pnpm test:store`. Real gates: nuxt typecheck 0 · core 20/20 · lint 0 · time-domain 6/6 · store 13/13 · render 12/12 · smoke 3/3 · i18n 2795/2795.
 ```
 
 ---
@@ -1133,11 +1134,14 @@ consumer) + `npx eslint <file app chạm>`.
 ## 7. Quy trình verify mỗi round (checklist dán vào lúc finish)
 
 ```text
-□ pnpm typecheck                      → EXIT=0  (nuxt typecheck = vue-tsc;
-  KHÔNG dùng tsc -p tsconfig.json một mình — nó BỎ QUA mọi .vue, đó là lý do
-  lỗi import ở TmcutInspector.vue lọt qua R82–R85)
+□ pnpm typecheck (= nuxt typecheck)   → EXIT=0. CẢNH CÁO R87: root tsconfig.json
+  là solution-style (files:[]) nên MỌI biến thể `tsc/vue-tsc -p tsconfig.json`
+  trả exit 0 mà không check file nào (gate giả từ R72). Chỉ tin exit 0 của lệnh
+  custom sau khi cấy lỗi thử và thấy nó fail.
 □ tests/unit/tmcut_time_domain.spec.ts → 6/6 (pin đơn vị giây↔ticks; bắt buộc
   chạy khi đụng clipTime / render clip / v1compat / migration)
+□ tests/unit/tmcut_store_behaviour.spec.ts → 13/13 (hành vi store: split/trim/
+  ripple/undo/transition/fade/save-load; chạy khi đụng useTmcutProject.ts)
 □ tests/unit/tmcut_render_graph.spec.ts → 12/12; đụng filter graph → chạy thêm
   tmcut_render_smoke.spec.ts (FFmpeg thật)
 □ npx eslint <tất cả file chạm>      → 0 lỗi (Vue stylistic: --fix trước)

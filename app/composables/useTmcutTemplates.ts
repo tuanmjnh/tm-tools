@@ -2,6 +2,7 @@ import type {
   TmcutTemplate,
   TmcutTemplateCategory
 } from '~/types/tmcut'
+import type { TmcutTrack } from './useTmcutProject'
 import {
   getBuiltinTemplates,
   instantiateTemplate,
@@ -103,10 +104,14 @@ export function useTmcutTemplates() {
       fps: instantiated.canvas.fps
     })
 
-    // Set timeline items and duration
+    // Set timeline items and duration.
+    // The template engine round-trips whatever items the template stores;
+    // app-authored templates carry app items verbatim, so re-asserting the
+    // app track type at this boundary is sound (validateTemplate gates the
+    // shape at save time; a foreign template would fail there first).
     proj.timeline = {
       version: 1,
-      tracks: instantiated.timeline.tracks,
+      tracks: instantiated.timeline.tracks as unknown as TmcutTrack[],
       durationMs: instantiated.durationMs,
       markers: instantiated.timeline.markers || []
     }

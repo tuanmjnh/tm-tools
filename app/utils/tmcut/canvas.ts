@@ -5,6 +5,8 @@
 // C16: App migration to DSL v3 — normalizeCanvas now uses core's implementation
 // which returns rational fps ({ numerator, denominator }). The app project model
 // now stores fps as FrameRate.
+import type { FrameRate } from '@tmcut-core'
+
 export {
   TMUTCANVAS_PRESETS,
   TMUTCUT_SOCIAL_PRESETS,

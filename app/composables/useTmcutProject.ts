@@ -1,4 +1,4 @@
-import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
+import type { TmcutCanvas, TmcutCropRect, TmcutFitMode, FrameRate } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipStartSec, clipEndSec } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
