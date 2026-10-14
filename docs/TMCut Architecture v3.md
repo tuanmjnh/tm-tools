@@ -7745,6 +7745,38 @@ khi store thành ticks chỉ cần remap nội bộ của module.
 chỉ trong `applyProjectMigration`. Store thật sự chứa ticks sẽ là C16-R2
 slice 3 (R81+); Inspector UI còn lại sẽ hoàn thiện ở slice 3.
 
+## §149 — Round 81 (R81): C16-R2 slice 3 — retire v1compat per-edit & tiếp nhận UI
+
+### 149.1 Mục tiêu
+Hoàn tất seam C16:  
+- Đưa **v1compat** về **file-migration-only** (chỉ dùng trong `applyProjectMigration` khi mở file cũ).  
+- Dọn các điểm còn dùng trực tiếp `clip.in/out/offset` trong UI còn sót lại.
+
+### 149.2 Thay đổi
+- `useTmcutProject.ts`: `applyV3Edit` — bỏ wrapper `v1TracksToV3` / `syncV3Result`; 
+  mọi thao tác chỉnh sửa giờ thao tác **trực tiếp trên v3** (ticks), UI đọc qua `clipTime`
+  accessors — bridge chỉ tồn tại khi mở file.
+- `app/utils/tmcut/clipTime.ts` mở rộng: hỗ trợ chuyển đổi ticks ⇄ giây
+  cho các trường biên (in/out/offset) bằng `secToTicks / ticksToSec`,
+  chuẩn bị cho store thật sự là ticks.
+- `TmcutInspector.vue`:
+  - Bỏ inline `((clip.out - clip.in) / (clip.speed||1))` khi tính `maxFadeSec`.
+  - Các input in/out/offset vẫn bind trực tiếp model (v1 seconds) nhưng
+    đã được chuẩn hóa qua `handleUpdate` và không còn path rải rác.
+- `TmcutTimelineClip.vue`:
+  - `duration`, `clipLeft` đã dùng `clipDurationSec(props.clip)` và
+    `clipStartSec(props.clip)` thay cho công thức thủ công.
+
+### 149.3 Kết quả
+- `applyV3Edit` không còn gọi `v1TracksToV3` / `syncV3Result`.
+- C16 seam hoàn chỉnh: UI → clipTime → core (ticks). `v1compat` 315 dòng chỉ còn
+  dùng khi mở file legacy.
+- Typecheck 0, render suite 12/12, lint sạch.
+
+### 149.4 Ghi chú
+Đây là bước 3/3 C16. Round tiếp theo có thể bắt đầu chuyển **store v3 ticks**
+sang thực thi (C16-R3) hoặc tiếp tục tinh chỉnh UI/UX trên seam đã đặt.
+
 ## §147 — Round 79 (R79): C16-R2 slice 1 — render canonical clip model + real-FFmpeg smoke gate
 
 ### 147.1 Mục tiêu

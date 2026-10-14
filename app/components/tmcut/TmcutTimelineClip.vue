@@ -8,6 +8,7 @@ import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useI18n } from 'vue-i18n'
 import { propsWithKeyframes, keyframeTimes, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
+import { clipDurationSec, clipStartSec } from '~/utils/tmcut/clipTime'
 
 const props = withDefaults(defineProps<{
   trackType: 'video' | 'text' | 'audio'
@@ -26,12 +27,8 @@ const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
-const duration = computed(() => {
-  const speed = props.clip.speed || 1
-  return Math.max(0.1, (props.clip.out - props.clip.in) / speed)
-})
-
-const clipLeft = computed(() => (props.clip.offset || 0) * zoom.value)
+const duration = computed(() => Math.max(0.1, clipDurationSec(props.clip)))
+const clipLeft = computed(() => clipStartSec(props.clip) * zoom.value)
 const clipWidth = computed(() => Math.max(20, duration.value * zoom.value))
 
 // Keyframe diamonds (Roadmap B1): unique keyframe times across every
