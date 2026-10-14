@@ -7,7 +7,7 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
-import { clipDurationSec, clipStartSec, clipEndSec, secToTicks } from '~/utils/tmcut/clipTime'
+import { clipDurationSec } from '~/utils/tmcut/clipTime'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -83,15 +83,10 @@ const isCropFit = computed(() => (clip.value?.fit || 'fit') === 'crop' && trackT
 
 function handleUpdate<K extends keyof NonNullable<typeof clip.value>>(field: K, value: NonNullable<typeof clip.value>[K]) {
   if (!selectedClipId.value) return
-  // Convert time fields from seconds (UI) to ticks (store)
-  let patchValue: any = value
-  if (field === 'in' || field === 'out' || field === 'offset') {
-    patchValue = secToTicks(Number(value))
-  }
   // Roadmap B8: bursts of the same field (typing a text, dragging a
   // slider) record ONE undo entry through the coalescing history.
   pushHistoryCoalesced(`${selectedClipId.value}:${String(field)}`)
-  updateClip(selectedClipId.value, { [field]: patchValue } as any)
+  updateClip(selectedClipId.value, { [field]: value })
 }
 
 // Font family (roadmap C-1): family (CSS preview) and file (drawtext

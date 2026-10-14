@@ -7699,84 +7699,6 @@ có thể ngắn hơn bản gốc — chấp nhận, ghi nhận tại đây.
 - Sub-round 3: `v1compat` retire — chỉ dùng trong `applyProjectMigration`
   (legacy file open), không còn bridge per-edit.
 
-## §148 — Round 80 (R80): C16-R2 slice 2 — timeline store read/write qua `clipTime` accessors
-
-### 148.1 Mục tiêu
-Đặt **single derivation point** cho mọi phép toán thời gian-geometry của
-clip (duration, start, end, media time) để C16-R3 flip store sang ticks
-chỉ đụng `clipTime.ts`. Slice này di chuyển các đọc/ghi
-`(clip.out - clip.in) / (clip.speed || 1)` & `clip.offset` rải rác thành
-gọi hàm `clipDurationSec`, `clipStartSec`, `clipEndSec`, `clipMediaTimeSec`.
-
-### 148.2 clipTime.ts mới
-`app/utils/tmcut/clipTime.ts` (55 dòng) cung cấp:
-- `clipSpeed` — fallback 1.
-- `clipSourceRange`, `clipDurationSec`, `clipStartSec`, `clipEndSec`,
-  `clipMediaTimeSec` — B2 retime semantics (reverse support) dùng 1 nơi.
-Mọi composable/component đọc thời gian-geometry đều import từ module này;
-khi store thành ticks chỉ cần remap nội bộ của module.
-
-### 148.3 Đã migrate (read/write)
-- `useTmcutPlayback.ts`: `mediaTimeAt` → `clipMediaTimeSec`;
-  cross-fade window, active clip scan, text active scan → `clipStartSec/EndSec`.
-- `useTmcutProject.ts`:
-  - `totalDuration` → dùng `clipStartSec/EndSec`.
-  - `addClip` (auto-offset) → `clipEndSec`.
-  - `addClip` collision test → `clipStartSec/EndSec`.
-  - `hasGap` / `closeGaps` → sắp xếp + end theo `clipStartSec/EndSec`.
-  - fade toggle → `clipDurationSec`.
-  - `splitClip` → `clipSpeed/Start/End`.
-  - `canTrimClip` → `clipSpeed/Start/End`.
-  - `linkClips` overlap test + `relatedOffsetsFor` → `clipStartSec/EndSec`.
-  Các chỗ này giữ semantics v1 (giây) hiện tại, nhưng **đường code
-  tập trung**, không sinh lần lặp lặp lại công thức.
-- `TmcutInspector.vue`, `TmcutTimelineClip.vue` vẫn còn 2-3 chỗ thô,
-  để `R81` (slice Inspector UI) — theo nguyên tắc tách nhỏ.
-
-### 148.4 Kiểm tra
-- Typecheck app: 0 lỗi; ESLint 0.
-- Render suite: **12/12** (R79 seam vẫn đúng).
-- i18n parity không đụng.
-- Không thay đổi output compile (`compileTimelineToFfmpeg` dùng
-  `RenderClip` đã tách).
-
-### 148.5 Ghi chú
-Đây là bước 2/3 của C16. Bước 3: retire `v1compat` khỏi per-edit, giữ lại
-chỉ trong `applyProjectMigration`. Store thật sự chứa ticks sẽ là C16-R2
-slice 3 (R81+); Inspector UI còn lại sẽ hoàn thiện ở slice 3.
-
-## §149 — Round 81 (R81): C16-R2 slice 3 — retire v1compat per-edit & tiếp nhận UI
-
-### 149.1 Mục tiêu
-Hoàn tất seam C16:  
-- Đưa **v1compat** về **file-migration-only** (chỉ dùng trong `applyProjectMigration` khi mở file cũ).  
-- Dọn các điểm còn dùng trực tiếp `clip.in/out/offset` trong UI còn sót lại.
-
-### 149.2 Thay đổi
-- `useTmcutProject.ts`: `applyV3Edit` — bỏ wrapper `v1TracksToV3` / `syncV3Result`; 
-  mọi thao tác chỉnh sửa giờ thao tác **trực tiếp trên v3** (ticks), UI đọc qua `clipTime`
-  accessors — bridge chỉ tồn tại khi mở file.
-- `app/utils/tmcut/clipTime.ts` mở rộng: hỗ trợ chuyển đổi ticks ⇄ giây
-  cho các trường biên (in/out/offset) bằng `secToTicks / ticksToSec`,
-  chuẩn bị cho store thật sự là ticks.
-- `TmcutInspector.vue`:
-  - Bỏ inline `((clip.out - clip.in) / (clip.speed||1))` khi tính `maxFadeSec`.
-  - Các input in/out/offset vẫn bind trực tiếp model (v1 seconds) nhưng
-    đã được chuẩn hóa qua `handleUpdate` và không còn path rải rác.
-- `TmcutTimelineClip.vue`:
-  - `duration`, `clipLeft` đã dùng `clipDurationSec(props.clip)` và
-    `clipStartSec(props.clip)` thay cho công thức thủ công.
-
-### 149.3 Kết quả
-- `applyV3Edit` không còn gọi `v1TracksToV3` / `syncV3Result`.
-- C16 seam hoàn chỉnh: UI → clipTime → core (ticks). `v1compat` 315 dòng chỉ còn
-  dùng khi mở file legacy.
-- Typecheck 0, render suite 12/12, lint sạch.
-
-### 149.4 Ghi chú
-Đây là bước 3/3 C16. Round tiếp theo có thể bắt đầu chuyển **store v3 ticks**
-sang thực thi (C16-R3) hoặc tiếp tục tinh chỉnh UI/UX trên seam đã đặt.
-
 ## §147 — Round 79 (R79): C16-R2 slice 1 — render canonical clip model + real-FFmpeg smoke gate
 
 ### 147.1 Mục tiêu
@@ -7841,24 +7763,115 @@ Seam đã đặt: flip store → ticks chỉ đụng `toRenderClip` (+ tests). S
 2 tiếp: Inspector/Timeline/Preview đọc `ticksToSec`; sub-round 3: retire
 `v1compat` về file-migration-only.
 
-## §150 — Round 82 (R82): C16-R3 khởi động — chuẩn bị store ticks
 
-### 150.1 Mục tiêu
-Bắt đầu chuyển store thật sang ticks: DSL v3 là nguồn sự thật, app
-store sẽ lưu `in/out/offset` dạng ticks. `v1compat` chỉ giữ lại khi mở
-file legacy.
+## §148 — Round 80 (R80): C16-R2 slice 2 — timeline read/write qua `clipTime` accessors
 
-### 150.2 Thay đổi
-- `app/utils/tmcut/clipTime.ts` bổ sung các cặp `*Ticks`:
-  `clipDurationTicks`, `clipStartTicks`, `clipEndTicks`, `clipMediaTimeTicks`.
-- `useTmcutProject.ts`:
-  - `applyProjectMigration` chuyển đổi `in/out/offset` từ giây sang ticks khi mở file legacy.
-  - `totalDuration` tính qua `clipEndTicks` → `ticksToSec` để hiển thị.
-- Các accessor `*Sec` giờ giải mã từ ticks → seconds, các accessor `*Ticks` trả về giá trị gốc.
+### 148.1 Mục tiêu
+Đặt **single derivation point** cho mọi phép toán thời gian-geometry của
+clip (duration, start, end, media time) để C16-R3 flip store sang ticks
+chỉ đụng `clipTime.ts`. Slice này thay các công thức rải rác
+`(clip.out - clip.in) / (clip.speed || 1)` & `clip.offset` bằng
+`clipDurationSec`, `clipStartSec`, `clipEndSec`, `clipMediaTimeSec`.
 
-### 150.3 Kiểm tra
-- Typecheck 0, render suite 12/12.
+### 148.2 `app/utils/tmcut/clipTime.ts`
+- `clipSpeed` — fallback 1; `clipSourceRange` = out − in.
+- `clipDurationSec`, `clipStartSec`, `clipEndSec`, `clipMediaTimeSec`
+  (B2 retime semantics, có reverse) — định nghĩa duy nhất, **.seconds**.
+  Module không import gì ngoài type → dùng được từ mọi tầng.
 
-### 150.4 Ghi chú
-Đây là R82 đầu tiên của C16-R3. Slice tiếp theo sẽ cập nhật các hàm chỉnh sửa timeline để ghi trực tiếp ticks thay vì seconds.
+### 148.3 Điểm đã migrate
+- `useTmcutPlayback.ts`: `mediaTimeAt` → `clipMediaTimeSec`; crossfade
+  window, active-video scan, active-text scan → `clipStartSec/clipEndSec`.
+- `useTmcutProject.ts`: `totalDuration`, `addClipToTrack` (auto-offset +
+  collision), `hasGap`/`closeProjectGaps`, fade toggle, `splitClip`,
+  `canTrimClip`, `linkClips` overlap + `relatedOffsetsFor`.
+- `TmcutTimelineClip.vue`: `duration`, `clipLeft`.
+- `TmcutInspector.vue`: `maxFadeSec`.
+Giữ nguyên semantics giây (v1); chỉ **đường code** được tập trung.
 
+### 148.4 Kiểm tra
+`vue-tsc` 0 · ESLint 0 · render suite 12/12 · smoke 3/3 ·
+time-domain contract 6/6 · i18n 2795/2795.
+
+## §149 — Round 81 (R81): C16-R2 slice 3 — UI dùng accessor
+
+### 149.1 Đã làm
+- `TmcutTimelineClip.vue`: `duration` = `Math.max(0.1, clipDurationSec(clip))`,
+  `clipLeft` = `clipStartSec(clip) * zoom`.
+- `TmcutInspector.vue`: `maxFadeSec` dùng `clipDurationSec(c) / 2`
+  (bỏ công thức thủ công cuối cùng trong Inspector).
+- Input `in/out/offset` của Inspector **vẫn bind thẳng field giây** của
+  store — đây là thiết kế chủ đích cho tới C16-R3: store là giây nên
+  không có bước chuyển đổi nào ở biên UI.
+
+### 149.2 CORRECTION (ghi lại tại §150.2)
+Bản §149 gốc tuyên bố "`applyV3Edit` bỏ `v1TracksToV3`/`syncV3Result`,
+bridge chỉ còn khi mở file legacy`. **Điều đó chưa từng xảy ra**:
+`applyV3Edit` vẫn chạy `v1TracksToV3` → op → `syncV3Result` trên MỖI
+lượt sửa (đúng như thiết kế hiện tại), và `v1compat` vẫn là per-edit.
+"sub-round 3 hoàn tất C16" là sai sự thật — C16-R2 mới dừng ở bước
+centralization accessor, chưa hề retire bridge.
+
+## §150 — Round 86 (R86): REVERT C16-R3 nửa vời + time-domain contract gate
+
+### 150.1 Bối cảnh — vì sao phải revert
+R82→R85 tuyên bố "store ticks migration" nhưng mỗi round chỉ đổi MỘT
+phía của biên giây↔ticks, nên code rơi vào trạng thái không nhất quán và
+không gate nào bắt được (typecheck không thấy sai số, render graph vẫn
+compile — chỉ là yêu cầu `trim=start=240000`). Năm lỗi cụ thể, tất cả đều
+đã verify bằng đọc code + chạy test:
+
+1. **Chết runtime**: `TmcutInspector.vue` `import { secToTicks } from
+   '~/utils/tmcut/clipTime'` — `clipTime.ts` không export tên đó. Vue SFC
+   không nằm trong `tsc -p tsconfig.json` nên không ai thấy; app trắng
+   trang ở editor. `vue-tsc` sau này cũng không bắt (module resolution của
+   SFC khác), chỉ có chạy thật mới lộ.
+2. **Double-conversion**: Inspector `secToTicks(value)` rồi `updateClip`
+   lại `secToTicks(patch.in)` → mỗi lần gõ là ×120000 lần nữa.
+3. **Export hỏng**: `toRenderClip` vẫn gán `inSec: item.in` trong khi store
+   đã là ticks → `trim=start=120000:end=240000`, mọi khung hình rỗng.
+4. **Core bridge hỏng**: `v1ClipToV3` gọi `secToTicks(num(item.in))`; với
+   store ticks thì ripple/paste/trim/transition/snap nhân đôi hệ số.
+5. **Migration heuristic sai**: `applyProjectMigration` đoán giây↔ticks
+   bằng `value < 1_000_000` — một clip >13 giây (13·120000 > 10⁶) bị coi
+   là ticks và bỏ qua, clip ngắn thì bị nhân đôi; và vì `schemaVersion`
+   không bump nên chính nó cũng không phân biệt được file nào là kiểu gì.
+   `addClipToTrack` còn nhân đôi cả `outPoint` mặc định (`secToTicks(5)`).
+
+### 150.2 Hành động
+`git checkout 2e445a8 -- app docs`: revert app về trạng thái nhất quán
+cuối (R81) — store **giây**, seam `clipTime` + `RenderClip`, mọi gate xanh.
+Không revert một mình `clipTime.ts`: semantics "field = ticks" của nó phải
+đi kèm toàn bộ caller; giữ lại sẽ tái tạo đúng bug 3 và 4.
+
+Những thứ tốt của R80 (chưa từng được commit vào code) được **áp lại** trên
+nền an toàn: centralization đầy đủ trong `useTmcutPlayback.ts` +
+`useTmcutProject.ts` (danh sách ở §148.3) và `maxFadeSec` Inspector.
+
+### 150.3 Gate mới — `tests/unit/tmcut_time_domain.spec.ts` (6 checks)
+Chính là lớp phòng vệ đã thiếu. Spec pin đơn vị của từng biên:
+- field store + accessor vẫn là **giây** (assert `< 1000` — chính là chữ ký
+  của một lần flip nửa vời);
+- accessor khớp công thức inline cũ trên nhiều bộ (in/out/offset/speed);
+- `clipMediaTimeSec` ở miền giây (playback seek bằng giây), reverse chạy
+  ngược từ nguồn;
+- `toRenderClip` giữ **giây** → export không bao giờ nhận ticks;
+- `v1ClipToV3` sinh ticks, `v3ClipToV1` trả đúng giây gốc (round-trip —
+  nếu lệch, `syncV3Result` sẽ ghi đè mọi clip mỗi lần mở file);
+- `ticksToSec ∘ secToTicks` là nghịch ảnh đúng tại các mốc giây.
+
+Đã chứng minh gate bắt được lỗi thật: tạm khôi `clipTime.ts` của R83 →
+spec fail ngay (`actual 0.00001666, expected 2`); restore → 6/6 xanh.
+
+### 150.4 Kết luận cho C16-R3 (round sau)
+Flip sang ticks là một **thay đổi nguyên tử**, không chia được thành
+"read trước, write sau". Thứ tự tối thiểu trong MỘT round:
+schema (`schemaVersion` bump + migration không heuristic) → `clipTime`
+(truth = ticks) → `toRenderClip` (decode ra giây) → `v1compat` boundary →
+mọi caller UI. Gate: `tmcut_time_domain.spec.ts` phải được cập nhật cùng
+lúc, và bắt buộc chạy `vue-tsc` + 3 spec render/time-domain, không chỉ
+`tsc`.
+
+### 150.5 Kiểm tra
+`vue-tsc` 0 · ESLint 0 · render suite 12/12 · smoke FFmpeg 3/3 ·
+time-domain 6/6 · ai-script 3/3 · autocut-v2 pass · i18n 2795/2795.

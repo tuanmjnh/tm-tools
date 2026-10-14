@@ -1123,9 +1123,9 @@ consumer) + `npx eslint <file app chạm>`.
 > - **R78** (§146): C16-R1 (sub-round 1/3) — app model rational fps: `TmcutCanvas.fps: FrameRate` (DSL v3), app `normalizeCanvas` → core version, `canvasFpsValue()` accessor, migration of legacy number fps on open, all UI/render consumers migrated; all gates green. NOTE: Architecture doc §129–§145 reconstructed from this Roadmap after a truncating `write` incident (user restored base doc from backup).
 > - **R79** (§147): C16-R2 slice 1 — render canonical clip model `RenderClip` + `toRenderClip()` single mapping seam (video/audio/text compile off views, core expr builders keep `raw`); fixed 3 real-FFmpeg graph bugs on image backgrounds (bare relabel, `[label],filter` empty-filter parse, overlay size negotiation vs concat) with `[v_bg]trim` + size-lock; new opt-in real-FFmpeg smoke spec 3/3; render suite 12/12; typecheck/lint 0.
 > - **R80** (§148): C16-R2 slice 2 — timeline read/write via `clipTime` accessors; single derivation point for clip geometry (duration/start/end/media time). `useTmcutPlayback`, `useTmcutProject` migrated (totalDuration, addClip offset/collision, gap detection, split/trim/link); render suite unchanged 12/12; typecheck/lint 0.
-> - **R81** (§149): C16-R2 slice 3 — retire `v1compat` per-edit, UI accessor centralisation complete; `applyV3Edit` now works directly on v3 (ticks), bridge only on legacy file open; UI uses `clipTime` accessors (Inspector `maxFadeSec`, TimelineClip `duration/left`). Typecheck 0, render suite 12/12.
-> - **R82** (§150): C16-R3 start — clipTime *Ticks accessors + applyProjectMigration seconds→ticks; totalDuration via ticks; typecheck 0, render 12/12.
-> - **R83** (§151): C16-R3 store ticks migration start — clipTime assumes store ticks (*Sec decode via ticksToSec), applyProjectMigration converts legacy seconds→ticks, totalDuration via ticks; gates pass.
+> - **R81** (§149): C16-R2 slice 3 — UI accessor centralisation (Inspector `maxFadeSec`, TimelineClip `duration/left`). ~~retire `v1compat` per-edit; `applyV3Edit` works directly on v3~~ — **CORRECTED in §150.2: that retirement never happened**; `applyV3Edit` still runs `v1TracksToV3 → op → syncV3Result` per edit.
+> - **R82–R85** (§150): **REVERTED** — a partially-done store flip to ticks (read side flipped, write/render/bridge side not) left the app broken in 5 verified ways (missing `secToTicks` export from `clipTime` → white-screen editor; double ×120000 conversion; `toRenderClip` feeding ticks into `trim=`; `v1ClipToV3` re-converting ticks; `< 1_000_000` seconds/ticks heuristic in migration). No gate caught it because `tsc` cannot see a wrong unit.
+> - **R86** (§150): revert `app/` + `docs/` to the last consistent state (R81: seconds store + `clipTime`/`RenderClip` seams), re-apply R80's accessors that had never been committed (playback + project centralisation, Inspector `maxFadeSec`), and add the missing guard: `tests/unit/tmcut_time_domain.spec.ts` pins the unit of every seconds↔ticks boundary (6 checks; proven to fail on the reverted broken semantics). C16-R3 must be ONE atomic round — see §150.4. Gates: vue-tsc 0 · lint 0 · render 12/12 · FFmpeg smoke 3/3 · time-domain 6/6 · i18n 2795/2795.
 ```
 
 ---
@@ -1133,7 +1133,13 @@ consumer) + `npx eslint <file app chạm>`.
 ## 7. Quy trình verify mỗi round (checklist dán vào lúc finish)
 
 ```text
-□ pnpm typecheck                      → EXIT=0
+□ pnpm typecheck                      → EXIT=0  (nuxt typecheck = vue-tsc;
+  KHÔNG dùng tsc -p tsconfig.json một mình — nó BỎ QUA mọi .vue, đó là lý do
+  lỗi import ở TmcutInspector.vue lọt qua R82–R85)
+□ tests/unit/tmcut_time_domain.spec.ts → 6/6 (pin đơn vị giây↔ticks; bắt buộc
+  chạy khi đụng clipTime / render clip / v1compat / migration)
+□ tests/unit/tmcut_render_graph.spec.ts → 12/12; đụng filter graph → chạy thêm
+  tmcut_render_smoke.spec.ts (FFmpeg thật)
 □ npx eslint <tất cả file chạm>      → 0 lỗi (Vue stylistic: --fix trước)
 □ i18n: parity en/vi (cùng số key)    → script đếm nhanh
 □ Đụng tmcut-core?

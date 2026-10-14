@@ -1,11 +1,17 @@
 import type { TmcutTimelineItem } from '~/composables/useTmcutProject'
-import { secToTicks, ticksToSec } from '@tmcut-core'
 
 /**
- * C16-R3 helpers: dual-mode accessors chuẩn bị cho store ticks.
- * Sau migration, các field `in/out/offset` được lưu dưới dạng ticks.
- * Các hàm `*Sec` giải mã ticks → seconds để UI cũ vẫn hoạt động.
- * Các hàm `*Ticks` trả về giá trị gốc (ticks) để dùng nội bộ.
+ * C16-R2: single accessors for clip TIME GEOMETRY.
+ *
+ * The app store still holds seconds (v1) while the DSL works in ticks.
+ * Every consumer that needs a clip's timeline span or source position must
+ * go through these helpers instead of spreading `(clip.out - clip.in) /
+ * (clip.speed || 1)` — when the store flips to ticks (C16-R3) only this
+ * file re-derives the numbers, consumers keep compiling.
+ *
+ * Field names are read through a small local type on purpose: this module
+ * must stay importable from anywhere (composables, components, utils) with
+ * no runtime imports of its own.
  */
 
 /** Speed with the legacy 0/undefined → 1 fallback. */
@@ -13,67 +19,37 @@ export function clipSpeed(clip: Pick<TmcutTimelineItem, 'speed'>): number {
   return clip.speed || 1
 }
 
-/** Source-range length, ticks. */
-export function clipSourceRangeTicks(clip: Pick<TmcutTimelineItem, 'in', 'out'>): number {
+/** Source-range length, source seconds. */
+export function clipSourceRange(clip: Pick<TmcutTimelineItem, 'in', 'out'>): number {
   return clip.out - clip.in
 }
 
-/** Source-range length, seconds (decoded). */
-export function clipSourceRange(clip: Pick<TmcutTimelineItem, 'in', 'out'>): number {
-  return ticksToSec(clipSourceRangeTicks(clip))
-}
-
-/** Timeline span, ticks. */
-export function clipDurationTicks(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed'>): number {
-  return Math.max(0, Math.round(clipSourceRangeTicks(clip) / clipSpeed(clip)))
-}
-
-/** Timeline span, seconds (decoded). */
+/** Timeline span, seconds: source range divided by playback speed. */
 export function clipDurationSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed'>): number {
-  return ticksToSec(clipDurationTicks(clip))
+  return clipSourceRange(clip) / clipSpeed(clip)
 }
 
-/** Timeline start, ticks. */
-export function clipStartTicks(clip: Pick<TmcutTimelineItem, 'offset'>): number {
+/** Timeline start, seconds. */
+export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
   return clip.offset || 0
 }
 
-/** Timeline start, seconds (decoded). */
-export function clipStartSec(clip: Pick<TmcutTimelineItem, 'offset'>): number {
-  return ticksToSec(clipStartTicks(clip))
-}
-
-/** Timeline end, ticks. */
-export function clipEndTicks(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset'>): number {
-  return clipStartTicks(clip) + clipDurationTicks(clip)
-}
-
-/** Timeline end, seconds (decoded). */
+/** Timeline end, seconds. */
 export function clipEndSec(clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset'>): number {
-  return ticksToSec(clipEndTicks(clip))
+  return clipStartSec(clip) + clipDurationSec(clip)
 }
 
 /**
  * Source-media time at a timeline position (roadmap B2 retime semantics):
- * forward clips run `in + local*ticks/speed`, reverse clips run from the
- * source end backwards. All values in ticks.
+ * forward clips run `in + localSec*speed`, reverse clips run from the
+ * source end backwards.
  */
-export function clipMediaTimeTicks(
-  clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset', 'reverse'>,
-  atTicks: number
-): number {
-  const localTicks = Math.max(0, atTicks - clipStartTicks(clip))
-  const speed = clipSpeed(clip)
-  const sourceTicks = Math.round(localTicks / speed)
-  return clip.reverse ? clip.out - sourceTicks : clip.in + sourceTicks
-}
-
-/** Source-media time at timeline position, in seconds (decoded). */
 export function clipMediaTimeSec(
   clip: Pick<TmcutTimelineItem, 'in', 'out', 'speed', 'offset', 'reverse'>,
   atSec: number
 ): number {
-  const atTicks = secToTicks(atSec)
-  const mediaTicks = clipMediaTimeTicks(clip, atTicks)
-  return ticksToSec(mediaTicks)
+  const localSec = atSec - clipStartSec(clip)
+  return clip.reverse
+    ? clip.out - localSec * clipSpeed(clip)
+    : clip.in + localSec * clipSpeed(clip)
 }

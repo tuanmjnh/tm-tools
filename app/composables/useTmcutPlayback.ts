@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { TICKS_PER_SECOND } from '@tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
+import { clipEndSec, clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
 
 // Shared playback state across TMCut editor
 const playhead = ref(0) // Playhead position in seconds
@@ -53,10 +54,7 @@ export function useTmcutPlayback() {
   // (roadmap B2) run from the source end backwards — core C4 retime
   // semantics. Shared by the main element and the crossfade layer.
   function mediaTimeAt(clip: TmcutTimelineItem, at: number): number {
-    const localSec = at - (clip.offset || 0)
-    return clip.reverse
-      ? clip.out - localSec * (clip.speed || 1)
-      : clip.in + localSec * (clip.speed || 1)
+    return clipMediaTimeSec(clip, at)
   }
 
   // Transition crossfade state (roadmap B3 / core C5): while the playhead
@@ -73,16 +71,16 @@ export function useTmcutPlayback() {
     for (const incoming of items) {
       const ti = incoming.transitionIn
       if (!ti || !(ti.duration > 0)) continue
-      const winStart = incoming.offset || 0
+      const winStart = clipStartSec(incoming)
       const winEnd = winStart + ti.duration / TICKS_PER_SECOND
       if (at < winStart || at >= winEnd) continue
       // The incoming clip must still cover the playhead — a split or trim
       // inside the window broke the pair (render as a plain cut).
-      const incomingEnd = winStart + (incoming.out - incoming.in) / (incoming.speed || 1)
+      const incomingEnd = clipEndSec(incoming)
       if (at >= incomingEnd) continue
       const outgoing = items.find(o =>
         o.id !== incoming.id
-        && Math.abs((o.offset || 0) + (o.out - o.in) / (o.speed || 1) - winEnd) < 0.005)
+        && Math.abs(clipEndSec(o) - winEnd) < 0.005)
       if (!outgoing) continue
       return {
         incoming,
@@ -106,9 +104,8 @@ export function useTmcutPlayback() {
       // Inside a transition window the OUTGOING clip owns the second
       // layer — the main element always renders the INCOMING clip.
       if (crossfade && clip.id === crossfade.outgoing.id) continue
-      const clipDuration = (clip.out - clip.in) / (clip.speed || 1)
-      const clipStart = clip.offset || 0
-      const clipEnd = clipStart + clipDuration
+      const clipStart = clipStartSec(clip)
+      const clipEnd = clipEndSec(clip)
       if (playhead.value >= clipStart && playhead.value < clipEnd) {
         return {
           clip,
@@ -126,9 +123,8 @@ export function useTmcutPlayback() {
     if (!textTrack) return []
 
     return textTrack.items.filter((clip) => {
-      const clipDuration = (clip.out - clip.in) / (clip.speed || 1)
-      const clipStart = clip.offset || 0
-      const clipEnd = clipStart + clipDuration
+      const clipStart = clipStartSec(clip)
+      const clipEnd = clipEndSec(clip)
       return playhead.value >= clipStart && playhead.value <= clipEnd
     })
   })

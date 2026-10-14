@@ -1,6 +1,6 @@
 import type { TmcutCanvas, TmcutCropRect, TmcutFitMode } from '~/types/tmcut'
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { clipDurationSec, clipStartSec, clipEndSec, clipSpeed, clipEndTicks } from '~/utils/tmcut/clipTime'
+import { clipDurationSec, clipStartSec, clipEndSec } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
   addTrack,
@@ -190,16 +190,16 @@ const selectedClip = computed(() => {
 // Compute total timeline duration in seconds
 const totalDuration = computed(() => {
   if (!currentProject.value?.timeline?.tracks) return 0
-  let maxTicks = 0
+  let maxSec = 0
   for (const track of currentProject.value.timeline.tracks) {
     for (const item of track.items || []) {
-      const endTicks = clipEndTicks(item)
-      if (endTicks > maxTicks) {
-        maxTicks = endTicks
+      const endSec = clipStartSec(item) + Math.max(0, clipDurationSec(item))
+      if (endSec > maxSec) {
+        maxSec = endSec
       }
     }
   }
-  return Math.max(5, ticksToSec(maxTicks))
+  return Math.max(maxSec, 5) // Minimum 5 seconds ruler
 })
 
 // True when at least one clip exists on any timeline track.
@@ -266,41 +266,6 @@ function applyProjectMigration(project: TmcutProject) {
   // throws on a missing array), so backfill it during migration.
   if (!Array.isArray(project.timeline.markers)) {
     project.timeline.markers = []
-  }
-  // C16-R3: migrate timeline item time fields from seconds to ticks
-  // (and legacy fade/transition durations, which are in seconds)
-  if (isLegacy && project.timeline?.tracks) {
-    for (const track of project.timeline.tracks) {
-      for (const item of track.items || []) {
-        // Source range in / out are seconds in legacy; convert to ticks
-        if (typeof item.in === 'number' && typeof item.out === 'number') {
-          // Detect seconds by heuristic: typical timeline values are < 1e6 seconds.
-          // If values look like ticks (> 1e9) skip conversion.
-          const inLooksSec = item.in < 1_000_000
-          const outLooksSec = item.out < 1_000_000
-          if (inLooksSec && outLooksSec) {
-            item.in = secToTicks(item.in)
-            item.out = secToTicks(item.out)
-          }
-        }
-        if (typeof item.offset === 'number') {
-          if (item.offset < 1_000_000) {
-            item.offset = secToTicks(item.offset)
-          }
-        }
-        // Transition in duration may be legacy seconds
-        if (item.transitionIn?.duration) {
-          if (item.transitionIn.duration < 1_000_000) {
-            item.transitionIn.duration = secToTicks(item.transitionIn.duration)
-          }
-        }
-        // Fade envelope stored in ticks already in core; legacy files had seconds
-        if (item.fade) {
-          if (item.fade.in && item.fade.in < 1_000_000) item.fade.in = secToTicks(item.fade.in)
-          if (item.fade.out && item.fade.out < 1_000_000) item.fade.out = secToTicks(item.fade.out)
-        }
-      }
-    }
   }
   if (isLegacy) {
     project.schemaVersion = TMCUT_PROJECT_SCHEMA_VERSION
@@ -688,14 +653,13 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
   }
 
   const speed = partialItem.speed ?? 1
-  // UI may supply seconds; normalize to ticks for store
-  const inPointTicks = partialItem.in != null ? secToTicks(partialItem.in) : 0
-  const outPointTicks = partialItem.out != null ? secToTicks(partialItem.out) : secToTicks(trackType === 'text' ? 4 : 5)
-  let offsetTicks = partialItem.offset != null ? secToTicks(partialItem.offset) : 0
+  const inPoint = partialItem.in ?? 0
+  const outPoint = partialItem.out ?? (trackType === 'text' ? 4 : 5)
 
   // Determine offset if not specified
-  if (partialItem.offset === undefined) {
-    offsetTicks = track.items.reduce((max, i) => Math.max(max, clipEndTicks(i)), 0)
+  let offset = partialItem.offset
+  if (offset === undefined) {
+    offset = track.items.reduce((max, i) => Math.max(max, clipEndSec(i)), 0)
   }
 
   const newItem: TmcutTimelineItem = {
@@ -705,9 +669,9 @@ function addClipToTrack(trackType: 'video' | 'text' | 'audio', partialItem: Part
     text: partialItem.text,
     color: partialItem.color || '#ffffff',
     fontSize: partialItem.fontSize || 36,
-    in: inPointTicks,
-    out: outPointTicks,
-    offset: offsetTicks,
+    in: inPoint,
+    out: outPoint,
+    offset,
     speed,
     reverse: partialItem.reverse ?? false,
     opacity: partialItem.opacity ?? 100,
@@ -785,19 +749,10 @@ function closeProjectGaps(): number {
 // Update clip
 function updateClip(clipId: string, patch: Partial<TmcutTimelineItem>) {
   if (!currentProject.value?.timeline?.tracks) return
-  // Normalize time fields from seconds (UI) to ticks (store)
-  const normalizedPatch: Partial<TmcutTimelineItem> = { ...patch }
-  if (patch.in != null) normalizedPatch.in = secToTicks(patch.in)
-  if (patch.out != null) normalizedPatch.out = secToTicks(patch.out)
-  if (patch.offset != null) normalizedPatch.offset = secToTicks(patch.offset)
-  // transitionIn.duration may be seconds
-  if (patch.transitionIn?.duration != null) {
-    normalizedPatch.transitionIn = { ...patch.transitionIn, duration: secToTicks(patch.transitionIn.duration) }
-  }
   for (const track of currentProject.value.timeline.tracks) {
     const idx = track.items?.findIndex(i => i.id === clipId)
     if (idx !== undefined && idx !== -1) {
-      track.items[idx] = { ...track.items[idx]!, ...normalizedPatch }
+      track.items[idx] = { ...track.items[idx]!, ...patch }
       saveProject()
       return
     }
@@ -1076,7 +1031,7 @@ function splitClip(clipId: string, splitTime: number): boolean {
     if (idx === undefined || idx === -1) continue
 
     const clip = track.items[idx]!
-    const speed = clipSpeed(clip)
+    const speed = clip.speed || 1
     const clipStart = clipStartSec(clip)
     const clipEnd = clipEndSec(clip)
 
@@ -1128,7 +1083,7 @@ function trimSelectedEdgeAt(edge: 'in' | 'out', timeSec: number): boolean {
     const clip = track.items?.find(i => i.id === id)
     if (!clip) continue
     if (track.locked) return false
-    const speed = clipSpeed(clip)
+    const speed = clip.speed || 1
     const start = clipStartSec(clip)
     const end = clipEndSec(clip)
     if (timeSec <= start + 0.1 || timeSec >= end - 0.1) return false
