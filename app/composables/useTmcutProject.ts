@@ -785,10 +785,19 @@ function closeProjectGaps(): number {
 // Update clip
 function updateClip(clipId: string, patch: Partial<TmcutTimelineItem>) {
   if (!currentProject.value?.timeline?.tracks) return
+  // Normalize time fields from seconds (UI) to ticks (store)
+  const normalizedPatch: Partial<TmcutTimelineItem> = { ...patch }
+  if (patch.in != null) normalizedPatch.in = secToTicks(patch.in)
+  if (patch.out != null) normalizedPatch.out = secToTicks(patch.out)
+  if (patch.offset != null) normalizedPatch.offset = secToTicks(patch.offset)
+  // transitionIn.duration may be seconds
+  if (patch.transitionIn?.duration != null) {
+    normalizedPatch.transitionIn = { ...patch.transitionIn, duration: secToTicks(patch.transitionIn.duration) }
+  }
   for (const track of currentProject.value.timeline.tracks) {
     const idx = track.items?.findIndex(i => i.id === clipId)
     if (idx !== undefined && idx !== -1) {
-      track.items[idx] = { ...track.items[idx]!, ...patch }
+      track.items[idx] = { ...track.items[idx]!, ...normalizedPatch }
       saveProject()
       return
     }
