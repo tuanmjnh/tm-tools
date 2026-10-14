@@ -7699,6 +7699,52 @@ có thể ngắn hơn bản gốc — chấp nhận, ghi nhận tại đây.
 - Sub-round 3: `v1compat` retire — chỉ dùng trong `applyProjectMigration`
   (legacy file open), không còn bridge per-edit.
 
+## §148 — Round 80 (R80): C16-R2 slice 2 — timeline store read/write qua `clipTime` accessors
+
+### 148.1 Mục tiêu
+Đặt **single derivation point** cho mọi phép toán thời gian-geometry của
+clip (duration, start, end, media time) để C16-R3 flip store sang ticks
+chỉ đụng `clipTime.ts`. Slice này di chuyển các đọc/ghi
+`(clip.out - clip.in) / (clip.speed || 1)` & `clip.offset` rải rác thành
+gọi hàm `clipDurationSec`, `clipStartSec`, `clipEndSec`, `clipMediaTimeSec`.
+
+### 148.2 clipTime.ts mới
+`app/utils/tmcut/clipTime.ts` (55 dòng) cung cấp:
+- `clipSpeed` — fallback 1.
+- `clipSourceRange`, `clipDurationSec`, `clipStartSec`, `clipEndSec`,
+  `clipMediaTimeSec` — B2 retime semantics (reverse support) dùng 1 nơi.
+Mọi composable/component đọc thời gian-geometry đều import từ module này;
+khi store thành ticks chỉ cần remap nội bộ của module.
+
+### 148.3 Đã migrate (read/write)
+- `useTmcutPlayback.ts`: `mediaTimeAt` → `clipMediaTimeSec`;
+  cross-fade window, active clip scan, text active scan → `clipStartSec/EndSec`.
+- `useTmcutProject.ts`:
+  - `totalDuration` → dùng `clipStartSec/EndSec`.
+  - `addClip` (auto-offset) → `clipEndSec`.
+  - `addClip` collision test → `clipStartSec/EndSec`.
+  - `hasGap` / `closeGaps` → sắp xếp + end theo `clipStartSec/EndSec`.
+  - fade toggle → `clipDurationSec`.
+  - `splitClip` → `clipSpeed/Start/End`.
+  - `canTrimClip` → `clipSpeed/Start/End`.
+  - `linkClips` overlap test + `relatedOffsetsFor` → `clipStartSec/EndSec`.
+  Các chỗ này giữ semantics v1 (giây) hiện tại, nhưng **đường code
+  tập trung**, không sinh lần lặp lặp lại công thức.
+- `TmcutInspector.vue`, `TmcutTimelineClip.vue` vẫn còn 2-3 chỗ thô,
+  để `R81` (slice Inspector UI) — theo nguyên tắc tách nhỏ.
+
+### 148.4 Kiểm tra
+- Typecheck app: 0 lỗi; ESLint 0.
+- Render suite: **12/12** (R79 seam vẫn đúng).
+- i18n parity không đụng.
+- Không thay đổi output compile (`compileTimelineToFfmpeg` dùng
+  `RenderClip` đã tách).
+
+### 148.5 Ghi chú
+Đây là bước 2/3 của C16. Bước 3: retire `v1compat` khỏi per-edit, giữ lại
+chỉ trong `applyProjectMigration`. Store thật sự chứa ticks sẽ là C16-R2
+slice 3 (R81+); Inspector UI còn lại sẽ hoàn thiện ở slice 3.
+
 ## §147 — Round 79 (R79): C16-R2 slice 1 — render canonical clip model + real-FFmpeg smoke gate
 
 ### 147.1 Mục tiêu
