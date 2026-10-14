@@ -1395,8 +1395,8 @@ function toggleTrackHidden(trackId: string) {
 }
 
 // Track add/remove (Roadmap A5): routed through applyV3Edit so history,
-// undo and autosave see the change; syncV3Result keeps the v1 track list
-// in step (creates on add, prunes on remove).
+// undo and autosave see the change; syncTicksResult keeps the store track
+// list in step (creates on add, prunes on remove).
 function addTrackToProject(trackType: 'video' | 'text' | 'audio'): boolean {
   return applyV3Edit(v3 => addTrack(v3, trackType)) !== null
 }
