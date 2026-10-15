@@ -8349,3 +8349,21 @@ The last four untested store seams close with `tests/unit/tmcut_ripple2.spec.ts`
 One spec-writing fact pinned by a genuine failure during R109: `undo()` SWAPS the project container (JSON snapshot restore), so any track/clip object reference captured before the undo is STALE afterwards — every check re-reads through `currentProject` accessors after undo/redo.
 
 Gates: ripple2 8/8 NEW · runner `pnpm test:tmcut` 21/21 · typecheck 0 · lint 0.
+
+# 174. R110 — Electron media whitelist broke every import (the amber "unreadable" bug)
+
+Reported symptom: importing any video in the Electron build shows the amber unreadable state. Root cause was not in the renderer at all.
+
+## 174.1 The whitelist that only whitelisted app folders
+
+`electron/tools/tmcut.controller.cjs` gated every media IPC handler (`analyzeAsset`, `statFiles`, `extractFrame`, `extractAudio`, `extractWaveform`, `analyzeScenes`, `analyzeSilence`, `generateProxy`, `stabilizeVideo`) behind `isPathSafe()` — a root whitelist of **userData + resources only**. User videos live anywhere on disk, so `analyzeAsset` returned `{ ok: false, error: 'Invalid path' }` before even stating the file; honestly mapping `!ok` to `asset.status = 'missing'`, the store painted the amber warning tile. The path-safety intent (blocking renderer-driven traversal of APP files) was legitimate; applying it to USER files was the bug — a file the user picked through the open dialog or dropped from Explorer cannot be sanitized by an app-folder whitelist.
+
+## 174.2 The fix — structural user-media validation
+
+`isUserMediaPath()`: non-empty string, `path.isAbsolute()`, canonicalized via `path.resolve` (also tolerates the store's forward-slash `normalizeMediaPath` form). Everything on the user's disks (drive letters, UNC shares) passes; relative, blank and non-string inputs still refuse. App-internal files never route through these handlers — project JSON/snapshots/cache are `sanitizeId()`-keyed. All media-path handlers now use it; `isPathSafe` plus its whitelist are gone.
+
+## 174.3 Pinned by tests/unit/tmcut_import_path.spec.ts (`pnpm test:importpath`, 5 checks)
+
+Absolute D:\ paths pass (the regression itself); forward-slash forms canonicalize; UNC passes; empty/relative/non-string refuse; whitespace trims. Requiring the controller under plain node is side-effect-free, so the guard is unit-testable without Electron (`isUserMediaPath` exported).
+
+Gates: importpath 5/5 NEW · runner `pnpm test:tmcut` 22/22 · lint 0.

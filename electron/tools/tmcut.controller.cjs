@@ -25,22 +25,26 @@ function getDirs() {
 }
 
 /**
- * Validate that a file path is within allowed roots (prevent path traversal).
- * Allowed roots: tmcut userData directory and resources directory.
- * Returns normalized path if safe, null if unsafe.
+ * Structural validation for USER-SELECTED media paths (import dialog,
+ * Explorer drag-and-drop, relink). These files legitimately live anywhere
+ * on the user's disks, so a root whitelist cannot apply — the old
+ * whitelist here (userData + resources only) silently rejected every
+ * real import: analyzeAsset -> ok:false -> asset 'missing' -> the amber
+ * "unreadable media" banner on every dropped file (R110).
+ *
+ * Every operation behind this guard is a read-only probe/thumbnail/
+ * waveform/proxy pass or a stat on a file the user explicitly added;
+ * internal app files (project JSON, snapshots, cache) are keyed through
+ * sanitizeId() instead and never route here. Reject empty, non-absolute
+ * or unparsable paths. Forward slashes from normalizeMediaPath() are
+ * fine — path.resolve() canonicalizes them.
  */
-function isPathSafe(filePath) {
-  if (typeof filePath !== 'string' || !filePath) return null
+function isUserMediaPath(filePath) {
+  if (typeof filePath !== 'string' || !filePath.trim()) return null
+  const trimmed = filePath.trim()
+  if (!path.isAbsolute(trimmed)) return null
   try {
-    const normalized = path.normalize(filePath)
-    const resolved = path.resolve(normalized)
-    const allowedRoots = [
-      path.resolve(app.getPath('userData')),
-      path.resolve(getResourcesDir())
-    ]
-    // Check if resolved path starts with any allowed root
-    const safe = allowedRoots.some(root => resolved.startsWith(root + path.sep) || resolved === root)
-    return safe ? resolved : null
+    return path.resolve(trimmed)
   } catch {
     return null
   }
@@ -904,7 +908,7 @@ function registerTmcutController() {
     const result = {}
     if (!Array.isArray(paths)) return result
     for (const p of paths.slice(0, 500)) {
-      const safePath = isPathSafe(p)
+      const safePath = isUserMediaPath(p)
       if (safePath) {
         result[p] = getFileStat(safePath)
       }
@@ -918,13 +922,13 @@ function registerTmcutController() {
   })
 
   ipcMain.handle(`${moduleName}:extractFrame`, async (_event, { src, atSec, width }) => {
-    const safePath = isPathSafe(src)
+    const safePath = isUserMediaPath(src)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return extractFrameAt(safePath, atSec, width)
   })
 
   ipcMain.handle(`${moduleName}:extractAudio`, async (_event, { filePath }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return extractCaptionAudio(safePath)
   })
@@ -951,37 +955,37 @@ function registerTmcutController() {
   })
 
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return extractWaveform(safePath, buckets)
   })
 
   ipcMain.handle(`${moduleName}:analyzeAsset`, async (_event, { filePath, kind }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return analyzeAsset(safePath, kind)
   })
 
   ipcMain.handle(`${moduleName}:analyzeScenes`, async (_event, { filePath, threshold }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return analyzeScenes(safePath, threshold)
   })
 
   ipcMain.handle(`${moduleName}:analyzeSilence`, async (_event, { filePath, noiseDb, minDuration }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return analyzeSilence(safePath, noiseDb, minDuration)
   })
 
   ipcMain.handle(`${moduleName}:generateProxy`, async (_event, { filePath, width }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return generateProxy(safePath, width)
   })
 
   ipcMain.handle(`${moduleName}:stabilizeVideo`, async (_event, { filePath, options }) => {
-    const safePath = isPathSafe(filePath)
+    const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
     return stabilizeVideo(safePath, options)
   })
@@ -989,4 +993,7 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:listFonts`, () => listSystemFonts())
 }
 
-module.exports = { registerTmcutController }
+// isUserMediaPath exported for the R110 regression spec (pure function,
+// no Electron state involved; requiring this module outside Electron is
+// side-effect-free because registration only runs from main.cjs).
+module.exports = { registerTmcutController, isUserMediaPath }
