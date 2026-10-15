@@ -348,6 +348,33 @@
       "soonTitle": "Coming soon",
       "soonDesc": "This category is planned for a future update"
     },
+    "fxLib": {
+      "animPresets": "Animation Presets",
+      "animPresetsHint": "Written as opacity/scale keyframes — visible and editable in the keyframe lanes. Preview-only until keyframe export lands.",
+      "anim": {
+        "fade": "Fade",
+        "fadeIn": "Fade In",
+        "fadeOut": "Fade Out",
+        "zoomIn": "Zoom In",
+        "zoomOut": "Zoom Out"
+      },
+      "needClip": "Select a clip on the timeline first",
+      "unnamedClip": "selected clip",
+      "targetHint": "Applies to: {clip}",
+      "transitionDefault": "0.5s at the cut with the left neighbor",
+      "transitionRejected": "Transition not applied",
+      "reasonNoNeighbor": "No clip touches the left edge of this clip",
+      "reasonGap": "There is a gap before this clip — move the clips together first",
+      "reasonTooLong": "The transition is longer than one of the two clips",
+      "reasonUnknown": "Unknown transition type",
+      "lut": {
+        "neutral": "Neutral",
+        "warm": "Warm",
+        "cool": "Cool",
+        "cinematic": "Cinematic",
+        "vintage": "Vintage"
+      }
+    },
     "tracks": {
       "mute": "Mute track",
       "unmute": "Unmute track",
@@ -551,7 +578,7 @@
       "fadeOut": "Fade out",
       "deleteClip": "Delete this clip",
       "noClipSelected": "Select a clip on timeline to view and edit properties.",
-      "tabVideo": "Video",
+      "tabVisual": "Visual",
       "tabAudio": "Audio",
       "tabSpeed": "Speed",
       "tabEffects": "Effects"

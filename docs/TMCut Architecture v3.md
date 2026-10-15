@@ -8385,3 +8385,17 @@ A scripted pass over the ten studio files converted every "dark-palette" utility
 Two repair passes fixed transform collateral (nested `dark:` tokens produced invalid `dark::` forms and duplicate dark-scoped utilities; Tailwind CSS order — not author order — decides duplicates, so every conflict had to be collapsed, not visually guessed). Net result across editor.vue + nine components: 295 dark-palette + 198 light-text/white decisions paired, LINT/TC/runner unaffected. The studio chrome (timeline, inspector, media bin, modals, shell) now follows the app's `useColorMode` toggle exactly like every other page, while the canvas well stays professional-dark.
 
 Gates: runner 22/22 · typecheck 0 · lint 0 · build sanity 0.
+
+# 176. R112 — FX library panel ("More" tab) + full inspector tab sets
+
+Two user-reported gaps closed at once: the library's More tab was a coming-soon placeholder with no effect categories, and the right inspector only showed property tabs for some clip kinds ("the right form is missing the animation tab…"). Both now follow the CapCut-referenced design in `private/tmcut/2`.
+
+## 176.1 `TmcutFxLibrary` — the More tab becomes a real browser
+
+A new studio-panel component with three sub-tabs — **Effects / Transitions / Filters** — driven entirely by the CORE registries so the panel can never advertise something the pipeline cannot render: the effects grid maps `EFFECT_REGISTRY` (minus `lut3d`, which owns the Filters tab, and `stabilize`, which keeps its dedicated E-5 section), the transitions grid maps `KNOWN_TRANSITIONS` (labels reuse the clip-menu i18n keys), and the filters grid maps the `lut3d` enum's five presets with gradient swatch tiles. Effects/filters add/toggle on the SELECTED clip; transitions go through the store's validated `applyClipTransition` (a pick on the same tile clears; refusals toast the core reason — no-neighbor/gap/too-long, both locales). A live "Applies to: {clip}" bar shows the current target. All pure math lives in `app/utils/tmcut/fxLibrary.ts` (toggle helpers + preset keyframe builder + reason mapper) with a 7-check spec; the old placeholder stays only as the unknown-category fallback.
+
+## 176.2 Inspector tab completeness
+
+The tab model renamed `video`→`visual` (its content is transform/appearance, not "video" specifically) and VIDEO clips now get the full five-tab set: **Visual ✓ Audio ✓ Speed ✓ Animation ✓ (new) Effects ✓**. Text keeps Visual/Animation/Speed, audio keeps Audio/Speed — still no dead tabs. The new media Animation tab writes CapCut-style whole-clip presets (Fade / Fade In / Fade Out / Zoom In / Zoom Out / Reset) as the SAME opacity/scale keyframes the ⏱ diamond buttons produce — so presets stay visible and editable in the keyframe lanes instead of hiding in a parallel animation model. Edge ramps clamp to half the clip (the core fade rule); a preset re-run replaces its own channel only (x/y/volume keyframes survive). The preview-only honesty chip rides along (keyframe export is still a roadmap item).
+
+Gates: runner 23/23 (fx spec auto-discovered) · new spec 7/7 · lint 0 · i18n parity 2818/2818 · typecheck 0 · build 0.

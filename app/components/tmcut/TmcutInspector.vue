@@ -7,7 +7,9 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
-import { clipDurationSec, clipStartTicks } from '~/utils/tmcut/clipTime'
+import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
+import { applyMediaAnimPreset } from '~/utils/tmcut/fxLibrary'
+import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -20,15 +22,16 @@ const { formatTimecode, playhead } = useTmcutPlayback()
 const clip = computed(() => selectedClip.value?.item)
 const trackType = computed(() => selectedClip.value?.track)
 
-// Clip property tabs (design #2): Video / Audio / Speed / Animation — the tab list
+// Clip property tabs (design #2 + R112): every clip type gets its full
+// editor — video: Visual / Audio / Speed / Animation / Effects; the tab list
 // follows the clip type so no dead (always-empty) tab ever shows.
-type TabKey = 'video' | 'audio' | 'speed' | 'effects' | 'animation'
-const activeTab = ref<TabKey>('video')
+type TabKey = 'visual' | 'audio' | 'speed' | 'effects' | 'animation'
+const activeTab = ref<TabKey>('visual')
 
 const availableTabs = computed<TabKey[]>(() => {
   if (trackType.value === 'audio') return ['audio', 'speed']
-  if (trackType.value === 'text') return ['video', 'animation', 'speed']
-  return ['video', 'audio', 'speed', 'effects']
+  if (trackType.value === 'text') return ['visual', 'animation', 'speed']
+  return ['visual', 'audio', 'speed', 'animation', 'effects']
 })
 
 const currentTab = computed(() => (
@@ -37,8 +40,8 @@ const currentTab = computed(() => (
 
 const tabItems = computed(() => availableTabs.value.map(key => ({
   key,
-  label: key === 'video'
-    ? t('tmcut.inspectorProps.tabVideo')
+  label: key === 'visual'
+    ? t('tmcut.inspectorProps.tabVisual')
     : key === 'audio'
       ? t('tmcut.inspectorProps.tabAudio')
       : key === 'speed'
@@ -46,8 +49,8 @@ const tabItems = computed(() => availableTabs.value.map(key => ({
         : key === 'effects'
           ? t('tmcut.inspectorProps.tabEffects')
           : t('tmcut.animation.tab'),
-  icon: key === 'video'
-    ? 'i-lucide-film'
+  icon: key === 'visual'
+    ? (trackType.value === 'text' ? 'i-lucide-type' : 'i-lucide-image')
     : key === 'audio'
       ? 'i-lucide-volume-2'
       : key === 'speed'
@@ -199,6 +202,54 @@ function applyAnimPreset(preset: 'fade' | 'slide' | 'pop' | 'reset') {
       animOut: 'none'
     })
   }
+}
+
+// ===== Media animation presets (R112, video clips) =========================
+// CapCut-style whole-clip entrances/exits. They write the SAME opacity/scale
+// keyframes the ⏱ buttons produce (fxLibrary.applyMediaAnimPreset), so the
+// result stays visible in the keyframe lanes and editable afterwards.
+// Preview-only — the same honesty label as every other keyframe.
+const mediaAnimOptions = computed(() => [
+  { label: t('tmcut.fxLib.anim.fade'), value: 'fade' as MediaAnimPreset },
+  { label: t('tmcut.fxLib.anim.fadeIn'), value: 'fade-in' as MediaAnimPreset },
+  { label: t('tmcut.fxLib.anim.fadeOut'), value: 'fade-out' as MediaAnimPreset },
+  { label: t('tmcut.fxLib.anim.zoomIn'), value: 'zoom-in' as MediaAnimPreset },
+  { label: t('tmcut.fxLib.anim.zoomOut'), value: 'zoom-out' as MediaAnimPreset },
+  { label: t('tmcut.animation.reset'), value: 'reset' as MediaAnimPreset }
+])
+
+// A preset is "active" when it currently owns both fade edges (fade) or the
+// whole scale channel (zoom) — a cheap truthy signal for the button state.
+const mediaAnimActive = computed<MediaAnimPreset | null>(() => {
+  const c = clip.value
+  if (!c || trackType.value !== 'video') return null
+  const props = propsWithKeyframes(c)
+  const hasOpacity = props.includes('opacity')
+  const hasScale = props.includes('scale')
+  if (!hasOpacity && !hasScale) return null
+  if (hasOpacity && !hasScale) {
+    const kf = c.keyframes || []
+    const inEdge = kf.find(k => k.prop === 'opacity' && k.t === 0 && k.value === 0)
+    const outEdge = kf.find(k => k.prop === 'opacity' && k.value === 0 && k.t === clipDurationTicks(c))
+    if (inEdge && outEdge) return 'fade'
+    if (inEdge) return 'fade-in'
+    if (outEdge) return 'fade-out'
+    return 'fade'
+  }
+  if (!hasOpacity) return (c.keyframes || []).some(k => k.prop === 'scale') ? 'zoom-in' : null
+  return null
+})
+
+function applyMediaAnimChoice(preset: MediaAnimPreset) {
+  const c = clip.value
+  const clipId = selectedClipId.value
+  if (!c || !clipId) return
+  const dur = clipDurationTicks(c)
+  const opacity = c.opacity ?? 100
+  const scale = c.scale ?? 100
+  const next = applyMediaAnimPreset(c.keyframes || [], preset, dur, opacity, scale)
+  pushHistory()
+  updateClip(clipId, { keyframes: next })
 }
 
 const alignOptions = [
@@ -589,7 +640,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Text Content Editor (If Text Track) -->
-    <div v-if="currentTab === 'video' && trackType === 'text'" class="space-y-2">
+    <div v-if="currentTab === 'visual' && trackType === 'text'" class="space-y-2">
       <label class="font-medium text-neutral-500 dark:text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
       <UTextarea
         :model-value="clip.text || ''"
@@ -819,6 +870,42 @@ const saveStateLabel = computed(() => {
       </div>
     </div>
 
+    <!-- Media Animation (R112, video only): whole-clip presets written as
+         the SAME opacity/scale keyframes the ⏱ buttons produce, so they
+         stay visible & editable in the keyframe lanes. Preview-only like
+         every other keyframe until the render pipeline lands. -->
+    <div v-if="currentTab === 'animation' && trackType === 'video'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+          {{ t('tmcut.fxLib.animPresets') }}
+        </span>
+        <span
+          v-if="clipHasKeyframes"
+          class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
+          :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+        >
+          <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
+          {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+        </span>
+      </div>
+      <div class="grid grid-cols-3 gap-1.5">
+        <UButton
+          v-for="p in mediaAnimOptions"
+          :key="p.value"
+          size="xs"
+          :variant="mediaAnimActive === p.value ? 'soft' : 'ghost'"
+          :color="p.value === 'reset' ? 'neutral' : mediaAnimActive === p.value ? 'primary' : 'neutral'"
+          class="justify-center text-[11px]"
+          @click="applyMediaAnimChoice(p.value)"
+        >
+          {{ p.label }}
+        </UButton>
+      </div>
+      <p class="text-[10px] text-neutral-500 dark:text-neutral-500 leading-snug">
+        {{ t('tmcut.fxLib.animPresetsHint') }}
+      </p>
+    </div>
+
     <!-- Timing & Speed Settings -->
     <div v-if="currentTab === 'speed'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{
@@ -881,7 +968,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Media Fitting (Phase 2, video track only) -->
-    <div v-if="currentTab === 'video' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.fit.label')
       }}</span>
 
@@ -996,7 +1083,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Video Stabilizer (Roadmap E-5, desktop only) -->
-    <div v-if="currentTab === 'video' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType === 'video' && isDesktop" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
           <UIcon name="i-lucide-activity" class="size-3.5 text-primary" />
@@ -1054,7 +1141,7 @@ const saveStateLabel = computed(() => {
     </div>
 
     <!-- Transform Settings (Video & Text) -->
-    <div v-if="currentTab === 'video' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{
           t('tmcut.inspectorProps.transform') }}</span>

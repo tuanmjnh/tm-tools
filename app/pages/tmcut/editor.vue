@@ -1473,7 +1473,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
               </p>
             </div>
 
-            <!-- Coming-soon categories (Stickers / Effects / Transitions / Filters) -->
+            <!-- Effects / Transitions / Filters library (roadmap R112) -->
+            <TmcutFxLibrary v-else-if="mediaTab === 'more'" />
+
+            <!-- Unknown category fallback -->
             <div v-else class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center">
               <UIcon name="i-lucide-sparkles" class="size-7 mx-auto text-neutral-500 dark:text-neutral-600 mb-2" />
               <p class="text-xs font-medium text-neutral-500 dark:text-neutral-400">

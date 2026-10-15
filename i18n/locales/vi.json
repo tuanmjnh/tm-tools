@@ -348,6 +348,33 @@
       "soonTitle": "Sắp ra mắt",
       "soonDesc": "Danh mục này dự kiến ở bản cập nhật sau"
     },
+    "fxLib": {
+      "animPresets": "Presets hoạt ảnh",
+      "animPresetsHint": "Được ghi dưới dạng keyframe opacity/scale — hiển thị và chỉnh sửa được trên lane keyframe. Chỉ xem trước cho đến khi xuất keyframe hoàn thiện.",
+      "anim": {
+        "fade": "Mờ dần",
+        "fadeIn": "Hiện dần",
+        "fadeOut": "Mất dần",
+        "zoomIn": "Phóng to từ từ",
+        "zoomOut": "Thu nhỏ từ từ"
+      },
+      "needClip": "Hãy chọn một clip trên timeline trước",
+      "unnamedClip": "clip đang chọn",
+      "targetHint": "Áp dụng cho: {clip}",
+      "transitionDefault": "0.5s tại điểm cắt với clip liền trước",
+      "transitionRejected": "Chưa áp dụng được chuyển tiếp",
+      "reasonNoNeighbor": "Không có clip nào chạm mép trái của clip này",
+      "reasonGap": "Có khoảng trống trước clip này — hãy kéo hai clip sát nhau trước",
+      "reasonTooLong": "Chuyển tiếp dài hơn một trong hai clip",
+      "reasonUnknown": "Loại chuyển tiếp không hợp lệ",
+      "lut": {
+        "neutral": "Trung tính",
+        "warm": "Ấm",
+        "cool": "Lạnh",
+        "cinematic": "Điện ảnh",
+        "vintage": "Cổ điển"
+      }
+    },
     "tracks": {
       "mute": "Tắt tiếng track",
       "unmute": "Bật tiếng track",
@@ -551,7 +578,7 @@
       "fadeOut": "Mờ ra",
       "deleteClip": "Xóa clip này",
       "noClipSelected": "Chọn một clip trên timeline để xem và chỉnh sửa thông số.",
-      "tabVideo": "Video",
+      "tabVisual": "Hình ảnh",
       "tabAudio": "Âm thanh",
       "tabSpeed": "Tốc độ",
       "tabEffects": "Hiệu ứng"
