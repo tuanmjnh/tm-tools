@@ -526,7 +526,15 @@ function computeEffectsCssFilter(effects: Array<{ type: string, params: Record<s
       const b = (Number(eff.params.brightness) || 0) / 100
       const c = (Number(eff.params.contrast) || 100) / 100
       const s = (Number(eff.params.saturation) || 100) / 100
-      parts.push(`brightness(${1 + b * 0.5}) contrast(${c}) saturate(${s})`)
+      // R117: temp — CSS has no colorbalance; warm ≈ sepia (amber cast).
+      // Cool uses the known sepia+hue-rotate(180deg) trick: sepia pushes
+      // the image toward amber (~25deg hue), rotating +180 lands that
+      // cast on cyan-blue — a recognizable "lạnh" tint.
+      const t = Number(eff.params.temp || 0) / 100
+      let tempFilter = ''
+      if (t > 0) tempFilter = `sepia(${Math.min(0.3, t * 0.3).toFixed(3)})`
+      else if (t < 0) tempFilter = `sepia(${Math.min(0.35, -t * 0.35).toFixed(3)}) hue-rotate(180deg)`
+      parts.push(`brightness(${1 + b * 0.5}) contrast(${c}) saturate(${s})${tempFilter ? ' ' + tempFilter : ''}`)
     } else if (eff.type === 'lut3d') {
       const preset = String(eff.params.lut || '')
       if (preset === 'warm') parts.push('sepia(0.2) saturate(1.15) hue-rotate(-5deg)')
@@ -561,10 +569,16 @@ const videoTransformStyle = computed(() => {
   // Keyframes (roadmap B1) evaluate at the playhead; the static clip
   // fields are the fallback for props without keyframes.
   const base = clipVisual(clip)
-  const style: { transform: string, opacity: number, clipPath?: string, filter?: string } = { ...base }
+  const style: { transform: string, opacity: number, clipPath?: string, filter?: string, mixBlendMode?: string } = { ...base }
   const effectFilter = computeEffectsCssFilter(clip.effects || [])
   if (effectFilter) {
     style.filter = effectFilter
+  }
+  // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
+  // the FFmpeg `blend` filter the export uses — same mode names.
+  const blend = (clip as { blend?: string }).blend
+  if (blend && blend !== 'normal') {
+    style.mixBlendMode = blend as 'normal' | 'screen' | 'overlay' | 'multiply'
   }
 
   // Transition crossfade (roadmap B3): the main element is the INCOMING

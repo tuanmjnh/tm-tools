@@ -31,6 +31,10 @@ import {
 import type { CoreClipboard, TmcutTimeline, TmcutTextAnimationType, TmcutStabilizeLevel, TmcutStabilizeStatus } from '@tmcut-core'
 
 // Type definitions for TMCut project
+/** R116: FFmpeg `blend` mode for compositing a clip over the track
+ *  below it (normal = the classic overlay, no blend filter). */
+export type TmcutBlendMode = 'normal' | 'screen' | 'overlay' | 'multiply'
+
 export interface TmcutTimelineItem {
   id: string
   name?: string
@@ -79,6 +83,9 @@ export interface TmcutTimelineItem {
   x: number
   y: number
   rotation: number
+  /** R116: composite blend mode for video clips (FFmpeg `blend`
+      filter on the overlay chain). 'normal' (default) = no filter. */
+  blend?: TmcutBlendMode
   volume?: number
   fit?: TmcutFitMode
   focusX?: number

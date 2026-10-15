@@ -8,7 +8,7 @@ import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
-import { applyMediaAnimPreset } from '~/utils/tmcut/fxLibrary'
+import { applyMediaAnimPreset, effectDefaultParams } from '~/utils/tmcut/fxLibrary'
 import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
 
 const { t } = useI18n()
@@ -371,6 +371,34 @@ const eqGradeEffect = computed(() => {
   return c.effects.find(e => e.type === 'eq-grade') || null
 })
 
+// Typed accessors for the Color Grade sliders (params values are
+// `unknown` at the type level — normalize guarantees numbers at runtime).
+const eqGradeDesc = EFFECT_REGISTRY['eq-grade']
+function eqParam(name: string, dflt: number): number {
+  const raw = eqGradeEffect.value?.params[name]
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : dflt
+}
+const eqBrightness = computed(() => eqParam('brightness', 0))
+const eqContrast = computed(() => eqParam('contrast', 100))
+const eqSaturation = computed(() => eqParam('saturation', 100))
+const tempValue = computed(() => eqParam('temp', 0))
+
+const blendMode = computed(() => clip.value?.blend || 'normal')
+
+const BLEND_OPTIONS = [
+  { label: t('tmcut.inspectorProps.blendNormal'), value: 'normal' },
+  { label: t('tmcut.inspectorProps.blendScreen'), value: 'screen' },
+  { label: t('tmcut.inspectorProps.blendOverlay'), value: 'overlay' },
+  { label: t('tmcut.inspectorProps.blendMultiply'), value: 'multiply' }
+]
+
+function handleBlendUpdate(value: string) {
+  const id = selectedClipId.value
+  if (!id) return
+  pushHistory() // discrete blend change → its own undo entry (B8)
+  updateClip(id, { blend: value as 'normal' | 'screen' | 'overlay' | 'multiply' })
+}
+
 // Desktop export renders keyframes (keyframeExpr in the render builders);
 // the tooltip spells out which channels so users can trust the label.
 const keyframesExportedHint = computed(() =>
@@ -486,7 +514,10 @@ function ensureEqGradeAndUpdate(param: string, value: number) {
   const effects = [...(c.effects || [])]
   let eq = effects.find(e => e.type === 'eq-grade')
   if (!eq) {
-    eq = { type: 'eq-grade', params: { brightness: 0, contrast: 100, saturation: 100 } }
+    // Defaults come from the registry (single source of truth) — never
+    // hand-coded here, newest core params show up automatically.
+    if (!eqGradeDesc) return
+    eq = { type: 'eq-grade', params: effectDefaultParams(eqGradeDesc) }
     effects.push(eq)
   }
   eq.params = { ...eq.params, [param]: value }
@@ -1254,6 +1285,22 @@ const saveStateLabel = computed(() => {
         />
       </div>
 
+      <!-- Blend mode (mock #2 "Hòa trộn"): how a clip composites over the
+           track below it — the render pipeline maps it to FFmpeg blend
+           (R116); 'normal' keeps the classic overlay. Video clips only:
+           a text clip already composites via drawtext/overlay. -->
+      <div v-if="trackType === 'video'">
+        <label class="text-[10px] text-neutral-500 block mb-1">
+          {{ t('tmcut.inspectorProps.blendMode') }}
+        </label>
+        <USelect
+          :items="BLEND_OPTIONS"
+          :model-value="blendMode"
+          size="xs"
+          @update:model-value="handleBlendUpdate(String($event))"
+        />
+      </div>
+
       <div class="grid grid-cols-2 gap-2">
         <div>
           <div class="flex items-center justify-between">
@@ -1307,13 +1354,13 @@ const saveStateLabel = computed(() => {
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
             <label>{{ t('tmcut.inspectorProps.brightness') }}</label>
-            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.brightness ?? 0 }}</span>
+            <span class="font-mono text-[10px]">{{ eqBrightness }}</span>
           </div>
           <input
             type="range"
             min="-100"
             max="100"
-            :value="eqGradeEffect?.params.brightness ?? 0"
+            :value="eqBrightness"
             class="w-full accent-primary"
             @input="e => ensureEqGradeAndUpdate('brightness', Number((e.target as HTMLInputElement).value))"
           >
@@ -1321,13 +1368,13 @@ const saveStateLabel = computed(() => {
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
             <label>{{ t('tmcut.inspectorProps.contrast') }}</label>
-            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.contrast ?? 100 }}</span>
+            <span class="font-mono text-[10px]">{{ eqContrast }}</span>
           </div>
           <input
             type="range"
             min="0"
             max="200"
-            :value="eqGradeEffect?.params.contrast ?? 100"
+            :value="eqContrast"
             class="w-full accent-primary"
             @input="e => ensureEqGradeAndUpdate('contrast', Number((e.target as HTMLInputElement).value))"
           >
@@ -1335,15 +1382,35 @@ const saveStateLabel = computed(() => {
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
             <label>{{ t('tmcut.inspectorProps.saturation') }}</label>
-            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.saturation ?? 100 }}</span>
+            <span class="font-mono text-[10px]">{{ eqSaturation }}</span>
           </div>
           <input
             type="range"
             min="0"
             max="200"
-            :value="eqGradeEffect?.params.saturation ?? 100"
+            :value="eqSaturation"
             class="w-full accent-primary"
             @input="e => ensureEqGradeAndUpdate('saturation', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <!-- Color Temp (mock #2: "-12 (Lạnh)"): negative = cooler (blue),
+             positive = warmer (amber); export maps it to FFmpeg
+             colorbalance (core), preview approximates with sepia/hue. -->
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.colorTemp') }}</label>
+            <span class="font-mono text-[10px]">
+              {{ tempValue }}
+              {{ tempValue < 0 ? t('tmcut.inspectorProps.tempCool') : tempValue > 0 ? t('tmcut.inspectorProps.tempWarm') : '' }}
+            </span>
+          </div>
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            :value="tempValue"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('temp', Number((e.target as HTMLInputElement).value))"
           >
         </div>
       </div>

@@ -8433,3 +8433,42 @@ The mock (`private/tmcut/2`) shows a basic color-grade block (Temp / Saturation 
 The "Video Clips in Project" sidebar rows hid the duration and swapped in two action buttons on hover — the layout shift read as the row zooming in. Now the duration stays visible and the action buttons (ghost variant) always occupy their space, fading in via `opacity` on hover: simple focus, no shift, no scale.
 
 Gates: runner 23/23 · lint 0 · typecheck 0 · build 0 · i18n parity 2825/2825.
+
+# 180. R116 — Blend mode (Hòa trộn) per clip
+
+User feedback pointed at the right-panel mock (`private/tmcut/2/code.html` Accordion 1) which carries a **Blend** dropdown (Normal / Screen / Overlay / Multiply). The app had no blend control at all — the UI and the render pipeline both had to gain it, together, so the control is never dead.
+
+## 180.1 Store model
+
+`TmcutTimelineItem` gained `blend?: TmcutBlendMode` with `TmcutBlendMode = 'normal' | 'screen' | 'overlay' | 'multiply'` (exported from `useTmcutProject`). 'normal' is the default and means "no change" — the overlay chain is byte-identical to before, so existing projects are unaffected.
+
+## 180.2 Render pipeline (desktop FFmpeg)
+
+`app/utils/tmcut/render/video.ts`: the per-clip compositing step now chooses its combiner from the blend mode. 'normal' keeps the existing `overlay=…` chain (transform-aware, positioned). Any other mode uses FFmpeg's **2-input `blend`** filter (`all_mode=…:shortest=1`) between the same two locked-to-canvas streams, so a non-normal blend is well-defined and graph-valid. The faded/opacity branch also gained the same switch (a clip with a non-normal blend still needs a background to blend over). Text clips deliberately keep the drawtext/overlay pipeline — CSS blend on text is meaningless.
+
+## 180.3 Preview (web + desktop)
+
+`TmcutPreviewPlayer.vue`: `videoTransformStyle` now carries `mixBlendMode` for non-normal modes. CSS `mix-blend-mode` is the direct preview counterpart of the FFmpeg `blend` filter and uses the same mode names, so what you see in preview is what ships.
+
+## 180.4 Inspector
+
+`TmcutInspector.vue` Visual tab: a **Blend Mode** dropdown under Rotation (video clips only — text already composites via drawtext). `handleBlendUpdate` pushes its own undo entry. The dropdown is wired to `BLEND_OPTIONS` with en+vi labels.
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · build 0 · i18n parity 2830/2830.
+
+# 181. R117 — Color temperature (Nhiệt độ màu) end-to-end
+
+The mock's Color Grade accordion (`private/tmcut/2`, Accordion 3) shows a **Temp** slider with a signed readout ("−12 (Lạnh)"). Implemented end-to-end in the order the architecture demands: core first, then pipeline, then UI.
+
+## 181.1 Core (`tmcut-core` commit b1b56b5)
+
+`EFFECT_REGISTRY['eq-grade']` gained a `temp` number param (−100..100, default 0; negative = cooler, positive = warmer). `buildFfmpegEffectFilters` maps it to `colorbalance=rs=r:bs=-r`, clamped to [−1, 1] — the same scale the lut3d presets already use, so a stray value can never break the graph. Zero emits no filter: existing projects export byte-identical. Battery 210/210 (the normalize-defaults test updated to carry `temp: 0`).
+
+## 181.2 App
+
+- **Inspector**: Color Grade accordion gained a Temp slider under Saturation, with the mock's signed readout ("−12 (Lạnh)" / "12 (Ấm)" via `tempCool`/`tempWarm` keys). All four grade sliders now read params through typed accessors (`eqParam` guarding the `unknown` params type), and the lazily-created `eq-grade` entry gets its defaults from `effectDefaultParams(EFFECT_REGISTRY['eq-grade'])` instead of hand-copied numbers — a future core param shows up with correct defaults automatically.
+- **Preview**: `computeEffectsCssFilter` approximates temp — warm = `sepia(x)` (amber cast), cool = the sepia + `hue-rotate(180deg)` trick (cyan-blue cast), proportional to |temp|. Honest approximation: export uses colorbalance, the preview gets the same direction and feel.
+
+Also folded in: the R116 work that was staged in the same files — per-clip **blend mode** (store `blend` field, FFmpeg 2-input `blend` combiner in video.ts, CSS `mix-blend-mode` preview, inspector Blend dropdown) and the project-clips hover re-landing (duration pinned right, buttons fade in over it), restored from the pre-reformat file so editor.vue keeps its lint-clean formatting.
+
+Gates: core 210/210 · runner 23/23 · lint 0 · typecheck 0 · build 0 · i18n parity 2833/2833.

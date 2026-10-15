@@ -99,6 +99,13 @@ export function compileVideoPipeline(
     const vOut = `[v_scaled_${currentInputIdx}]`
     const clipChain = `[${currentInputIdx}:v]trim=start=${clip.inSec}:end=${clip.outSec},${setpts}${reverseStep},${fitFilters.join(',')}${effectChain},setsar=1`
 
+    // Blend mode (R116): 'normal' = the classic overlay combiner; any
+    // other mode composites with the FFmpeg `blend` filter (2-input,
+    // pixel-wise — screen/overlay/multiply). Both inputs are locked to
+    // the canvas size, so a full-frame blend is well-defined.
+    const blendMode = clip.raw.blend || 'normal'
+    const blendCombiner = blendMode !== 'normal' ? `blend=all_mode='${blendMode}':shortest=1` : ''
+
     if (transform) {
       const vFg = `[v_fg_${currentInputIdx}]`
       let vBg: string
@@ -123,9 +130,10 @@ export function compileVideoPipeline(
       // stream ("Input link … do not match"). An explicit scale locks every
       // per-clip stream to the canvas size (real-FFmpeg verified, R79).
       const sizeLock = ctx.bgBase ? `,scale=${ctx.canvasW}:${ctx.canvasH},setsar=1` : ''
+      const combiner = blendCombiner || transform.overlay
       graph.addFilterChain(`${clipChain},${transform.tail}${alphaArg}${vFg}`)
-      graph.addFilterChain(`${vBg}${vFg}${transform.overlay}${sizeLock}${vOut}`)
-    } else if (faded || kfOpacity) {
+      graph.addFilterChain(`${vBg}${vFg}${combiner}${sizeLock}${vOut}`)
+    } else if (faded || kfOpacity || blendMode !== 'normal') {
       const vBg = `[v_obg_${currentInputIdx}]`
       const vFg = `[v_ofg_${currentInputIdx}]`
       const bgSrc = ctx.bgBase
@@ -134,7 +142,8 @@ export function compileVideoPipeline(
       graph.addFilterChain(bgSrc)
       graph.addFilterChain(`${clipChain}${alphaArg}${vFg}`)
       const sizeLock = ctx.bgBase ? `,scale=${ctx.canvasW}:${ctx.canvasH},setsar=1` : ''
-      graph.addFilterChain(`${vBg}${vFg}overlay=shortest=1${sizeLock}${vOut}`)
+      const combiner = blendCombiner || 'overlay=shortest=1'
+      graph.addFilterChain(`${vBg}${vFg}${combiner}${sizeLock}${vOut}`)
     } else {
       graph.addFilterChain(`${clipChain}${vOut}`)
     }
