@@ -8130,3 +8130,25 @@ After save/history/history leaks were hunted and fixed, the next UI seam is the 
 No defect. The existing `addClipToTrack` implementation already performs the collision check, calls `insertClipRipple` with `skipHistory:true` (history was already pushed for the mutation), and falls back to a plain `items.push` when the core op is rejected (locked track). The spec now pins the five corner cases that make the UI feel like CapCut.
 
 Gates: ripple 5/5 NEW · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
+
+# 161. R97 — Markers + snap pinned (roadmap B5)
+
+The ruler marker + snap seam had never been behaviour-tested in the store layer. The UI exposed add/rename/delete markers and the playhead snap, but the only guarantees came from core unit tests — which run in a vacuum without the store’s `markerShim`, `ensureMarkers` live reference, the `secToTicks` ↔ `ticksToSec` boundaries, or the undo integration.
+
+## 161.1 The spec
+
+`tests/unit/tmcut_markers.spec.ts` (7 checks, `pnpm test:markers`):
+
+- `addMarkerAt` creates a marker, persists to the mirror, and is undo/redo-able;
+- `updateMarker` (label/colour) is a single undo entry;
+- `removeMarkerById` deletes and is undoable;
+- `snapTimeSec` correctly snaps to clip starts/ends, zero, and playhead;
+- markers are first-class snap candidates — `snapTimeSec` sees them even when no clips exist, and when a marker sits closer than a clip edge it wins;
+- snap threshold and ignore-ids are honoured (no cross-track leakage);
+- markers round-trip via the localStorage mirror and survive `loadProject`.
+
+## 161.2 Finding
+
+No defect. The store’s shim `markerShim()` returns a `TmcutTimeline` whose `markers` array is **the same object** as `currentProject.value.timeline.markers`, so core `addMarker`/`removeMarker` mutations are immediately visible in the UI. `snapTimeSec` decodes tracks to v3, installs that same marker array, and forwards ticks/options. All boundaries stay in ticks — seconds only appear at the UI edge (`secToTicks` / `ticksToSec`).
+
+Gates: markers 7/7 NEW · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
