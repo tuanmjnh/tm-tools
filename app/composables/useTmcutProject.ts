@@ -551,6 +551,11 @@ function createProject(
   flushDiskSave() // outgoing project keeps its pending edit (R95)
   currentProject.value = newProject
   resetHistory() // openProject paths reset the stacks — see R94
+  // The same rule covers the other per-project module state (R106): a
+  // selection or a recovery prompt from the OUTGOING project must not
+  // leak into the freshly created one.
+  selectedClipId.value = null
+  pendingRecovery.value = null
   projects.value.unshift(newProject)
   saveProject()
 

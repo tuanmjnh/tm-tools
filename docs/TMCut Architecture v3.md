@@ -8288,3 +8288,24 @@ A fake `window.electronAPI.tmcut` exercises the seam end-to-end:
 - snapshots: list/save/delete round-trip, the IPC payload survives as a plain JSON copy (reactive proxies die at the structured clone boundary), names forwarded.
 
 Gates: recovery 7/7 NEW · runner `pnpm test:tmcut` 19/19 · typecheck 0 · lint 0.
+
+# 170. R106 — Dashboard lifecycle: deleteProject neutralization and the refreshProject rules
+
+Two index-maintenance paths the dashboard relies on: `deleteProject` and `refreshProjects`. Both talk to disk over IPC and mutate module-level reactive lists. `tests/unit/tmcut_dashboard.spec.ts` (5 checks, `pnpm test:dashboard`) pins their contract, and another cross-project state leak fell out immediately.
+
+## 170.1 Defect fixed — createProject leaked the outgoing selection
+
+`loadProject` cleared `selectedClipId.value = null` and `pendingRecovery.value = null` (R94/R95). `createProject` cleared NEITHER: creating a new project with a clip selected in the outgoing project left the new project with an active `selectedClipId` pointing at a clip that didn't exist in it. Every inspector binding that reads `selectedClip` then queried the new tracks with an alien id. Fix: `createProject` clears both refs alongside its `resetHistory()` and `flushDiskSave()` calls.
+
+## 170.2 Dashboard contract pinned
+
+- `deleteProject` on the CURRENT project neutralizes the pending disk save timer (R95 — no resurrection on late timer fire), removes the localStorage mirror, drops the project from `projects.value`, clears `currentProject`, `selectedClipId` and `pendingRecovery`, and sets `saveStatus = 'idle'`; IPC receives the delete call;
+- `deleteProject` of ANOTHER project deletes only that project's files/mirror, leaving the open project, its selection and its timer untouched;
+- `refreshProjects`:
+  - unknown disk file joins the index (via unshift);
+  - known file whose DISK copy is newer replaces the in-memory entry (external writes propagate);
+  - known file whose disk copy is OLDER than memory stays untouched (local edits win);
+  - the CURRENT open project is NEVER overwritten by a refresh (in-memory authoring wins);
+  - web session (no IPC) is a clean no-op.
+
+Gates: dashboard 5/5 NEW · runner `pnpm test:tmcut` 20/20 · typecheck 0 · lint 0.
