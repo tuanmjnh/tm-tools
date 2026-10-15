@@ -398,6 +398,10 @@ async function loadProject(projectId: string) {
         currentProject.value = local
         applyProjectMigration(local)
         syncProjectIndex(local)
+        // R105: the disk file can be missing while a recovery file is not
+        // (crash before the first save). Without this call the 'force'
+        // verdict never ran and the orphaned recovery stayed invisible.
+        await detectRecovery(local.id)
         await persistProjectMetadata(local.id, { lastOpenedAt: new Date().toISOString() })
         isLoading.value = false
         return
@@ -409,6 +413,7 @@ async function loadProject(projectId: string) {
 
   const newProj = buildDefaultProject(projectId)
   currentProject.value = newProj
+  await detectRecovery(projectId) // R105: same orphan case
   isLoading.value = false
 }
 

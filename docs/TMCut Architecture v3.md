@@ -8267,3 +8267,24 @@ The C15 seam — `copySelectedClips` / `pasteClipboardAt` / `duplicateSelectedCl
 `pasteClipboardAt` and `duplicateSelectedClips` went through `applyV3Edit`, which pushes history BEFORE running the op. When every target track was locked, core skipped everything — yet an undo entry (and a save) had already been pushed: Ctrl+V onto a locked timeline silently added phantom undo steps the user had to walk back one per attempt. The same refusal rule established for `closeProjectGaps` (R99) and `removeTrackFromProject` (R103) now applies: run the op on the throwaway v3 copy FIRST, open the undo entry only if something actually lands. `pushHistory()` still snapshots the PRE-edit state because the merge-back (`syncTicksResult`) runs after the push.
 
 Gates: copy-paste 8/8 NEW · runner `pnpm test:tmcut` 18/18 · typecheck 0 · lint 0.
+
+# 169. R105 — Recovery: the crash-recovery verdict reaches the store on every load path
+
+The recovery chain (autosave writes a shadow file; `decideRecovery` compares stamps; the editor offers to restore) had only ever been unit-tested in core. The store half — what `loadProject` actually does with the verdict — had no coverage, and the seam was broken in exactly the way these seams break: silently.
+
+## 169.1 Defect fixed — orphaned recoveries invisible on the localStorage fallback
+
+`loadProject` ran `detectRecovery` ONLY when the disk (IPC) read succeeded. But the crash case the feature exists for is precisely the one where the project file may NOT exist yet: crash before the first `writeProject`, leaving only the recovery file (and, for a web-created-then-desktop-opened project, only the localStorage mirror). Opening such a project took the fallback branch, never consulted `readProjectMeta`, and the 'force' verdict — apply the recovery immediately — never fired. The user's last session was simply invisible. Fix: `detectRecovery` now runs on BOTH success and fallback paths (and the empty-project tail), guarded internally by the same IPC/server checks, so the web session stays a no-op.
+
+## 169.2 Contract pinned (`tests/unit/tmcut_recovery.spec.ts`, 7 checks, `pnpm test:recovery`)
+
+A fake `window.electronAPI.tmcut` exercises the seam end-to-end:
+
+- web session (no IPC): snapshots empty, `createSnapshot` a no-op, no prompt;
+- `decideRecovery` 'none' → no prompt; 'suggest' → current project STAYS, `pendingRecovery` carries the project id (the recovery file is keyed by project id) and the meta stamp;
+- `applyRecovery` swaps in the recovered project, clears the prompt, and persists the RECOVERED data (verified against the last `writeProject` payload, not just a count);
+- `dismissRecovery` deletes the recovery file by project id and keeps the disk project;
+- 'force' (project file missing): recovery applies immediately, legacy seconds payloads migrate exactly once through the normal schema path (R82 stamp rule), and the banner STILL surfaces — the user must know their session was recovered; the applied state is scheduled to disk with delay 0;
+- snapshots: list/save/delete round-trip, the IPC payload survives as a plain JSON copy (reactive proxies die at the structured clone boundary), names forwarded.
+
+Gates: recovery 7/7 NEW · runner `pnpm test:tmcut` 19/19 · typecheck 0 · lint 0.
