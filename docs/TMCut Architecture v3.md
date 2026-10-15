@@ -8326,3 +8326,26 @@ Spec count since the QA chain began (R91): 13 new store-seam specs, 8 product de
 The chain's closing rule — "audit every module-level timer for cross-project leaks" — found its own last entry: `setupAutosave()` was an exported 3-second debouncer with its own `autosaveTimeout` ref, and **nothing ever called it**. The real autosave is `scheduleDiskSave` (called from `saveProject`, flushed by `flushDiskSave` on every swap, R95). The dead twin was not harmless: had anyone ever wired it, it would have reintroduced, verbatim, the R95 bug class (a second timer owning `saveProject` outside the flush discipline). Removed with a comment marking why; the store exports one save scheduler, and the module-level state audit is now: `undoStack`/`redoStack` (R94 reset), `diskSaveTimer` (R95 flush + delete-cancel), `clipboard` (portable by design, R104), and nothing else.
 
 Gates: runner `pnpm test:tmcut` 20/20 · typecheck 0 · lint 0.
+
+# 173. R109 — Ripple delete, snapshot restore, canvas background, init() boot scan
+
+The last four untested store seams close with `tests/unit/tmcut_ripple2.spec.ts` (8 checks, `pnpm test:ripple2`). No product defects this round — the seams were already correct; the value is the pinning itself plus two contract facts worth writing down.
+
+## 173.1 rippleDeleteSelected contract
+
+- default (same-track): removes the clip, shifts only clips starting at or after the deleted clip's END on the same track, clears the selection, one undo restores everything;
+- `acrossTracks=true`: every UNLOCKED track shifts later clips (A/V sync); a locked track never shifts even when the delete itself succeeds;
+- a selected clip on a locked track is REFUSED with no history entry (the R99/R103 refusal rule verified via the undo-semantics probe: the clip's own add is the only stack entry, so one undo must empty the timeline).
+
+## 173.2 restoreSnapshot keeps history (by design)
+
+`loadProject` resets history because a project swap changes WHOSE edits the stack describes. `restoreSnapshot` does NOT reset: the snapshot belongs to the SAME project id, so the pre-restore stack remains the correct continuation — undo after a restore walks back the user's own pre-restore edits. The spec pins this asymmetry explicitly (undo after restore reaches the pre-clip-added state, not a dead end). The restore path also reads by `{ id, ts }`, migrates, syncs the index and mirrors synchronously; without IPC (web) it is a clean no-op.
+
+## 173.3 The two small ones
+
+- `setCanvasBackground` normalizes through core `normalizeCanvas` and mirrors to localStorage (color/transparent verified);
+- `init()` runs on every `useTmcutProject()` call and boot-scans `tmcut_project_*` / legacy `vc_project_*` localStorage keys into the index, deduped by id, corrupt payloads skipped with a console error and no throw.
+
+One spec-writing fact pinned by a genuine failure during R109: `undo()` SWAPS the project container (JSON snapshot restore), so any track/clip object reference captured before the undo is STALE afterwards — every check re-reads through `currentProject` accessors after undo/redo.
+
+Gates: ripple2 8/8 NEW · runner `pnpm test:tmcut` 21/21 · typecheck 0 · lint 0.
