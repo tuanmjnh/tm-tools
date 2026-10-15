@@ -8093,3 +8093,20 @@ Continuing the QA chain: the undo/redo stack (roadmap B8 coalescing, the app-JSO
 `undoStack`/`redoStack` are module state and snapshots carry only `{timeline, canvas}` — no project id. Nothing reset them on a project switch, so: edit project A, open/create/duplicate-to project B, press Ctrl+Z → A's timeline and canvas were transplanted into B (and auto-saved into B's file). The editor UI made this near-invisible (the clip count changed without any visible edit). Fix: `resetHistory()` (clears both stacks + `lastCoalesce`) called in every current-project swap — `loadProject`, `createProject`, `duplicateAsProject`. `applyRecovery`/`restoreSnapshot` deliberately keep the stack: same project id, same undoable stream (the load that opened the project already reset it).
 
 Gates: history 7/7 NEW · store 15/15 · time-domain 7/7 · render 12/12 · templates 4/4 · typecheck 0 · lint 0.
+
+# 159. R95 — Save lifecycle: pending writes followed the wrong project
+
+Third QA round in the chain, same seam as R94: the 2 s-debounced disk save (`scheduleDiskSave` → `persistProjectToDisk`) captures NOTHING about the project it was scheduled for — it serializes `currentProject` at FIRE time. Web builds only lean on the localStorage mirror (written synchronously), but every project switch in Electron had a 2-second window where the pending write silently changed target.
+
+`tests/unit/tmcut_save_lifecycle.spec.ts` (5 checks, `pnpm test:save`) pins the lifecycle with a raw-timer spy (only the store's fixed 2000 ms delay is tracked; handles keyed by their real objects, so flush/cancel are asserted deterministically, no sleeping): mirror written synchronously; outgoing project's pending edit survives a switch; delete cancels the pending save; deleting another project touches nothing.
+
+## 159.1 What the spec forced into the open
+
+Three switches simply DROPPED the pending edit of the outgoing project (the old file kept up-to-2 s of lost work), and `deleteProject` of the CURRENT project left its debounce timer armed — the late fire then re-created the project files the user had just deleted (disk resurrection; the mirror delete alone was not enough).
+
+Fixes in the store:
+- `loadProject` and `createProject` `flushDiskSave()` BEFORE replacing `currentProject` (fire-while-loading is harmless: the write goes to the outgoing id from its own payload);
+- `duplicateAsProject` flushes the SOURCE project first (it swaps `currentProject` too);
+- `deleteProject` of the current project clears `diskSaveTimer` and resets `saveStatus` to `idle` — no timer survives its project.
+
+Gates: save 5/5 NEW · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · typecheck 0 · lint 0.

@@ -22,6 +22,7 @@
     "test:store": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_store_behaviour.spec.ts",
     "test:templates": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_templates.spec.ts",
     "test:history": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_history.spec.ts",
+    "test:save": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_save_lifecycle.spec.ts",
     "test:ai-script": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_ai_script.spec.ts",
     "test:autocut": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_autocut_v2.spec.ts",
     "test:smoke": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_render_smoke.spec.ts",

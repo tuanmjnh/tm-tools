@@ -358,6 +358,10 @@ function flushDiskSave() {
 
 // Load project by ID
 async function loadProject(projectId: string) {
+  // Persist any pending edit of the OUTGOING project first: dropping the
+  // timer silently would lose it, and a late fire would write the NEW
+  // project's state into the OLD files — R95.
+  flushDiskSave()
   isLoading.value = true
   selectedClipId.value = null
   pendingRecovery.value = null
@@ -539,6 +543,7 @@ function createProject(
     newProject.canvas = normalizeCanvas({ ...newProject.canvas, ...canvas })
   }
 
+  flushDiskSave() // outgoing project keeps its pending edit (R95)
   currentProject.value = newProject
   resetHistory() // openProject paths reset the stacks — see R94
   projects.value.unshift(newProject)
@@ -644,9 +649,18 @@ async function deleteProject(projectId: string) {
   projects.value = projects.value.filter(p => p.id !== projectId)
 
   if (currentProject.value?.id === projectId) {
+    // Neutralize any pending autosave for THIS id before deleting: a late
+    // timer fire would resurrect the project files (R95). Pointing the
+    // timer at the (null) current project makes it a no-op, and the
+    // mirror is already gone.
+    if (diskSaveTimer) {
+      clearTimeout(diskSaveTimer)
+      diskSaveTimer = null
+    }
     currentProject.value = null
     selectedClipId.value = null
     pendingRecovery.value = null
+    saveStatus.value = 'idle'
   }
 
   const ipc = tmcutIpc()
@@ -1302,6 +1316,7 @@ function duplicateAsProject(presetId: string): TmcutProject | null {
     }
   }
 
+  flushDiskSave() // source project keeps its pending edit (R95)
   currentProject.value = clone
   resetHistory() // the clone is a new project — its history starts empty
   projects.value.unshift(clone)
