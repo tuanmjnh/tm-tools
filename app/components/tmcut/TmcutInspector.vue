@@ -365,6 +365,12 @@ const clipLocalTicks = computed(() => {
 
 const clipHasKeyframes = computed(() => propsWithKeyframes(clip.value).length > 0)
 
+const eqGradeEffect = computed(() => {
+  const c = clip.value
+  if (!c?.effects) return null
+  return c.effects.find(e => e.type === 'eq-grade') || null
+})
+
 // Desktop export renders keyframes (keyframeExpr in the render builders);
 // the tooltip spells out which channels so users can trust the label.
 const keyframesExportedHint = computed(() =>
@@ -471,6 +477,21 @@ function handleFitUpdate(value: string) {
     return
   }
   updateClip(selectedClipId.value, { fit })
+}
+
+function ensureEqGradeAndUpdate(param: string, value: number) {
+  const id = selectedClipId.value
+  const c = clip.value
+  if (!id || !c) return
+  const effects = [...(c.effects || [])]
+  let eq = effects.find(e => e.type === 'eq-grade')
+  if (!eq) {
+    eq = { type: 'eq-grade', params: { brightness: 0, contrast: 100, saturation: 100 } }
+    effects.push(eq)
+  }
+  eq.params = { ...eq.params, [param]: value }
+  pushHistoryCoalesced(`${id}:eqgrade-${param}`)
+  updateClip(id, { effects })
 }
 
 // Effects management (Roadmap Phase E, C6 registry)
@@ -1167,7 +1188,6 @@ const saveStateLabel = computed(() => {
         </span>
       </div>
       <div class="grid grid-cols-2 gap-2">
-
         <div>
           <div class="flex items-center justify-between">
             <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
@@ -1274,6 +1294,57 @@ const saveStateLabel = computed(() => {
             size="xs"
             @update:model-value="handleUpdate('y', Number($event))"
           />
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Grade (EQ / Grade) -->
+    <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{ t('tmcut.inspectorProps.colorGrade') }}</span>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.brightness') }}</label>
+            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.brightness ?? 0 }}</span>
+          </div>
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            :value="eqGradeEffect?.params.brightness ?? 0"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('brightness', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.contrast') }}</label>
+            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.contrast ?? 100 }}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="200"
+            :value="eqGradeEffect?.params.contrast ?? 100"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('contrast', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.saturation') }}</label>
+            <span class="font-mono text-[10px]">{{ eqGradeEffect?.params.saturation ?? 100 }}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="200"
+            :value="eqGradeEffect?.params.saturation ?? 100"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('saturation', Number((e.target as HTMLInputElement).value))"
+          >
         </div>
       </div>
     </div>

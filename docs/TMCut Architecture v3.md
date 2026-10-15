@@ -8419,3 +8419,17 @@ Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.
 A user noticed the panel's "preview-only" copy was confusing because keyframes actually ship via FFmpeg on desktop. Inspectors, the transition picker, and store comments were changed to be explicit: on Electron/FFmpeg the UI says "Keyframes active — renders on export"; the tooltip explains *which channels* are exported (scale/x/y/opacity/volume — scale/x/y/opacity/volume present in video.ts / text.ts / audio.ts via keyframeExpr). On the web build the same chips gain a secondary "Preview only — no FFmpeg in browser" hint and tooltips differentiate the two.
 
 Files touched: docs §178, `i18n/*/en|vi.json` (new keys `keyframesExported`, `keyframesExportedHintDesktop/Web`, `webPreviewOnly`), `TmcutInspector.vue` (badges + tooltip computed `keyframesExportedHint`), `TmcutTimelineClip.vue` (isDesktop import; transition badge honest mode), `useTmcutProject.ts` docstring updated. Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.
+
+# 179. R115 — Color grade in the Visual tab + project clips hover fix
+
+Two follow-ups from user feedback.
+
+## 179.1 Color grade accordion (Visual tab)
+
+The mock (`private/tmcut/2`) shows a basic color-grade block (Temp / Saturation / Contrast). The core `EFFECT_REGISTRY` already has `eq-grade` (brightness −100..100, contrast 0..200, saturation 0..200, `renderReady: true`), so the Visual tab now carries a **Color Grade** accordion right under Transform: three sliders (Brightness / Contrast / Saturation) that lazily create the `eq-grade` effect entry on first touch and patch only the touched param. Slider bursts coalesce into one undo entry via `pushHistoryCoalesced` (same pattern as the fade sliders). Because the effect is a registry `renderReady` effect, desktop export already renders it through `buildFfmpegEffectFilters` — no new pipeline work, and the panel stays honest by construction.
+
+## 179.2 Project clips list hover
+
+The "Video Clips in Project" sidebar rows hid the duration and swapped in two action buttons on hover — the layout shift read as the row zooming in. Now the duration stays visible and the action buttons (ghost variant) always occupy their space, fading in via `opacity` on hover: simple focus, no shift, no scale.
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · build 0 · i18n parity 2825/2825.
