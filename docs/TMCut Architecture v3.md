@@ -8152,3 +8152,23 @@ The ruler marker + snap seam had never been behaviour-tested in the store layer.
 No defect. The store’s shim `markerShim()` returns a `TmcutTimeline` whose `markers` array is **the same object** as `currentProject.value.timeline.markers`, so core `addMarker`/`removeMarker` mutations are immediately visible in the UI. `snapTimeSec` decodes tracks to v3, installs that same marker array, and forwards ticks/options. All boundaries stay in ticks — seconds only appear at the UI edge (`secToTicks` / `ticksToSec`).
 
 Gates: markers 7/7 NEW · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
+
+# 162. R98 — Transitions pinned (roadmap B3/C5)
+
+The last major UI seam in the core-ticks land is the transition DSL (roadmap B3 / core C5): applying a cross dissolve, wipe etc. shifts the clip left so its head overlaps the neighbour’s tail, and clearing restores the original cut. The store already routes through core (`applyTransition` / `clearTransition` / `canApplyTransition`) and validates *before* pushing history — but this contract had never been pinned in the store test suite.
+
+## 162.1 The spec
+
+`tests/unit/tmcut_transitions.spec.ts` (5 checks, `pnpm test:transitions`):
+
+- `checkClipTransition` returns `ok=false` for a clip with no neighbour and leaves no history entry;
+- `applyClipTransition` succeeds only for an adjacent neighbour, stores `transitionIn.duration` in TICKS, shifts the clip’s `offset` left by the duration, and is undoable/restorable via the history stack;
+- `clearClipTransition` removes the transition and restores the original cut position (no stray undo when the probe fails);
+- too-long duration (greater than the overlap the two clips can provide) is refused;
+- `timelineTransitionCount` reflects the live number of clips carrying a non-zero `transitionIn.duration`.
+
+## 162.2 Finding
+
+No defect. The store already validates first (`checkClipTransition` → `canApplyTransition`), then pushes via `applyV3Edit`. The bridge preserves the duration field unchanged through the v1compat identity path. The spec now locks the five corner cases that make the UI/export badge trustworthy.
+
+Gates: transitions 5/5 NEW · markers 7/7 · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
