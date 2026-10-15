@@ -365,6 +365,14 @@ const clipLocalTicks = computed(() => {
 
 const clipHasKeyframes = computed(() => propsWithKeyframes(clip.value).length > 0)
 
+// Desktop export renders keyframes (keyframeExpr in the render builders);
+// the tooltip spells out which channels so users can trust the label.
+const keyframesExportedHint = computed(() =>
+  isDesktop.value
+    ? t('tmcut.inspectorProps.keyframesExportedHintDesktop')
+    : t('tmcut.inspectorProps.keyframesExportedHintWeb')
+)
+
 function hasKfAtPlayhead(prop: KfProp): boolean {
   return !!keyframeAt(clip.value, prop, clipLocalTicks.value)
 }
@@ -885,10 +893,10 @@ const saveStateLabel = computed(() => {
         <span
           v-if="clipHasKeyframes"
           class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
-          :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+          :title="keyframesExportedHint"
         >
           <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
-          {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+          {{ t('tmcut.inspectorProps.keyframesExported') }}
         </span>
       </div>
       <div class="grid grid-cols-3 gap-1.5">
@@ -1151,10 +1159,10 @@ const saveStateLabel = computed(() => {
         <span
           v-if="clipHasKeyframes"
           class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
-          :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+          :title="keyframesExportedHint"
         >
           <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
-          {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+          {{ t('tmcut.inspectorProps.keyframesExported') }}
         </span>
       </div>
 
@@ -1278,10 +1286,16 @@ const saveStateLabel = computed(() => {
           <span
             v-if="clipHasKeyframes"
             class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
-            :title="t('tmcut.inspectorProps.previewOnlyKeyframes')"
+            :title="keyframesExportedHint"
           >
             <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
-            {{ t('tmcut.inspectorProps.previewOnlyKeyframes') }}
+            {{ t('tmcut.inspectorProps.keyframesExported') }}
+          </span>
+          <span
+            v-if="!isDesktop"
+            class="text-[9px] leading-none rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 px-1.5 py-0.5"
+          >
+            {{ t('tmcut.inspectorProps.webPreviewOnly') }}
           </span>
           <!-- Keyframe toggle: only for VIDEO clips — a timeline audio
                clip has no preview engine yet, so a keyframe there would

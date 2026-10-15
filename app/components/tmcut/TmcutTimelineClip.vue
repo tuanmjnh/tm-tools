@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
-const { findAssetBySrc, loadWaveform, mediaUrl } = useTmcutMedia()
+const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
 const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
 
@@ -34,7 +34,8 @@ const clipWidth = computed(() => Math.max(20, duration.value * zoom.value))
 // Keyframe diamonds (Roadmap B1): unique keyframe times across every
 // animated prop, as a percentage of the clip duration (times are
 // clip-local ticks). Nothing renders when the clip has no keyframes —
-// no empty layer. Keyframes are preview-only until Phase K export.
+// no empty layer. Desktop export renders them (keyframeExpr chains);
+// the web build has no FFmpeg, so web export stays preview-only.
 const keyframePercents = computed<number[]>(() => {
   if (!props.clip.keyframes?.length) return []
   const seen = new Set<number>()
@@ -566,7 +567,9 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Clear + honest scope note (export support ships later) -->
+      <!-- Clear + honest scope note: the desktop render pipeline maps
+           these transitions to xfade, so only the web build is honest
+           about being preview-only (no FFmpeg there). -->
       <div class="mt-1.5 flex items-center justify-between gap-2">
         <button
           type="button"
@@ -576,7 +579,7 @@ onUnmounted(() => {
         >
           {{ t('tmcut.clipMenu.none') }}
         </button>
-        <span class="text-[9px] leading-tight text-neutral-500 text-right">
+        <span v-if="!isDesktop" class="text-[9px] leading-tight text-neutral-500 text-right">
           {{ t('tmcut.clipMenu.previewOnly') }}
         </span>
       </div>
