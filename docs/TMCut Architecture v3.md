@@ -8309,3 +8309,14 @@ Two index-maintenance paths the dashboard relies on: `deleteProject` and `refres
   - web session (no IPC) is a clean no-op.
 
 Gates: dashboard 5/5 NEW · runner `pnpm test:tmcut` 20/20 · typecheck 0 · lint 0.
+
+# 171. R107 — Full-stack battery: the chain's closing gate
+
+R103–R106 changed app code four times (rename/duplicate mirrors, refusal-rule rewrites, orphan-recovery detection, createProject leak fix). Before the closing report, everything re-verified at `eb9c6ae`:
+
+- `pnpm test:tmcut` (runner): **21/21 specs** including the opt-in `--smoke` (3 real-FFmpeg renders: plain, speed/transform-over-background, xfade transition — byte-checked pipeline output);
+- core `node --test`: **210/210**; core `tsc` (tsconfig.check): 0; core eslint: 0; `check-boundaries`: PASS (core imports nothing platform-specific);
+- app: `nuxt typecheck` 0, eslint (tmcut partition) 0, `nuxt build` **BUILD=0** (first build since R93 — all four store fixes ship clean);
+- i18n parity: **2797/2797**, no drift this entire chain; core still `3885ba9` (untouched since R88).
+
+Spec count since the QA chain began (R91): 13 new store-seam specs, 8 product defects found and fixed (raw-project patches ×2, history leak, save-timer misfire, web-rename mirror gap, phantom history on refused ops, orphan-recovery invisibility, createProject selection leak), plus one rotted spec resurrected (R100). The module-level-state rule from §159 now has teeth: every per-project ref (`undoStack`, `diskSaveTimer`, `selectedClipId`, `pendingRecovery`, `clipboard`) has BOTH an explicit cross-project test and, where it leaked, a fix.
