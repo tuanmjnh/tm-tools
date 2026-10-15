@@ -8239,3 +8239,15 @@ QA round on the project-management layer, the seam where the desktop (IPC) and w
 - `updateClipsSrc` relinks by `normalizePath` (slashes normalized, case preserved), reports the real count, leaves unrelated clips alone.
 
 Gates: projects 6/6 NEW · runner `pnpm test:tmcut` 16/16 · typecheck 0 · lint 0.
+
+# 167. R103 — Track flags, track add/remove, canvas switch (A5 / Phase 2)
+
+Store seams the editor UI leans on daily but no spec had ever touched: the eye/lock/mute toggles, `addTrackToProject`/`removeTrackFromProject` (roadmap A5), `switchCanvas`, and the reframe-duplicate `duplicateAsProject`. `tests/unit/tmcut_tracks.spec.ts` (7 checks, `pnpm test:tracks`) pins them; no defects found — every guarantee below already held.
+
+- **flags are view state, not edits**: `toggleTrackMute/Hidden/Lock` save (mirrored) but push NO undo entry — undo after muting three tracks returns to the pre-add state, not to "unmuted";
+- **locked tracks refuse structurally, quietly**: ripple delete and `removeTrackFromProject` both refuse locked tracks, and a refusal pushes no history entry (the store pre-checks `track.locked` so core never even sees the call);
+- **A5 goes through `applyV3Edit`**: add appends the track and undo removes it; remove takes its clips, clears `selectedClipId` when the selection pointed at a removed clip, and undo restores the track WITH its items (core's default, `keepClips` unused);
+- **`switchCanvas` is timeline-neutral**: same clips, manual `x/y` reframed by `reframeTransform` (1920×1080→1080×1920 maps (100,100)→(56,178)), mirrored to disk, and no extra undo entry;
+- **`duplicateAsProject`** clones to the preset ratio with reframed offsets, keeps the SOURCE file untouched (including the R95 flush before the swap), mirrors the clone, and the clone's history starts EMPTY — the R94 reset rule holds for every project-swap path.
+
+Gates: tracks 7/7 NEW · runner `pnpm test:tmcut` 17/17 · typecheck 0 · lint 0.
