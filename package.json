@@ -27,6 +27,7 @@
     "test:markers": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_markers.spec.ts",
     "test:transitions": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_transitions.spec.ts",
     "test:split-trim": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_split_trim.spec.ts",
+    "test:tmcut": "tsx tests/unit/run-all.mts",
     "test:ai-script": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_ai_script.spec.ts",
     "test:autocut": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_autocut_v2.spec.ts",
     "test:smoke": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_render_smoke.spec.ts",

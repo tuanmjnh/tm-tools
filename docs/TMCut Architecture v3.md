@@ -8199,3 +8199,11 @@ No defect. The store already:
 The spec now locks the six corner cases that make the editing feel solid.
 
 Gates: split-trim 6/6 NEW · transitions 5/5 · markers 7/7 · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
+
+# 164. R100 — Consolidation: one runner, and the runner caught a rotted spec
+
+Nine QA rounds later, the suite had grown to 13 specs plus two older ones — and the gate ritual was a hand-typed loop, which is exactly how rot hides. R100 adds `tests/unit/run-all.mts` (`pnpm test:tmcut`, `--smoke` opts into the real-FFmpeg renders): one process per spec (each installs global shims and the store is a module singleton, so isolation is a feature, not overhead), first-non-zero-exit propagation.
+
+Its very first run caught a spec that had been BROKEN SINCE R88 AND NOBODY KNEW: `tmcut_phase2.spec.ts` still asserted `canvas.fps === 30`, but C16 made `normalizeCanvas` produce a rational `FrameRate` everywhere. The file was never wired into any script — outside the ritual, outside the sweep, red for ~12 rounds. Fix: assert `{ numerator: 30, denominator: 1 }` (the actual contract; the legacy-number input is still accepted and migrated). Lesson recorded: a spec nobody runs is a spec that lies — the runner is now the ritual.
+
+Full-suite state (R100): `pnpm test:tmcut` → 14/14 green (ai-script 3 · autocut 4 · history 7 · markers 7 · phase15 14 · phase2 16 · render-graph 12 · ripple 5 · save 5 · split-trim 6 · store 15 · templates 4 · time-domain 7 · transitions 5). FFmpeg smoke 3/3 · core `node --test` 210/210 · core tsc 0 · core eslint 0 · boundaries PASS · i18n parity 2797/2797.

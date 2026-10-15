@@ -66,7 +66,9 @@ function main() {
     const canvas = normalizeCanvas({ width: 1080, height: 1920, fps: 30 })
     assert.equal(canvas.width, 1080)
     assert.equal(canvas.height, 1920)
-    assert.equal(canvas.fps, 30)
+    // C16: fps is always a rational FrameRate after normalization; legacy
+    // bare numbers (30) migrate to { numerator: 30, denominator: 1 }.
+    assert.deepEqual(canvas.fps, { numerator: 30, denominator: 1 })
     assert.equal(canvas.aspectRatio.id, '9:16')
     assert.equal(canvas.aspectRatio.orientation, 'portrait')
     assert.deepEqual(canvas.background, { type: 'color', value: '#000000' })
@@ -81,7 +83,7 @@ function main() {
     assert.equal(canvas.aspectRatio.value, 2.35)
     assert.deepEqual(canvas.background, { type: 'transparent' })
     assert.equal(canvas.width, 1920)
-    assert.equal(canvas.fps, 30)
+    assert.deepEqual(canvas.fps, { numerator: 30, denominator: 1 })
   })
 
   check('computeFitObjectStyle maps modes to CSS objectFit', () => {
