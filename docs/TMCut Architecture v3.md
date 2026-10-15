@@ -8320,3 +8320,9 @@ R103–R106 changed app code four times (rename/duplicate mirrors, refusal-rule 
 - i18n parity: **2797/2797**, no drift this entire chain; core still `3885ba9` (untouched since R88).
 
 Spec count since the QA chain began (R91): 13 new store-seam specs, 8 product defects found and fixed (raw-project patches ×2, history leak, save-timer misfire, web-rename mirror gap, phantom history on refused ops, orphan-recovery invisibility, createProject selection leak), plus one rotted spec resurrected (R100). The module-level-state rule from §159 now has teeth: every per-project ref (`undoStack`, `diskSaveTimer`, `selectedClipId`, `pendingRecovery`, `clipboard`) has BOTH an explicit cross-project test and, where it leaked, a fix.
+
+# 172. R108 — Dead autosave timer removed (the state class, once more)
+
+The chain's closing rule — "audit every module-level timer for cross-project leaks" — found its own last entry: `setupAutosave()` was an exported 3-second debouncer with its own `autosaveTimeout` ref, and **nothing ever called it**. The real autosave is `scheduleDiskSave` (called from `saveProject`, flushed by `flushDiskSave` on every swap, R95). The dead twin was not harmless: had anyone ever wired it, it would have reintroduced, verbatim, the R95 bug class (a second timer owning `saveProject` outside the flush discipline). Removed with a comment marking why; the store exports one save scheduler, and the module-level state audit is now: `undoStack`/`redoStack` (R94 reset), `diskSaveTimer` (R95 flush + delete-cancel), `clipboard` (portable by design, R104), and nothing else.
+
+Gates: runner `pnpm test:tmcut` 20/20 · typecheck 0 · lint 0.

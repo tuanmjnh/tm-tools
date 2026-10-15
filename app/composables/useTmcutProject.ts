@@ -1494,16 +1494,12 @@ function removeTrackFromProject(trackId: string): boolean {
   return ok
 }
 
-// Autosave
-let autosaveTimeout: ReturnType<typeof setTimeout> | null = null
-function setupAutosave() {
-  if (autosaveTimeout) clearTimeout(autosaveTimeout)
-
-  autosaveTimeout = setTimeout(() => {
-    autosaveTimeout = null
-    saveProject()
-  }, 3000)
-}
+// Autosave IS scheduleDiskSave, called from saveProject (R95): one
+// debounce timer per store, flushed on every project swap. The old
+// setupAutosave() (R108 removed) was an exported second, independent
+// 3-second timer that nothing ever called — dead code with its own
+// module-level timer, the exact state class the R94-R106 chain keeps
+// finding leaks in.
 
 // ===== Snapshots =====
 
@@ -1655,7 +1651,6 @@ export function useTmcutProject() {
     switchCanvas,
     setCanvasBackground,
     duplicateAsProject,
-    setupAutosave,
     persistProjectToDisk,
     refreshProjects,
     applyRecovery,
