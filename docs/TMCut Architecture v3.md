@@ -8110,3 +8110,23 @@ Fixes in the store:
 - `deleteProject` of the current project clears `diskSaveTimer` and resets `saveStatus` to `idle` — no timer survives its project.
 
 Gates: save 5/5 NEW · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · typecheck 0 · lint 0.
+
+# 160. R96 — Ripple-mode insert behaviour pinned (and no defects found)
+
+After save/history/history leaks were hunted and fixed, the next UI seam is the ripple-insert path: the store toggles `rippleMode` for drag/drops, and when the target offset collides, the drop must route through `insertClipRipple` from core (C2) so later clips on the same track slide right without gaps. Until now the behaviour lived only in the UI and in the core tests (`editing.test.mjs`) — no store-layer test guaranteed the `rippleMode` flag actually gates the bridge, nor that the fallback for locked tracks / empty gaps is correct.
+
+## 160.1 The spec
+
+`tests/unit/tmcut_ripple.spec.ts` (5 checks, `pnpm test:ripple`):
+
+- plain (ripple OFF) → strict overlay, no shifts, no side-effects;
+- ripple ON + collision → the newly dropped clip is created via the core `insertClipRipple` bridge (`applyV3Edit(v3 => insertClipRipple(...))`) and later clips on the same track are shifted right by exactly the inserted duration;
+- ripple ON + empty gap → plain overlay fallback (no unnecessary shift);
+- locked target track → core bridge refuses; store falls back to plain overlay so the drop never silently disappears (the fallback is already encoded in `addClipToTrack`, now proven by test);
+- ripple is track-scoped: video ripple never touches audio items.
+
+## 160.2 Finding
+
+No defect. The existing `addClipToTrack` implementation already performs the collision check, calls `insertClipRipple` with `skipHistory:true` (history was already pushed for the mutation), and falls back to a plain `items.push` when the core op is rejected (locked track). The spec now pins the five corner cases that make the UI feel like CapCut.
+
+Gates: ripple 5/5 NEW · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
