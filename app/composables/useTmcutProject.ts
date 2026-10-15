@@ -553,8 +553,10 @@ function createProject(
 }
 
 // Rename a project from the dashboard. The project does not need to be
-// the open one: on desktop the new name is written straight to disk, on
-// the web session it stays in memory (same rule as saveProject).
+// the open one. Non-current renames mirror to localStorage (the web-survival
+// rule of persistProjectMetadata, R102) and write straight to disk when
+// IPC is available — before the fix a dashboard rename of a closed project
+// vanished on reload in the web session.
 async function renameProject(projectId: string, name: string) {
   const project = projects.value.find(p => p.id === projectId)
   const clean = String(name || '').trim()
@@ -566,6 +568,12 @@ async function renameProject(projectId: string, name: string) {
     currentProject.value.name = clean
     saveProject()
     return
+  }
+
+  try {
+    localStorage.setItem(`tmcut_project_${projectId}`, JSON.stringify(project))
+  } catch (error) {
+    console.error('Failed to mirror renamed project:', error)
   }
 
   const ipc = tmcutIpc()
@@ -628,6 +636,14 @@ function duplicateProject(projectId: string, copySuffix = 'copy'): TmcutProject 
   clone.created_at = new Date().toISOString()
   clone.updated_at = clone.created_at
   projects.value.unshift(clone)
+
+  // Mirror the clone too (R102): without this the duplicate existed only
+  // in memory + disk, so a web reload dropped it from the dashboard.
+  try {
+    localStorage.setItem(`tmcut_project_${clone.id}`, JSON.stringify(clone))
+  } catch (error) {
+    console.error('Failed to mirror duplicated project:', error)
+  }
 
   const ipc = tmcutIpc()
   if (ipc) {

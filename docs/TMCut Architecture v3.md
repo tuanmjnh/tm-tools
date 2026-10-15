@@ -8221,3 +8221,21 @@ The last untested store seam: groups and linked pairs. The app selection is deli
 No defect found; the B4 wiring (expanded selection in every core call, locked-track exclusion done TWICE — once in the store guard, once in core) behaves exactly as designed.
 
 Gates: groups 6/6 NEW · runner `pnpm test:tmcut` 15/15 · typecheck 0 · lint 0.
+
+# 166. R102 — Dashboard mutations must survive a web reload
+
+QA round on the project-management layer, the seam where the desktop (IPC) and web (localStorage mirror) persistence rules diverge. `renameProject`, `duplicateProject`, `togglePinProject`, `updateClipsSrc` — every dashboard card action. The store's own rule (documented in `persistProjectMetadata`, roadmap J-2) is that every project write mirrors to localStorage so the web session survives a reload.
+
+`tests/unit/tmcut_projects_lifecycle.spec.ts` (6 checks, `pnpm test:projects`) pins the contract; one real defect fell out:
+
+## 166.1 Defect (silent in Electron, visible in the web session)
+
+`renameProject` on a NON-open project updated memory + disk but never the mirror — rename a closed project in the web session and a reload reverts the name. Fix: mirror the updated `projects` entry (the same write `persistProjectMetadata` does). Renaming the CURRENT project was already safe (it routes through `saveProject`). Blank/unknown-id renames stay honest no-ops.
+
+## 166.2 Verified honest (one belt-and-suspenders addition)
+
+- `duplicateProject` persists the clone via IPC, but the clone had no mirror — on web the clone only ever lived in memory, and on desktop the dashboard index self-heals only after `refreshProjects` reads disk. Mirroring the clone under its new id makes reload and the project index correct immediately;
+- `togglePinProject` already routed through `persistProjectMetadata` — pinned state mirrors, `updated_at` stays untouched (the honest "Recently edited" sort survives metadata writes);
+- `updateClipsSrc` relinks by `normalizePath` (slashes normalized, case preserved), reports the real count, leaves unrelated clips alone.
+
+Gates: projects 6/6 NEW · runner `pnpm test:tmcut` 16/16 · typecheck 0 · lint 0.
