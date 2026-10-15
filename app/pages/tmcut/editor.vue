@@ -1510,15 +1510,15 @@ function handleEditorKeydown(e: KeyboardEvent) {
                   </div>
 
                   <div class="flex items-center gap-1 shrink-0">
-                    <span class="text-[9px] font-mono text-neutral-500 group-hover/clip:hidden">
+                    <span class="text-[9px] font-mono text-neutral-500">
                       {{ clipDurationSec(item).toFixed(1) }}s
                     </span>
-                    <div class="hidden group-hover/clip:flex items-center gap-1">
+                    <div class="opacity-0 group-hover/clip:opacity-100 transition-opacity flex items-center gap-1">
                       <UButton
                         v-if="item.src"
                         icon="i-lucide-eye"
                         size="xs"
-                        variant="soft"
+                        variant="ghost"
                         color="neutral"
                         :title="t('tmcut.previewFile')"
                         @click.stop="openFilePreview(item.src, item.name)"
@@ -1527,7 +1527,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                         v-if="item.src"
                         icon="i-lucide-folder"
                         size="xs"
-                        variant="soft"
+                        variant="ghost"
                         color="neutral"
                         :title="t('tmcut.openInFolder')"
                         @click.stop="showInFolder(item.src)"

@@ -1153,9 +1153,10 @@ const saveStateLabel = computed(() => {
 
     <!-- Transform Settings (Video & Text) -->
     <div v-if="currentTab === 'visual' && trackType !== 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
-      <div class="flex items-center justify-between">
-        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">{{
-          t('tmcut.inspectorProps.transform') }}</span>
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+          {{ t('tmcut.inspectorProps.transform') }}
+        </span>
         <span
           v-if="clipHasKeyframes"
           class="text-[9px] leading-none rounded bg-primary/15 text-primary px-1.5 py-0.5 flex items-center gap-1"
@@ -1165,8 +1166,8 @@ const saveStateLabel = computed(() => {
           {{ t('tmcut.inspectorProps.keyframesExported') }}
         </span>
       </div>
-
       <div class="grid grid-cols-2 gap-2">
+
         <div>
           <div class="flex items-center justify-between">
             <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
