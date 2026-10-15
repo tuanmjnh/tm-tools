@@ -8399,3 +8399,17 @@ A new studio-panel component with three sub-tabs — **Effects / Transitions / F
 The tab model renamed `video`→`visual` (its content is transform/appearance, not "video" specifically) and VIDEO clips now get the full five-tab set: **Visual ✓ Audio ✓ Speed ✓ Animation ✓ (new) Effects ✓**. Text keeps Visual/Animation/Speed, audio keeps Audio/Speed — still no dead tabs. The new media Animation tab writes CapCut-style whole-clip presets (Fade / Fade In / Fade Out / Zoom In / Zoom Out / Reset) as the SAME opacity/scale keyframes the ⏱ diamond buttons produce — so presets stay visible and editable in the keyframe lanes instead of hiding in a parallel animation model. Edge ramps clamp to half the clip (the core fade rule); a preset re-run replaces its own channel only (x/y/volume keyframes survive). The preview-only honesty chip rides along (keyframe export is still a roadmap item).
 
 Gates: runner 23/23 (fx spec auto-discovered) · new spec 7/7 · lint 0 · i18n parity 2818/2818 · typecheck 0 · build 0.
+
+# 177. R113 — Inspector tab grid + the AI Script button that never opened
+
+Two user-reported follow-ups on the R112 studio.
+
+## 177.1 Right-panel "broken form": five tabs never fit one row
+
+The inspector tab strip was a flex row of `flex-1` buttons sized for three short English labels. Video clips now carry five tabs, and the Vietnamese labels (Hình ảnh / Âm thanh / Tốc độ / Hoạt ảnh / Hiệu ứng) overflowed the 288 px panel — labels collided and the strip read as a broken form. The strip is now a 3-column grid (2 columns when a clip type only has two tabs): labels get `min-w-0 truncate`, icons `shrink-0`, so the set wraps to a tidy second line instead of overflowing. Grid columns follow the tab count, so text (3) and audio (2) keep their one-line look.
+
+## 177.2 AI Script button: silent `modelValue` contract on Nuxt UI v4
+
+The toolbar AI Script button (and the Alt+A hotkey) set `aiScriptModalOpen = true` and nothing opened. Root cause: `TmcutAiScriptModal` still used the Nuxt UI **v3** contract — prop `modelValue` + `@update:modelValue` on the `<UModal>`. Nuxt UI v4's UModal is driven by `open`/`v-model:open` (as every other studio modal already used, via `defineModel<boolean>('open')`); the stale `:model-value` binding simply did nothing. The modal was converted to the same `defineModel('open')` pattern, the editor mount switched to `v-model:open`, and all internal close paths (`closeModal`, create-project, insert-to-timeline) now flip `open.value`. Feature recap for the user: the modal writes a topic, picks a platform (TikTok/YouTube/Vlog/Ads) + duration, generates a scene-by-scene storyboard (gateway AI if an API key is configured — offline it falls back to curated presets), then inserts the scenes into the current timeline, or creates a new project from the script, or copies the Markdown.
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.

@@ -624,18 +624,21 @@ const saveStateLabel = computed(() => {
       />
     </div>
 
-    <!-- Clip property tabs (design #2): Video / Audio / Speed -->
-    <div class="flex items-center gap-1 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-800 rounded-lg p-1">
+    <!-- Clip property tabs (design #2 + R112): a GRID, not a flex row —
+         five Vietnamese labels (Hình ảnh/Âm thanh/Tốc độ/Hoạt ảnh/Hiệu ứng)
+         overflow a single row inside the 288 px panel. 3 columns wrap to a
+         second line for video clips; 2-3 tab sets stay on one line. -->
+    <div class="grid gap-1 bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-800 rounded-lg p-1" :class="tabItems.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
       <button
         v-for="tab in tabItems"
         :key="tab.key"
         type="button"
-        class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+        class="min-w-0 flex items-center justify-center gap-1 px-1.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
         :class="currentTab === tab.key ? 'bg-primary/15 text-primary' : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
         @click="activeTab = tab.key"
       >
-        <UIcon :name="tab.icon" class="size-3" />
-        {{ tab.label }}
+        <UIcon :name="tab.icon" class="size-3 shrink-0" />
+        <span class="truncate">{{ tab.label }}</span>
       </button>
     </div>
 

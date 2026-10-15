@@ -1860,7 +1860,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
       </UModal>
 
       <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
-      <TmcutAiScriptModal v-model="aiScriptModalOpen" />
+      <TmcutAiScriptModal v-model:open="aiScriptModalOpen" />
     </div>
   </BasePage>
 </template>

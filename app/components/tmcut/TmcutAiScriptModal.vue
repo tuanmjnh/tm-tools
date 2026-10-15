@@ -11,12 +11,12 @@ import {
 } from '~/composables/useTmcutAiScript'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 
-defineProps<{
-  modelValue: boolean
-}>()
+// Nuxt UI v4 UModal contract (same defineModel('open') as every other
+// studio modal): UModal ignores the old modelValue prop, which is why
+// this modal used to never open from the toolbar button.
+const open = defineModel<boolean>('open', { default: false })
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
   (e: 'script-inserted', count: number): void
 }>()
 
@@ -126,7 +126,7 @@ function handleCreateNewProject() {
     description: proj.name,
     color: 'success'
   })
-  emit('update:modelValue', false)
+  open.value = false
   router.push('/tmcut/editor')
 }
 
@@ -139,19 +139,18 @@ function handleInsertToTimeline() {
     color: 'success'
   })
   emit('script-inserted', count)
-  emit('update:modelValue', false)
+  open.value = false
 }
 
 function closeModal() {
-  emit('update:modelValue', false)
+  open.value = false
 }
 </script>
 
 <template>
   <UModal
-    :model-value="modelValue"
+    v-model:open="open"
     :ui="{ content: 'max-w-5xl' }"
-    @update:model-value="emit('update:modelValue', $event)"
   >
     <template #content>
       <!-- Modal Header -->
