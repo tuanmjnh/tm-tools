@@ -72,8 +72,8 @@ const trackStyles = computed(() => {
       }
     default:
       return {
-        bg: 'bg-neutral-600/20 border-neutral-500/60 text-neutral-200 hover:bg-neutral-600/30',
-        activeBg: 'bg-neutral-600/40 border-neutral-400 ring-2 ring-neutral-400',
+        bg: 'bg-neutral-300/20 dark:bg-neutral-600/20 border-neutral-500/60 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-300/30 dark:hover:bg-neutral-600/30',
+        activeBg: 'bg-neutral-300/40 dark:bg-neutral-600/40 border-neutral-400 ring-2 ring-neutral-400',
         handle: 'bg-neutral-400',
         icon: 'i-lucide-film'
       }
@@ -516,12 +516,12 @@ onUnmounted(() => {
     <div
       v-if="menuOpen"
       ref="menuEl"
-      class="fixed z-120 w-56 rounded-lg border border-neutral-700 bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-200 select-none"
+      class="fixed z-120 w-56 rounded-lg border border-neutral-400 dark:border-neutral-700 bg-neutral-100/95 dark:bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-700 dark:text-neutral-200 select-none"
       :style="{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }"
       @contextmenu.prevent
     >
       <div class="flex items-center justify-between gap-2 px-1 pb-1.5">
-        <span class="font-semibold text-[11px] uppercase tracking-wide text-neutral-400">
+        <span class="font-semibold text-[11px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
           {{ t('tmcut.clipMenu.transition') }}
         </span>
         <span class="text-[10px] font-mono text-neutral-500 truncate">{{ appliedLabel }}</span>
@@ -536,7 +536,7 @@ onUnmounted(() => {
           class="rounded border px-1 py-1.5 text-[10px] leading-tight transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           :class="clip.transitionIn?.type === type
             ? 'bg-primary/30 border-primary/60 text-primary-100'
-            : 'bg-neutral-800/70 border-neutral-700 hover:bg-neutral-700/70 text-neutral-300'"
+            : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
           :disabled="!!reasonFor(type, menuDuration)"
           :title="titleFor(type, menuDuration)"
           @click="pickType(type)"
@@ -557,7 +557,7 @@ onUnmounted(() => {
           class="rounded border px-1 py-1 text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           :class="Math.abs((ticksToSec(clip.transitionIn?.duration ?? 0)) - d) < 0.001
             ? 'bg-primary/30 border-primary/60 text-primary-100'
-            : 'bg-neutral-800/70 border-neutral-700 hover:bg-neutral-700/70 text-neutral-300'"
+            : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
           :disabled="!!reasonFor(menuType, d)"
           :title="titleFor(menuType, d)"
           @click="pickDuration(d)"
@@ -570,7 +570,7 @@ onUnmounted(() => {
       <div class="mt-1.5 flex items-center justify-between gap-2">
         <button
           type="button"
-          class="rounded border border-neutral-700 bg-neutral-800/70 px-2 py-1 text-[10px] text-neutral-300 hover:bg-neutral-700/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          class="rounded border border-neutral-400 dark:border-neutral-700 bg-neutral-200/70 dark:bg-neutral-800/70 px-2 py-1 text-[10px] text-neutral-600 dark:text-neutral-300 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           :disabled="!hasTransition"
           @click="clearTransitionPick"
         >

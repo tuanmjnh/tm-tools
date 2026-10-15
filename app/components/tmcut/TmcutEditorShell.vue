@@ -22,7 +22,7 @@ const navItems = ref([
           <h2 class="font-bold text-lg leading-tight">
             {{ t('nav.tmcut') }}
           </h2>
-          <p class="text-[10px] text-neutral-400 uppercase tracking-widest font-semibold">
+          <p class="text-[10px] text-neutral-500 dark:text-neutral-400 uppercase tracking-widest font-semibold">
             {{ t('tmcut.editor') }}
           </p>
         </div>
@@ -39,7 +39,7 @@ const navItems = ref([
         </ul>
       </nav>
 
-      <div class="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-400">
+      <div class="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-500 dark:text-neutral-400">
         TM Tools Desktop
       </div>
     </aside>
@@ -63,7 +63,7 @@ const navItems = ref([
             </div>
           </div>
 
-          <p class="text-neutral-400 text-sm mt-3">
+          <p class="text-neutral-500 dark:text-neutral-400 text-sm mt-3">
             Create or import a project to start editing.
           </p>
         </div>

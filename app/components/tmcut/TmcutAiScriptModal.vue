@@ -255,7 +255,7 @@ function closeModal() {
 
           <!-- Curated Presets Bar -->
           <div class="pt-3 border-t border-neutral-200 dark:border-neutral-800">
-            <span class="text-[11px] font-medium text-neutral-400 uppercase tracking-wider block mb-2">
+            <span class="text-[11px] font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider block mb-2">
               {{ t('tmcut.aiScript.samplePresets') }}
             </span>
             <div class="flex flex-col gap-1.5">
@@ -267,7 +267,7 @@ function closeModal() {
                 @click="handleLoadPreset(preset)"
               >
                 <span class="truncate group-hover:text-primary-500">{{ preset.title }}</span>
-                <span class="text-[10px] text-neutral-400 shrink-0 ml-2">{{ preset.targetDurationSec }}s</span>
+                <span class="text-[10px] text-neutral-500 dark:text-neutral-400 shrink-0 ml-2">{{ preset.targetDurationSec }}s</span>
               </button>
             </div>
           </div>
@@ -321,7 +321,7 @@ function closeModal() {
                 </div>
 
                 <div v-if="scene.visualPrompt" class="flex items-start gap-2 text-neutral-600 dark:text-neutral-400">
-                  <UIcon name="i-lucide-video" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-neutral-400" />
+                  <UIcon name="i-lucide-video" class="w-3.5 h-3.5 shrink-0 mt-0.5 text-neutral-500 dark:text-neutral-400" />
                   <span class="italic leading-relaxed">{{ scene.visualPrompt }}</span>
                 </div>
 
@@ -347,17 +347,17 @@ function closeModal() {
           <!-- Empty State -->
           <div
             v-else
-            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center text-neutral-400"
+            class="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-8 text-center text-neutral-500 dark:text-neutral-400"
           >
             <div
-              class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3 text-neutral-400"
+              class="w-12 h-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-3 text-neutral-500 dark:text-neutral-400"
             >
               <UIcon name="i-lucide-film" class="w-6 h-6" />
             </div>
             <p class="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {{ t('tmcut.aiScript.emptyStateTitle') }}
             </p>
-            <p class="text-xs text-neutral-400 max-w-sm">
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm">
               {{ t('tmcut.aiScript.emptyStateDesc') }}
             </p>
           </div>

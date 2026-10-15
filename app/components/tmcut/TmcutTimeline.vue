@@ -958,9 +958,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-neutral-900 border-t border-neutral-800 text-neutral-200 select-none">
+  <div class="h-full flex flex-col bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 text-neutral-700 dark:text-neutral-200 select-none">
     <!-- Timeline Toolbar -->
-    <div class="h-10 px-3 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/90 shrink-0">
+    <div class="h-10 px-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between bg-neutral-100/90 dark:bg-neutral-900/90 shrink-0">
       <!-- Left: History + Tools (Undo, Redo, Split, Delete, Add Media) -->
       <div class="flex items-center gap-1.5">
         <UButton
@@ -982,7 +982,7 @@ onUnmounted(() => {
           @click="redo"
         />
 
-        <div class="h-4 w-px bg-neutral-800 mx-1" />
+        <div class="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1" />
 
         <UButton
           icon="i-lucide-scissors"
@@ -1048,7 +1048,7 @@ onUnmounted(() => {
           @click="handleCloseGaps"
         />
 
-        <div class="h-4 w-px bg-neutral-800 mx-1" />
+        <div class="h-4 w-px bg-neutral-200 dark:bg-neutral-800 mx-1" />
 
         <UButton
           icon="i-lucide-plus"
@@ -1115,11 +1115,11 @@ onUnmounted(() => {
 
       <!-- Center: Timecode Info -->
       <div
-        class="font-mono text-xs flex items-center gap-1 bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-800"
+        class="font-mono text-xs flex items-center gap-1 bg-neutral-100 dark:bg-neutral-950 px-2.5 py-0.5 rounded border border-neutral-300 dark:border-neutral-800"
       >
         <span class="text-primary font-semibold">{{ formatTimecode(playhead) }}</span>
         <span class="text-neutral-500">/</span>
-        <span class="text-neutral-400">{{ formatTimecode(totalDuration) }}</span>
+        <span class="text-neutral-500 dark:text-neutral-400">{{ formatTimecode(totalDuration) }}</span>
       </div>
 
       <!-- In/Out render zone chip (clears on click) -->
@@ -1159,7 +1159,7 @@ onUnmounted(() => {
           :title="t('tmcut.timelineActions.zoom')"
         >
         <UIcon name="i-lucide-zoom-in" class="size-3.5 text-neutral-500" />
-        <span class="text-[10px] font-mono text-neutral-400 w-11 text-right">{{ zoom }}px</span>
+        <span class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 w-11 text-right">{{ zoom }}px</span>
         <UButton
           icon="i-lucide-maximize-2"
           size="xs"
@@ -1174,13 +1174,13 @@ onUnmounted(() => {
     <!-- Timeline Workspace -->
     <div class="flex-1 flex overflow-hidden relative">
       <!-- Fixed Left Track Headers (w-44) -->
-      <div class="w-44 border-r border-neutral-800 bg-neutral-950/80 flex flex-col shrink-0 z-20">
+      <div class="w-44 border-r border-neutral-300 dark:border-neutral-800 bg-neutral-100/80 dark:bg-neutral-950/80 flex flex-col shrink-0 z-20">
         <!-- Spacer aligned with the minimap strip on the right, so the
              TRACKS corner keeps matching the ruler height -->
         <div class="h-4 mt-1 mx-1 shrink-0" />
 
         <!-- Ruler Corner (+ opens the add-track menu) -->
-        <div class="h-6 border-b border-neutral-800 flex items-center justify-between px-2 text-[10px] font-mono text-neutral-500">
+        <div class="h-6 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between px-2 text-[10px] font-mono text-neutral-500">
           <span>TRACKS</span>
           <UDropdownMenu :items="addTrackMenuItems" :content="{ align: 'end' }">
             <UButton
@@ -1194,11 +1194,11 @@ onUnmounted(() => {
         </div>
 
         <!-- Track Labels with eye / lock / mute (CapCut-style) -->
-        <div class="flex-1 flex flex-col divide-y divide-neutral-800/60 overflow-hidden">
+        <div class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-hidden">
           <div
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
-            class="h-14 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-300"
+            class="h-14 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-600 dark:text-neutral-300"
           >
             <div class="flex items-center gap-1.5 truncate min-w-0">
               <UIcon
@@ -1255,7 +1255,7 @@ onUnmounted(() => {
              scroll viewport -->
         <div
           ref="minimapRef"
-          class="h-4 mt-1 mx-1 shrink-0 relative rounded-sm bg-neutral-900 border border-neutral-800 overflow-hidden cursor-ew-resize"
+          class="h-4 mt-1 mx-1 shrink-0 relative rounded-sm bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 overflow-hidden cursor-ew-resize"
           :title="t('tmcut.timelineActions.minimap')"
           @mousedown="onMinimapMouseDown"
         >
@@ -1287,7 +1287,7 @@ onUnmounted(() => {
           <!-- Time Ruler Bar (Sticky at top of tracks) -->
           <div
             ref="rulerRef"
-            class="h-6 border-b border-neutral-800 bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
+            class="h-6 border-b border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
             :style="{ width: `${timelineWidth}px` }"
             @mousedown="onRulerMouseDown"
           >
@@ -1298,7 +1298,7 @@ onUnmounted(() => {
               class="absolute top-0 bottom-0 flex flex-col justify-end"
               :style="{ left: `${tick.left}px` }"
             >
-              <div class="w-px bg-neutral-700" :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'" />
+              <div class="w-px bg-neutral-300 dark:bg-neutral-700" :class="tick.isMajor ? 'h-3.5 bg-neutral-500' : 'h-2'" />
               <span
                 v-if="tick.isMajor"
                 class="absolute -top-0.5 left-1 text-[9px] font-mono text-neutral-500 select-none pointer-events-none"
@@ -1349,7 +1349,7 @@ onUnmounted(() => {
               />
               <span
                 v-if="pin.label"
-                class="absolute top-0.5 left-[9px] max-w-24 truncate rounded bg-neutral-800/90 px-1 py-0.5 text-[8px] leading-none text-neutral-300"
+                class="absolute top-0.5 left-[9px] max-w-24 truncate rounded bg-neutral-200/90 dark:bg-neutral-800/90 px-1 py-0.5 text-[8px] leading-none text-neutral-600 dark:text-neutral-300"
               >
                 {{ pin.label }}
               </span>
@@ -1358,7 +1358,7 @@ onUnmounted(() => {
 
           <!-- Tracks Canvas -->
           <div
-            class="flex-1 flex flex-col divide-y divide-neutral-800/60 relative"
+            class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 relative"
             :style="{ width: `${timelineWidth}px` }"
             @mousedown="onTracksBackgroundMouseDown"
             @dragover="onMediaDragOver"
@@ -1378,7 +1378,7 @@ onUnmounted(() => {
               v-for="tick in rulerTicks"
               v-show="tick.isMajor"
               :key="'grid-' + tick.sec"
-              class="absolute top-0 bottom-0 w-px bg-neutral-800/30 pointer-events-none"
+              class="absolute top-0 bottom-0 w-px bg-neutral-200/30 dark:bg-neutral-800/30 pointer-events-none"
               :style="{ left: `${tick.left}px` }"
             />
 
@@ -1386,7 +1386,7 @@ onUnmounted(() => {
             <div
               v-for="track in currentProject?.timeline?.tracks || []"
               :key="track.id"
-              class="h-14 relative bg-neutral-900/40 hover:bg-neutral-800/20 transition-colors"
+              class="h-14 relative bg-neutral-100/40 dark:bg-neutral-900/40 hover:bg-neutral-200/20 dark:hover:bg-neutral-800/20 transition-colors"
               :class="track.hidden ? 'opacity-40' : ''"
             >
               <!-- Clips inside track -->
@@ -1417,14 +1417,14 @@ onUnmounted(() => {
     <div
       v-if="editingMarkerId"
       ref="markerEditorRef"
-      class="fixed z-50 w-56 rounded-md border border-neutral-700 bg-neutral-900 p-2 shadow-xl shadow-black/40"
+      class="fixed z-50 w-56 rounded-md border border-neutral-400 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900 p-2 shadow-xl shadow-black/40"
       :style="{ left: `${markerEditorPos.x}px`, top: `${markerEditorPos.y}px` }"
       @mousedown.stop
     >
       <input
         ref="markerLabelInputRef"
         v-model="editingMarkerLabel"
-        class="h-7 w-full rounded border border-neutral-700 bg-neutral-950 px-2 text-xs text-neutral-200 outline-none focus:border-primary"
+        class="h-7 w-full rounded border border-neutral-400 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-950 px-2 text-xs text-neutral-700 dark:text-neutral-200 outline-none focus:border-primary"
         @keydown.enter="commitMarkerEditor"
         @keydown.esc="editingMarkerId = null"
       >
@@ -1433,7 +1433,7 @@ onUnmounted(() => {
           v-for="color in MARKER_COLORS"
           :key="color"
           type="button"
-          class="h-4 w-4 rounded-full border border-neutral-600 transition-transform hover:scale-110"
+          class="h-4 w-4 rounded-full border border-neutral-400 dark:border-neutral-600 transition-transform hover:scale-110"
           :style="{ background: color }"
           :aria-label="t('tmcut.marker.color')"
           @click="setMarkerColor(color)"

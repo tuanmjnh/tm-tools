@@ -968,7 +968,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
       <!-- Honest hardware status chip (WebGPU detection + export engine) -->
       <span
-        class="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-400"
+        class="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-[11px] font-mono text-neutral-500 dark:text-neutral-400"
         :title="t('tmcut.workspace.hardwareStatus')"
       >
         <UIcon name="i-lucide-cpu" class="size-3 text-primary" />
@@ -986,13 +986,13 @@ function handleEditorKeydown(e: KeyboardEvent) {
           :title="t('tmcut.canvasRatio')"
         >
           <span class="font-mono text-xs">{{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas) }}fps)</span>
-          <UIcon name="i-lucide-chevron-down" class="size-3 text-neutral-400" />
+          <UIcon name="i-lucide-chevron-down" class="size-3 text-neutral-500 dark:text-neutral-400" />
         </UButton>
       </UDropdownMenu>
 
       <span
         v-if="saveLabel"
-        class="hidden lg:inline text-[11px] font-mono text-neutral-400"
+        class="hidden lg:inline text-[11px] font-mono text-neutral-500 dark:text-neutral-400"
         :class="saveStatus === 'error' ? 'text-red-400' : ''"
         :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''"
       >
@@ -1059,7 +1059,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
     </template>
 
     <!-- Full viewport Workspace (flush p-0) -->
-    <div class="flex-1 flex flex-col min-h-0 bg-neutral-950 text-white overflow-hidden select-none">
+    <div class="flex-1 flex flex-col min-h-0 bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-white overflow-hidden select-none">
       <!-- Recovery banner -->
       <div
         v-if="pendingRecovery"
@@ -1091,15 +1091,15 @@ function handleEditorKeydown(e: KeyboardEvent) {
         <!-- Left Media Library Panel (CapCut-style: category tabs + thumbnail grid).
              Whole panel is the external-drop target (roadmap G-2). -->
         <aside
-          class="w-80 border-r border-neutral-800 bg-neutral-900/50 flex flex-col shrink-0"
+          class="w-80 border-r border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col shrink-0"
           :class="dropActive ? 'ring-2 ring-primary/60' : ''"
           @dragenter="onMediaPanelDragEnter"
           @dragover="onMediaPanelDragOver"
           @dragleave="onMediaPanelDragLeave"
           @drop="onMediaPanelDrop"
         >
-          <div class="p-3 border-b border-neutral-800 flex items-center justify-between gap-1">
-            <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider truncate">
+          <div class="p-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between gap-1">
+            <span class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider truncate">
               {{ t('tmcut.media.library') }}
             </span>
             <div class="flex items-center gap-1 shrink-0">
@@ -1160,7 +1160,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
           </div>
 
           <!-- Category tab bar -->
-          <div class="flex items-center gap-1 px-2 py-2 border-b border-neutral-800 overflow-x-auto">
+          <div class="flex items-center gap-1 px-2 py-2 border-b border-neutral-300 dark:border-neutral-800 overflow-x-auto">
             <UButton
               v-for="tab in mediaTabs"
               :key="tab.id"
@@ -1187,9 +1187,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
           </div>
 
           <!-- Folder / Album management bar (roadmap G-3) -->
-          <div v-if="isAssetTab" class="px-2 pt-2 pb-1.5 space-y-1.5 border-b border-neutral-800/80">
+          <div v-if="isAssetTab" class="px-2 pt-2 pb-1.5 space-y-1.5 border-b border-neutral-300/80 dark:border-neutral-800/80">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+              <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                 <UIcon name="i-lucide-folder" class="size-3.5 text-primary" />
                 <span>{{ t('tmcut.folders.title') }}</span>
               </div>
@@ -1211,7 +1211,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               <button
                 type="button"
                 class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
-                :class="selectedFolderId === null ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'"
+                :class="selectedFolderId === null ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-600 dark:text-neutral-300'"
                 @click="selectedFolderId = null"
               >
                 <UIcon name="i-lucide-layers" class="size-3" />
@@ -1224,7 +1224,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 v-for="folder in projectFolders"
                 :key="folder.id"
                 class="group/fchip relative rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors pl-2 pr-1 py-1 cursor-pointer border"
-                :class="selectedFolderId === folder.id ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-300'"
+                :class="selectedFolderId === folder.id ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-600 dark:text-neutral-300'"
                 @click="selectedFolderId = folder.id"
                 @dragover.prevent="onFolderDragOver($event)"
                 @drop.prevent="onFolderDrop($event, folder.id)"
@@ -1235,7 +1235,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 <UDropdownMenu :items="folderActionItems(folder)" :content="{ side: 'bottom', align: 'start' }">
                   <button
                     type="button"
-                    class="p-0.5 rounded hover:bg-neutral-700 text-neutral-400 hover:text-white"
+                    class="p-0.5 rounded hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
                     @click.stop
                   >
                     <UIcon name="i-lucide-more-vertical" class="size-3" />
@@ -1248,12 +1248,12 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 v-if="(folderCounts.unassigned ?? 0) > 0"
                 type="button"
                 class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
-                :class="selectedFolderId === '__unassigned__' ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-neutral-800/60 border-neutral-800 hover:border-neutral-700 text-neutral-400'"
+                :class="selectedFolderId === '__unassigned__' ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-500 dark:text-neutral-400'"
                 @click="selectedFolderId = '__unassigned__'"
                 @dragover.prevent="onFolderDragOver($event)"
                 @drop.prevent="onFolderDrop($event, null)"
               >
-                <UIcon name="i-lucide-folder-archive" class="size-3 text-neutral-400" />
+                <UIcon name="i-lucide-folder-archive" class="size-3 text-neutral-500 dark:text-neutral-400" />
                 <span>{{ t('tmcut.folders.unassigned') }}</span>
                 <span class="text-[10px] opacity-75 font-mono">({{ folderCounts.unassigned ?? 0 }})</span>
               </button>
@@ -1274,7 +1274,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <!-- Loading indicator -->
             <div
               v-if="importing || analyzingCount > 0"
-              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-400"
+              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-500 dark:text-neutral-400"
             >
               <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
               {{ t('tmcut.media.importing') }}
@@ -1284,17 +1284,17 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <div v-else-if="isAssetTab">
               <div
                 v-if="filteredAssets.length === 0"
-                class="border border-dashed border-neutral-800 hover:border-primary/50 cursor-pointer rounded-lg p-4 text-center transition-colors group"
+                class="border border-dashed border-neutral-300 dark:border-neutral-800 hover:border-primary/50 cursor-pointer rounded-lg p-4 text-center transition-colors group"
                 @click="handleImportMedia"
               >
                 <UIcon
                   name="i-lucide-upload-cloud"
                   class="size-7 mx-auto text-neutral-500 group-hover:text-primary mb-1.5 transition-colors"
                 />
-                <p class="text-xs text-neutral-400 group-hover:text-neutral-200 font-medium">
+                <p class="text-xs text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 font-medium">
                   {{ t('tmcut.media.empty') }}
                 </p>
-                <p class="text-[10px] text-neutral-600 mt-1">
+                <p class="text-[10px] text-neutral-500 dark:text-neutral-600 mt-1">
                   {{ t('tmcut.media.importHint') }}
                 </p>
               </div>
@@ -1302,7 +1302,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               <div v-else class="grid grid-cols-2 gap-2">
                 <div v-for="asset in filteredAssets" :key="asset.id" class="min-w-0">
                   <div
-                    class="group/thumb relative aspect-video rounded-md overflow-hidden bg-neutral-800 cursor-pointer border border-transparent hover:border-primary/60 transition-colors"
+                    class="group/thumb relative aspect-video rounded-md overflow-hidden bg-neutral-200 dark:bg-neutral-800 cursor-pointer border border-transparent hover:border-primary/60 transition-colors"
                     :class="asset.status === 'missing' ? 'border-amber-500/60!' : ''"
                     :title="asset.name"
                     :draggable="asset.status !== 'missing'"
@@ -1326,14 +1326,14 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     <UIcon
                       v-else
                       :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-6 text-neutral-600"
+                      class="absolute inset-0 m-auto size-6 text-neutral-500 dark:text-neutral-600"
                     />
 
                     <div
                       v-if="asset.status === 'analyzing'"
                       class="absolute inset-0 bg-black/50 flex items-center justify-center"
                     >
-                      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-neutral-300" />
+                      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-neutral-600 dark:text-neutral-300" />
                     </div>
                     <div
                       v-if="asset.status === 'missing'"
@@ -1378,7 +1378,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     <!-- Folder badge (when viewing all assets) -->
                     <span
                       v-if="!selectedFolderId && getFolderBadge(asset)"
-                      class="absolute bottom-1 left-1 px-1 py-0.5 rounded bg-black/80 border border-neutral-700 text-[9px] font-medium text-neutral-200 flex items-center gap-1 max-w-21.25 truncate"
+                      class="absolute bottom-1 left-1 px-1 py-0.5 rounded bg-black/80 border border-neutral-400 dark:border-neutral-700 text-[9px] font-medium text-neutral-700 dark:text-neutral-200 flex items-center gap-1 max-w-21.25 truncate"
                       :title="getFolderBadge(asset)?.name"
                     >
                       <span
@@ -1437,7 +1437,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     </div>
                   </div>
 
-                  <p class="text-[11px] font-medium text-neutral-200 truncate mt-1" :title="asset.name">
+                  <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate mt-1" :title="asset.name">
                     {{ asset.name }}
                   </p>
                   <p
@@ -1455,7 +1455,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               <div
                 v-for="preset in textPresets"
                 :key="preset.id"
-                class="border border-neutral-800 hover:border-primary/60 cursor-pointer rounded-lg p-3 bg-neutral-950/60 transition-colors"
+                class="border border-neutral-300 dark:border-neutral-800 hover:border-primary/60 cursor-pointer rounded-lg p-3 bg-neutral-100/60 dark:bg-neutral-950/60 transition-colors"
                 @click="handleAddTextPreset(preset)"
               >
                 <p
@@ -1468,18 +1468,18 @@ function handleEditorKeydown(e: KeyboardEvent) {
                   {{ preset.name }}
                 </p>
               </div>
-              <p class="text-[10px] text-neutral-600 text-center px-2">
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-600 text-center px-2">
                 {{ t('tmcut.tabs.textHint') }}
               </p>
             </div>
 
             <!-- Coming-soon categories (Stickers / Effects / Transitions / Filters) -->
-            <div v-else class="border border-dashed border-neutral-800 rounded-lg p-6 text-center">
-              <UIcon name="i-lucide-sparkles" class="size-7 mx-auto text-neutral-600 mb-2" />
-              <p class="text-xs font-medium text-neutral-400">
+            <div v-else class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center">
+              <UIcon name="i-lucide-sparkles" class="size-7 mx-auto text-neutral-500 dark:text-neutral-600 mb-2" />
+              <p class="text-xs font-medium text-neutral-500 dark:text-neutral-400">
                 {{ t('tmcut.tabs.soonTitle') }}
               </p>
-              <p class="text-[10px] text-neutral-600 mt-1">
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-600 mt-1">
                 {{ t('tmcut.tabs.soonDesc') }}
               </p>
             </div>
@@ -1493,7 +1493,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 <div
                   v-for="item in track.items"
                   :key="item.id"
-                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-900/80 border border-neutral-800/80 text-xs hover:border-neutral-700 transition-colors"
+                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-100/80 dark:bg-neutral-900/80 border border-neutral-300/80 dark:border-neutral-800/80 text-xs hover:border-neutral-400 dark:hover:border-neutral-700 transition-colors"
                 >
                   <div class="flex items-center gap-2 min-w-0">
                     <UIcon
@@ -1501,7 +1501,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                       class="size-3.5 shrink-0"
                       :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
                     />
-                    <span class="truncate font-medium text-neutral-300 text-[11px]" :title="item.name || item.text">
+                    <span class="truncate font-medium text-neutral-600 dark:text-neutral-300 text-[11px]" :title="item.name || item.text">
                       {{ item.name || item.text || t('tmcut.project') }}
                     </span>
                   </div>
@@ -1539,7 +1539,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
         <!-- Center Player Preview (compact, CapCut-style) -->
         <main
-          class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-950 relative overflow-hidden min-w-0"
+          class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-100 dark:bg-neutral-950 relative overflow-hidden min-w-0"
         >
           <div class="w-full max-w-xl">
             <TmcutPreviewPlayer />
@@ -1547,9 +1547,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
         </main>
 
         <!-- Right Inspector Panel -->
-        <aside class="w-72 border-l border-neutral-800 bg-neutral-900/50 flex flex-col overflow-y-auto p-4 shrink-0">
-          <div class="pb-2 border-b border-neutral-800 mb-3">
-            <span class="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+        <aside class="w-72 border-l border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col overflow-y-auto p-4 shrink-0">
+          <div class="pb-2 border-b border-neutral-300 dark:border-neutral-800 mb-3">
+            <span class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
               {{ t('tmcut.inspector') }}
             </span>
           </div>
@@ -1559,16 +1559,16 @@ function handleEditorKeydown(e: KeyboardEvent) {
       </div>
 
       <!-- Bottom Timeline (h-72) -->
-      <div class="h-72 border-t border-neutral-800 bg-neutral-900 flex flex-col shrink-0 z-10">
+      <div class="h-72 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 flex flex-col shrink-0 z-10">
         <TmcutTimeline @open-export="showExportModal = true" />
       </div>
 
       <!-- Status footer (design #2): honest project/engine info -->
       <div
-        class="h-7 shrink-0 border-t border-neutral-800 bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500"
+        class="h-7 shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/70 dark:bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500"
       >
         <div class="flex items-center gap-3 min-w-0">
-          <span class="text-neutral-300 font-medium truncate">{{ currentProject?.name }}</span>
+          <span class="text-neutral-600 dark:text-neutral-300 font-medium truncate">{{ currentProject?.name }}</span>
           <span v-if="currentProject?.canvas" class="font-mono shrink-0">
             {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }} · {{ canvasFpsValue(currentProject.canvas) }}fps
           </span>
@@ -1656,7 +1656,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               v-if="snapshots.length === 0"
               class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-6 text-center"
             >
-              <UIcon name="i-lucide-history" class="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+              <UIcon name="i-lucide-history" class="w-8 h-8 text-neutral-500 dark:text-neutral-400 mx-auto mb-2" />
               <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                 {{ t('tmcut.snapshot.empty') }}
               </p>
@@ -1705,7 +1705,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         <template #body>
           <div class="space-y-4">
             <div class="space-y-1.5">
-              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
+              <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
               <UInput
                 v-model="newFolderName"
                 :placeholder="t('tmcut.folders.namePlaceholder')"
@@ -1715,7 +1715,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               />
             </div>
             <div class="space-y-1.5">
-              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
+              <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
               <div class="flex items-center gap-2">
                 <button
                   v-for="c in folderTagColors"
@@ -1758,7 +1758,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         <template #body>
           <div class="space-y-4">
             <div class="space-y-1.5">
-              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
+              <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.nameLabel') }}</label>
               <UInput
                 v-model="editingFolderName"
                 :placeholder="t('tmcut.folders.namePlaceholder')"
@@ -1768,7 +1768,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
               />
             </div>
             <div class="space-y-1.5">
-              <label class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
+              <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.colorLabel') }}</label>
               <div class="flex items-center gap-2">
                 <button
                   v-for="c in folderTagColors"
@@ -1810,18 +1810,18 @@ function handleEditorKeydown(e: KeyboardEvent) {
       <UModal v-model:open="moveAssetModalOpen" :title="t('tmcut.folders.moveToTitle')">
         <template #body>
           <div class="space-y-2">
-            <p v-if="targetMoveAsset" class="text-xs text-neutral-400 truncate mb-3">
+            <p v-if="targetMoveAsset" class="text-xs text-neutral-500 dark:text-neutral-400 truncate mb-3">
               {{ targetMoveAsset.name }}
             </p>
             <!-- Unassigned / Clear folder option -->
             <button
               type="button"
-              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 transition-colors cursor-pointer text-left"
+              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 bg-neutral-100/60 dark:bg-neutral-900/60 transition-colors cursor-pointer text-left"
               @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, null)"
             >
               <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-folder-minus" class="size-4 text-neutral-400" />
-                <span class="text-xs font-medium text-neutral-300">{{ t('tmcut.folders.clearFolder') }}</span>
+                <UIcon name="i-lucide-folder-minus" class="size-4 text-neutral-500 dark:text-neutral-400" />
+                <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.clearFolder') }}</span>
               </div>
               <UIcon
                 v-if="targetMoveAsset && !getAssetFolderId(targetMoveAsset)"
@@ -1838,12 +1838,12 @@ function handleEditorKeydown(e: KeyboardEvent) {
               v-for="folder in projectFolders"
               :key="folder.id"
               type="button"
-              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-800 hover:border-neutral-700 bg-neutral-900/60 transition-colors cursor-pointer text-left"
+              class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 bg-neutral-100/60 dark:bg-neutral-900/60 transition-colors cursor-pointer text-left"
               @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, folder.id)"
             >
               <div class="flex items-center gap-2 min-w-0">
                 <span class="size-3 rounded-full shrink-0" :style="{ backgroundColor: folder.color || '#3b82f6' }" />
-                <span class="text-xs font-medium text-neutral-200 truncate">{{ folder.name }}</span>
+                <span class="text-xs font-medium text-neutral-700 dark:text-neutral-200 truncate">{{ folder.name }}</span>
                 <span class="text-[10px] text-neutral-500 font-mono">({{ folderCounts[folder.id] || 0 }})</span>
               </div>
               <UIcon

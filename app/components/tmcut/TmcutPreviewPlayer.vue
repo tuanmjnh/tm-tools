@@ -1083,13 +1083,13 @@ onUnmounted(() => {
   <div ref="viewportRef" class="flex flex-col items-center justify-center w-full max-w-full">
     <!-- HUD header (design #2): canvas info + engine badge | overlay toggles + fullscreen -->
     <div class="w-full mb-2 flex items-center justify-between gap-2 text-[11px]">
-      <div class="flex items-center gap-2 min-w-0 text-neutral-400">
+      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-        <span class="font-medium text-neutral-300 truncate">{{ t('tmcut.player.hudCanvas') }}</span>
+        <span class="font-medium text-neutral-600 dark:text-neutral-300 truncate">{{ t('tmcut.player.hudCanvas') }}</span>
         <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
           {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }}
         </span>
-        <span v-if="aspectLabel" class="font-mono text-neutral-600 shrink-0">({{ aspectLabel }})</span>
+        <span v-if="aspectLabel" class="font-mono text-neutral-500 dark:text-neutral-600 shrink-0">({{ aspectLabel }})</span>
         <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
           {{ canvasFpsValue(currentProject.canvas) }} FPS
         </span>
@@ -1195,7 +1195,7 @@ onUnmounted(() => {
     >
       <div
         ref="monitorRef"
-        class="tmcut-monitor relative bg-black rounded-lg border border-neutral-800 shadow-2xl overflow-hidden select-none m-auto"
+        class="tmcut-monitor relative bg-black rounded-lg border border-neutral-300 dark:border-neutral-800 shadow-2xl overflow-hidden select-none m-auto"
         :style="monitorBoxStyle"
         :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
         @click="onCanvasClick"
@@ -1311,13 +1311,13 @@ onUnmounted(() => {
         <!-- Empty / Standby Canvas Placeholder -->
         <div
           v-if="!currentMediaSrc"
-          class="absolute inset-0 flex flex-col items-center justify-center text-neutral-600 gap-2 p-6 text-center"
+          class="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-600 gap-2 p-6 text-center"
         >
           <UIcon name="i-lucide-clapperboard" class="size-12 opacity-30 text-primary" />
           <span class="text-xs font-medium text-neutral-500">
             {{ t('tmcut.player.noVideoAtPlayhead', { time: formatTimecode(playhead) }) }}
           </span>
-          <span class="text-[10px] text-neutral-600 font-mono">
+          <span class="text-[10px] text-neutral-500 dark:text-neutral-600 font-mono">
             {{ currentProject?.canvas?.width }} x {{ currentProject?.canvas?.height }}
           </span>
         </div>
@@ -1422,13 +1422,13 @@ onUnmounted(() => {
 
           <!-- Crop Mode Floating Controls Banner -->
           <div
-            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/95 border border-neutral-700/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
+            class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100/95 dark:bg-neutral-900/95 border border-neutral-400/80 dark:border-neutral-700/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
             @click.stop
           >
             <span class="text-[10px] font-semibold text-primary uppercase tracking-wider pl-1 shrink-0">
               {{ t('tmcut.crop.tool') }}
             </span>
-            <div class="w-px h-3.5 bg-neutral-700 mx-1 shrink-0" />
+            <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
             <UButton
               v-for="preset in cropRatioPresets"
               :key="preset.id"
@@ -1440,7 +1440,7 @@ onUnmounted(() => {
             >
               {{ preset.label }}
             </UButton>
-            <div class="w-px h-3.5 bg-neutral-700 mx-1 shrink-0" />
+            <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
             <UButton
               icon="i-lucide-rotate-ccw"
               size="xs"
@@ -1479,7 +1479,7 @@ onUnmounted(() => {
     </div><!-- /monitor stage (F-2) -->
 
     <!-- Scrub bar + Transport deck (design #2) -->
-    <div class="w-full mt-3 bg-neutral-900/50 border border-neutral-800 rounded-lg px-3 py-2 flex flex-col gap-2">
+    <div class="w-full mt-3 bg-neutral-100/50 dark:bg-neutral-900/50 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-2 flex flex-col gap-2">
       <!-- Mini scrub bar: click/drag to seek -->
       <div
         ref="scrubRef"
@@ -1490,13 +1490,13 @@ onUnmounted(() => {
         <span class="font-mono text-[11px] text-primary font-semibold w-20 shrink-0 tabular-nums">
           {{ formatTimecode(playhead) }}
         </span>
-        <div class="relative flex-1 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+        <div class="relative flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
           <div
             class="h-full bg-linear-to-r from-primary/60 to-primary rounded-full transition-[width] duration-75"
             :style="{ width: scrubProgress + '%' }"
           />
         </div>
-        <span class="font-mono text-[11px] text-neutral-400 w-20 shrink-0 text-right tabular-nums">
+        <span class="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 w-20 shrink-0 text-right tabular-nums">
           {{ formatTimecode(totalDuration) }}
         </span>
       </div>
@@ -1534,7 +1534,7 @@ onUnmounted(() => {
           >
             OUT
           </UButton>
-          <div class="w-px h-4 bg-neutral-800 mx-0.5" />
+          <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
           <UButton
             icon="i-lucide-skip-back"
             size="xs"
@@ -1587,7 +1587,7 @@ onUnmounted(() => {
             :title="t('tmcut.player.jumpToEnd')"
             @click="seek(totalDuration)"
           />
-          <div class="w-px h-4 bg-neutral-800 mx-0.5" />
+          <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
           <UButton
             :icon="previewMuted || previewVolume === 0 ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
             size="xs"

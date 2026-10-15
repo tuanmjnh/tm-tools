@@ -636,19 +636,19 @@ function previewResultDirectly() {
     :ui="{ content: 'w-[calc(100%-2rem)] max-w-5xl' }"
   >
     <template #content>
-      <div class="flex flex-col max-h-[90vh] overflow-hidden rounded-xl bg-neutral-950 border border-neutral-800 shadow-2xl">
+      <div class="flex flex-col max-h-[90vh] overflow-hidden rounded-xl bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 shadow-2xl">
         <!-- HEADER: title + master badge + file name & destination grid -->
-        <div class="px-5 py-4 bg-neutral-900 border-b border-neutral-800 flex flex-col gap-3 shrink-0">
+        <div class="px-5 py-4 bg-neutral-100 dark:bg-neutral-900 border-b border-neutral-300 dark:border-neutral-800 flex flex-col gap-3 shrink-0">
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
               <div class="w-7 h-7 rounded bg-primary/15 flex items-center justify-center shrink-0">
                 <UIcon name="i-lucide-clapperboard" class="size-4 text-primary" />
               </div>
               <div class="flex items-baseline gap-2 min-w-0">
-                <h2 class="text-base font-semibold text-neutral-100 truncate">
+                <h2 class="text-base font-semibold text-neutral-800 dark:text-neutral-100 truncate">
                   {{ t('tmcut.export.title') }}
                 </h2>
-                <span class="px-1.5 py-0.5 rounded bg-neutral-800 text-primary text-[10px] font-medium tracking-wide shrink-0">
+                <span class="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-primary text-[10px] font-medium tracking-wide shrink-0">
                   {{ t('tmcut.export.badgeMaster') }}
                 </span>
               </div>
@@ -676,8 +676,8 @@ function previewResultDirectly() {
 
           <!-- File name (7) + destination (5) -->
           <div class="grid grid-cols-12 gap-3">
-            <div class="col-span-12 sm:col-span-7 flex items-center gap-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
-              <span class="text-xs text-neutral-400 whitespace-nowrap">{{ t('tmcut.export.fileName') }}:</span>
+            <div class="col-span-12 sm:col-span-7 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
+              <span class="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{{ t('tmcut.export.fileName') }}:</span>
               <UInput
                 v-model="fileName"
                 size="sm"
@@ -686,9 +686,9 @@ function previewResultDirectly() {
               />
               <span class="font-mono text-[11px] text-neutral-500">.{{ ext }}</span>
             </div>
-            <div class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
+            <div class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
               <UIcon name="i-lucide-folder-open" class="size-4 text-neutral-500 shrink-0" />
-              <span class="font-mono text-xs text-neutral-400 truncate flex-1 min-w-0" :title="dirName">{{ dirName || 'D:/' }}</span>
+              <span class="font-mono text-xs text-neutral-500 dark:text-neutral-400 truncate flex-1 min-w-0" :title="dirName">{{ dirName || 'D:/' }}</span>
               <UButton
                 size="xs"
                 variant="soft"
@@ -707,11 +707,11 @@ function previewResultDirectly() {
             <label class="flex items-center gap-2.5 cursor-pointer select-none">
               <UCheckbox v-model="watchFolder" :disabled="isExporting" size="sm" />
               <UIcon name="i-lucide-folder-eye" class="size-3.5 text-primary" />
-              <span class="text-xs text-neutral-300 font-medium">
+              <span class="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
                 {{ t('tmcut.export.watchFolder') }} · {{ t('tmcut.export.watchFolderHint') }}
               </span>
             </label>
-            <span class="font-mono text-[10px] text-primary/80 bg-neutral-800 px-2 py-0.5 rounded">media://watch-sync</span>
+            <span class="font-mono text-[10px] text-primary/80 bg-neutral-200 dark:bg-neutral-800 px-2 py-0.5 rounded">media://watch-sync</span>
           </div>
 
           <!-- Transitions confirmation badge (Roadmap R3) -->
@@ -724,7 +724,7 @@ function previewResultDirectly() {
               <span class="text-xs font-medium text-primary">
                 {{ t('tmcut.export.transitionsTitle', { n: timelineTransitionCount }) }}
               </span>
-              <span class="text-[11px] leading-snug text-neutral-300">
+              <span class="text-[11px] leading-snug text-neutral-600 dark:text-neutral-300">
                 {{ t('tmcut.export.transitionsDesc') }}
               </span>
             </div>
@@ -734,16 +734,16 @@ function previewResultDirectly() {
         <!-- BODY: left specs (5) / right parameters (7) -->
         <div class="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 lg:grid-cols-12">
           <!-- LEFT: poster + specs + range + hardware -->
-          <div class="lg:col-span-5 p-5 flex flex-col gap-4 bg-neutral-950/60 lg:border-r border-neutral-800">
+          <div class="lg:col-span-5 p-5 flex flex-col gap-4 bg-neutral-100/60 dark:bg-neutral-950/60 lg:border-r border-neutral-300 dark:border-neutral-800">
             <!-- Poster preview -->
-            <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800 group">
+            <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 group">
               <img
                 v-if="posterUrl"
                 :src="posterUrl"
                 alt=""
                 class="w-full h-full object-cover"
               >
-              <div v-else class="w-full h-full flex flex-col items-center justify-center gap-1.5 text-neutral-600">
+              <div v-else class="w-full h-full flex flex-col items-center justify-center gap-1.5 text-neutral-500 dark:text-neutral-600">
                 <UIcon name="i-lucide-image" class="size-7" />
                 <span class="text-[11px]">{{ t('tmcut.export.posterEmpty') }}</span>
               </div>
@@ -752,7 +752,7 @@ function previewResultDirectly() {
                 <span class="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur font-mono text-[10px] text-primary tracking-wider">
                   {{ outputW }}×{{ outputH }}
                 </span>
-                <span class="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur text-[10px] text-neutral-200">
+                <span class="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur text-[10px] text-neutral-700 dark:text-neutral-200">
                   {{ aspectLabel }}
                 </span>
               </div>
@@ -762,10 +762,10 @@ function previewResultDirectly() {
             </div>
 
             <!-- Specs snapshot -->
-            <div class="grid grid-cols-2 gap-3 p-3.5 bg-neutral-900 rounded-lg border border-neutral-800">
+            <div class="grid grid-cols-2 gap-3 p-3.5 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
               <div class="flex flex-col gap-0.5">
                 <span class="text-[10px] uppercase tracking-wider text-neutral-500">{{ t('tmcut.export.specDuration') }}</span>
-                <span class="font-mono text-sm text-neutral-100 font-semibold">{{ formatTimecode(outputDuration) }}</span>
+                <span class="font-mono text-sm text-neutral-800 dark:text-neutral-100 font-semibold">{{ formatTimecode(outputDuration) }}</span>
               </div>
               <div class="flex flex-col gap-0.5">
                 <span class="text-[10px] uppercase tracking-wider text-neutral-500">{{ t('tmcut.export.specSize') }}</span>
@@ -773,27 +773,27 @@ function previewResultDirectly() {
               </div>
               <div class="flex flex-col gap-0.5">
                 <span class="text-[10px] uppercase tracking-wider text-neutral-500">{{ t('tmcut.export.projectResolution') }}</span>
-                <span class="font-mono text-[11px] text-neutral-300">{{ canvasW }} × {{ canvasH }} px</span>
+                <span class="font-mono text-[11px] text-neutral-600 dark:text-neutral-300">{{ canvasW }} × {{ canvasH }} px</span>
               </div>
               <div class="flex flex-col gap-0.5">
                 <span class="text-[10px] uppercase tracking-wider text-neutral-500">{{ t('tmcut.export.specAudio') }}</span>
-                <span class="font-mono text-[11px] text-neutral-300">{{ audioSpecValue }}</span>
+                <span class="font-mono text-[11px] text-neutral-600 dark:text-neutral-300">{{ audioSpecValue }}</span>
               </div>
             </div>
 
             <!-- Export range selector (In/Out zone) -->
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-neutral-400 flex items-center gap-1.5">
+              <label class="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
                 <UIcon name="i-lucide-clock" class="size-3.5" />
                 {{ t('tmcut.export.rangeLabel') }}
               </label>
-              <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+              <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                 <button
                   type="button"
                   class="py-1.5 px-2 rounded text-xs font-semibold transition-colors"
                   :class="rangeMode === 'full'
-                    ? 'bg-neutral-800 text-primary shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-primary shadow-sm'
+                    : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                   @click="rangeMode = 'full'"
                 >
                   {{ t('tmcut.export.rangeFull') }}
@@ -802,30 +802,30 @@ function previewResultDirectly() {
                   type="button"
                   class="py-1.5 px-2 rounded text-xs font-medium transition-colors"
                   :class="!hasRange
-                    ? 'text-neutral-600 cursor-not-allowed'
+                    ? 'text-neutral-500 dark:text-neutral-600 cursor-not-allowed'
                     : rangeMode === 'inout'
-                      ? 'bg-neutral-800 text-primary shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      ? 'bg-neutral-200 dark:bg-neutral-800 text-primary shadow-sm'
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                   :disabled="!hasRange"
                   @click="rangeMode = 'inout'"
                 >
                   {{ rangeLabel }}
                 </button>
               </div>
-              <p class="text-[10px] text-neutral-600 leading-snug">
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-600 leading-snug">
                 {{ t('tmcut.export.rangeHint') }}
               </p>
             </div>
 
             <!-- Hardware status -->
-            <div class="mt-auto p-3 rounded-lg bg-neutral-900/70 border border-neutral-800 flex items-center gap-3">
+            <div class="mt-auto p-3 rounded-lg bg-neutral-100/70 dark:bg-neutral-900/70 border border-neutral-300 dark:border-neutral-800 flex items-center gap-3">
               <div class="w-8 h-8 rounded bg-primary/15 flex items-center justify-center shrink-0">
                 <UIcon name="i-lucide-memory" class="size-4 text-primary" />
               </div>
               <div class="flex flex-col min-w-0">
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
-                  <span class="text-xs text-neutral-100 font-medium truncate">{{ hwInfo.label }}</span>
+                  <span class="text-xs text-neutral-800 dark:text-neutral-100 font-medium truncate">{{ hwInfo.label }}</span>
                 </div>
                 <span class="text-[10px] text-neutral-500">
                   {{ isDesktop ? hwInfo.desc : t('tmcut.export.hwDesktopOnly') }}
@@ -835,9 +835,9 @@ function previewResultDirectly() {
           </div>
 
           <!-- RIGHT: mode tabs + parameters -->
-          <div class="lg:col-span-7 p-5 flex flex-col gap-4 bg-neutral-900/20">
+          <div class="lg:col-span-7 p-5 flex flex-col gap-4 bg-neutral-100/20 dark:bg-neutral-900/20">
             <!-- Mode tabs -->
-            <div class="flex items-center gap-1 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+            <div class="flex items-center gap-1 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
               <button
                 v-for="tab in modeTabs"
                 :key="tab.value"
@@ -845,7 +845,7 @@ function previewResultDirectly() {
                 class="flex-1 py-1.5 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 :class="mode === tab.value
                   ? 'bg-primary/15 text-primary shadow-sm'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                  : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                 @click="mode = tab.value"
               >
                 <UIcon :name="tab.icon" class="size-3.5" />
@@ -857,7 +857,7 @@ function previewResultDirectly() {
             <template v-if="mode === 'video'">
               <!-- Social presets -->
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</label>
+                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</label>
                 <div class="grid grid-cols-3 gap-1.5">
                   <button
                     v-for="p in socialPresets"
@@ -870,9 +870,9 @@ function previewResultDirectly() {
                     class="py-1.5 px-2 rounded-lg border text-center transition-colors"
                     :class="presetFit(p)
                       ? (presetActive(p)
-                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
-                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200')
-                      : 'bg-neutral-900/50 border-neutral-800/50 text-neutral-600 cursor-not-allowed'"
+                        ? 'bg-neutral-200 dark:bg-neutral-800 border-primary/40 text-neutral-800 dark:text-neutral-100'
+                        : 'bg-neutral-100 dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200')
+                      : 'bg-neutral-100/50 dark:bg-neutral-900/50 border-neutral-300/50 dark:border-neutral-800/50 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'"
                     @click="applyPreset(p)"
                   >
                     <span class="block text-[11px] font-medium truncate">{{ t(p.labelKey) }}</span>
@@ -884,10 +884,10 @@ function previewResultDirectly() {
               <!-- Output resolution -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
-                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.resLabel') }}</label>
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.resLabel') }}</label>
                   <span class="font-mono text-[11px] text-primary">{{ t('tmcut.export.resCurrent', { w: outputW, h: outputH }) }}</span>
                 </div>
-                <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+                <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     v-for="s in scaleOptions"
                     :key="s"
@@ -895,7 +895,7 @@ function previewResultDirectly() {
                     class="py-1.5 rounded text-center transition-colors"
                     :class="outScale === s
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="outScale = s"
                   >
                     <span class="block text-xs font-semibold">{{ s }}×</span>
@@ -907,7 +907,7 @@ function previewResultDirectly() {
               <!-- Frame rate & Format & Codec side-by-side -->
               <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1.5">
-                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.fpsLabel') }}</label>
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.fpsLabel') }}</label>
                   <USelect
                     :model-value="fpsValue"
                     :items="fpsOptions"
@@ -917,7 +917,7 @@ function previewResultDirectly() {
                   />
                 </div>
                 <div class="flex flex-col gap-1.5">
-                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.formatLabel') }}</label>
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.formatLabel') }}</label>
                   <USelect
                     v-model="videoFormat"
                     :items="formatOptions"
@@ -930,16 +930,16 @@ function previewResultDirectly() {
               <!-- Bitrate Options -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
-                  <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.bitrateLabel') }}</label>
+                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.bitrateLabel') }}</label>
                   <span class="font-mono text-[11px] text-primary">{{ effectiveBitrateMbps }} Mbps</span>
                 </div>
-                <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+                <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     type="button"
                     class="py-1.5 rounded text-[11px] text-center transition-colors"
                     :class="bitratePreset === 'standard'
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="bitratePreset = 'standard'"
                   >
                     {{ t('tmcut.export.bitrateStandard') }}
@@ -949,7 +949,7 @@ function previewResultDirectly() {
                     class="py-1.5 rounded text-[11px] text-center transition-colors"
                     :class="bitratePreset === 'recommended'
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="bitratePreset = 'recommended'"
                   >
                     {{ t('tmcut.export.bitrateRecommended') }}
@@ -959,7 +959,7 @@ function previewResultDirectly() {
                     class="py-1.5 rounded text-[11px] text-center transition-colors"
                     :class="bitratePreset === 'high'
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="bitratePreset = 'high'"
                   >
                     {{ t('tmcut.export.bitrateHigh') }}
@@ -969,14 +969,14 @@ function previewResultDirectly() {
                     class="py-1.5 rounded text-[11px] text-center transition-colors"
                     :class="bitratePreset === 'custom'
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="bitratePreset = 'custom'"
                   >
                     {{ t('tmcut.export.bitrateCustom', { mbps: customBitrate }) }}
                   </button>
                 </div>
                 <div v-if="bitratePreset === 'custom'" class="flex items-center gap-2 pt-1">
-                  <span class="text-xs text-neutral-400">{{ t('tmcut.export.bitrateCustomLabel') }}:</span>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ t('tmcut.export.bitrateCustomLabel') }}:</span>
                   <UInput
                     v-model.number="customBitrate"
                     type="number"
@@ -985,19 +985,19 @@ function previewResultDirectly() {
                     max="200"
                     class="w-24 font-mono"
                   />
-                  <span class="text-xs text-neutral-400 font-mono">Mbps</span>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400 font-mono">Mbps</span>
                 </div>
               </div>
 
               <!-- Hardware Acceleration Engine (§10, §13) -->
-              <div class="flex flex-col gap-2.5 p-3.5 bg-neutral-900 rounded-lg border border-neutral-800">
+              <div class="flex flex-col gap-2.5 p-3.5 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2.5">
                     <div class="w-6 h-6 rounded bg-primary/15 flex items-center justify-center text-primary">
                       <UIcon name="i-lucide-zap" class="size-3.5" />
                     </div>
                     <div>
-                      <div class="text-xs font-medium text-neutral-200">
+                      <div class="text-xs font-medium text-neutral-700 dark:text-neutral-200">
                         {{ t('tmcut.export.hwToggle') }}
                       </div>
                       <div class="text-[10px] text-neutral-500">
@@ -1009,28 +1009,28 @@ function previewResultDirectly() {
                 </div>
 
                 <div class="flex flex-col gap-1.5 pt-1">
-                  <label class="text-[11px] text-neutral-400 font-medium">{{ t('tmcut.export.hwEncoderProfiles') }}:</label>
+                  <label class="text-[11px] text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.hwEncoderProfiles') }}:</label>
                   <div class="grid grid-cols-2 gap-2">
                     <!-- NVENC Profile -->
                     <div
                       class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
                       :class="activeEncoder.includes('nvenc')
-                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        ? 'bg-neutral-200 dark:bg-neutral-800 border-primary/40 text-neutral-800 dark:text-neutral-100'
                         : gpuSupport.nvenc
-                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
-                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                          ? 'bg-neutral-100/60 dark:bg-neutral-950/60 border-neutral-300 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-700'
+                          : 'bg-neutral-100/30 dark:bg-neutral-950/30 border-neutral-300/40 dark:border-neutral-800/40 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'"
                       @click="selectEncoderProfile('nvenc')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('nvenc') ? 'bg-primary animate-pulse' : gpuSupport.nvenc ? 'bg-emerald-400' : 'bg-neutral-600'"
+                          :class="activeEncoder.includes('nvenc') ? 'bg-primary animate-pulse' : gpuSupport.nvenc ? 'bg-emerald-400' : 'bg-neutral-300 dark:bg-neutral-600'"
                         />
                         <span class="font-medium truncate">NVIDIA NVENC</span>
                       </div>
                       <span
                         class="text-[10px] shrink-0 font-medium"
-                        :class="activeEncoder.includes('nvenc') ? 'text-primary' : gpuSupport.nvenc ? 'text-neutral-400' : 'text-neutral-600'"
+                        :class="activeEncoder.includes('nvenc') ? 'text-primary' : gpuSupport.nvenc ? 'text-neutral-500 dark:text-neutral-400' : 'text-neutral-500 dark:text-neutral-600'"
                       >
                         {{ activeEncoder.includes('nvenc') ? t('tmcut.export.hwActive') : gpuSupport.nvenc ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
                       </span>
@@ -1040,22 +1040,22 @@ function previewResultDirectly() {
                     <div
                       class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
                       :class="activeEncoder.includes('qsv')
-                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        ? 'bg-neutral-200 dark:bg-neutral-800 border-primary/40 text-neutral-800 dark:text-neutral-100'
                         : gpuSupport.qsv
-                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
-                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                          ? 'bg-neutral-100/60 dark:bg-neutral-950/60 border-neutral-300 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-700'
+                          : 'bg-neutral-100/30 dark:bg-neutral-950/30 border-neutral-300/40 dark:border-neutral-800/40 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'"
                       @click="selectEncoderProfile('qsv')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('qsv') ? 'bg-primary animate-pulse' : gpuSupport.qsv ? 'bg-emerald-400' : 'bg-neutral-600'"
+                          :class="activeEncoder.includes('qsv') ? 'bg-primary animate-pulse' : gpuSupport.qsv ? 'bg-emerald-400' : 'bg-neutral-300 dark:bg-neutral-600'"
                         />
                         <span class="font-medium truncate">Intel QuickSync (QSV)</span>
                       </div>
                       <span
                         class="text-[10px] shrink-0 font-medium"
-                        :class="activeEncoder.includes('qsv') ? 'text-primary' : gpuSupport.qsv ? 'text-neutral-400' : 'text-neutral-600'"
+                        :class="activeEncoder.includes('qsv') ? 'text-primary' : gpuSupport.qsv ? 'text-neutral-500 dark:text-neutral-400' : 'text-neutral-500 dark:text-neutral-600'"
                       >
                         {{ activeEncoder.includes('qsv') ? t('tmcut.export.hwActive') : gpuSupport.qsv ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
                       </span>
@@ -1065,22 +1065,22 @@ function previewResultDirectly() {
                     <div
                       class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
                       :class="activeEncoder.includes('amf')
-                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
+                        ? 'bg-neutral-200 dark:bg-neutral-800 border-primary/40 text-neutral-800 dark:text-neutral-100'
                         : gpuSupport.amf
-                          ? 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'
-                          : 'bg-neutral-950/30 border-neutral-800/40 text-neutral-600 cursor-not-allowed'"
+                          ? 'bg-neutral-100/60 dark:bg-neutral-950/60 border-neutral-300 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-700'
+                          : 'bg-neutral-100/30 dark:bg-neutral-950/30 border-neutral-300/40 dark:border-neutral-800/40 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'"
                       @click="selectEncoderProfile('amf')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
                         <span
                           class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :class="activeEncoder.includes('amf') ? 'bg-primary animate-pulse' : gpuSupport.amf ? 'bg-emerald-400' : 'bg-neutral-600'"
+                          :class="activeEncoder.includes('amf') ? 'bg-primary animate-pulse' : gpuSupport.amf ? 'bg-emerald-400' : 'bg-neutral-300 dark:bg-neutral-600'"
                         />
                         <span class="font-medium truncate">AMD AMF</span>
                       </div>
                       <span
                         class="text-[10px] shrink-0 font-medium"
-                        :class="activeEncoder.includes('amf') ? 'text-primary' : gpuSupport.amf ? 'text-neutral-400' : 'text-neutral-600'"
+                        :class="activeEncoder.includes('amf') ? 'text-primary' : gpuSupport.amf ? 'text-neutral-500 dark:text-neutral-400' : 'text-neutral-500 dark:text-neutral-600'"
                       >
                         {{ activeEncoder.includes('amf') ? t('tmcut.export.hwActive') : gpuSupport.amf ? t('tmcut.export.hwReady') : t('tmcut.export.hwUnsupported') }}
                       </span>
@@ -1090,8 +1090,8 @@ function previewResultDirectly() {
                     <div
                       class="p-2 rounded border flex items-center justify-between text-xs transition-colors cursor-pointer"
                       :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf')
-                        ? 'bg-neutral-800 border-primary/40 text-neutral-100'
-                        : 'bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700'"
+                        ? 'bg-neutral-200 dark:bg-neutral-800 border-primary/40 text-neutral-800 dark:text-neutral-100'
+                        : 'bg-neutral-100/60 dark:bg-neutral-950/60 border-neutral-300 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-400 dark:hover:border-neutral-700'"
                       @click="selectEncoderProfile('cpu')"
                     >
                       <div class="flex items-center gap-1.5 truncate">
@@ -1103,7 +1103,7 @@ function previewResultDirectly() {
                       </div>
                       <span
                         class="text-[10px] shrink-0 font-medium"
-                        :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? 'text-primary' : 'text-neutral-400'"
+                        :class="!activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'"
                       >
                         {{ !activeEncoder.includes('nvenc') && !activeEncoder.includes('qsv') && !activeEncoder.includes('amf') ? t('tmcut.export.hwActive') : t('tmcut.export.hwReady') }}
                       </span>
@@ -1115,13 +1115,13 @@ function previewResultDirectly() {
                 <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
                   <UCheckbox v-model="autoPreview" size="xs" />
                   <UIcon name="i-lucide-play-square" class="size-3.5 text-primary shrink-0" />
-                  <span class="text-[11px] text-neutral-300">{{ t('tmcut.export.autoPreview') }}</span>
+                  <span class="text-[11px] text-neutral-600 dark:text-neutral-300">{{ t('tmcut.export.autoPreview') }}</span>
                 </label>
               </div>
 
               <!-- Color LUT (roadmap E-4) -->
               <div v-if="isDesktop" class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</label>
+                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</label>
                 <div class="flex items-center gap-1.5">
                   <UButton
                     size="xs"
@@ -1143,7 +1143,7 @@ function previewResultDirectly() {
                     @click="lut3dPath = null"
                   />
                 </div>
-                <p class="text-[10px] text-neutral-600 leading-snug">
+                <p class="text-[10px] text-neutral-500 dark:text-neutral-600 leading-snug">
                   {{ t('tmcut.export.lutNote') }}
                 </p>
               </div>
@@ -1152,8 +1152,8 @@ function previewResultDirectly() {
             <!-- AUDIO settings -->
             <template v-else-if="mode === 'audio'">
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.audioFormatLabel') }}</label>
-                <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioFormatLabel') }}</label>
+                <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     v-for="fmt in ([{ value: 'mp3' }, { value: 'wav' }] as const)"
                     :key="fmt.value"
@@ -1161,7 +1161,7 @@ function previewResultDirectly() {
                     class="py-2 px-2 rounded text-left transition-colors"
                     :class="audioFormat === fmt.value
                       ? 'bg-primary/15 text-primary shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="audioFormat = fmt.value"
                   >
                     <span class="block text-xs font-semibold">{{ fmt.value.toUpperCase() }}</span>
@@ -1176,8 +1176,8 @@ function previewResultDirectly() {
                 v-if="audioFormat === 'mp3'"
                 class="flex flex-col gap-1.5"
               >
-                <label class="text-xs text-neutral-400 font-medium">{{ t('tmcut.export.audioBitrateLabel') }}</label>
-                <div class="grid grid-cols-3 gap-1.5 p-1 bg-neutral-900 rounded-lg border border-neutral-800">
+                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioBitrateLabel') }}</label>
+                <div class="grid grid-cols-3 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     v-for="kbps in [128, 192, 320]"
                     :key="kbps"
@@ -1185,7 +1185,7 @@ function previewResultDirectly() {
                     class="py-1.5 rounded text-[11px] transition-colors"
                     :class="audioBitrate === kbps
                       ? 'bg-primary/15 text-primary font-semibold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'"
+                      : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'"
                     @click="audioBitrate = kbps"
                   >
                     {{ kbps }} kbps
@@ -1193,16 +1193,16 @@ function previewResultDirectly() {
                 </div>
               </div>
 
-              <p class="text-[10px] text-neutral-600 leading-snug">
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-600 leading-snug">
                 {{ t('tmcut.export.audioNote') }}
               </p>
             </template>
 
             <!-- GIF settings -->
             <template v-else>
-              <div class="p-3 rounded-lg bg-neutral-900 border border-neutral-800 flex items-start gap-2.5">
+              <div class="p-3 rounded-lg bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 flex items-start gap-2.5">
                 <UIcon name="i-lucide-info" class="size-4 text-primary shrink-0 mt-0.5" />
-                <p class="text-[11px] text-neutral-400 leading-snug">
+                <p class="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
                   {{ t('tmcut.export.gifNote') }}
                 </p>
               </div>
@@ -1212,7 +1212,7 @@ function previewResultDirectly() {
             <label v-if="mode !== 'gif'" class="flex items-center gap-2.5 cursor-pointer select-none">
               <UCheckbox v-model="denoise" :disabled="isExporting" size="sm" />
               <UIcon name="i-lucide-waves" class="size-3.5 text-primary" />
-              <span class="text-xs text-neutral-300 font-medium">
+              <span class="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
                 {{ t('tmcut.export.denoiseLabel') }} · {{ t('tmcut.export.denoiseNote') }}
               </span>
             </label>
@@ -1220,11 +1220,11 @@ function previewResultDirectly() {
         </div>
 
         <!-- FOOTER: status/estimate + actions -->
-        <div class="px-5 py-3 bg-neutral-900 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+        <div class="px-5 py-3 bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
           <!-- Status / estimate -->
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <template v-if="isExporting">
-              <div class="h-1.5 w-32 sm:w-40 bg-neutral-800 rounded-full overflow-hidden shrink-0">
+              <div class="h-1.5 w-32 sm:w-40 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden shrink-0">
                 <div
                   class="h-full bg-primary transition-all duration-200"
                   :style="{ width: `${progressPercent}%` }"
@@ -1233,7 +1233,7 @@ function previewResultDirectly() {
               <span class="font-mono text-xs text-primary font-semibold shrink-0">{{ progressPercent }}%</span>
               <span
                 v-if="etaText"
-                class="text-[11px] text-neutral-400 shrink-0"
+                class="text-[11px] text-neutral-500 dark:text-neutral-400 shrink-0"
               >
                 {{ t('tmcut.export.etaLabel') }} {{ etaText }}
               </span>
@@ -1284,16 +1284,16 @@ function previewResultDirectly() {
             </template>
 
             <template v-else>
-              <span class="flex items-center gap-1.5 text-xs text-neutral-400">
+              <span class="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                 <UIcon name="i-lucide-hard-drive" class="size-3.5 text-primary" />
                 {{ t('tmcut.export.labelSize') }}:
-                <strong class="font-mono text-neutral-100">{{ estimatedSize ?? '—' }}</strong>
+                <strong class="font-mono text-neutral-800 dark:text-neutral-100">{{ estimatedSize ?? '—' }}</strong>
               </span>
-              <span class="hidden sm:block w-1 h-1 rounded-full bg-neutral-700" />
-              <span class="hidden sm:flex items-center gap-1.5 text-xs text-neutral-400">
+              <span class="hidden sm:block w-1 h-1 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+              <span class="hidden sm:flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                 <UIcon name="i-lucide-clock" class="size-3.5 text-primary" />
                 {{ t('tmcut.export.specDuration') }}:
-                <strong class="font-mono text-neutral-100">{{ formatTimecode(outputDuration) }}</strong>
+                <strong class="font-mono text-neutral-800 dark:text-neutral-100">{{ formatTimecode(outputDuration) }}</strong>
               </span>
             </template>
           </div>

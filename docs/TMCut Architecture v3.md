@@ -8367,3 +8367,21 @@ Reported symptom: importing any video in the Electron build shows the amber unre
 Absolute D:\ paths pass (the regression itself); forward-slash forms canonicalize; UNC passes; empty/relative/non-string refuse; whitespace trims. Requiring the controller under plain node is side-effect-free, so the guard is unit-testable without Electron (`isUserMediaPath` exported).
 
 Gates: importpath 5/5 NEW · runner `pnpm test:tmcut` 22/22 · lint 0.
+
+# 175. R111 — Studio light mode: the forced-dark palette becomes mode-paired
+
+User report: switching the app to light mode left the TMCut studio fully dark. Cause: the studio was authored forced-dark — surfaces painted `neutral-500..950` with no light counterpart. Nuxt UI v4 itself handles modes correctly (`:root/.light` vs `.dark` CSS variables — verified in its built theme), but plain Tailwind `neutral-*` classes bypass those tokens entirely, so the editor simply ignored the toggle.
+
+## 175.1 The transform
+
+A scripted pass over the ten studio files converted every "dark-palette" utility (`bg/text/border/divide/ring-neutral-500..950`) into an explicit pair — the exact mechanism Nuxt UI's `light`/`dark` custom variants use:
+
+- dark surfaces flip light-first: `bg-neutral-900` → `bg-neutral-100 dark:bg-neutral-900` (`/opacity` modifiers preserved on both sides);
+- light text flips too (`text-neutral-200` → `text-neutral-700 dark:text-neutral-200`) — otherwise text authored for dark surfaces vanishes on white;
+- `text-white` flips to `text-neutral-900 dark:text-white` ONLY where the element has no dark-surface signal (video matte, thumbnail badges and scrim overlays keep white text in both modes by design);
+- existing `x dark:y` pairs are skipped; variant prefixes (`hover:`, `group-hover:`, `aria-*`…) are kept on both sides;
+- **deliberate exemption**: the video viewport canvas (`TmcutPreviewPlayer` preview root) STAYS dark in both modes — the grading-matte rule from the Obsidian Cut design reference: footage previews need a constant dark surround for color judgment.
+
+Two repair passes fixed transform collateral (nested `dark:` tokens produced invalid `dark::` forms and duplicate dark-scoped utilities; Tailwind CSS order — not author order — decides duplicates, so every conflict had to be collapsed, not visually guessed). Net result across editor.vue + nine components: 295 dark-palette + 198 light-text/white decisions paired, LINT/TC/runner unaffected. The studio chrome (timeline, inspector, media bin, modals, shell) now follows the app's `useColorMode` toggle exactly like every other page, while the canvas well stays professional-dark.
+
+Gates: runner 22/22 · typecheck 0 · lint 0 · build sanity 0.
