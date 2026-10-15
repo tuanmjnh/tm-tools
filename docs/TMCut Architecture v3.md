@@ -8207,3 +8207,17 @@ Nine QA rounds later, the suite had grown to 13 specs plus two older ones — an
 Its very first run caught a spec that had been BROKEN SINCE R88 AND NOBODY KNEW: `tmcut_phase2.spec.ts` still asserted `canvas.fps === 30`, but C16 made `normalizeCanvas` produce a rational `FrameRate` everywhere. The file was never wired into any script — outside the ritual, outside the sweep, red for ~12 rounds. Fix: assert `{ numerator: 30, denominator: 1 }` (the actual contract; the legacy-number input is still accepted and migrated). Lesson recorded: a spec nobody runs is a spec that lies — the runner is now the ritual.
 
 Full-suite state (R100): `pnpm test:tmcut` → 14/14 green (ai-script 3 · autocut 4 · history 7 · markers 7 · phase15 14 · phase2 16 · render-graph 12 · ripple 5 · save 5 · split-trim 6 · store 15 · templates 4 · time-domain 7 · transitions 5). FFmpeg smoke 3/3 · core `node --test` 210/210 · core tsc 0 · core eslint 0 · boundaries PASS · i18n parity 2797/2797.
+
+# 165. R101 — Groups & linked pairs pinned (roadmap B4 / core C9)
+
+The last untested store seam: groups and linked pairs. The app selection is deliberately single-clip; the store expands it through core `expandRelated` so relatives always travel together — a design decision (CapCut parity) whose guarantees lived only in core unit tests. `tests/unit/tmcut_groups.spec.ts` (6 checks, `pnpm test:groups`) now pins the store layer:
+
+- `toggleLinkSelection` links the selected clip with EVERY unlocked clip overlapping it in time, on any other track (shared `linkId`); non-overlapping and locked-track clips are excluded; no selection → `'none'`;
+- a second toggle unlinks the whole pair (shared-linkId detection, not a fresh link);
+- `groupSelection` groups the EXPANDED selection — a lone clip honestly fails (no relations), a linked pair reaches the 2-target minimum and shares one `groupId`;
+- `ungroupSelection` dissolves the group the selection expands to; second call is a no-op (UI toast stays honest);
+- `relatedOffsetsFor` returns the relatives' positions in STORE TICKS, excludes the dragged clip itself, integer everywhere — the drag handler's cross-track payload.
+
+No defect found; the B4 wiring (expanded selection in every core call, locked-track exclusion done TWICE — once in the store guard, once in core) behaves exactly as designed.
+
+Gates: groups 6/6 NEW · runner `pnpm test:tmcut` 15/15 · typecheck 0 · lint 0.
