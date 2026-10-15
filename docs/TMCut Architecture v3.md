@@ -8077,3 +8077,19 @@ Typecheck proves types; only the bundler proves the whole graph resolves — pat
 Full-repo `eslint .` has a PRE-EXISTING baseline of ~4.1 k problems (tools/admin/inbox pages etc.) — out of scope, but the tmcut partition (components/composables/pages/utils/tests) is now the standard: 82 problems found, ALL in `TmcutAiScriptModal.vue`, all pure template formatting (`max-attributes-per-line`, `html-indent`, closing-bracket rules) — the file predates lint awareness. `--fix` reformatted it (verified: attribute re-wrapping only, zero semantic change); tmcut partition is now **0 errors / 0 warnings**. Rule going forward: new tmcut code lints clean per-file (full-repo lint stays red-baselined; do not chase it).
 
 Gates: nuxt build 0 · tmcut-partition eslint 0 · typecheck 0 · all 6 specs green (4/15/7/12/4/3).
+
+# 158. R94 — History spec exposes the cross-project undo leak
+
+Continuing the QA chain: the undo/redo stack (roadmap B8 coalescing, the app-JSON twin of core C15) had never been behaviour-tested — every earlier spec tested ops, none tested Ctrl+Z. `tests/unit/tmcut_history.spec.ts` (7 checks, `pnpm test:history`) now pins:
+
+- undo restores the pre-mutation state, redo re-applies, neither switches project;
+- B8 same-key burst (Inspector slider: coalesced push + N× `updateClip`, which never pushes itself) is ONE undo entry — one Ctrl+Z reverts the whole drag;
+- a different key (same clip, next field) starts a NEW entry;
+- `restoreHistorySnapshot` clearing `lastCoalesce` really breaks the burst (post-undo push is fresh even for the same key in the same millisecond);
+- a fresh edit invalidates redo.
+
+## 158.1 The real defect: history is module-level, projects are not
+
+`undoStack`/`redoStack` are module state and snapshots carry only `{timeline, canvas}` — no project id. Nothing reset them on a project switch, so: edit project A, open/create/duplicate-to project B, press Ctrl+Z → A's timeline and canvas were transplanted into B (and auto-saved into B's file). The editor UI made this near-invisible (the clip count changed without any visible edit). Fix: `resetHistory()` (clears both stacks + `lastCoalesce`) called in every current-project swap — `loadProject`, `createProject`, `duplicateAsProject`. `applyRecovery`/`restoreSnapshot` deliberately keep the stack: same project id, same undoable stream (the load that opened the project already reset it).
+
+Gates: history 7/7 NEW · store 15/15 · time-domain 7/7 · render 12/12 · templates 4/4 · typecheck 0 · lint 0.

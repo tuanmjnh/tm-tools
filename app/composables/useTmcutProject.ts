@@ -361,6 +361,9 @@ async function loadProject(projectId: string) {
   isLoading.value = true
   selectedClipId.value = null
   pendingRecovery.value = null
+  // New project, fresh history (R94): the stacks belong to the project
+  // they were built on.
+  resetHistory()
 
   const ipc = tmcutIpc()
   if (ipc && !import.meta.server) {
@@ -537,6 +540,7 @@ function createProject(
   }
 
   currentProject.value = newProject
+  resetHistory() // openProject paths reset the stacks — see R94
   projects.value.unshift(newProject)
   saveProject()
 
@@ -1299,6 +1303,7 @@ function duplicateAsProject(presetId: string): TmcutProject | null {
   }
 
   currentProject.value = clone
+  resetHistory() // the clone is a new project — its history starts empty
   projects.value.unshift(clone)
   saveProject()
   return clone
@@ -1343,6 +1348,16 @@ function pushHistoryCoalesced(key: string) {
   }
   pushHistory()
   lastCoalesce = { key, at: now }
+}
+
+// The stacks are module-level and snapshots never carry a project id, so
+// any stack left over from another project transplants the CLOSED one's
+// timeline/canvas into whatever is open when the user hits Ctrl+Z (R94).
+// Every project switch must reset.
+function resetHistory() {
+  undoStack.value = []
+  redoStack.value = []
+  lastCoalesce = null
 }
 
 const canUndo = computed(() => undoStack.value.length > 0)
