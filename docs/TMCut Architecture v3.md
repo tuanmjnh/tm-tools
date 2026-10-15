@@ -8172,3 +8172,30 @@ The last major UI seam in the core-ticks land is the transition DSL (roadmap B3 
 No defect. The store already validates first (`checkClipTransition` → `canApplyTransition`), then pushes via `applyV3Edit`. The bridge preserves the duration field unchanged through the v1compat identity path. The spec now locks the five corner cases that make the UI/export badge trustworthy.
 
 Gates: transitions 5/5 NEW · markers 7/7 · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
+
+# 163. R99 — Split / trim / close-gaps pinned (roadmap B2/B7/B9, core C1/C2)
+
+The editing seam that touches every timeline operation is split/trim/gap-close: `splitClip`, `trimSelectedEdgeAt`, and `closeProjectGaps`. After the ticks flip these three were refactored but never behaviour-tested in the store layer. The spec pins the contracts that keep the timeline sane.
+
+## 163.1 The spec
+
+`tests/unit/tmcut_split_trim.spec.ts` (6 checks, `pnpm test:split-trim`):
+
+- `splitClip` respects the 0.1 s margin, creates two pieces with correct `in/out/offset`, drops `transitionIn` on the tail, and refuses edge splits;
+- margin enforcement is exact — splits within 0.1 s of either edge are rejected, no degenerate slivers;
+- `trimSelectedEdgeAt` trims the selected clip edge with a margin guard, keeps duration > 0, and routes through core `trimClip` via `applyV3Edit`;
+- `closeProjectGaps` pre-scans for gaps to avoid a no-op history push, then routes to core `closeGaps` and returns the number of TICKS closed;
+- no-op case is a true no-op (items stay put, history not polluted);
+- a combined split + trim + closeGaps flow keeps all fields integer TICKS and never produces negative durations.
+
+## 163.2 Finding
+
+No defect. The store already:
+- converts UI seconds → ticks at the boundary;
+- guards both split and trim with the 0.1 s margin;
+- deletes `transitionIn` on the second piece after a split (core semantics);
+- uses a pre-scan before pushing history for `closeProjectGaps`.
+
+The spec now locks the six corner cases that make the editing feel solid.
+
+Gates: split-trim 6/6 NEW · transitions 5/5 · markers 7/7 · ripple 5/5 · save 5/5 · history 7/7 · store 15/15 · templates 4/4 · time-domain 7/7 · render 12/12 · typecheck 0 · lint 0.
