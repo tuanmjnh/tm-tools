@@ -67,6 +67,20 @@ function pct(fraction: number) {
   return `${Number((fraction * 100).toFixed(4))}%`
 }
 
+// Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p.
+// Adjusts the monitor's rendered pixel size; the source still decodes at
+// full resolution (no re-encoding), we scale the CSS box — cheap,
+// honest preview, matches the mock's intent.
+const previewQuality = ref<'full' | 'half' | 'quarter' | 'proxy'>('half')
+const qualityFactor = computed(() => {
+  switch (previewQuality.value) {
+    case 'half': return 0.5
+    case 'quarter': return 0.25
+    case 'proxy': return 0.33
+    default: return 1
+  }
+})
+
 // Safe-area rects (roadmap C13 / core canvas.mjs): action safe 0.90 and
 // title safe 0.80 as centered fractions — replaces the hardcoded
 // 2.5%/5% insets with the broadcast standard.
@@ -220,9 +234,12 @@ const monitorBoxStyle = computed(() => {
   const h = canvas?.height || 1080
   const availW = Math.max(200, viewportWidth.value || 640)
   const availH = monitorStageHeight.value
-  const scale = canvasZoom.value === 'fit'
+  const baseScale = canvasZoom.value === 'fit'
     ? Math.max(0.05, Math.min(availW / w, availH / h))
     : Math.max(0.05, canvasZoom.value)
+  // Quality selector (mock #2) scales the monitor box; no re-encoding —
+  // the video still decodes at full resolution, we only scale the CSS box.
+  const scale = baseScale * qualityFactor.value
   // Canvas background (roadmap Phase 4): color paints the box, an image
   // covers it (core exports the same way: bg under the clips); the web
   // blob object-URL passes through the engine resolver untouched.
@@ -1130,6 +1147,28 @@ onUnmounted(() => {
         </span>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
+        <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
+          <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
+          <select
+            v-model="previewQuality"
+            class="bg-transparent text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
+            :title="t('tmcut.player.quality')"
+          >
+            <option value="full">
+              {{ t('tmcut.player.qualityFull') }}
+            </option>
+            <option value="half">
+              {{ t('tmcut.player.qualityHalf') }}
+            </option>
+            <option value="quarter">
+              {{ t('tmcut.player.qualityQuarter') }}
+            </option>
+            <option value="proxy">
+              {{ t('tmcut.player.qualityProxy') }}
+            </option>
+          </select>
+        </div>
         <UButton
           v-if="activeVideoClip"
           icon="i-lucide-crop"

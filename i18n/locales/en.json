@@ -541,7 +541,12 @@
       "snapshotSaved": "Frame saved to cache",
       "snapshotFailed": "Could not extract frame",
       "zoom": "Canvas zoom",
-      "zoomFit": "Fit"
+      "zoomFit": "Fit",
+      "quality": "Preview Quality",
+      "qualityFull": "Full Res",
+      "qualityHalf": "1/2 Res",
+      "qualityQuarter": "1/4 Res",
+      "qualityProxy": "Proxy 720p"
     },
     "inspectorProps": {
       "textContent": "Text Content",

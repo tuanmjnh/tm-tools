@@ -541,7 +541,12 @@
       "snapshotSaved": "Đã lưu khung hình vào cache",
       "snapshotFailed": "Không chụp được khung hình",
       "zoom": "Zoom canvas",
-      "zoomFit": "Vừa khung"
+      "zoomFit": "Vừa khung",
+      "quality": "Chất lượng xem trước",
+      "qualityFull": "Full Res",
+      "qualityHalf": "1/2 Res (Khuyến nghị)",
+      "qualityQuarter": "1/4 Res",
+      "qualityProxy": "Proxy 720p"
     },
     "inspectorProps": {
       "textContent": "Nội dung chữ",
