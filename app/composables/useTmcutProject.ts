@@ -918,24 +918,38 @@ function copySelectedClips(): boolean {
 
 function pasteClipboardAt(timeSec: number): string[] {
   const data = clipboard.value
-  if (!data) return []
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!data || !tracks) return []
   const target = Math.max(0, Math.round(secToTicks(timeSec)))
-  const result = applyV3Edit(v3 => pasteClips(v3, data, target))
-  if (result && result.length > 0) {
-    selectedClipId.value = result[result.length - 1] ?? null
-  }
-  return result ?? []
+  // Refused ops must not touch history (house rule, cf. closeProjectGaps
+  // R99 / removeTrack R103): run the op on the throwaway v3 copy FIRST
+  // and only open an undo entry if something actually lands (locked
+  // target tracks make pasteClips skip everything).
+  const v3 = ticksTracksToV3(tracks)
+  const result = pasteClips(v3, data, target)
+  if (!result || result.length === 0) return []
+  pushHistory() // still snapshots the pre-paste state (sync runs after)
+  syncTicksResult(tracks, v3)
+  saveProject()
+  selectedClipId.value = result[result.length - 1] ?? null
+  return result
 }
 
 function duplicateSelectedClips(atSec?: number): string[] {
+  const tracks = currentProject.value?.timeline?.tracks
   const ids = expandedSelectionIds()
-  if (ids.length === 0) return []
+  if (!tracks || ids.length === 0) return []
   const target = atSec === undefined ? undefined : Math.max(0, Math.round(secToTicks(atSec)))
-  const result = applyV3Edit(v3 => duplicateClips(v3, ids, target))
-  const newIds = result ? result.map(copy => copy.id) : []
-  if (newIds.length > 0) {
-    selectedClipId.value = newIds[0] ?? null
-  }
+  // Same refusal rule as pasteClipboardAt: a fully locked selection
+  // duplicates nothing and must not push an undo entry or save.
+  const v3 = ticksTracksToV3(tracks)
+  const result = duplicateClips(v3, ids, target)
+  if (!result || result.length === 0) return []
+  pushHistory()
+  syncTicksResult(tracks, v3)
+  saveProject()
+  const newIds = result.map(copy => copy.id)
+  selectedClipId.value = newIds[0] ?? null
   return newIds
 }
 

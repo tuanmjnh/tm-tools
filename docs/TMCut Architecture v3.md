@@ -8251,3 +8251,19 @@ Store seams the editor UI leans on daily but no spec had ever touched: the eye/l
 - **`duplicateAsProject`** clones to the preset ratio with reframed offsets, keeps the SOURCE file untouched (including the R95 flush before the swap), mirrors the clone, and the clone's history starts EMPTY — the R94 reset rule holds for every project-swap path.
 
 Gates: tracks 7/7 NEW · runner `pnpm test:tmcut` 17/17 · typecheck 0 · lint 0.
+
+# 168. R104 — Copy / paste / duplicate: the clipboard and the refusal rule (C15)
+
+The C15 seam — `copySelectedClips` / `pasteClipboardAt` / `duplicateSelectedClips` — had never been spec'd. `tests/unit/tmcut_copy_paste.spec.ts` (8 checks, `pnpm test:copy-paste`) pins the full contract, and one honesty defect surfaced along the way.
+
+## 168.1 What is now guaranteed
+
+- `copySelectedClips` copies the EXPANDED selection (linked relatives travel) into a portable payload `{ version: ..., clips }` with `baseStart` = earliest start, so relative offsets survive any paste;
+- `pasteClipboardAt` takes UI seconds, preserves offsets, is ONE undo entry, selects the LAST pasted clip; `duplicateSelectedClips` selects the FIRST copy, drops `linkId` (copies never stay linked to originals), and remaps `groupId` to one FRESH group per source group;
+- the clipboard is module-level **on purpose** — it survives a project switch (core documents cross-project pasting), and the paste lands in the CURRENT project's history; the source project's file stays untouched.
+
+## 168.2 Defect fixed — refused paste/duplicate polluted history
+
+`pasteClipboardAt` and `duplicateSelectedClips` went through `applyV3Edit`, which pushes history BEFORE running the op. When every target track was locked, core skipped everything — yet an undo entry (and a save) had already been pushed: Ctrl+V onto a locked timeline silently added phantom undo steps the user had to walk back one per attempt. The same refusal rule established for `closeProjectGaps` (R99) and `removeTrackFromProject` (R103) now applies: run the op on the throwaway v3 copy FIRST, open the undo entry only if something actually lands. `pushHistory()` still snapshots the PRE-edit state because the merge-back (`syncTicksResult`) runs after the push.
+
+Gates: copy-paste 8/8 NEW · runner `pnpm test:tmcut` 18/18 · typecheck 0 · lint 0.
