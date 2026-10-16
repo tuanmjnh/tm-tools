@@ -67,11 +67,12 @@ function pct(fraction: number) {
   return `${Number((fraction * 100).toFixed(4))}%`
 }
 
-// Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p.
-// Adjusts the monitor's rendered pixel size; the source still decodes at
-// full resolution (no re-encoding), we scale the CSS box — cheap,
-// honest preview, matches the mock's intent.
-const previewQuality = ref<'full' | 'half' | 'quarter' | 'proxy'>('half')
+// Preview quality (mock #2): scales the monitor box (1 / 0.5 / 0.25 /
+// 0.33). Default 'full' keeps the historical fill-the-panel fit — the
+// selector is a deliberate step-DOWN tool for heavy timelines, matching
+// the mock's performance intent. The source always decodes at full
+// resolution (no re-encoding) — honest preview sizing, export untouched.
+const previewQuality = ref<'full' | 'half' | 'quarter' | 'proxy'>('full')
 const qualityFactor = computed(() => {
   switch (previewQuality.value) {
     case 'half': return 0.5
@@ -222,10 +223,12 @@ const canvasZoomItems = computed(() => [
   }))
 ])
 
-// Stage budget: the same 40vh the fit calculation may consume — fit mode
-// keeps AUTO height (old layout), zoomed mode pins it to scroll.
+// Stage budget: the same fraction of the viewport height the fit
+// calculation may consume — fit mode keeps AUTO height, zoomed mode pins
+// it to scroll. Tuned down (R119) so the monitor stays balanced with the
+// widened media library (the mock caps the stage at ~350px too).
 const monitorStageHeight = computed(() =>
-  Math.max(200, Math.round((viewportHeight.value || 800) * 0.4))
+  Math.max(200, Math.round((viewportHeight.value || 800) * 0.36))
 )
 
 const monitorBoxStyle = computed(() => {

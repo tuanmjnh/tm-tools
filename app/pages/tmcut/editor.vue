@@ -1091,7 +1091,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
         <!-- Left Media Library Panel (CapCut-style: category tabs + thumbnail grid).
              Whole panel is the external-drop target (roadmap G-2). -->
         <aside
-          class="w-80 border-r border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col shrink-0"
+          class="@container w-[38%] min-w-[360px] max-w-[560px] border-r border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col shrink-0"
           :class="dropActive ? 'ring-2 ring-primary/60' : ''"
           @dragenter="onMediaPanelDragEnter"
           @dragover="onMediaPanelDragOver"
@@ -1299,7 +1299,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 </p>
               </div>
 
-              <div v-else class="grid grid-cols-2 gap-2">
+              <div v-else class="grid grid-cols-3 gap-2 @[40rem]:grid-cols-4">
                 <div v-for="asset in filteredAssets" :key="asset.id" class="min-w-0">
                   <div
                     class="group/thumb relative aspect-video rounded-md overflow-hidden bg-neutral-200 dark:bg-neutral-800 cursor-pointer border border-transparent hover:border-primary/60 transition-colors"
@@ -1548,11 +1548,14 @@ function handleEditorKeydown(e: KeyboardEvent) {
           </div>
         </aside>
 
-        <!-- Center Player Preview (compact, CapCut-style) -->
+        <!-- Center Player Preview (compact, CapCut-style). The monitor's
+             real size budget is the 40vh stage inside the player, so this
+             wrapper only caps the HUD/transport width — no narrow xl cap
+             (the panel gained the width the left library took). -->
         <main
           class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-100 dark:bg-neutral-950 relative overflow-hidden min-w-0"
         >
-          <div class="w-full max-w-xl">
+          <div class="w-full max-w-3xl">
             <TmcutPreviewPlayer />
           </div>
         </main>

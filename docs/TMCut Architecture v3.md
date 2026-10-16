@@ -8472,3 +8472,15 @@ The mock's Color Grade accordion (`private/tmcut/2`, Accordion 3) shows a **Temp
 Also folded in: the R116 work that was staged in the same files — per-clip **blend mode** (store `blend` field, FFmpeg 2-input `blend` combiner in video.ts, CSS `mix-blend-mode` preview, inspector Blend dropdown) and the project-clips hover re-landing (duration pinned right, buttons fade in over it), restored from the pre-reformat file so editor.vue keeps its lint-clean formatting.
 
 Gates: core 210/210 · runner 23/23 · lint 0 · typecheck 0 · build 0 · i18n parity 2833/2833.
+
+# 182. R118 — Preview quality selector (Full Res / 1/2 Res / 1/4 Res / Proxy 720p)
+
+The mock player HUD (right side) carries a quality dropdown next to the volume thumb and the Zero-Drop badge. Implemented as a non-destructive preview control: it only scales the monitor box CSS size via a quality factor (1 / 0.5 / 0.25 / 0.33). No re-encoding, no export impact — honest preview.
+
+## 182.1 Implementation
+`TmcutPreviewPlayer.vue`
+- `previewQuality` ref (`full | half | quarter | proxy`) with `qualityFactor` computed.
+- HUD header gains a small select pill with i18n keys (`quality`, `qualityFull/Half/Quarter/Proxy`).
+- `monitorBoxStyle` multiplies the base zoom scale by `qualityFactor` — the source video still decodes at full resolution; we simply render the canvas box smaller/faster.
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · i18n 2838/2838.
