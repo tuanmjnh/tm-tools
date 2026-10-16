@@ -8515,3 +8515,24 @@ R119 turned the bin into a rich horizontal list; hundreds of imported assets wou
 Dead keys `tmcut.tabs.more/soonTitle/soonDesc` remain in the locale files (harmless, parity intact).
 
 Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.
+
+# 185. R121 — Hover honesty: nothing may resize on hover
+
+User rule (twice now, clips list then media bin): **hovering a row must never grow it** — only the border color may change. The R119/R120 media card regressed exactly that, so the whole app was swept for hover-triggered layout/paint growth.
+
+## 185.1 The media card rework (the reported bug)
+Root cause: the hover quick-actions were `hidden` and became `flex` **inside the right column** — appearing added a ~20px row to the card, so every row visibly grew. Rebuilt so growth is impossible by construction:
+- The card root itself carries `group/thumb` (replacing a redundant inner wrapper) with `border-transparent hover:border-primary/60 transition-colors` — hover changes the border and nothing else.
+- Quick actions moved to an **absolute overlay on the fixed-size thumbnail**: inset-0, opacity-0 -> 100 on group-hover, transition-opacity, `pointer-events-none` on the veil so the card's drag-to-timeline and click still work; the buttons themselves get `group-hover/thumb:pointer-events-auto`.
+- The right column is a fixed three-line stack (name / meta / optional status), vertically centered — hover-invariant geometry.
+
+## 185.2 App-wide hover sweep
+Grepped every `hover:` / `group-hover:` scale / display / padding pattern:
+- editor folder-color chips: `hover:scale-105` -> `hover:border-white/60`
+- tmcut project cards (tmcut/index): cover image `group-hover:scale-105` zoom -> static cover
+- templates gallery: aspect placeholder `group-hover:scale-105` -> static
+- QrCodeBuilder preview card: `group-hover:scale-[1.02]` -> static
+
+Deliberately kept: **tiny icons inside fixed containers** (star toggle hover:scale-110 on a 16px icon, avatar pencil, color dots in system settings, timeline color dots, icon-selector glyph). These transform inside a fixed-size box, overlap nothing, and are standard micro-feedback — no row or card grows.
+
+Gates: runner 23/23, lint 0, typecheck 0, build 0.

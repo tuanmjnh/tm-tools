@@ -257,7 +257,7 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
           <div class="w-full h-40 bg-neutral-950 flex items-center justify-center relative overflow-hidden p-4 border-b border-neutral-100 dark:border-neutral-800">
             <!-- Simulated aspect ratio container -->
             <div
-              class="border-2 border-dashed border-neutral-700 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 duration-200 bg-neutral-900/80"
+              class="border-2 border-dashed border-neutral-700 rounded-lg flex items-center justify-center bg-neutral-900/80"
               :class="{
                 'w-20 h-32': tpl.aspectRatio === '9:16',
                 'w-40 h-24': tpl.aspectRatio === '16:9',

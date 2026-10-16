@@ -218,7 +218,7 @@ const copyToClipboard = () => {
       >
         <div class="relative group shrink-0">
           <div
-            class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 transform transition-transform group-hover:scale-[1.02]"
+            class="bg-white p-4 rounded-xl shadow-lg border border-gray-100"
           >
             <LazyCodeQrcodeGenerator :value="qrContent" :size="120" :options="{ quietZone: 10 }" />
           </div>

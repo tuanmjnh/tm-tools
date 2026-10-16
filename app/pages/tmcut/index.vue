@@ -499,7 +499,7 @@ const headerActions = computed<HeaderAction[]>(() => [
               <img
                 v-if="project.cover"
                 :src="project.cover"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                class="w-full h-full object-cover"
               >
               <UIcon v-else name="i-lucide-film" class="w-10 h-10 text-neutral-400" />
 
