@@ -1661,6 +1661,11 @@ onUnmounted(() => {
             class="w-16 accent-primary cursor-pointer"
             :title="t('tmcut.player.volume')"
           >
+          <!-- dB readout (mock transport): gain 1.0 = 0 dB, the slider is
+               a linear 0..1 gain so dB = 20·log10(v); silence shows -∞. -->
+          <span class="font-mono text-[10px] text-neutral-500 w-11 text-right shrink-0">
+            {{ previewVolume <= 0 ? '-\u221E dB' : `${(20 * Math.log10(previewVolume)).toFixed(1)} dB` }}
+          </span>
         </div>
       </div>
     </div>

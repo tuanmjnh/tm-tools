@@ -10,7 +10,7 @@
 //  the store's validated applyClipTransition (reasons surface as toasts —
 //  the same contract the clip context menu uses).
 // =============================================================================
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { EFFECT_REGISTRY, KNOWN_TRANSITIONS } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
@@ -20,6 +20,18 @@ import {
   activeLutPreset,
   transitionReasonKey
 } from '~/utils/tmcut/fxLibrary'
+
+// R120: the media panel splits Effects / Transitions / Filters into their
+// own top-level tabs (mock #2 subtab bar); the component keeps its internal
+// switcher too (tab='all') so the old "More" aggregate stays available.
+const props = withDefaults(defineProps<{ tab?: FxTab | 'all' }>(), { tab: 'all' })
+
+type FxTab = 'effects' | 'transitions' | 'filters'
+const fxTab = ref<FxTab>('effects')
+watch(() => props.tab, (v) => {
+  if (v !== 'all') fxTab.value = v
+}, { immediate: true })
+const showSubTabs = computed(() => props.tab === 'all')
 
 const { t } = useI18n()
 const toast = useToast()
@@ -31,9 +43,6 @@ const {
   applyClipTransition,
   clearClipTransition
 } = useTmcutProject()
-
-type FxTab = 'effects' | 'transitions' | 'filters'
-const fxTab = ref<FxTab>('effects')
 
 const DEFAULT_TRANSITION_SEC = 0.5
 const LUT_OPTIONS = ['neutral', 'warm', 'cool', 'cinematic', 'vintage']
@@ -172,8 +181,9 @@ function handlePickTransition(type: string) {
   <!-- The library panel lives inside the media panel's own scroll area, so
        it must not set its own height/overflow (double scrollbars). -->
   <div class="flex flex-col min-h-0">
-    <!-- Sub-tab bar (Effects / Transitions / Filters) -->
-    <div class="flex items-center gap-1 border-b border-neutral-300 dark:border-neutral-800 pb-1.5">
+    <!-- Sub-tab bar (Effects / Transitions / Filters) — hidden when the
+         host tab already fixes the category (R120 split tabs). -->
+    <div v-if="showSubTabs" class="flex items-center gap-1 border-b border-neutral-300 dark:border-neutral-800 pb-1.5">
       <button
         type="button"
         class="flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"

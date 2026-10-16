@@ -120,23 +120,29 @@ const previewFileTitle = ref('')
 
 // ===== Media Library Tabs (CapCut-style top category bar) =====
 
-type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'more'
+type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'effects' | 'transitions' | 'filters'
 
 const mediaTab = ref<MediaTabId>('media')
 
+// R120 (mock #2 subtab bar): Effects / Transitions / Filters are full tabs
+// now (the fx library renders the matching category directly), replacing
+// the old single "More" aggregate.
 const mediaTabs = computed(() => [
   { id: 'media', label: t('tmcut.tabs.media'), icon: 'i-lucide-layout-grid' },
   { id: 'video', label: t('tmcut.tabs.video'), icon: 'i-lucide-film' },
   { id: 'audio', label: t('tmcut.tabs.audio'), icon: 'i-lucide-music' },
   { id: 'image', label: t('tmcut.tabs.image'), icon: 'i-lucide-image' },
   { id: 'text', label: t('tmcut.tabs.text'), icon: 'i-lucide-type' },
-  { id: 'more', label: t('tmcut.tabs.more'), icon: 'i-lucide-shapes' }
+  { id: 'effects', label: t('tmcut.tabs.effects'), icon: 'i-lucide-sparkles' },
+  { id: 'transitions', label: t('tmcut.tabs.transitions'), icon: 'i-lucide-shapes' },
+  { id: 'filters', label: t('tmcut.tabs.filters'), icon: 'i-lucide-palette' }
 ] as Array<{ id: MediaTabId, label: string, icon: string }>)
 
 const isAssetTab = computed(() => ['media', 'video', 'audio', 'image'].includes(mediaTab.value))
 
 // Library search box (design #2): filter visible assets by name
 const assetSearch = ref('')
+const mediaScrollRef = ref<HTMLDivElement | null>(null)
 
 const filteredAssets = computed(() => {
   const base = mediaTab.value === 'media'
@@ -147,6 +153,24 @@ const filteredAssets = computed(() => {
   if (!q) return byFolder
   return byFolder.filter(a => (a.name || '').toLowerCase().includes(q))
 })
+
+// R120: progressive rendering for the media bin. A project can import
+// hundreds of assets; mounting every card (thumb <img> + hover actions)
+// at once stalls the panel. Render the first slice and extend it while
+// the shared scroll container nears the bottom — cheap, layout-stable.
+const BIN_SLICE = 120
+const binRenderCount = ref(BIN_SLICE)
+const visibleAssets = computed(() => filteredAssets.value.slice(0, binRenderCount.value))
+watch([filteredAssets, selectedFolderId, assetSearch], () => {
+  binRenderCount.value = BIN_SLICE
+})
+function onMediaBinScroll() {
+  const el = mediaScrollRef.value
+  if (!el) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 400 && binRenderCount.value < filteredAssets.value.length) {
+    binRenderCount.value += BIN_SLICE
+  }
+}
 
 // ===== Folder / Album Management (Roadmap G-3) =====
 const createFolderModalOpen = ref(false)
@@ -1159,17 +1183,19 @@ function handleEditorKeydown(e: KeyboardEvent) {
             {{ t('tmcut.media.webSession') }}
           </div>
 
-          <!-- Category tab bar -->
-          <div class="flex items-center gap-1 px-2 py-2 border-b border-neutral-300 dark:border-neutral-800 overflow-x-auto">
+          <!-- Category tab bar (R120: labeled chips like the mock, wrapping
+               to a second row instead of scrolling — the 8 categories fit
+               4+4 at the new panel width). -->
+          <div class="flex flex-wrap items-center gap-1 px-2 py-2 border-b border-neutral-300 dark:border-neutral-800">
             <UButton
               v-for="tab in mediaTabs"
               :key="tab.id"
               :icon="tab.icon"
               size="xs"
+              :label="tab.label"
               :variant="mediaTab === tab.id ? 'solid' : 'ghost'"
               :color="mediaTab === tab.id ? 'primary' : 'neutral'"
               :title="tab.label"
-              class="shrink-0"
               @click="mediaTab = tab.id"
             />
           </div>
@@ -1270,7 +1296,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-3 space-y-2">
+          <div ref="mediaScrollRef" class="flex-1 overflow-y-auto p-3 space-y-2" @scroll="onMediaBinScroll">
             <!-- Loading indicator -->
             <div
               v-if="importing || analyzingCount > 0"
@@ -1304,7 +1330,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                    far more data per row than the old thumbnail grid —
                    the user asked the left panel to display more. -->
               <div v-else class="flex flex-col gap-2">
-                <div v-for="asset in filteredAssets" :key="asset.id" class="min-w-0">
+                <div v-for="asset in visibleAssets" :key="asset.id" class="min-w-0">
                   <div
                     class="group/thumb relative flex gap-2 p-1.5 rounded-md bg-neutral-200/60 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-800 cursor-pointer border border-transparent transition-colors"
                     :class="asset.status === 'missing' ? 'border-amber-500/60' : 'hover:border-primary/60'"
@@ -1490,19 +1516,12 @@ function handleEditorKeydown(e: KeyboardEvent) {
               </p>
             </div>
 
-            <!-- Effects / Transitions / Filters library (roadmap R112) -->
-            <TmcutFxLibrary v-else-if="mediaTab === 'more'" />
-
-            <!-- Unknown category fallback -->
-            <div v-else class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center">
-              <UIcon name="i-lucide-sparkles" class="size-7 mx-auto text-neutral-500 dark:text-neutral-600 mb-2" />
-              <p class="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                {{ t('tmcut.tabs.soonTitle') }}
-              </p>
-              <p class="text-[10px] text-neutral-500 dark:text-neutral-600 mt-1">
-                {{ t('tmcut.tabs.soonDesc') }}
-              </p>
-            </div>
+            <!-- Effects / Transitions / Filters library (roadmap R112,
+                 split into the mock's three tabs in R120) -->
+            <TmcutFxLibrary
+              v-else-if="mediaTab === 'effects' || mediaTab === 'transitions' || mediaTab === 'filters'"
+              :tab="mediaTab"
+            />
 
             <!-- Video Clips in Project -->
             <div v-if="currentProject?.timeline?.tracks" class="space-y-1.5 pt-2">

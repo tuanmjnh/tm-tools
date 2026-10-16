@@ -8498,3 +8498,20 @@ User feedback on the three-pane editor: the center video frame was oversized nex
 - The preview wrapper cap rises `max-w-xl` → `max-w-3xl` (the freed side width goes to it), but the monitor stage budget drops **40vh → 36vh**, and the quality selector default returns to **Full Res** (it is the performance step-DOWN knob, matching the mock; the old 1/2 default permanently halved the fit). Net: the monitor reads clearly smaller than before next to the richer left panel.
 
 Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.
+
+# 184. R120 — Mock subtab bar: split Effects/Transitions/Filters tabs, dB readout, media-bin virtualization
+
+Three follow-ups on the layout round, all from the user's "analyze what's next" request: mirror the mock's left subtab bar, finish the transport's volume readout, and keep the (now data-rich) media bin fast on big projects.
+
+## 184.1 Left panel tabs match the mock's six
+The library tab bar was `Media · Video · Audio · Image · Text · More`. The mock's category bar is flat: **Phương tiện · Âm thanh · Văn bản · Hiệu ứng · Chuyển cảnh · Bộ lọc**. The "More" aggregate split into three real tabs — `Effects`, `Transitions`, `Filters`. `TmcutFxLibrary` gained a `tab` prop (`effects | transitions | filters | all`): the host tab fixes the category and hides the internal switcher; the default `all` keeps the old aggregate behaviour. Tab chips now carry labels (the panel is wide enough post-R119), replacing icon-only buttons.
+
+## 184.2 Decibel readout next to the volume slider
+The mock's transport shows `0 dB` after the volume thumb. The player's volume slider gained a `dB` readout computed honestly from linear gain (`20·log10(v)`, silence `-∞`). It is the preview monitor gain, so the number matches the knob's acoustic meaning instead of a fake 0..100.
+
+## 184.3 Media bin progressive rendering
+R119 turned the bin into a rich horizontal list; hundreds of imported assets would now mount hundreds of cards (thumb `<img>` + per-row hover buttons) at once. The bin renders the first 120 rows and extends by 120 when the shared scroll container nears the bottom (400px lookahead), resetting to the first slice on search/folder/tab change. Layout stays stable (plain document flow, no absolute positioning), scroll state untouched.
+
+Dead keys `tmcut.tabs.more/soonTitle/soonDesc` remain in the locale files (harmless, parity intact).
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.
