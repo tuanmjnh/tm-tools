@@ -8484,3 +8484,17 @@ The mock player HUD (right side) carries a quality dropdown next to the volume t
 - `monitorBoxStyle` multiplies the base zoom scale by `qualityFactor` — the source video still decodes at full resolution; we simply render the canvas box smaller/faster.
 
 Gates: runner 23/23 · lint 0 · typecheck 0 · i18n 2838/2838.
+
+# 183. R119 — Editor layout rebalance: data-rich left panel, balanced preview
+
+User feedback on the three-pane editor: the center video frame was oversized next to the left media library, while the left panel needed to show MORE data. The mock's grid is `col-span-3 / col-span-6 / col-span-3` (library 25% — media bin rows are horizontal cards); the app had a fixed `w-80` (320px) library with a 2-col thumbnail grid and a center capped at `max-w-xl` (576px) that could still fill the whole 40vh stage.
+
+## 183.1 Left media library — wide + data-rich
+- Panel: `w-80` → responsive `w-[38%] min-w-[360px] max-w-[560px]` with a Tailwind v4 `@container` context.
+- The asset list switches from the thumbnail grid to the mock's **horizontal media card**: 96×56 thumb (duration/added/proxy badges stay on it) + name row + a `assetMetaLabel` metadata row (kind · duration · resolution · file size) with the folder pill inline, and a footer line carrying the missing/proxy status text plus the hover quick-actions (move/proxy/add/relink/delete).
+- A list row fits ~72px tall and exposes four data fields, versus a 2-col grid cell that showed the name only — the panel now displays far more per screen.
+
+## 183.2 Center preview — shrink to balance
+- The preview wrapper cap rises `max-w-xl` → `max-w-3xl` (the freed side width goes to it), but the monitor stage budget drops **40vh → 36vh**, and the quality selector default returns to **Full Res** (it is the performance step-DOWN knob, matching the mock; the old 1/2 default permanently halved the fit). Net: the monitor reads clearly smaller than before next to the richer left panel.
+
+Gates: runner 23/23 · lint 0 · typecheck 0 · build 0.

@@ -1299,153 +1299,170 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 </p>
               </div>
 
-              <div v-else class="grid grid-cols-3 gap-2 @[40rem]:grid-cols-4">
+              <!-- Horizontal asset cards (mock #2 media bin): thumbnail +
+                   name/resolution row + proxy/relink footer. A list shows
+                   far more data per row than the old thumbnail grid —
+                   the user asked the left panel to display more. -->
+              <div v-else class="flex flex-col gap-2">
                 <div v-for="asset in filteredAssets" :key="asset.id" class="min-w-0">
                   <div
-                    class="group/thumb relative aspect-video rounded-md overflow-hidden bg-neutral-200 dark:bg-neutral-800 cursor-pointer border border-transparent hover:border-primary/60 transition-colors"
-                    :class="asset.status === 'missing' ? 'border-amber-500/60!' : ''"
+                    class="group/thumb relative flex gap-2 p-1.5 rounded-md bg-neutral-200/60 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-800 cursor-pointer border border-transparent transition-colors"
+                    :class="asset.status === 'missing' ? 'border-amber-500/60' : 'hover:border-primary/60'"
                     :title="asset.name"
                     :draggable="asset.status !== 'missing'"
                     @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
                     @dragstart="handleAssetDragStart($event, asset)"
                   >
-                    <img
-                      v-if="asset.kind !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
-                      :src="getThumbUrl(asset)"
-                      draggable="false"
-                      class="absolute inset-0 w-full h-full object-cover"
-                      loading="lazy"
-                      @error="thumbErrors[asset.id] = true"
-                    >
-                    <div
-                      v-else-if="asset.kind === 'audio' && waveformMap[asset.id]"
-                      class="absolute inset-0 flex items-center justify-center p-1"
-                    >
-                      <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="100" :height="36" />
-                    </div>
-                    <UIcon
-                      v-else
-                      :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-6 text-neutral-500 dark:text-neutral-600"
-                    />
-
-                    <div
-                      v-if="asset.status === 'analyzing'"
-                      class="absolute inset-0 bg-black/50 flex items-center justify-center"
-                    >
-                      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-neutral-600 dark:text-neutral-300" />
-                    </div>
-                    <div
-                      v-if="asset.status === 'missing'"
-                      class="absolute inset-0 bg-amber-950/60 flex items-center justify-center"
-                    >
-                      <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400" />
-                    </div>
-
-                    <!-- Duration badge (top-right, like CapCut) -->
-                    <span
-                      v-if="assetDurationLabel(asset)"
-                      class="absolute top-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
-                    >
-                      {{ assetDurationLabel(asset) }}
-                    </span>
-                    <!-- Added badge (top-left, CapCut-style) -->
-                    <span
-                      v-if="isAssetOnTimeline(asset)"
-                      class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white"
-                    >
-                      {{ t('tmcut.media.addedBadge') }}
-                    </span>
-                    <!-- Proxy badge (roadmap F-4) -->
-                    <span
-                      v-if="asset.proxyStatus === 'ready'"
-                      class="absolute px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
-                      :class="isAssetOnTimeline(asset) ? 'top-5 left-1' : 'top-1 left-1'"
-                      :title="t('tmcut.proxy.readyDesc')"
-                    >
-                      <UIcon name="i-lucide-zap" class="size-2.5 text-black" />
-                      <span>PXY</span>
-                    </span>
-                    <span
-                      v-else-if="asset.proxyStatus === 'generating'"
-                      class="absolute px-1 rounded bg-amber-500/30 border border-amber-500/50 text-[9px] font-medium text-amber-200 flex items-center gap-0.5"
-                      :class="isAssetOnTimeline(asset) ? 'top-5 left-1' : 'top-1 left-1'"
-                    >
-                      <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
-                      <span>PXY</span>
-                    </span>
-
-                    <!-- Folder badge (when viewing all assets) -->
-                    <span
-                      v-if="!selectedFolderId && getFolderBadge(asset)"
-                      class="absolute bottom-1 left-1 px-1 py-0.5 rounded bg-black/80 border border-neutral-400 dark:border-neutral-700 text-[9px] font-medium text-neutral-700 dark:text-neutral-200 flex items-center gap-1 max-w-21.25 truncate"
-                      :title="getFolderBadge(asset)?.name"
-                    >
-                      <span
-                        class="size-1.5 rounded-full shrink-0"
-                        :style="{ backgroundColor: getFolderBadge(asset)?.color || '#3b82f6' }"
+                    <div class="relative w-24 h-14 rounded overflow-hidden shrink-0 bg-neutral-300 dark:bg-neutral-900">
+                      <img
+                        v-if="asset.kind !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
+                        :src="getThumbUrl(asset)"
+                        draggable="false"
+                        class="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        @error="thumbErrors[asset.id] = true"
+                      >
+                      <div
+                        v-else-if="asset.kind === 'audio' && waveformMap[asset.id]"
+                        class="absolute inset-0 flex items-center justify-center p-1"
+                      >
+                        <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="90" :height="44" />
+                      </div>
+                      <UIcon
+                        v-else
+                        :name="assetKindIcon(asset)"
+                        class="absolute inset-0 m-auto size-6 text-neutral-500 dark:text-neutral-600"
                       />
-                      <span class="truncate">{{ getFolderBadge(asset)?.name }}</span>
-                    </span>
 
-                    <!-- Hover quick actions -->
-                    <div class="absolute bottom-1 right-1 hidden group-hover/thumb:flex items-center gap-0.5">
-                      <UButton
-                        icon="i-lucide-folder-input"
-                        size="xs"
-                        variant="solid"
-                        color="neutral"
-                        :title="t('tmcut.folders.moveToFolder')"
-                        @click.stop="openMoveAssetModal(asset)"
-                      />
-                      <UButton
-                        v-if="isDesktop && asset.kind === 'video' && asset.status !== 'missing'"
-                        :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                        size="xs"
-                        variant="solid"
-                        :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
-                        :loading="asset.proxyStatus === 'generating'"
-                        :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                        @click.stop="handleProxyAction(asset)"
-                      />
-                      <UButton
-                        v-if="asset.status !== 'missing'"
-                        icon="i-lucide-plus"
-                        size="xs"
-                        variant="solid"
-                        color="primary"
-                        :title="t('tmcut.media.addToTimeline')"
-                        @click.stop="handleAddToTimeline(asset)"
-                      />
-                      <UButton
+                      <div
+                        v-if="asset.status === 'analyzing'"
+                        class="absolute inset-0 bg-black/50 flex items-center justify-center"
+                      >
+                        <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-neutral-600 dark:text-neutral-300" />
+                      </div>
+                      <div
                         v-if="asset.status === 'missing'"
-                        icon="i-lucide-folder-search"
-                        size="xs"
-                        variant="solid"
-                        color="warning"
-                        :title="t('tmcut.media.relink')"
-                        @click.stop="handleRelink(asset)"
-                      />
-                      <UButton
-                        icon="i-lucide-trash"
-                        size="xs"
-                        variant="solid"
-                        color="error"
-                        :title="t('tmcut.media.remove')"
-                        @click.stop="handleRemoveAsset(asset)"
-                      />
+                        class="absolute inset-0 bg-amber-950/60 flex items-center justify-center"
+                      >
+                        <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400" />
+                      </div>
+
+                      <!-- Duration badge (bottom-right) -->
+                      <span
+                        v-if="assetDurationLabel(asset)"
+                        class="absolute bottom-0.5 right-0.5 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
+                      >
+                        {{ assetDurationLabel(asset) }}
+                      </span>
+                      <!-- Added badge (top-left, CapCut-style) -->
+                      <span
+                        v-if="isAssetOnTimeline(asset)"
+                        class="absolute top-0.5 left-0.5 px-1 rounded bg-primary text-[9px] font-medium text-white"
+                      >
+                        {{ t('tmcut.media.addedBadge') }}
+                      </span>
+                      <!-- Proxy badge (roadmap F-4) -->
+                      <span
+                        v-if="asset.proxyStatus === 'ready'"
+                        class="absolute px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
+                        :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
+                        :title="t('tmcut.proxy.readyDesc')"
+                      >
+                        <UIcon name="i-lucide-zap" class="size-2.5 text-black" />
+                        <span>PXY</span>
+                      </span>
+                      <span
+                        v-else-if="asset.proxyStatus === 'generating'"
+                        class="absolute px-1 rounded bg-amber-500/30 border border-amber-500/50 text-[9px] font-medium text-amber-200 flex items-center gap-0.5"
+                        :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
+                      >
+                        <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
+                        <span>PXY</span>
+                      </span>
+                    </div>
+
+                    <!-- Right column: name + metadata + status/actions -->
+                    <div class="flex flex-col justify-between min-w-0 flex-1 py-0.5">
+                      <div class="min-w-0">
+                        <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate" :title="asset.name">
+                          {{ asset.name }}
+                        </p>
+                        <p class="text-[9px] font-mono text-neutral-500 dark:text-neutral-500 truncate">
+                          {{ assetMetaLabel(asset) }}
+                          <template v-if="!selectedFolderId && getFolderBadge(asset)">
+                            •
+                            <span
+                              class="inline-block size-1.5 rounded-full align-middle"
+                              :style="{ backgroundColor: getFolderBadge(asset)?.color || '#3b82f6' }"
+                            />
+                            {{ getFolderBadge(asset)?.name }}
+                          </template>
+                        </p>
+                      </div>
+                      <div class="flex items-center justify-between gap-1">
+                        <span
+                          v-if="asset.status === 'missing'"
+                          class="text-[9px] font-medium text-amber-400 truncate"
+                        >
+                          {{ t('tmcut.media.missing') }}
+                        </span>
+                        <span
+                          v-else-if="asset.proxyStatus === 'ready'"
+                          class="text-[9px] font-mono text-emerald-400 truncate"
+                        >
+                          ✓ PXY
+                        </span>
+                        <span v-else class="text-[9px] font-mono text-neutral-500 truncate" />
+                        <!-- Hover quick actions (compact: folder/proxy/add/relink/delete) -->
+                        <div class="hidden group-hover/thumb:flex items-center gap-0.5 shrink-0">
+                          <UButton
+                            icon="i-lucide-folder-input"
+                            size="xs"
+                            variant="solid"
+                            color="neutral"
+                            :title="t('tmcut.folders.moveToFolder')"
+                            @click.stop="openMoveAssetModal(asset)"
+                          />
+                          <UButton
+                            v-if="isDesktop && asset.kind === 'video' && asset.status !== 'missing'"
+                            :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
+                            size="xs"
+                            variant="solid"
+                            :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
+                            :loading="asset.proxyStatus === 'generating'"
+                            :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
+                            @click.stop="handleProxyAction(asset)"
+                          />
+                          <UButton
+                            v-if="asset.status !== 'missing'"
+                            icon="i-lucide-plus"
+                            size="xs"
+                            variant="solid"
+                            color="primary"
+                            :title="t('tmcut.media.addToTimeline')"
+                            @click.stop="handleAddToTimeline(asset)"
+                          />
+                          <UButton
+                            v-if="asset.status === 'missing'"
+                            icon="i-lucide-folder-search"
+                            size="xs"
+                            variant="solid"
+                            color="warning"
+                            :title="t('tmcut.media.relink')"
+                            @click.stop="handleRelink(asset)"
+                          />
+                          <UButton
+                            icon="i-lucide-trash"
+                            size="xs"
+                            variant="solid"
+                            color="error"
+                            :title="t('tmcut.media.remove')"
+                            @click.stop="handleRemoveAsset(asset)"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate mt-1" :title="asset.name">
-                    {{ asset.name }}
-                  </p>
-                  <p
-                    class="text-[10px] truncate"
-                    :class="asset.status === 'missing' ? 'text-amber-400' : 'text-neutral-500'"
-                  >
-                    {{ asset.status === 'missing' ? t('tmcut.media.missing') : assetMetaLabel(asset) }}
-                  </p>
                 </div>
               </div>
             </div>
