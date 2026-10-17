@@ -725,3 +725,14 @@ export function useTmcutMedia() {
     getAssetFolderId
   }
 }
+
+// Dev/QA hook (R124): same pattern as useTmcutProject — lets the e2e
+// harness seed the media library and assert drop behaviour. The web
+// runtime deliberately clears the library on load (blob: URLs do not
+// survive a reload), so a browser-driven harness must push fixtures
+// through this ref instead of localStorage.
+if (import.meta.client && import.meta.dev && typeof window !== 'undefined') {
+  const w = window as unknown as Record<string, unknown>
+  const qaStore = (w.tmcutQaStore || (w.tmcutQaStore = {})) as Record<string, unknown>
+  qaStore.assets = assets
+}

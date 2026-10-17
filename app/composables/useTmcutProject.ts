@@ -1631,6 +1631,20 @@ function init() {
   }
 }
 
+// Dev/QA hook (R124): lets an automated harness read live store state
+// (and pre-seed localStorage + reload) instead of clicking through the
+// UI. Tree-shaken out of production builds by import.meta.dev. Lives at
+// module bottom on purpose: module-scope code here would hit the TDZ of
+// refs declared below. Merged (not assigned) so sibling modules can add
+// their own state to the same object regardless of load order.
+if (import.meta.client && import.meta.dev && typeof window !== 'undefined') {
+  const w = window as unknown as Record<string, unknown>
+  const qaStore = (w.tmcutQaStore || (w.tmcutQaStore = {})) as Record<string, unknown>
+  qaStore.projects = projects
+  qaStore.currentProject = currentProject
+  qaStore.gesturePreview = gesturePreview
+}
+
 // Export composable
 export function useTmcutProject() {
   init()

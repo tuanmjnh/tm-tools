@@ -379,29 +379,32 @@ function onMediaDrop(e: DragEvent) {
   } catch {
     return
   }
-  const canvas = e.currentTarget as HTMLElement
-  const rect = canvas.getBoundingClientRect()
-  // Same rule as the ruler scrub: the canvas lives inside the scroll
-  // container, so rect.left already includes the horizontal scroll.
-  const targetSec = Math.max(0, (e.clientX - rect.left) / zoom.value)
+  // Handlers live on the scroll container, not the rows canvas, so a drop
+  // in the EMPTY AREA BELOW the last row still lands (R124). The canvas
+  // only spans the rows; the container spans the whole viewport.
+  const container = e.currentTarget as HTMLElement
+  const containerRect = container.getBoundingClientRect()
+  // Scroll-space x: the container rect is the fixed viewport, content is
+  // shifted by scrollLeft — exact same coordinate the ruler scrub uses.
+  const targetSec = Math.max(0, (e.clientX - containerRect.left + container.scrollLeft) / zoom.value)
   const snappedSec = snapTimeSec(targetSec, playhead.value, { thresholdSec: 8 / zoom.value })
   const desiredType = payload.kind === 'audio' ? 'audio' : 'video'
   const tracks = currentProject.value?.timeline?.tracks || []
   // Row hit-test through the DOM, not a 56px guess (row borders drift).
   // Dropping on a row of the wanted type lands THAT track — parallel
-  // audio lanes (CapCut-style). Dropping into the empty area below all
-  // rows (R124 "kéo file xuống dòng để thêm audio song song") creates a
-  // new track of the wanted type when none exists yet, else appends to
-  // the LAST lane of that type, which is the row visually nearest the gap.
+  // audio lanes (CapCut-style). The empty area below the last row is an
+  // explicit "ADD A ROW" gesture (R124 "kéo file xuống dòng để thêm
+  // audio song song"): always create a fresh track of the wanted type;
+  // only fall back to the last lane of that type when track creation
+  // fails (locked/full state).
   const rowEl = (e.target as HTMLElement)?.closest('[data-track-row]')
   const rowTrackId = rowEl?.getAttribute('data-track-row') || undefined
   const rowTrack = rowTrackId ? tracks.find(tr => tr.id === rowTrackId) : undefined
   if (!rowTrack) {
-    const lastOfType = [...tracks].reverse().find(tr => tr.type === desiredType)
-    const trackId = lastOfType?.id
-      ?? (addTrackToProject(desiredType)
-        ? (currentProject.value?.timeline?.tracks || []).slice(-1)[0]?.id
-        : undefined)
+    const created = addTrackToProject(desiredType)
+    const trackId = created
+      ? (currentProject.value?.timeline?.tracks || []).slice(-1)[0]?.id
+      : [...tracks].reverse().find(tr => tr.type === desiredType)?.id
     addAssetToTimeline(payload.id, { offset: snappedSec, trackId })
     return
   }
@@ -1220,7 +1223,7 @@ onUnmounted(() => {
              synced with the canvas wheel-scroll handler instead (R124),
              because overflow-y:auto here showed its own scrollbar that
              did not move the canvas rows. -->
-        <div ref="trackHeadersRef" class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-y-hidden">
+        <div ref="trackHeadersRef" data-tmcut-track-headers class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-y-hidden">
           <!-- Spacer matching the sticky ruler (24px of scroll content in
                the canvas column) so header rows stay pixel-aligned with
                track rows at every scrollTop (R124). Opaque + sticky like
@@ -1229,7 +1232,7 @@ onUnmounted(() => {
           <div
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
-            class="h-14 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-600 dark:text-neutral-300"
+            class="h-14 shrink-0 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-600 dark:text-neutral-300"
           >
             <div class="flex items-center gap-1.5 truncate min-w-0">
               <UIcon
@@ -1332,14 +1335,18 @@ onUnmounted(() => {
              The headers column follows via onTracksScroll. -->
         <div
           ref="tracksContainerRef"
+          data-tmcut-tracks-container
           class="flex-1 flex flex-col overflow-x-auto overflow-y-auto relative select-none"
           @scroll="onTracksScroll"
           @wheel="onTracksWheel"
+          @dragover="onMediaDragOver"
+          @drop="onMediaDrop"
         >
           <!-- Time Ruler Bar (sticky top so vertical track scrolling (R124)
                never loses the time labels; rows scroll beneath it) -->
           <div
             ref="rulerRef"
+            data-tmcut-ruler
             class="h-6 sticky top-0 z-10 border-b border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
             :style="{ width: `${timelineWidth}px` }"
             @mousedown="onRulerMouseDown"
@@ -1414,8 +1421,6 @@ onUnmounted(() => {
             class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 relative"
             :style="{ width: `${timelineWidth}px` }"
             @mousedown="onTracksBackgroundMouseDown"
-            @dragover="onMediaDragOver"
-            @drop="onMediaDrop"
           >
             <!-- Vertical playhead line (primary accent, design #2) -->
             <div

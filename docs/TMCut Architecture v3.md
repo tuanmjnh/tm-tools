@@ -8738,3 +8738,80 @@ Gates: runner 23/23, lint 0, typecheck 0, build 0; no new i18n keys
 Known gaps: reverse audio clips stay silent in preview (documented in
 code); export of parallel audio lanes still relies on the desktop
 compiler's own mix, not this preview engine.
+
+---
+
+# 189. R124.5 — Live browser QA harness on the dev app + negative-delta trim fix
+
+R124 shipped on unit parity alone; the user then asked to *verify the
+running dev app directly* ("tự động kiểm tra trực tiếp bản dev"). This
+round delivers that harness AND the real bug it caught — which turned
+out to be the surviving half of the R122/R124 "trim doesn't work"
+complaint.
+
+## 189.1 tests/e2e/tmcut_r124_ui.mts — drives the RUNNING app in a real browser
+
+- `playwright-core` (new devDep) launching the **system Edge** headless
+  (`CHROME_EXE`), flags `--autoplay-policy=no-user-gesture-required
+  --mute-audio` so audio play checks are honest without audio policy
+  interference.
+- Auth wall skipped with `tests/e2e/hub-stub.cjs`: a stub hub on
+  `TMCUT_HUB_PORT` answering `/api/v1/auth/me` with a root user
+  (`permissions:['*']` skips the RBAC routes fetch); harness injects the
+  `accessToken` cookie before navigation. The user's own :3000 dev
+  instance keeps its real hub config — QA runs on **:3100** against the
+  stub on **:4100**.
+- Tiny dev-only QA hooks (`import.meta.dev` guarded, merge-into-object
+  on `window.tmcutQaStore`) expose the store refs (`projects`,
+  `currentProject`, `gesturePreview`, `assets`) so the harness can seed
+  state and read live gesture geometry. The web runtime clears the
+  media library on load by design, so asset fixtures are PUSHED through
+  the hook after editor mount instead of localStorage.
+- Fixtures are real media: a 1×1 PNG data-URL as the video src and
+  runtime-generated 3s PCM WAV data-URLs (`makeWav`) — the hidden
+  `<audio>` element must actually decode them for the play check.
+- 11 checks, all green: hook exposure; hidden `<audio>` per clip;
+  unmuted + composed volume; **trusted click on Play advances the media
+  clock**; right-handle trim paints `gesturePreview` mid-drag while the
+  store stays untouched and writes ONCE on release; left-handle sliding
+  trim at `in=0`; DnD via in-page `new DataTransfer()`+`DragEvent`
+  (dispatchEvent from Node cannot serialize a DataTransfer) creating a
+  parallel clip; drop below the bottom row creating a NEW audio track;
+  vertical scroll (sticky ruler + header sync via trusted
+  `mouse.wheel` — synthetic WheelEvents are untrusted and ignored);
+  HUD `[data-hud-row]` count; zero pageerror.
+
+## 189.2 The bug the harness caught: every leftward drag was silently zeroed
+
+`pxToTicks(px) = secToTicks(px / zoom)` looked right but the core
+`secToTicks` guards `seconds <= 0 → 0` (it converts ABSOLUTE times).
+Pointer deltas are signed: dragging LEFT produced `deltaTicks = 0` for
+every move, so left-trim, sliding trim at `in=0`, and leftward clip
+drags simply did nothing — the exact R122/R124 "trim works sometimes"
+symptom surviving the R124 gesture rewrite. Fixed in
+`TmcutTimelineClip.vue` by converting deltas directly
+(`px / zoom * TICKS_PER_SECOND`). The harness's mid-drag instrumentation
+(`gesturePreview` pinned at the initial offset while trusted pointermoves
+clearly arrived) is what pinpointed it; unit tests had always dragged
+rightward-only, which is why 23/23 stayed green over a broken gesture.
+
+## 189.3 Two smaller real bugs fixed in the same pass
+
+- Track-header column flex-crush: header rows lacked `shrink-0`, so
+  with many tracks the flex column squeezed the 56px rows and the
+  sticky header sync desynced from `scrollTop` (harness measured
+  `headersTop=21` at `scrollTop=140`). Added shrink-0 → sync verified.
+- Drop below the last row now ALWAYS creates a fresh track of the
+  dropped type (explicit "add a row" gesture per the user's R124 ask)
+  instead of silently reusing the last lane; old drop handlers moved
+  from the rows canvas to the scroll container so a drop in the empty
+  area below the rows lands at all.
+
+Gates: runner 23/23, lint 0 (eslint config now relaxes `no-explicit-any`
+for `tests/**` only — page.evaluate callbacks have no ambient types),
+typecheck unchanged (pre-existing vue-tsc/volar crash, not chased),
+build 0, live UI harness 11/11 against :3100.
+
+Known gaps: the harness is a manual-command QA tool (not wired into CI
+yet); hub-stub returns 404 for `/notifications` (harmless console noise,
+asserted as non-pageerror).

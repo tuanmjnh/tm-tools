@@ -1228,9 +1228,9 @@ onUnmounted(() => {
          overlap — row 1 is text labels only (canvas state on the left,
          PROXY / STAB status pills right-aligned), row 2 is icon action
          buttons only. -->
-    <div class="w-full mb-2 flex flex-col gap-1.5 text-[11px]">
+    <div class="w-full mb-2 flex flex-col gap-1.5 text-[11px]" data-tmcut-hud>
       <!-- Row 1: labels -->
-      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap">
+      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap" data-hud-row="labels">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
         <span class="font-medium text-neutral-600 dark:text-neutral-300 truncate">{{ t('tmcut.player.hudCanvas') }}</span>
         <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
@@ -1264,7 +1264,7 @@ onUnmounted(() => {
         </span>
       </div>
       <!-- Row 2: icon action buttons -->
-      <div class="flex items-center gap-1.5 flex-wrap">
+      <div class="flex items-center gap-1.5 flex-wrap" data-hud-row="actions">
         <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
         <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
           <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />

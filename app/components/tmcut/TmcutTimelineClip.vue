@@ -188,11 +188,14 @@ watch(() => props.clip.src, () => {
 // snapTimeSec — candidates are 0, the playhead, every other clip edge
 // and markers, within an 8px radius at the current zoom. Controlled by
 // the Magnet toolbar toggle / N key (snapOn in useTmcutUiPrefs).
-// C16-R3: drag math runs in STORE TICKS end to end; the seconds seam
+// C16-R3/R124: drag math runs in STORE TICKS end to end; the seconds seam
 // sits here (snapTimeSec speaks seconds) and px converts through zoom
-// (px per second).
+// (px per second). NOTE: secToTicks() clamps negatives to 0 (it converts
+// absolute times), so pointer DELTAS must be converted directly — the old
+// secToTicks(px/zoom) swallowed every leftward drag into 0, which is what
+// made "trim/drag left" do nothing (R124 field report).
 function pxToTicks(px: number): number {
-  return Math.round(secToTicks(px / zoom.value))
+  return Math.round((px / zoom.value) * TICKS_PER_SECOND)
 }
 
 function applySnapTicks(targetTicks: number): number {
