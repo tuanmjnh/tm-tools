@@ -8815,3 +8815,18 @@ build 0, live UI harness 11/11 against :3100.
 Known gaps: the harness is a manual-command QA tool (not wired into CI
 yet); hub-stub returns 404 for `/notifications` (harmless console noise,
 asserted as non-pageerror).
+
+## 189.4 Follow-up: audio preview volume unit mismatch (live-user report)
+
+User report: Vue warn “Failed setting prop "volume• on <audio>: value
+100 is invalid”. The store carries clip volume as PERCENT 0..100 (v1
+heritage, core audio.mjs normalizes it for gainAt and every exporter
+divides by 100), but the R124 preview layer bound ‘(clip.volume ?? 1) *
+previewVolume’ straight into HTMLMediaElement.volume, which only accepts
+0..1 — default clips (volume 100) tripped the warn and pinned audio at
+full scale. Fixed in TmcutPreviewPlayer.vue by normalizing and clamping
+((volume ?? 100)/100 * previewVolume) before the DOM binding; the QA
+harness fixture switched to the real 0..100 unit and gained a 12th check
+that FAILS the run on any “Failed setting prop” console warning, so a
+unit leak into a DOM property can never pass green again. Live UI 12/12,
+runner 23/23, lint 0.

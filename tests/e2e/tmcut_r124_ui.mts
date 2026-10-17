@@ -137,7 +137,9 @@ function buildProject(): Record<string, unknown> {
           { id: 'qa-clip-v1', name: 'qa-video', src: PNG_DATA_URL, in: 0, out: 240000, offset: 600000, speed: 1, opacity: 1, scale: 1, x: 0, y: 0, rotation: 0 }
         ] },
         { id: 'qa-audio-1', type: 'audio', name: 'Audio 1', items: [
-          { id: 'qa-clip-a1', name: 'qa-audio-a', src: WAV_A_DATA_URL, in: 0, out: 600000, offset: 0, speed: 1, opacity: 1, scale: 1, x: 0, y: 0, rotation: 0, volume: 1 }
+          // Store volume is PERCENT (0..100), not 0..1 — matches the
+          // app's v1 heritage; the preview layer normalizes to el.volume.
+          { id: 'qa-clip-a1', name: 'qa-audio-a', src: WAV_A_DATA_URL, in: 0, out: 600000, offset: 0, speed: 1, opacity: 1, scale: 1, x: 0, y: 0, rotation: 0, volume: 100 }
         ] }
       ],
       durationMs: 0,
@@ -252,9 +254,14 @@ async function main(): Promise<void> {
 
   const pageErrors: string[] = []
   const consoleErrors: string[] = []
+  const domPropWarnings: string[] = []
   page.on('pageerror', err => pageErrors.push(String(err)))
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text())
+    // Vue "Failed setting prop ... invalid" warnings are console.warn —
+    // they signal a unit mismatch leaking straight into a DOM property
+    // (the volume=100 bug). Fail the run on any of them.
+    if (msg.text().includes('Failed setting prop')) domPropWarnings.push(msg.text())
   })
 
   // 1) load the app (unauthenticated lands on /login — fine, same origin)
@@ -519,6 +526,10 @@ async function main(): Promise<void> {
   // 6) global health --------------------------------------------------------
   await check('no pageerror during the run', async () => {
     assert(pageErrors.length === 0, 'page errors: ' + pageErrors.slice(0, 3).join(' | '))
+  })
+
+  await check('no DOM prop unit warnings (Vue "Failed setting prop")', async () => {
+    assert(domPropWarnings.length === 0, 'dom prop warnings: ' + domPropWarnings.slice(0, 2).join(' | '))
   })
 
   console.log(`\nconsole error lines captured (informational): ${consoleErrors.length}`)

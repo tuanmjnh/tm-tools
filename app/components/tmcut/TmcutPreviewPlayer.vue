@@ -464,7 +464,11 @@ const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track
   src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
   mediaTime: clipMediaTimeSec(clip, playhead.value),
   muted: !!track.muted || !!previewMuted.value,
-  volume: (clip.volume ?? 1) * previewVolume.value,
+  // Store volume is PERCENT 0..100 (v1 heritage, core audio.mjs) while
+  // HTMLMediaElement.volume speaks 0..1 — normalize + clamp before the
+  // DOM binding. The old `clip.volume ?? 1` wrote e.g. HTTP 100 straight
+  // into el.volume ("Failed setting prop volume: value 100 is invalid").
+  volume: Math.min(1, Math.max(0, ((clip.volume ?? 100) / 100) * previewVolume.value)),
   rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
 })))
 
