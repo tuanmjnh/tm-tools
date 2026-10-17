@@ -143,6 +143,17 @@ async function createWindow() {
     win.loadURL(`http://127.0.0.1:${PORT}`)
   }
 
+  // Navigation lockdown (Electron security checklist #17): the main
+  // frame must never navigate to a foreign origin. Programmatic loads
+  // (loadURL/back) do not fire this event; only user/link-driven
+  // navigations do. window.open stays with the OAuth-aware handler below.
+  const appOrigin = isDev ? 'http://localhost:3000' : `http://127.0.0.1:${PORT}`
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(appOrigin) && !url.startsWith('devtools://')) {
+      event.preventDefault()
+    }
+  })
+
   win.webContents.on('before-input-event', (event, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'i') {
       win.webContents.toggleDevTools()
@@ -218,7 +229,25 @@ async function createWindow() {
 
 const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 
-ipcMain.handle('get-config', () => {
+// IPC sender validation (audit MEDIUM): every privileged handler refuses
+// calls whose frame is not the app's own origin. Dev loads from the Vite
+// server URL, prod from the loopback nitro server; devtools frames and
+// the initial about:blank are let through because Chromium injects them
+// around trusted app navigations.
+function isTrustedSender(event) {
+  let url
+  try {
+    url = event.senderFrame ? event.senderFrame.url : ''
+  } catch {
+    return false
+  }
+  if (!url || url === 'about:blank' || url.startsWith('devtools://')) return true
+  if (isDev) return url.startsWith('http://localhost:3000') || url.startsWith('http://127.0.0.1:3000')
+  return url.startsWith(`http://127.0.0.1:${PORT}`) || url.startsWith(`http://localhost:${PORT}`)
+}
+
+ipcMain.handle('get-config', (event) => {
+  if (!isTrustedSender(event)) return {}
   const result = {}
   const configFile = userConfigPath()
   try {
@@ -241,7 +270,8 @@ ipcMain.handle('get-config', () => {
   return result
 })
 
-ipcMain.handle('set-config', (_event, values) => {
+ipcMain.handle('set-config', (event, values) => {
+  if (!isTrustedSender(event)) return { success: false }
   const configFile = userConfigPath()
   const existing = {}
   try {
@@ -266,22 +296,20 @@ ipcMain.handle('set-config', (_event, values) => {
 })
 
 ipcMain.handle('open-path', async (event, fullPath) => {
+  if (!isTrustedSender(event)) return false
   const { shell } = require('electron')
-  const exists = fs.existsSync(fullPath)
-  // console.log('[open-path] path=' + JSON.stringify(fullPath), 'exists=', exists)
-  if (exists) {
-    try {
-      const err = await shell.openPath(fullPath)
-      // console.log('[open-path] shell.openPath result=' + JSON.stringify(err))
-      return err === '' ? true : false
-    } catch {
-      // console.log('[open-path] threw')
-    }
+  const exists = typeof fullPath === 'string' && fs.existsSync(fullPath)
+  if (!exists) return false
+  try {
+    const err = await shell.openPath(fullPath)
+    return err === ''
+  } catch {
+    return false
   }
-  return false
 })
 
-ipcMain.handle('open-external', async (_event, url) => {
+ipcMain.handle('open-external', async (event, url) => {
+  if (!isTrustedSender(event)) return false
   const { shell } = require('electron')
   try {
     // Validate URL format
@@ -296,14 +324,11 @@ ipcMain.handle('open-external', async (_event, url) => {
 })
 
 ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
+  if (!isTrustedSender(event)) return false
   const { shell } = require('electron')
-  const exists = fullPath && fs.existsSync(fullPath)
-  // console.log('[show-item-in-folder] FULL=' + JSON.stringify(fullPath), 'exists=', exists)
-  if (exists) {
-    shell.showItemInFolder(fullPath)
-    return true
-  }
-  return false
+  if (typeof fullPath !== 'string' || !fs.existsSync(fullPath)) return false
+  shell.showItemInFolder(fullPath)
+  return true
 })
 
 // Watch-folder for render outputs (TMCut export, docs section 65.4).

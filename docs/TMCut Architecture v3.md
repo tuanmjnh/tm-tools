@@ -8830,3 +8830,28 @@ harness fixture switched to the real 0..100 unit and gained a 12th check
 that FAILS the run on any “Failed setting prop” console warning, so a
 unit leak into a DOM property can never pass green again. Live UI 12/12,
 runner 23/23, lint 0.
+
+## 189.5 Electron hardening from the MCP security audit (same round)
+
+The installed Electron MCP audit tools ran against the real main/preload
+and returned 10/12 checklist passes, gaps: no will-navigate handler
+(#17) and no IPC sender validation (MEDIUM). Both fixed in main.cjs:
+
+- will-navigate now preventDefaults ANY main-frame navigation leaving
+  the app origin (dev localhost:3000 / prod loopback PORT). An earlier
+  generic setWindowOpenHandler briefly added here would have silently
+  broken the Google/GitHub OAuth popup flow reserved by the existing
+  OAuth-aware handler — removed before commit; checks #17/#18/#19 now
+  all PASS(#19 static note: handlers compare against the allowlist, not
+  just read the URL).
+- isTrustedSender(event) checks event.senderFrame.url against the app
+  origin and now guards every privileged handler: get-config, set-config
+  (config.env read/write), open-path, open-external (shell handoff) and
+  show-item-in-folder. Untrusted frames get empty/false results. The
+  preload generic send/on passthrough remains a documented residual
+  risk (channel allow-list would be the next step, deferred).
+
+Remaining audit notes NOT acted on, deliberately: perf MEDIUM for sync
+fs in main (startup-only, negligible) and webSecurity:false (needed by
+media:// + file thumbs; revisit with a proper protocol, tracked as R126
+candidate).
