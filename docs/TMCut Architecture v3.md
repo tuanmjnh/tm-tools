@@ -8611,3 +8611,32 @@ compositing lands, the export modal shows an amber banner (`tmcut.export.paralle
 second track of a rendered type carries clips, so upper layers are never silently dropped from a file.
 
 Gates: runner 23/23, lint 0, typecheck 0, build 0, i18n parity 2845/2845.
+
+# 187. R123 — Media bin follow-up: list actions on the right, grid up to 5 per row
+
+R122 shipped the two views; the user immediately scoped both: in **list** the action
+buttons belong on the RIGHT of the row (not as an overlay over the thumbnail), and the
+**grid** must shrink so a fullscreen window fits about 5 items per row.
+
+## 187.1 List view: reserved right action column
+
+The hover overlay that sat on top of the thumbnail (R121 design) is gone. Each row is
+now three columns — thumbnail | name/meta (the only growing column) | a **fixed `w-24`
+action column** on the right. Fixed width, not `shrink-0` auto: every row aligns
+whether the asset shows 2 or 4 buttons (proxy only applies to desktop videos).
+Buttons are ghost-icon (lighter than the R122 solid squares), fade in on hover, and
+only then take pointer events, so an invisible action can never be clicked. Relink
+(missing) and add (ready) share the first slot via `v-if/v-else-if`; the whole column
+swallows `@click.stop` so a press inside it never adds the clip twice.
+
+## 187.2 Grid view: container-query columns
+
+The bin panel already declares `@container` (R119), so the grid switches on the PANEL
+width rather than the viewport: `grid-cols-2` at the 360px floor, `@[420px]:3`,
+`@[480px]:4`, `@[530px]:5` — the 560px cap of fullscreen. Cells shrink; nothing else
+does. Inside the tightest tier the meta line and the move-to-folder button disappear
+(no room to show them usefully) and the fallback icon drops `size-7` -> `size-5`; the
+duration/ADDED/PXY badges and the hover action strip (plus/proxy/trash) survive.
+Gaps went 8px -> 6px to claw back width.
+
+Gates: lint 0, typecheck 0, build 0.

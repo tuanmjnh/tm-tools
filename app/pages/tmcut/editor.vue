@@ -1386,9 +1386,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
               </div>
 
               <!-- Horizontal asset cards (mock #2 media bin): fixed-size
-                   thumbnail + name/meta/status rows. Hover only changes the
-                   border color — quick actions are an ABSOLUTE overlay on
-                   the thumbnail (opacity fade), so the card can never grow) -->
+                   thumbnail + name/meta rows + a reserved ACTION COLUMN on
+                   the right. Hover only changes the border color and the
+                   action column's opacity — the geometry is hover-invariant. -->
               <div v-if="mediaView === 'list'" class="flex flex-col gap-2">
                 <div
                   v-for="asset in visibleAssets"
@@ -1469,71 +1469,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
                       <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
                       <span>PXY</span>
                     </span>
-
-                    <!-- Hover quick actions: absolute overlay ON the
-                           thumbnail (no layout participation) — the card
-                           geometry is hover-invariant by construction. -->
-                    <div
-                      class="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none"
-                    >
-                      <div class="flex items-center gap-0.5">
-                        <UButton
-                          icon="i-lucide-folder-input"
-                          size="xs"
-                          variant="solid"
-                          color="neutral"
-                          :title="t('tmcut.folders.moveToFolder')"
-                          class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                          @click.stop="openMoveAssetModal(asset)"
-                        />
-                        <UButton
-                          v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
-                          :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                          size="xs"
-                          variant="solid"
-                          :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
-                          :loading="asset.proxyStatus === 'generating'"
-                          :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                          class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                          @click.stop="handleProxyAction(asset)"
-                        />
-                        <UButton
-                          v-if="asset.status !== 'missing'"
-                          icon="i-lucide-plus"
-                          size="xs"
-                          variant="solid"
-                          color="primary"
-                          :title="t('tmcut.media.addToTimeline')"
-                          class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                          @click.stop="handleAddToTimeline(asset)"
-                        />
-                      </div>
-                      <div class="flex items-center gap-0.5">
-                        <UButton
-                          v-if="asset.status === 'missing'"
-                          icon="i-lucide-folder-search"
-                          size="xs"
-                          variant="solid"
-                          color="warning"
-                          :title="t('tmcut.media.relink')"
-                          class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                          @click.stop="handleRelink(asset)"
-                        />
-                        <UButton
-                          icon="i-lucide-trash"
-                          size="xs"
-                          variant="solid"
-                          color="error"
-                          :title="t('tmcut.media.remove')"
-                          class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                          @click.stop="handleRemoveAsset(asset)"
-                        />
-                      </div>
-                    </div>
                   </div>
 
-                  <!-- Right column: name + metadata rows (fixed layout,
-                         no hover-reactive content). -->
+                  <!-- Middle column: name + metadata rows (the only
+                       growing column). -->
                   <div class="flex flex-col justify-center gap-0.5 min-w-0 flex-1">
                     <p
                       class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
@@ -1559,15 +1498,79 @@ function handleEditorKeydown(e: KeyboardEvent) {
                       ✓ PXY
                     </p>
                   </div>
+
+                  <!-- Action column (right side): FIXED width so every row
+                       aligns regardless of which buttons apply; buttons
+                       fade in on hover and only then take pointer events,
+                       so an invisible button can never be clicked. -->
+                  <div
+                    class="flex items-center justify-end gap-0.5 shrink-0 w-24 opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                    @click.stop
+                  >
+                    <UButton
+                      v-if="asset.status === 'missing'"
+                      icon="i-lucide-folder-search"
+                      size="xs"
+                      variant="ghost"
+                      color="warning"
+                      :title="t('tmcut.media.relink')"
+                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="handleRelink(asset)"
+                    />
+                    <UButton
+                      v-else-if="asset.status !== 'analyzing'"
+                      icon="i-lucide-plus"
+                      size="xs"
+                      variant="ghost"
+                      color="primary"
+                      :title="t('tmcut.media.addToTimeline')"
+                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="handleAddToTimeline(asset)"
+                    />
+                    <UButton
+                      v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
+                      :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
+                      size="xs"
+                      variant="ghost"
+                      :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
+                      :loading="asset.proxyStatus === 'generating'"
+                      :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
+                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="handleProxyAction(asset)"
+                    />
+                    <UButton
+                      icon="i-lucide-folder-input"
+                      size="xs"
+                      variant="ghost"
+                      color="neutral"
+                      :title="t('tmcut.folders.moveToFolder')"
+                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="openMoveAssetModal(asset)"
+                    />
+                    <UButton
+                      icon="i-lucide-trash"
+                      size="xs"
+                      variant="ghost"
+                      color="error"
+                      :title="t('tmcut.media.remove')"
+                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="handleRemoveAsset(asset)"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <!-- Grid view: 2 columns so the thumbnail stays legible in a
-                   360-560px panel (3 columns made every name unreadable).
-                   Actions sit in the LOWER-RIGHT of the thumbnail: they
-                   never cover the frame centre and the geometry never
-                   changes on hover (opacity only). -->
-              <div v-if="mediaView === 'grid'" class="grid grid-cols-2 gap-2">
+              <!-- Grid view, compact (R123): container-query columns so
+                   the cell count follows the panel width — 2 at the
+                   360px minimum, up to 5 per row when fullscreen. Cells
+                   shrink instead of cards growing; the meta line and the
+                   wider actions disappear at the 5-column tier where
+                   there is no room for them. Actions stay a hover strip
+                   (opacity only) over the thumbnail. -->
+              <div
+                v-if="mediaView === 'grid'"
+                class="grid grid-cols-2 gap-1.5 @[420px]:grid-cols-3 @[480px]:grid-cols-4 @[530px]:grid-cols-5"
+              >
                 <div
                   v-for="asset in visibleAssets"
                   :key="asset.id"
@@ -1591,12 +1594,12 @@ function handleEditorKeydown(e: KeyboardEvent) {
                       v-else-if="assetKind(asset) === 'audio' && waveformMap[asset.id]"
                       class="absolute inset-0 flex items-center justify-center p-2"
                     >
-                      <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="120" :height="44" />
+                      <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="96" :height="40" />
                     </div>
                     <UIcon
                       v-else
                       :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-7 text-neutral-500 dark:text-neutral-600"
+                      class="absolute inset-0 m-auto size-7 @[530px]:size-5 text-neutral-500 dark:text-neutral-600"
                     />
                     <span
                       v-if="assetDurationLabel(asset)"
@@ -1629,7 +1632,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                         variant="solid"
                         color="neutral"
                         :title="t('tmcut.folders.moveToFolder')"
-                        class="pointer-events-auto"
+                        class="pointer-events-auto hidden @[530px]:flex"
                         @click.stop="openMoveAssetModal(asset)"
                       />
                       <UButton
@@ -1654,14 +1657,14 @@ function handleEditorKeydown(e: KeyboardEvent) {
                       />
                     </div>
                   </div>
-                  <div class="p-1.5">
+                  <div class="p-1 @[530px]:px-0.5 @[530px]:py-0.5">
                     <p
                       class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
                       :title="asset.name"
                     >
                       {{ asset.name }}
                     </p>
-                    <p class="text-[9px] font-mono text-neutral-500 truncate">
+                    <p class="text-[9px] font-mono text-neutral-500 truncate hidden @[530px]:block">
                       {{ assetMetaLabel(asset) }}
                     </p>
                   </div>
