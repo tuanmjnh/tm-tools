@@ -1029,8 +1029,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
           color="neutral"
           :title="t('tmcut.canvasRatio')"
         >
-          <span class="font-mono text-xs">{{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas)
-          }}fps)</span>
+          <span class="font-mono text-xs">
+            {{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas) }}fps)
+          </span>
           <UIcon name="i-lucide-chevron-down" class="size-3 text-neutral-500 dark:text-neutral-400" />
         </UButton>
       </UDropdownMenu>
@@ -1327,10 +1328,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
           <!-- Bin toolbar: view toggle. OUTSIDE the scroll container so it
                stays reachable, and only for the kind tabs where it means
                something (Effects/Text/FX lists ignore it). -->
-          <div
-            v-if="isAssetTab"
-            class="mx-3 mt-2 flex items-center justify-between gap-2"
-          >
+          <div v-if="isAssetTab" class="mx-3 mt-2 flex items-center justify-between gap-2">
             <div class="text-[10px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
               {{ t('tmcut.media.assets') }} · {{ filteredAssets.length }}
             </div>
@@ -1507,14 +1505,15 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     class="flex items-center justify-end gap-0.5 shrink-0 w-24 opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                     @click.stop
                   >
-                    <UButton
+                    <!-- Relink is an icon (not a button): the missing row
+                         would otherwise show one fat ghost next to the
+                         compact icon column. UIcon has no color prop —
+                         text-warning + pointer affordance keep it honest. -->
+                    <UIcon
                       v-if="asset.status === 'missing'"
-                      icon="i-lucide-folder-search"
-                      size="xs"
-                      variant="ghost"
-                      color="warning"
+                      name="i-lucide-folder-search"
                       :title="t('tmcut.media.relink')"
-                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      class="size-4 text-warning cursor-pointer hover:opacity-75 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto"
                       @click.stop="handleRelink(asset)"
                     />
                     <UButton
@@ -1581,7 +1580,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
                   @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
                   @dragstart="handleAssetDragStart($event, asset)"
                 >
-                  <div class="relative aspect-[16/9] bg-neutral-300 dark:bg-neutral-900">
+                  <div class="relative aspect-video bg-neutral-300 dark:bg-neutral-900">
                     <img
                       v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
                       :src="getThumbUrl(asset)"
@@ -1604,11 +1603,13 @@ function handleEditorKeydown(e: KeyboardEvent) {
                     <span
                       v-if="assetDurationLabel(asset)"
                       class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
-                    >{{ assetDurationLabel(asset) }}</span>
+                    >{{
+                      assetDurationLabel(asset) }}</span>
                     <span
                       v-if="isAssetOnTimeline(asset)"
                       class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white"
-                    >{{ t('tmcut.media.addedBadge') }}</span>
+                    >{{
+                      t('tmcut.media.addedBadge') }}</span>
                     <span
                       v-if="asset.proxyStatus === 'ready'"
                       class="absolute top-1 right-1 px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black"
@@ -1616,7 +1617,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
                     <!-- Hover actions: bottom-anchored strip on the
                          thumbnail (opacity-only reveal). -->
-                    <div class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 px-1 py-0.5 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto">
+                    <div
+                      class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 px-1 py-0.5 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto"
+                    >
                       <UButton
                         icon="i-lucide-plus"
                         size="xs"
