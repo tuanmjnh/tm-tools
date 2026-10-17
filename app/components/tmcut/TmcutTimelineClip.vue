@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
 })
 
 const { t } = useI18n()
-const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject } = useTmcutProject()
+const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject, gesturePreview, setGesturePreview, clearGesturePreview } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
@@ -27,8 +27,18 @@ const { available: canExtractFrames, clipFilmstrip } = useTmcutFrames()
 
 const isSelected = computed(() => selectedClipId.value === props.clip.id)
 
-const duration = computed(() => Math.max(0.1, clipDurationSec(props.clip)))
-const clipLeft = computed(() => clipStartSec(props.clip) * zoom.value)
+// Live gesture geometry (R124): while a pointer gesture runs, the moving
+// values live in the shared gesturePreview map instead of the store, so
+// only clip layers repaint — no deep watchers, no localStorage, no
+// per-frame media seeks. Geometry computeds read through the patch;
+// every other consumer still sees the committed clip.
+const liveClip = computed<TmcutTimelineItem>(() => {
+  const patch = gesturePreview.value[props.clip.id]
+  return patch ? { ...props.clip, ...patch } : props.clip
+})
+
+const duration = computed(() => Math.max(0.1, clipDurationSec(liveClip.value)))
+const clipLeft = computed(() => clipStartSec(liveClip.value) * zoom.value)
 const clipWidth = computed(() => Math.max(20, duration.value * zoom.value))
 
 // Keyframe diamonds (Roadmap B1): unique keyframe times across every
@@ -198,128 +208,155 @@ function applySnapTicks(targetTicks: number): number {
 // Trim floor: a source range never shrinks below 0.2s (store unit).
 const MIN_SOURCE_TICKS = Math.round(0.2 * TICKS_PER_SECOND)
 
+// Pointer-captured gesture plumbing (R124). This is the "triệt để" fix
+// for drag/trim being laggy and "sometimes working":
+//  - setPointerCapture keeps move/up events coming to the handle even
+//    when the pointer leaves the element or the button is released
+//    outside the window. The old window-listener shape lost mouseup,
+//    leaving a STALE listener whose closed-over initial values wrote to
+//    the clip during the NEXT gesture — the classic "trim jumps to a
+//    random spot / does nothing" symptom.
+//  - computePatch only paints the shared gesturePreview map (cheap,
+//    clip layers only). The store is written exactly ONCE on release,
+//    right before the single saveProject — never per frame.
+//  - pushHistory runs on genuine movement only, so a click no longer
+//    pollutes the undo stack, and a gesture with no movement commits
+//    nothing.
+type GesturePatch = Record<string, Partial<TmcutTimelineItem>>
+
+// One gesture at a time, app-wide. A stray pointerdown while another
+// clip's gesture is still running (lost pointerup) would otherwise leave
+// two handlers painting the shared map.
+let gestureInFlight = false
+
+function startClipGesture(
+  e: PointerEvent,
+  computePatch: (pe: PointerEvent) => GesturePatch,
+  options: { onFirstMove?: () => void } = {}
+) {
+  const target = e.currentTarget as HTMLElement
+  if (!target || !('setPointerCapture' in target) || gestureInFlight) return
+  try {
+    target.setPointerCapture(e.pointerId)
+  } catch {
+    return
+  }
+  gestureInFlight = true
+  let moved = false
+  let done = false
+  let last: GesturePatch = computePatch(e)
+  const move = (pe: PointerEvent) => {
+    if (!moved) {
+      moved = true
+      options.onFirstMove?.()
+    }
+    last = computePatch(pe)
+    setGesturePreview(last)
+  }
+  const end = () => {
+    if (done) return
+    done = true
+    gestureInFlight = false
+    target.removeEventListener('pointermove', move)
+    target.removeEventListener('pointerup', end)
+    target.removeEventListener('pointercancel', end)
+    clearGesturePreview()
+    if (!moved) return
+    for (const [id, patch] of Object.entries(last)) {
+      updateClip(id, patch, false)
+    }
+    saveProject()
+  }
+  target.addEventListener('pointermove', move)
+  target.addEventListener('pointerup', end)
+  target.addEventListener('pointercancel', end)
+}
+
 // Drag to move clip along timeline
-function onDragStart(e: MouseEvent) {
+function onDragStart(e: PointerEvent) {
   if (e.button !== 0) return // Left click only
   selectClip(props.clip.id)
   if (props.locked) return // Locked track: select only, no move
-  pushHistory()
 
-  const startX = e.clientX
-  const initialOffset = props.clip.offset || 0
   // Grouped/linked relatives travel with the drag (roadmap B4): their
   // offsets are captured now and shifted by the same adjusted delta.
   const relatives = relatedOffsetsFor(props.clip.id)
+  const startX = e.clientX
+  const initialOffset = props.clip.offset || 0
 
-  function onMouseMove(moveEvent: MouseEvent) {
-    const deltaX = moveEvent.clientX - startX
-    const deltaTicks = pxToTicks(deltaX)
+  startClipGesture(e, (pe) => {
+    const deltaTicks = pxToTicks(pe.clientX - startX)
     const newOffset = applySnapTicks(Math.max(0, initialOffset + deltaTicks))
     const moved = newOffset - initialOffset
-    // R122: no localStorage write per frame — that is what made dragging
-    // lag. Persist once on mouseup.
-    updateClip(props.clip.id, { offset: newOffset }, false)
+    const patch: GesturePatch = { [props.clip.id]: { offset: newOffset } }
     for (const [id, base] of Object.entries(relatives)) {
-      updateClip(id, { offset: Math.max(0, base + moved) }, false)
+      patch[id] = { offset: Math.max(0, base + moved) }
     }
-  }
-
-  function onMouseUp() {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-    saveProject()
-  }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
+    return patch
+  }, { onFirstMove: pushHistory })
 }
 
 // Left handle: trim 'in' point & offset
-function onTrimLeftStart(e: MouseEvent) {
+function onTrimLeftStart(e: PointerEvent) {
   e.stopPropagation()
   e.preventDefault()
   selectClip(props.clip.id)
   if (props.locked) return
-  pushHistory()
 
   const startX = e.clientX
   const initialIn = props.clip.in
   const initialOffset = props.clip.offset || 0
   const speed = props.clip.speed || 1
+  const out = props.clip.out
 
-  function onMouseMove(moveEvent: MouseEvent) {
-    const deltaX = moveEvent.clientX - startX
-    const deltaTicks = pxToTicks(deltaX)
+  startClipGesture(e, (pe) => {
+    const deltaTicks = pxToTicks(pe.clientX - startX)
 
     // Sliding trim: the left edge ALWAYS follows the pointer. While the
     // source in-point has room it is consumed first (normal trim); once
     // `in` is clamped at 0 the remainder slides the whole clip left
     // (CapCut behavior). The old math derived the offset from the
     // (clamped) in-delta, so dragging left from in=0 did nothing —
-    // that was the "sometimes left trim doesn't work" report.
+    // that was the R122 "sometimes left trim doesn't work" report.
     let newOffset = Math.max(0, initialOffset + deltaTicks)
     if (snapOn.value) {
       newOffset = applySnapTicks(newOffset)
     }
     let newIn = Math.round(initialIn + (newOffset - initialOffset) * speed)
-    newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, newIn))
-
-    updateClip(props.clip.id, {
-      in: Math.round(newIn),
-      offset: newOffset
-    }, false)
-  }
-
-  function onMouseUp() {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-    saveProject()
-  }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
+    newIn = Math.max(0, Math.min(out - MIN_SOURCE_TICKS, newIn))
+    return { [props.clip.id]: { offset: newOffset, in: newIn } }
+  }, { onFirstMove: pushHistory })
 }
 
 // Right handle: trim 'out' point
-function onTrimRightStart(e: MouseEvent) {
+function onTrimRightStart(e: PointerEvent) {
   e.stopPropagation()
   e.preventDefault()
   selectClip(props.clip.id)
   if (props.locked) return
-  pushHistory()
 
   const startX = e.clientX
   const initialOut = props.clip.out
   const speed = props.clip.speed || 1
   const initialEnd = clipEndTicks(props.clip)
+  const inTick = props.clip.in
+  const offset = props.clip.offset || 0
 
-  function onMouseMove(moveEvent: MouseEvent) {
-    const deltaX = moveEvent.clientX - startX
-    const deltaTicks = pxToTicks(deltaX)
+  startClipGesture(e, (pe) => {
+    const deltaTicks = pxToTicks(pe.clientX - startX)
     const deltaSourceTicks = deltaTicks * speed
 
-    let newOut = Math.max(props.clip.in + MIN_SOURCE_TICKS, initialOut + deltaSourceTicks)
+    let newOut = Math.max(inTick + MIN_SOURCE_TICKS, initialOut + deltaSourceTicks)
     if (snapOn.value) {
       // Snap the moving right edge (timeline end) to nearby candidates.
       const newEnd = applySnapTicks(Math.max(0, initialEnd + deltaTicks))
       newOut = Math.max(
-        props.clip.in + MIN_SOURCE_TICKS,
-        Math.round(props.clip.in + (newEnd - (props.clip.offset || 0)) * speed)
+        inTick + MIN_SOURCE_TICKS,
+        Math.round(inTick + (newEnd - offset) * speed)
       )
     }
-    updateClip(props.clip.id, {
-      out: Math.round(newOut)
-    }, false)
-  }
-
-  function onMouseUp() {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
-    saveProject()
-  }
-
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
+    return { [props.clip.id]: { out: Math.round(newOut) } }
+  }, { onFirstMove: pushHistory })
 }
 
 // ===== Right-click transition menu (roadmap B3 / core C5) =====
@@ -437,7 +474,7 @@ onUnmounted(() => {
       width: `${clipWidth}px`,
       ...filmstripStyle
     }"
-    @mousedown="onDragStart"
+    @pointerdown="onDragStart"
     @contextmenu="onClipContextMenu"
   >
     <!-- Left Trim Handle (z-20: must win over the right handle when a
@@ -447,7 +484,7 @@ onUnmounted(() => {
     <div
       class="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 flex items-center justify-center transition-opacity z-20"
       :class="[trackStyles.handle, isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100']"
-      @mousedown="onTrimLeftStart"
+      @pointerdown="onTrimLeftStart"
     >
       <div class="w-0.5 h-3 bg-black/60 rounded" />
     </div>
@@ -513,7 +550,7 @@ onUnmounted(() => {
     <div
       class="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 flex items-center justify-center transition-opacity z-10"
       :class="[trackStyles.handle, isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100']"
-      @mousedown="onTrimRightStart"
+      @pointerdown="onTrimRightStart"
     >
       <div class="w-0.5 h-3 bg-black/60 rounded" />
     </div>

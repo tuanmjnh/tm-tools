@@ -831,6 +831,23 @@ function closeProjectGaps(): number {
   return Math.round((applyV3Edit(v3 => closeGaps(v3)) ?? 0) * TICKS_PER_SECOND)
 }
 
+// Gesture preview (roadmap R124): live drag/trim geometry lives HERE,
+// outside the project store, while a pointer gesture runs. Writing the
+// store on every pointermove re-rendered every timeline layer AND fired
+// the deep timeline watchers (preview sync, minimap, ...) every frame —
+// that is what "dragging feels laggy, works sometimes" meant. Handlers
+// now paint into this map on move and commit the final values into the
+// store ONCE on pointerup, right before the single saveProject().
+const gesturePreview = ref<Record<string, Partial<TmcutTimelineItem>>>({})
+
+function setGesturePreview(entries: Record<string, Partial<TmcutTimelineItem>>) {
+  gesturePreview.value = { ...gesturePreview.value, ...entries }
+}
+
+function clearGesturePreview() {
+  if (Object.keys(gesturePreview.value).length > 0) gesturePreview.value = {}
+}
+
 // Update clip. `persist` is false during live drag/trim handlers:
 // writing localStorage on every mousemove frame is what made dragging
 // feel laggy (R122). The handlers mutate the reactive store for instant
@@ -1641,6 +1658,9 @@ export function useTmcutProject() {
     selectClip,
     addClipToTrack,
     updateClip,
+    gesturePreview,
+    setGesturePreview,
+    clearGesturePreview,
     removeClip,
     splitClip,
     closeProjectGaps,

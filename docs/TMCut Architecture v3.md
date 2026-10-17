@@ -8640,3 +8640,101 @@ duration/ADDED/PXY badges and the hover action strip (plus/proxy/trash) survive.
 Gaps went 8px -> 6px to claw back width.
 
 Gates: lint 0, typecheck 0, build 0.
+
+# 188. R124 — Audio-track preview playback, pointer-captured gestures, vertical track scroll, two-row HUD
+
+Four user reports in one pass: the WebM audio clip stayed silent in the
+preview, trim/drag was still laggy and "works sometimes", dragging a
+file below the tracks did nothing useful, the track area showed only
+about three rows with no way to scroll, and the preview HUD still
+collided with itself on narrow widths.
+
+## 188.1 Audio-track playback engine (preview)
+
+Root cause of "webm audio khi play không thấy phát được": the preview
+only ever had a VIDEO engine. `activeVideoClip` picks a video track,
+the `<video>` element follows it — audio-track clips simply had nothing
+playing them. Routing the clip to the right ROW (R122) was necessary but
+never sufficient.
+
+`TmcutPreviewPlayer.vue` now owns a hidden `<audio>` element per audio
+clip under the playhead (`activeAudioSrcs`, keyed by clip id through
+`:key` so the media clock survives unrelated re-renders):
+
+- **While playing**, elements run on their own media clocks; a 500 ms
+  drift tick only seeks when an element strays more than 0.35 s from
+  `clipMediaTimeSec` — no per-frame seeks, N lanes cost nothing.
+- **While paused/scrubbing**, elements mirror the playhead exactly and
+  stay paused (same contract as the video layer).
+- Volume/mute compose per clip: `clip.volume × previewVolume`,
+  `track.muted || previewMuted`. `playbackRate` follows clip speed
+  (clamped 0.25–4); reverse audio clips are skipped — HTMLMediaElement
+  cannot run backwards, silence beats playing from the wrong end.
+- Mount identity (`id:src` string) triggers a `nextTick` resync;
+  committed timeline edits (deep watcher) and the isPlaying toggle
+  resync immediately.
+
+## 188.2 Pointer-captured gestures + gesture-preview map ("triệt để" fix)
+
+Two independent bugs made trim/drag feel random:
+
+1. **Lost mouseup = stale listener.** The old handlers attached
+   `mousemove`/`mouseup` to `window`. Release the button outside the
+   window (or over an element that swallows the event) and `mouseup`
+   never fires; the handler stays attached, and the NEXT gesture runs
+   TWO handlers — the stale one writing last gesture's closed-over
+   values. That is the literal "lúc được lúc không".
+2. **Store writes at pointer rate.** `updateClip` replaces the clip
+   object, so every mousemove re-identities a track item, re-runs every
+   sibling computed (filmstrip/waveform/geometry), and fires the deep
+   timeline watchers (preview sync, minimap). 60–120 Hz pointer events
+   outpace rAF; the UI queues behind itself. That is the "lag".
+
+Fix in `TmcutTimelineClip.vue` + `useTmcutProject.ts`:
+
+- `startClipGesture(e, computePatch, opts)` uses **`setPointerCapture`**
+  on the handle itself — moves/ups keep arriving even outside the
+  element or window; `pointercancel` is handled; a module-level
+  `gestureInFlight` flag refuses a second simultaneous gesture.
+- While a gesture runs, `computePatch` writes ONLY into the shared
+  `gesturePreview` map (new store state: `Record<clipId, partial>`).
+  The clip's geometry computeds read `liveClip = clip + patch`;
+  nothing else in the app re-renders — no store writes, no watchers, no
+  localStorage during the gesture.
+- On release: map cleared, final patch committed via
+  `updateClip(..., false)` once, then ONE `saveProject()`. No movement →
+  no commit, and `pushHistory` fires on genuine first-move only, so
+  clicks stopped polluting the undo stack.
+- Left trim keeps the R122 sliding-trim math (edge always follows the
+  pointer, `in` clamped independently), right trim keeps edge-snapping —
+  both now just return a patch instead of touching the store.
+
+## 188.3 Vertical track scroll + drop-below-rows creates a lane
+
+- The tracks container is now `overflow-y-auto`; the ruler became
+  `sticky top-0` inside it so time labels never scroll away; the headers
+  column mirrors `scrollTop` from the canvas (its own scrollbar stays
+  hidden), with a sticky opaque 24 px spacer matching the ruler so rows
+  and headers stay pixel-aligned at every scroll offset.
+- Media drop hit-tests the DOM (`[data-track-row]`) instead of a 56 px
+  arithmetic guess. Dropping on a row of the matching type lands THAT
+  track (parallel lanes); dropping **below the last row** (the gesture
+  users tried) appends to the last lane of that type or creates a new
+  audio/video track when none exists — "kéo file xuống dòng để thêm
+  audio song song" now works exactly like that.
+
+## 188.4 Preview HUD: two guaranteed rows
+
+The header is now a plain `flex-col`: **row 1 = labels only** (canvas
+info + engine badge, PROXY/STAB pills right-aligned), **row 2 = icon
+actions only** (quality select, crop, proxy, overlay toggles, zoom,
+ratio guide, snapshot, fullscreen). Rows wrap instead of overlapping at
+any width — the §119 split reworked into the exact two-line layout the
+user asked for.
+
+Gates: runner 23/23, lint 0, typecheck 0, build 0; no new i18n keys
+(parity 2845/2845 unchanged).
+
+Known gaps: reverse audio clips stay silent in preview (documented in
+code); export of parallel audio lanes still relies on the desktop
+compiler's own mix, not this preview engine.

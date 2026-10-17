@@ -387,11 +387,25 @@ function onMediaDrop(e: DragEvent) {
   const snappedSec = snapTimeSec(targetSec, playhead.value, { thresholdSec: 8 / zoom.value })
   const desiredType = payload.kind === 'audio' ? 'audio' : 'video'
   const tracks = currentProject.value?.timeline?.tracks || []
-  // Track rows are uniform h-14 (56px); dropping below the last row (or
-  // on an incompatible type) falls back to the first compatible track
-  // inside addClipToTrack.
-  const rowTrack = tracks[Math.floor((e.clientY - rect.top) / 56)]
-  const trackId = rowTrack && rowTrack.type === desiredType ? rowTrack.id : undefined
+  // Row hit-test through the DOM, not a 56px guess (row borders drift).
+  // Dropping on a row of the wanted type lands THAT track — parallel
+  // audio lanes (CapCut-style). Dropping into the empty area below all
+  // rows (R124 "kéo file xuống dòng để thêm audio song song") creates a
+  // new track of the wanted type when none exists yet, else appends to
+  // the LAST lane of that type, which is the row visually nearest the gap.
+  const rowEl = (e.target as HTMLElement)?.closest('[data-track-row]')
+  const rowTrackId = rowEl?.getAttribute('data-track-row') || undefined
+  const rowTrack = rowTrackId ? tracks.find(tr => tr.id === rowTrackId) : undefined
+  if (!rowTrack) {
+    const lastOfType = [...tracks].reverse().find(tr => tr.type === desiredType)
+    const trackId = lastOfType?.id
+      ?? (addTrackToProject(desiredType)
+        ? (currentProject.value?.timeline?.tracks || []).slice(-1)[0]?.id
+        : undefined)
+    addAssetToTimeline(payload.id, { offset: snappedSec, trackId })
+    return
+  }
+  const trackId = rowTrack.type === desiredType ? rowTrack.id : undefined
   addAssetToTimeline(payload.id, { offset: snappedSec, trackId })
 }
 
@@ -818,11 +832,18 @@ async function handleAddAudio() {
   }
 }
 
-// Synchronize horizontal scrolling between ruler and tracks
+// Synchronize scrolling between panels: the canvas is the master axes
+// pair; the headers column mirrors vertical scroll (R124), and the ruler
+// stays pinned via position:sticky.
+const trackHeadersRef = ref<HTMLDivElement | null>(null)
+
 function onTracksScroll(e: Event) {
   const target = e.target as HTMLElement
   if (rulerRef.value) {
     rulerRef.value.scrollLeft = target.scrollLeft
+  }
+  if (trackHeadersRef.value) {
+    trackHeadersRef.value.scrollTop = target.scrollTop
   }
   syncMinimapState()
 }
@@ -1194,8 +1215,17 @@ onUnmounted(() => {
           </UDropdownMenu>
         </div>
 
-        <!-- Track Labels with eye / lock / mute (CapCut-style) -->
-        <div class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-hidden">
+        <!-- Track Labels with eye / lock / mute (CapCut-style).
+             overflow-y-hidden: kept visually clipped; every row is
+             synced with the canvas wheel-scroll handler instead (R124),
+             because overflow-y:auto here showed its own scrollbar that
+             did not move the canvas rows. -->
+        <div ref="trackHeadersRef" class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-y-hidden">
+          <!-- Spacer matching the sticky ruler (24px of scroll content in
+               the canvas column) so header rows stay pixel-aligned with
+               track rows at every scrollTop (R124). Opaque + sticky like
+               the ruler, so rows scroll under the same visual band. -->
+          <div class="h-6 shrink-0 sticky top-0 z-10 bg-neutral-100/80 dark:bg-neutral-950/80" />
           <div
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
@@ -1297,17 +1327,20 @@ onUnmounted(() => {
           />
         </div>
 
-        <!-- Scrollable Tracks & Ruler Area -->
+        <!-- Scrollable Tracks & Ruler Area. Vertical overflow scrolls too
+             (R124): more than ~3 tracks used to be simply unreachable.
+             The headers column follows via onTracksScroll. -->
         <div
           ref="tracksContainerRef"
-          class="flex-1 flex flex-col overflow-x-auto overflow-y-hidden relative select-none"
+          class="flex-1 flex flex-col overflow-x-auto overflow-y-auto relative select-none"
           @scroll="onTracksScroll"
           @wheel="onTracksWheel"
         >
-          <!-- Time Ruler Bar (Sticky at top of tracks) -->
+          <!-- Time Ruler Bar (sticky top so vertical track scrolling (R124)
+               never loses the time labels; rows scroll beneath it) -->
           <div
             ref="rulerRef"
-            class="h-6 border-b border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
+            class="h-6 sticky top-0 z-10 border-b border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 relative cursor-pointer overflow-hidden shrink-0"
             :style="{ width: `${timelineWidth}px` }"
             @mousedown="onRulerMouseDown"
           >
@@ -1406,6 +1439,7 @@ onUnmounted(() => {
             <div
               v-for="track in currentProject?.timeline?.tracks || []"
               :key="track.id"
+              :data-track-row="track.id"
               class="h-14 relative bg-neutral-100/40 dark:bg-neutral-900/40 hover:bg-neutral-200/20 dark:hover:bg-neutral-800/20 transition-colors"
               :class="track.hidden ? 'opacity-40' : ''"
             >

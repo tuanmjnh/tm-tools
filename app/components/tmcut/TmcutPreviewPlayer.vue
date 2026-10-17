@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTmcutProject } from '~/composables/useTmcutProject'
+import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
 import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
-import { clipDurationTicks } from '~/utils/tmcut/clipTime'
+import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 
@@ -424,6 +425,104 @@ watch(currentMediaSrc, (newSrc) => {
     syncPreviewToPlayhead()
   }
 })
+
+// ===== Audio-track playback engine (roadmap R124) =====
+// Audio clips used to have NO preview engine at all — dropping a (WebM)
+// audio file onto an audio track produced silence, which is what "webm
+// audio không phát được" actually meant (the routing at R122 only moved
+// the clip to the right row). Each active audio clip now owns a hidden
+// <audio> element keyed by clip id. While playing, the elements run on
+// their own media clocks and only drift-correct (>=0.35s); while paused
+// they follow the playhead like the video layer (scrub = seek). Reverse
+// audio clips are not seek-looped (documented gap, mirrors the video
+// reverse handling being a step-loop feature).
+const audioEls = new Map<string, HTMLAudioElement>()
+function setAudioEl(clipId: string, el: unknown) {
+  if (el instanceof HTMLAudioElement) audioEls.set(clipId, el)
+  else audioEls.delete(clipId)
+}
+
+const activeAudioClips = computed(() => {
+  const tracks = currentProject.value?.timeline?.tracks || []
+  const out: { clip: TmcutTimelineItem, track: TmcutTrack }[] = []
+  for (const track of tracks) {
+    if (track.type !== 'audio') continue
+    for (const clip of track.items || []) {
+      // Reverse clips are skipped: HTMLMediaElement has no backward
+      // playback, and starting one at the wrong end is worse than silence.
+      if (clip.reverse) continue
+      if (playhead.value >= clipStartSec(clip) && playhead.value < clipEndSec(clip)) {
+        out.push({ clip, track })
+      }
+    }
+  }
+  return out
+})
+
+const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track }) => ({
+  id: clip.id,
+  src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
+  mediaTime: clipMediaTimeSec(clip, playhead.value),
+  muted: !!track.muted || !!previewMuted.value,
+  volume: (clip.volume ?? 1) * previewVolume.value,
+  rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
+})))
+
+function seekAudioElement(el: HTMLAudioElement, time: number) {
+  try {
+    el.currentTime = time
+  } catch { /* metadata not ready */ }
+}
+
+function syncAudioElements() {
+  const activeIds = new Set(activeAudioSrcs.value.map(a => a.id))
+  for (const [id, el] of audioEls) {
+    if (!activeIds.has(id)) el.pause()
+  }
+  for (const a of activeAudioSrcs.value) {
+    const el = audioEls.get(a.id)
+    if (!el || !a.src) continue
+    el.playbackRate = a.rate
+    if (!isPlaying.value) {
+      // Paused / scrubbing: mirror the playhead exactly, stay paused.
+      seekAudioElement(el, a.mediaTime)
+      el.pause()
+      continue
+    }
+    if (Math.abs(el.currentTime - a.mediaTime) > 0.35) {
+      seekAudioElement(el, a.mediaTime)
+    }
+    if (el.paused) el.play().catch(() => { })
+  }
+}
+
+function onAudioLoaded(a: { id: string, mediaTime: number }) {
+  const el = audioEls.get(a.id)
+  if (!el) return
+  seekAudioElement(el, a.mediaTime)
+}
+
+// Identity string: element mount/unmount (clip enters/leaves the
+// playhead or its src changes) resyncs after Vue has rendered the refs.
+watch(
+  () => activeAudioSrcs.value.map(a => `${a.id}:${a.src}`).join('|'),
+  () => { nextTick(syncAudioElements) }
+)
+watch(isPlaying, () => {
+  syncAudioElements()
+})
+// Scrub while paused: follow immediately (playing runs on media clocks).
+watch(playhead, () => {
+  if (!isPlaying.value) syncAudioElements()
+})
+// Committed timeline edits (trim/move/add/remove) resync the elements.
+watch(
+  () => currentProject.value?.timeline,
+  () => { syncAudioElements() },
+  { deep: true }
+)
+
+let audioDriftTimer: ReturnType<typeof setInterval> | null = null
 
 // --- Canvas Crop & Mask (Roadmap F-3) ---
 const isCropActive = computed(() => {
@@ -1101,6 +1200,12 @@ onMounted(() => {
     })
     viewportObserver.observe(viewportRef.value)
   }
+  // Audio-layer drift correction (R124): media clocks run independently
+  // of the playhead rAF loop; a light 500ms tick keeps them within the
+  // 0.35s tolerance without seeking on every frame.
+  audioDriftTimer = setInterval(() => {
+    if (isPlaying.value) syncAudioElements()
+  }, 500)
 })
 
 onUnmounted(() => {
@@ -1110,14 +1215,22 @@ onUnmounted(() => {
   resizeObserver = null
   viewportObserver?.disconnect()
   viewportObserver = null
+  if (audioDriftTimer) clearInterval(audioDriftTimer)
+  audioDriftTimer = null
+  for (const el of audioEls.values()) el.pause()
+  audioEls.clear()
 })
 </script>
 
 <template>
   <div ref="viewportRef" class="flex flex-col items-center justify-center w-full max-w-full">
-    <!-- HUD header (design #2): canvas info + engine badge | overlay toggles + fullscreen -->
-    <div class="w-full mb-2 flex items-center justify-between gap-2 text-[11px]">
-      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400">
+    <!-- HUD header (R124 rework): exactly TWO rows so nothing can ever
+         overlap — row 1 is text labels only (canvas state on the left,
+         PROXY / STAB status pills right-aligned), row 2 is icon action
+         buttons only. -->
+    <div class="w-full mb-2 flex flex-col gap-1.5 text-[11px]">
+      <!-- Row 1: labels -->
+      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
         <span class="font-medium text-neutral-600 dark:text-neutral-300 truncate">{{ t('tmcut.player.hudCanvas') }}</span>
         <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
@@ -1132,101 +1245,94 @@ onUnmounted(() => {
         >
           {{ t('tmcut.player.engineBadge') }}
         </span>
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <!-- Proxy / Stabilize labels (two-line stacked) -->
-        <div
-          v-if="isCurrentClipProxy || isCurrentClipStabilized"
-          class="flex flex-col items-end gap-0.5 text-[10px] leading-none shrink-0"
+        <span
+          v-if="isCurrentClipProxy"
+          class="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium text-[10px] leading-none shrink-0"
+          :title="t('tmcut.proxy.activeDesc')"
         >
-          <span
-            v-if="isCurrentClipProxy"
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium"
-            :title="t('tmcut.proxy.activeDesc')"
+          <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
+          {{ t('tmcut.proxy.active') }}
+        </span>
+        <span
+          v-if="isCurrentClipStabilized"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium text-[10px] leading-none shrink-0"
+          :class="isCurrentClipProxy ? '' : 'ml-auto'"
+          :title="t('tmcut.stabilize.activeDesc')"
+        >
+          <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
+          {{ t('tmcut.stabilize.badge') }}
+        </span>
+      </div>
+      <!-- Row 2: icon action buttons -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
+        <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
+          <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
+          <select
+            v-model="previewQuality"
+            class="bg-transparent text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
+            :title="t('tmcut.player.quality')"
           >
-            <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
-            {{ t('tmcut.proxy.active') }}
-          </span>
-          <span
-            v-if="isCurrentClipStabilized"
-            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium"
-            :title="t('tmcut.stabilize.activeDesc')"
-          >
-            <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
-            {{ t('tmcut.stabilize.badge') }}
-          </span>
+            <option value="full">
+              {{ t('tmcut.player.qualityFull') }}
+            </option>
+            <option value="half">
+              {{ t('tmcut.player.qualityHalf') }}
+            </option>
+            <option value="quarter">
+              {{ t('tmcut.player.qualityQuarter') }}
+            </option>
+            <option value="proxy">
+              {{ t('tmcut.player.qualityProxy') }}
+            </option>
+          </select>
         </div>
-        <!-- Actions row -->
-        <div class="flex items-center gap-1.5 shrink-0">
-          <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
-          <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
-            <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
-            <select
-              v-model="previewQuality"
-              class="bg-transparent text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
-              :title="t('tmcut.player.quality')"
-            >
-              <option value="full">
-                {{ t('tmcut.player.qualityFull') }}
-              </option>
-              <option value="half">
-                {{ t('tmcut.player.qualityHalf') }}
-              </option>
-              <option value="quarter">
-                {{ t('tmcut.player.qualityQuarter') }}
-              </option>
-              <option value="proxy">
-                {{ t('tmcut.player.qualityProxy') }}
-              </option>
-            </select>
-          </div>
+        <UButton
+          v-if="activeVideoClip"
+          icon="i-lucide-crop"
+          size="xs"
+          variant="soft"
+          :color="isCropActive ? 'primary' : 'neutral'"
+          :title="t('tmcut.crop.tool')"
+          @click="triggerCropTool"
+        />
+        <UButton
+          v-if="previewEngine.capabilities.proxyPreview"
+          :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
+          size="xs"
+          variant="soft"
+          :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+          :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
+          @click="proxyPreview = !proxyPreview"
+        />
+        <UButton
+          v-for="toggle in overlayToggles"
+          :key="toggle.key"
+          :icon="toggle.icon"
+          size="xs"
+          variant="soft"
+          :color="toggle.active ? 'primary' : 'neutral'"
+          :title="toggle.label"
+          @click="toggle.onSelect()"
+        />
+        <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
           <UButton
-            v-if="activeVideoClip"
-            icon="i-lucide-crop"
+            icon="i-lucide-zoom-in"
             size="xs"
             variant="soft"
-            :color="isCropActive ? 'primary' : 'neutral'"
-            :title="t('tmcut.crop.tool')"
-            @click="triggerCropTool"
+            :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
+            :title="t('tmcut.player.zoom')"
           />
+        </UDropdownMenu>
+        <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
           <UButton
-            v-if="previewEngine.capabilities.proxyPreview"
-            :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
+            icon="i-lucide-rectangle-horizontal"
             size="xs"
             variant="soft"
-            :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
-            :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
-            @click="proxyPreview = !proxyPreview"
+            :color="ratioGuideId ? 'primary' : 'neutral'"
+            :title="t('tmcut.safeArea.ratioGuide')"
           />
-          <UButton
-            v-for="toggle in overlayToggles"
-            :key="toggle.key"
-            :icon="toggle.icon"
-            size="xs"
-            variant="soft"
-            :color="toggle.active ? 'primary' : 'neutral'"
-            :title="toggle.label"
-            @click="toggle.onSelect()"
-          />
-          <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
-            <UButton
-              icon="i-lucide-zoom-in"
-              size="xs"
-              variant="soft"
-              :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
-              :title="t('tmcut.player.zoom')"
-            />
-          </UDropdownMenu>
-          <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
-            <UButton
-              icon="i-lucide-rectangle-horizontal"
-              size="xs"
-              variant="soft"
-              :color="ratioGuideId ? 'primary' : 'neutral'"
-              :title="t('tmcut.safeArea.ratioGuide')"
-            />
-          </UDropdownMenu>
-        </div>
+        </UDropdownMenu>
         <UButton
           v-if="canExtractFrames && activeVideoClip"
           :icon="snapshotBusy ? 'i-lucide-loader-circle' : 'i-lucide-camera'"
@@ -1298,6 +1404,23 @@ onUnmounted(() => {
           playsinline
           @loadedmetadata="onLoadedMetadata"
           @error="onMediaError"
+        />
+
+        <!-- Audio-track playback layer (roadmap R124): one hidden <audio>
+             per clip under the playhead, keyed by clip id so the element
+             (and its media clock) survives unrelated re-renders. WebM
+             audio and any other audio clip on an audio track now plays in
+             the preview — previously these had no engine at all. -->
+        <audio
+          v-for="a in activeAudioSrcs"
+          :key="a.id"
+          :ref="(el) => setAudioEl(a.id, el)"
+          :src="a.src"
+          :muted="a.muted"
+          :volume="a.volume"
+          preload="auto"
+          hidden
+          @loadedmetadata="onAudioLoaded(a)"
         />
 
         <!-- Vignette overlay effect (Roadmap Phase E) -->
