@@ -2,7 +2,6 @@ const { app, BrowserWindow, Menu, ipcMain, protocol } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
-const { Readable } = require('node:stream')
 const { pathToFileURL } = require('url')
 const { registerYoutubeController } = require('./tools/youtube.controller.cjs')
 const { registerFfmpegController } = require('./tools/ffmpeg.controller.cjs')
@@ -12,6 +11,7 @@ const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
+const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
 
 let initializePlatform
 try {
@@ -21,22 +21,17 @@ try {
   initializePlatform = require('./src/index.ts').initializePlatform
 }
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: 'media',
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      bypassCSP: true,
-      stream: true,
-      corsEnabled: true
-    }
-  }
-])
+protocol.registerSchemesAsPrivileged([mediaSchemePrivileges()])
 
 const isDev = !app.isPackaged
 const PORT = process.env.APP_PORT || 3456
+
+// Origins the renderer legitimately runs from; media-protocol uses this
+// to decide whether a fetch() gets CORS headers (webSecurity:true, R126).
+function appOrigins() {
+  if (isDev) return ['http://localhost:3000', 'http://127.0.0.1:3000']
+  return [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
+}
 
 let win = null
 
@@ -124,7 +119,13 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false
+      // R126: same-origin policy is back ON. The one thing that used to
+      // need webSecurity:false — loading local media — now runs through
+      // the privileged media:// scheme, which answers CORS for
+      // appOrigins() only (media-protocol.cjs). Media tags load
+      // cross-origin by design; only fetch()/canvas readback need CORS,
+      // and those come from the app origin.
+      webSecurity: true
     }
   })
 
@@ -191,8 +192,7 @@ async function createWindow() {
             height: 680,
             webPreferences: {
               nodeIntegration: false,
-              contextIsolation: true,
-              webSecurity: false
+              contextIsolation: true
             }
           }
         }
@@ -212,8 +212,7 @@ async function createWindow() {
         height: 680,
         webPreferences: {
           nodeIntegration: false,
-          contextIsolation: true,
-          webSecurity: false
+          contextIsolation: true
         }
       }
     }
@@ -444,136 +443,15 @@ ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
   }
 })
 
-// Content types served by the media:// protocol, keyed by extension.
-// The Chromium media pipeline selects its demuxer from Content-Type,
-// so a missing header breaks playback of some containers.
-const MEDIA_CONTENT_TYPES = {
-  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm',
-  '.mkv': 'video/x-matroska', '.mov': 'video/quicktime',
-  '.avi': 'video/x-msvideo', '.flv': 'video/x-flv',
-  '.wmv': 'video/x-ms-wmv', '.3gp': 'video/3gpp',
-  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
-  '.oga': 'audio/ogg', '.m4a': 'audio/mp4', '.flac': 'audio/flac',
-  '.aac': 'audio/aac', '.opus': 'audio/ogg',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
-  '.tif': 'image/tiff', '.tiff': 'image/tiff', '.ico': 'image/x-icon',
-  '.svg': 'image/svg+xml'
-}
-
-function mediaContentTypeFor(filePath) {
-  const ext = path.extname(filePath || '').toLowerCase()
-  return MEDIA_CONTENT_TYPES[ext] || 'application/octet-stream'
-}
-
-// File stream for the media protocol. The 'error' listener
-// is mandatory: an unhandled 'error' event on a Node stream
-// (file locked or deleted between stat and read, requests
-// aborted mid-scrub) would throw an uncaught exception and
-// take down the main process. Readable.toWeb surfaces the
-// failure to the consumer as a broken response body instead.
-function diskStream(filePath, start, end) {
-  const stream = fs.createReadStream(filePath, { start, end })
-  stream.on('error', () => {
-    // surfaced via the web stream as a response error
-  })
-  return stream
-}
+// The media:// protocol itself lives in media-protocol.cjs (R126): with
+// webSecurity back on, only requests from appOrigins() receive CORS
+// headers, so a remote frame cannot read local files through it.
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId(process.execPath)
   }
-  protocol.handle('media', async (request) => {
-    try {
-      let filePath = ''
-      try {
-        const parsedUrl = new URL(request.url)
-        filePath = parsedUrl.searchParams.get('file') || ''
-      } catch {
-        // ignore
-      }
-
-      if (!filePath) {
-        filePath = decodeURIComponent(request.url.replace(/^media:\/\//i, ''))
-        if (process.platform === 'win32') {
-          filePath = filePath.replace(/^\/+([a-zA-Z]:)/, '$1')
-        }
-      }
-
-      if (!filePath || !fs.existsSync(filePath)) {
-        return new Response('File not found: ' + (filePath || 'empty path'), { status: 404 })
-      }
-      const stat = fs.statSync(filePath)
-      if (!stat.isFile()) {
-        return new Response('Not a file: ' + filePath, { status: 404 })
-      }
-
-      const fileSize = stat.size
-      const contentType = mediaContentTypeFor(filePath)
-      const baseHeaders = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes' }
-
-      if (request.method === 'HEAD') {
-        return new Response(null, {
-          status: 200,
-          headers: { ...baseHeaders, 'Content-Length': String(fileSize) }
-        })
-      }
-
-      if (fileSize === 0) {
-        return new Response(new Uint8Array(0), {
-          status: 200,
-          headers: { ...baseHeaders, 'Content-Length': '0' }
-        })
-      }
-
-      // Serve the file straight from disk with HTTP Range support
-      // (206 Partial Content). The media pipeline seeks by issuing
-      // Range requests; a plain 200 without `Accept-Ranges` stalls
-      // seeks beyond the initially buffered window, which froze the
-      // preview whenever the playhead was dragged off 00:00.
-      // (net.fetch(file://) cannot forward Range headers, so the
-      // file is streamed directly instead.)
-      const rangeHeader = request.headers.get('range')
-      const rangeMatch = rangeHeader ? /bytes=(\d*)-(\d*)/.exec(rangeHeader) : null
-
-      if (rangeMatch) {
-        let start = rangeMatch[1] ? Number(rangeMatch[1]) : 0
-        let end = rangeMatch[2] ? Number(rangeMatch[2]) : fileSize - 1
-        if (!Number.isFinite(start) || start < 0) start = 0
-        if (!Number.isFinite(end) || end >= fileSize) end = fileSize - 1
-        if (!rangeMatch[1] && rangeMatch[2]) {
-          // Suffix range ("bytes=-N"): the final N bytes.
-          const suffixLength = Math.min(end, fileSize)
-          start = fileSize - suffixLength
-          end = fileSize - 1
-        }
-        if (start > end || start >= fileSize) {
-          return new Response('Range not satisfiable', {
-            status: 416,
-            headers: { 'Content-Range': `bytes */${fileSize}` }
-          })
-        }
-        const stream = Readable.toWeb(diskStream(filePath, start, end))
-        return new Response(stream, {
-          status: 206,
-          headers: {
-            ...baseHeaders,
-            'Content-Length': String(end - start + 1),
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`
-          }
-        })
-      }
-
-      const stream = Readable.toWeb(diskStream(filePath, 0, fileSize - 1))
-      return new Response(stream, {
-        status: 200,
-        headers: { ...baseHeaders, 'Content-Length': String(fileSize) }
-      })
-    } catch (err) {
-      return new Response(String(err), { status: 500 })
-    }
-  })
+  protocol.handle('media', createMediaHandler(appOrigins))
 
   registerYoutubeController()
   registerFfmpegController()

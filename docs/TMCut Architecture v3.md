@@ -8853,5 +8853,71 @@ and returned 10/12 checklist passes, gaps: no will-navigate handler
 
 Remaining audit notes NOT acted on, deliberately: perf MEDIUM for sync
 fs in main (startup-only, negligible) and webSecurity:false (needed by
-media:// + file thumbs; revisit with a proper protocol, tracked as R126
-candidate).
+media:// + file thumbs at the time; SUPERSEDED — closed by R126/§190
+below with origin-scoped CORS on the media protocol).
+
+---
+
+# 190. R126 — webSecurity is back on; media:// gets origin-scoped CORS
+
+The main window ran with webSecurity:false for a long time (the audit
+flagged it CRITICAL). The only real consumer was local media loading:
+media tags through media://, the waveform fetch(), and — on web only —
+the canvas thumbnail readback (blob: URLs, same-origin, untouched). No
+code path actually used file:// URLs in the renderer (toFileURL was
+dead), so flipping the flag only had to make the media protocol
+well-behaved cross-origin.
+
+## 190.1 electron/media-protocol.cjs — the protocol moves out of main.cjs
+
+- mediaSchemePrivileges() (same flags as before: standard/secure/
+  supportFetchAPI/bypassCSP/stream/corsEnabled) and
+  createMediaHandler(getAllowedOrigins).
+- New: CORS. A request carrying an Origin that is the app origin (dev
+  localhost:3000, prod loopback :PORT) gets Access-Control-Allow-Origin
+  echoed back + Vary: Origin + Access-Control-Allow-Headers: Range (the
+  preflight), and OPTIONS answers 204. ANY other origin (a remote page
+  an OAuth popup loaded, a future embedded webview, …) gets NO ACAO —
+  so while webSecurity was off such a page could have fetched arbitrary
+  local files through media://, now it cannot. Media tags need no CORS
+  and keep working regardless, which is why playback does not depend on
+  the fetch path at all.
+- Range/206/suffix/416, Content-Type table, stream error containment:
+  moved verbatim.
+
+## 190.2 webSecurity flip
+
+- Main window + both window-open branches (OAuth popup, internal
+  popup) now use the defaults: contextIsolation true,
+  nodeIntegration false, webSecurity no longer overridden (i.e. true).
+
+## 190.3 Proofs (two layers, because "trust me" is not a gate)
+
+1. tests/unit/tmcut_media_protocol.spec.ts (new, 7 checkpoints) —
+   drives the REAL module with Node web Request/Response: 200 content
+   type, 206 slice + Content-Range, suffix range, 416 guard, CORS echo
+   for the app origin, NO ACAO for a remote origin, OPTIONS preflight,
+   404 on missing file. 24/24 unit specs pass.
+2. tests/e2e/electron_media_probe.cjs — launches the real Electron
+   binary, registers the scheme + handler, loads a page from a loopback
+   http server (same origin shape as dev/prod), and inside the page:
+   plays a real WAV through <audio> from media:// (metadata dur≈2s,
+   media clock advances past 0.28s) AND fetch()s the waveform JSON
+   through CORS — both under webSecurity:true with no-user-gesture
+   autoplay. 3/3 PROBE PASS.
+
+Run: with ELECTRON_RUN_AS_NODE unset,
+  node_modules\electron\dist\electron.exe tests/e2e/electron_media_probe.cjs
+
+## 190.4 What this closes
+
+- MCP audit finding #5 (webSecurity) — the single CRITICAL/FAIL item —
+  is fixed and runtime-proven, not just statically claimed.
+- Hardens media:// beyond the old blanket-off state: local files are
+  now only readable cross-origin by the app itself.
+- Live web harness still 12/12 (web runtime never used webSecurity at
+  all — it is an Electron-only flag); unit 24/24; lint 0; build 0.
+
+Known edge: if a future feature needs a NEW cross-origin fetch of
+media:// from a different local port, extend appOrigins() in main.cjs
+(one line) — the handler is already origin-list driven.
