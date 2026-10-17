@@ -589,6 +589,17 @@ async function analyzeAsset(filePath, kind) {
     const wave = await extractWaveform(filePath, 200)
     if (wave && wave.ok && wave.cachePath) result.waveCachePath = wave.cachePath
   }
+  // Audio-only containers mislabeled by extension (a .webm with no video
+  // stream is the common one): the declared kind is wrong, so the probe's
+  // OWN streams decide what to extract. Without this the asset gets
+  // neither a thumbnail (ffmpeg finds no frame) nor a waveform.
+  const streams = Array.isArray(result.probe?.streams) ? result.probe.streams : []
+  const probedVideo = streams.some(stream => stream?.codec_type === 'video')
+  const probedAudio = streams.some(stream => stream?.codec_type === 'audio')
+  if (!result.thumbCachePath && !result.waveCachePath && !probedVideo && probedAudio) {
+    const wave = await extractWaveform(filePath, 200)
+    if (wave && wave.ok && wave.cachePath) result.waveCachePath = wave.cachePath
+  }
   return result
 }
 

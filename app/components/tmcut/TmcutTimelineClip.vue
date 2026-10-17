@@ -19,7 +19,7 @@ const props = withDefaults(defineProps<{
 })
 
 const { t } = useI18n()
-const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition } = useTmcutProject()
+const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
@@ -216,15 +216,18 @@ function onDragStart(e: MouseEvent) {
     const deltaTicks = pxToTicks(deltaX)
     const newOffset = applySnapTicks(Math.max(0, initialOffset + deltaTicks))
     const moved = newOffset - initialOffset
-    updateClip(props.clip.id, { offset: newOffset })
+    // R122: no localStorage write per frame — that is what made dragging
+    // lag. Persist once on mouseup.
+    updateClip(props.clip.id, { offset: newOffset }, false)
     for (const [id, base] of Object.entries(relatives)) {
-      updateClip(id, { offset: Math.max(0, base + moved) })
+      updateClip(id, { offset: Math.max(0, base + moved) }, false)
     }
   }
 
   function onMouseUp() {
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
+    saveProject()
   }
 
   window.addEventListener('mousemove', onMouseMove)
@@ -234,6 +237,7 @@ function onDragStart(e: MouseEvent) {
 // Left handle: trim 'in' point & offset
 function onTrimLeftStart(e: MouseEvent) {
   e.stopPropagation()
+  e.preventDefault()
   selectClip(props.clip.id)
   if (props.locked) return
   pushHistory()
@@ -246,31 +250,30 @@ function onTrimLeftStart(e: MouseEvent) {
   function onMouseMove(moveEvent: MouseEvent) {
     const deltaX = moveEvent.clientX - startX
     const deltaTicks = pxToTicks(deltaX)
-    const deltaSourceTicks = deltaTicks * speed
 
-    let newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, initialIn + deltaSourceTicks))
-    const actualDeltaIn = newIn - initialIn
-    let newOffset = Math.max(0, Math.round(initialOffset + actualDeltaIn / speed))
+    // Sliding trim: the left edge ALWAYS follows the pointer. While the
+    // source in-point has room it is consumed first (normal trim); once
+    // `in` is clamped at 0 the remainder slides the whole clip left
+    // (CapCut behavior). The old math derived the offset from the
+    // (clamped) in-delta, so dragging left from in=0 did nothing —
+    // that was the "sometimes left trim doesn't work" report.
+    let newOffset = Math.max(0, initialOffset + deltaTicks)
     if (snapOn.value) {
-      // Snap the moving left edge (timeline start), then derive the new
-      // source in-point; the clamp keeps the trim inside the source.
       newOffset = applySnapTicks(newOffset)
-      newIn = Math.round(initialIn + (newOffset - initialOffset) * speed)
-      if (newIn < 0 || newIn > props.clip.out - MIN_SOURCE_TICKS) {
-        newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, newIn))
-        newOffset = Math.max(0, Math.round(initialOffset + (newIn - initialIn) / speed))
-      }
     }
+    let newIn = Math.round(initialIn + (newOffset - initialOffset) * speed)
+    newIn = Math.max(0, Math.min(props.clip.out - MIN_SOURCE_TICKS, newIn))
 
     updateClip(props.clip.id, {
       in: Math.round(newIn),
       offset: newOffset
-    })
+    }, false)
   }
 
   function onMouseUp() {
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
+    saveProject()
   }
 
   window.addEventListener('mousemove', onMouseMove)
@@ -280,6 +283,7 @@ function onTrimLeftStart(e: MouseEvent) {
 // Right handle: trim 'out' point
 function onTrimRightStart(e: MouseEvent) {
   e.stopPropagation()
+  e.preventDefault()
   selectClip(props.clip.id)
   if (props.locked) return
   pushHistory()
@@ -305,12 +309,13 @@ function onTrimRightStart(e: MouseEvent) {
     }
     updateClip(props.clip.id, {
       out: Math.round(newOut)
-    })
+    }, false)
   }
 
   function onMouseUp() {
     window.removeEventListener('mousemove', onMouseMove)
     window.removeEventListener('mouseup', onMouseUp)
+    saveProject()
   }
 
   window.addEventListener('mousemove', onMouseMove)
@@ -435,10 +440,13 @@ onUnmounted(() => {
     @mousedown="onDragStart"
     @contextmenu="onClipContextMenu"
   >
-    <!-- Left Trim Handle -->
+    <!-- Left Trim Handle (z-20: must win over the right handle when a
+         narrow clip's handles overlap — that overlap is what made left
+         trimming "sometimes not work". Visible whenever selected so the
+         user can always find it, hover otherwise.) -->
     <div
-      class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-      :class="trackStyles.handle"
+      class="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 flex items-center justify-center transition-opacity z-20"
+      :class="[trackStyles.handle, isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100']"
       @mousedown="onTrimLeftStart"
     >
       <div class="w-0.5 h-3 bg-black/60 rounded" />
@@ -500,10 +508,11 @@ onUnmounted(() => {
       :style="{ left: `calc(${pct}% - 3px)` }"
     />
 
-    <!-- Right Trim Handle -->
+    <!-- Right Trim Handle (z-10: intentionally below the left handle so
+         the left edge stays grabbable on narrow clips.) -->
     <div
-      class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-      :class="trackStyles.handle"
+      class="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 flex items-center justify-center transition-opacity z-10"
+      :class="[trackStyles.handle, isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100']"
       @mousedown="onTrimRightStart"
     >
       <div class="w-0.5 h-3 bg-black/60 rounded" />

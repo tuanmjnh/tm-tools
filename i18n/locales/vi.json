@@ -386,7 +386,10 @@
       "addVideoTrack": "Thêm track Video",
       "addTextTrack": "Thêm track Text",
       "addAudioTrack": "Thêm track Audio",
-      "removeTrack": "Xóa track (kèm clip)"
+      "removeTrack": "Xóa track (kèm clip)",
+      "order": "Thứ tự chồng lớp",
+      "moveUp": "Đưa lên trên (hiển thị đè)",
+      "moveDown": "Đưa xuống dưới"
     },
     "details": {
       "name": "Tên",
@@ -736,6 +739,7 @@
       "audioMp3Spec": "MP3 · {kbps} kbps · 48 kHz",
       "audioWavSpec": "WAV · PCM 16-bit · 48 kHz",
       "gifNote": "15 fps · tối đa 1280 px · bảng màu tối ưu",
+      "parallelTracksWarning": "Project này có nhiều track video/text song song. Hiện bộ xuất mới render track đầu tiên mỗi loại — các lớp phía trên chỉ xem được ở preview, sẽ không có trong file.",
       "etaLabel": "Còn lại",
       "labelSize": "Dung lượng",
       "formatLabel": "Định dạng & Bộ giải mã (Codec)",
@@ -883,7 +887,10 @@
       "image": "Hình ảnh",
       "desktopOnly": "Nhập media cần chạy trên app desktop (Electron)",
       "analysisFailed": "Phân tích media thất bại",
-      "clips": "Clip trong project"
+      "clips": "Clip trong project",
+      "assets": "Tài nguyên",
+      "viewGrid": "Chế độ lưới",
+      "viewList": "Chế độ danh sách"
     },
     "workspace": {
       "shortcutsBtn": "Phím tắt",

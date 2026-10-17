@@ -45,6 +45,9 @@ export interface TmcutAssetMeta {
   fileSize: number
   mtimeMs: number
   probedAt: string | null
+  /** True when the container reports at least one video stream (width > 0).
+   *  False for audio-only containers mislabeled as video (e.g. WebM-audio). */
+  hasVideo?: boolean
 }
 
 export interface TmcutAsset {

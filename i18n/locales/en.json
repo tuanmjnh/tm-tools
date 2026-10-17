@@ -386,7 +386,10 @@
       "addVideoTrack": "Add Video track",
       "addTextTrack": "Add Text track",
       "addAudioTrack": "Add Audio track",
-      "removeTrack": "Remove track (with its clips)"
+      "removeTrack": "Remove track (with its clips)",
+      "order": "Stacking order",
+      "moveUp": "Move up (render above)",
+      "moveDown": "Move down (render below)"
     },
     "details": {
       "name": "Name",
@@ -736,6 +739,7 @@
       "audioMp3Spec": "MP3 · {kbps} kbps · 48 kHz",
       "audioWavSpec": "WAV · PCM 16-bit · 48 kHz",
       "gifNote": "15 fps · up to 1280 px wide · optimized palette",
+      "parallelTracksWarning": "This project uses parallel video/text tracks. The exporter currently renders only the first track of each type — upper layers are preview-only and will be missing from the file.",
       "etaLabel": "ETA",
       "labelSize": "Size",
       "formatLabel": "Format & Codec",
@@ -883,7 +887,10 @@
       "image": "Image",
       "desktopOnly": "Importing media requires the desktop (Electron) app",
       "analysisFailed": "Media analysis failed",
-      "clips": "Clips in project"
+      "clips": "Clips in project",
+      "assets": "Assets",
+      "viewGrid": "Grid view",
+      "viewList": "List view"
     },
     "workspace": {
       "shortcutsBtn": "Shortcuts",

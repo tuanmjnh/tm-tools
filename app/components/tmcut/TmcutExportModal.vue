@@ -357,6 +357,29 @@ const posterUrl = computed(() => {
   return asset?.thumbPath ? mediaUrl(asset.thumbPath) : ''
 })
 
+// Honest warning for the parallel-track gap (R122): the preview scans
+// every video/text track, but compileTimelineToFfmpeg still takes only
+// the FIRST of each. Whenever a SECOND track of a rendered type carries
+// clips, the exported file will not match the preview — warn instead of
+// surprising the user with missing layers.
+const parallelTracksWarning = computed(() => {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return false
+  let seenVideo = false
+  let seenText = false
+  for (const track of tracks) {
+    if ((track.items || []).length === 0) continue
+    if (track.type === 'video') {
+      if (seenVideo) return true
+      seenVideo = true
+    } else if (track.type === 'text') {
+      if (seenText) return true
+      seenText = true
+    }
+  }
+  return false
+})
+
 const formatOptions = computed(() => [
   { value: 'mp4-h264', label: t('tmcut.export.formatMp4H264') },
   { value: 'mp4-h265', label: t('tmcut.export.formatMp4H265') },
@@ -1217,6 +1240,20 @@ function previewResultDirectly() {
               </span>
             </label>
           </div>
+        </div>
+
+        <!-- Multi-track honesty banner (R122): the ffmpeg compiler
+             consumes the FIRST video/text track only, so parallel tracks
+             preview but are not exported yet. Say so instead of shipping
+             a silent surprise file. -->
+        <div
+          v-if="parallelTracksWarning"
+          class="mx-5 mb-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-2 shrink-0"
+        >
+          <UIcon name="i-lucide-alert-triangle" class="size-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <p class="text-[11px] text-amber-200 leading-snug">
+            {{ t('tmcut.export.parallelTracksWarning') }}
+          </p>
         </div>
 
         <!-- FOOTER: status/estimate + actions -->

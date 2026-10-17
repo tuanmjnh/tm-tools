@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import type { TmcutAsset, TmcutAssetKind, TmcutMediaFolder } from '~/types/tmcut'
 import { createEmptyTmcutAssetMeta } from '~/types/tmcut'
+import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
 import {
   classifyAssetKind,
   mediaFileName,
@@ -284,13 +285,21 @@ export function useTmcutMedia() {
           asset.meta.width = meta.width
           asset.meta.height = meta.height
           asset.meta.fps = meta.fps
+          // WebM audio-only (audio stream, no video stream) is the
+          // container that trips up the `kind === 'video'` guess. Record
+          // whether a video stream was actually found so routing to the
+          // audio track is unambiguous.
+          asset.meta.hasVideo = meta.width > 0
         }
 
         if (asset.kind === 'video' && result.thumbCachePath) {
           asset.thumbPath = result.thumbCachePath
           asset.filmstripPath = result.filmstripCachePath || null
         }
-        if (asset.kind === 'audio' && result.waveCachePath) {
+        // Waveform is kept for anything that carries audio: an
+        // audio-only container arriving as `kind: 'video'` still gets its
+        // strip (the controller extracts it from the probe, see R122).
+        if (result.waveCachePath) {
           asset.waveformPath = result.waveCachePath
         }
       }
@@ -590,15 +599,18 @@ export function useTmcutMedia() {
     if (!asset.usedBy.includes(project.id)) {
       asset.usedBy.push(project.id)
     }
+    // Audio-only containers (WebM without a video stream) must not land
+    // on a video track — see effectiveAssetKind for the rule.
+    const kind = effectiveAssetKind(asset)
     let duration: number
-    if (asset.kind === 'image') {
+    if (kind === 'image') {
       duration = 5
     } else if (asset.meta.durationSec > 0) {
       duration = asset.meta.durationSec
     } else {
-      duration = asset.kind === 'audio' ? 5 : 10
+      duration = kind === 'audio' ? 5 : 10
     }
-    const trackType = asset.kind === 'audio' ? 'audio' : 'video'
+    const trackType = kind === 'audio' ? 'audio' : 'video'
     const clip = addClipToTrack(trackType, {
       name: asset.name,
       src: asset.path,

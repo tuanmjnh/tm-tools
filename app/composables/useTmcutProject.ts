@@ -831,14 +831,17 @@ function closeProjectGaps(): number {
   return Math.round((applyV3Edit(v3 => closeGaps(v3)) ?? 0) * TICKS_PER_SECOND)
 }
 
-// Update clip
-function updateClip(clipId: string, patch: Partial<TmcutTimelineItem>) {
+// Update clip. `persist` is false during live drag/trim handlers:
+// writing localStorage on every mousemove frame is what made dragging
+// feel laggy (R122). The handlers mutate the reactive store for instant
+// visual feedback and persist once on mouseup.
+function updateClip(clipId: string, patch: Partial<TmcutTimelineItem>, persist = true) {
   if (!currentProject.value?.timeline?.tracks) return
   for (const track of currentProject.value.timeline.tracks) {
     const idx = track.items?.findIndex(i => i.id === clipId)
     if (idx !== undefined && idx !== -1) {
       track.items[idx] = { ...track.items[idx]!, ...patch }
-      saveProject()
+      if (persist) saveProject()
       return
     }
   }
@@ -1482,6 +1485,26 @@ function toggleTrackHidden(trackId: string) {
   updateTrack(trackId, { hidden: !track.hidden })
 }
 
+// Track z-order (layering groundwork, R122): the store array IS the
+// stacking order — index 0 is the top row AND the topmost rendered layer
+// (the preview takes the first matching video track, text overlays draw
+// over video). "Up" therefore means a smaller index. Done on the store
+// array directly (core ops key by id and never reorder); history
+// snapshots the whole project, so undo restores the previous stacking.
+function moveTrackInProject(trackId: string, direction: 'up' | 'down'): boolean {
+  const tracks = currentProject.value?.timeline?.tracks
+  if (!tracks) return false
+  const from = tracks.findIndex(t => t.id === trackId)
+  if (from === -1) return false
+  const to = direction === 'up' ? from - 1 : from + 1
+  if (to < 0 || to >= tracks.length) return false
+  pushHistory()
+  const [track] = tracks.splice(from, 1)
+  tracks.splice(to, 0, track!)
+  saveProject()
+  return true
+}
+
 // Track add/remove (Roadmap A5): routed through applyV3Edit so history,
 // undo and autosave see the change; syncTicksResult keeps the store track
 // list in step (creates on add, prunes on remove).
@@ -1648,6 +1671,7 @@ export function useTmcutProject() {
     toggleTrackLock,
     toggleTrackHidden,
     addTrackToProject,
+    moveTrackInProject,
     removeTrackFromProject,
     updateClipsSrc,
     trimSelectedEdgeAt,

@@ -1132,92 +1132,101 @@ onUnmounted(() => {
         >
           {{ t('tmcut.player.engineBadge') }}
         </span>
-        <span
-          v-if="isCurrentClipProxy"
-          class="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-medium shrink-0 flex items-center gap-1"
-          :title="t('tmcut.proxy.activeDesc')"
-        >
-          <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
-          <span>{{ t('tmcut.proxy.active') }}</span>
-        </span>
-        <span
-          v-if="isCurrentClipStabilized"
-          class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium shrink-0 flex items-center gap-1"
-          :title="t('tmcut.stabilize.activeDesc')"
-        >
-          <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
-          <span>{{ t('tmcut.stabilize.badge') }}</span>
-        </span>
       </div>
-      <div class="flex items-center gap-1.5 shrink-0">
-        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
-        <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
-          <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
-          <select
-            v-model="previewQuality"
-            class="bg-transparent text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
-            :title="t('tmcut.player.quality')"
+      <div class="flex items-center gap-2 shrink-0">
+        <!-- Proxy / Stabilize labels (two-line stacked) -->
+        <div
+          v-if="isCurrentClipProxy || isCurrentClipStabilized"
+          class="flex flex-col items-end gap-0.5 text-[10px] leading-none shrink-0"
+        >
+          <span
+            v-if="isCurrentClipProxy"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium"
+            :title="t('tmcut.proxy.activeDesc')"
           >
-            <option value="full">
-              {{ t('tmcut.player.qualityFull') }}
-            </option>
-            <option value="half">
-              {{ t('tmcut.player.qualityHalf') }}
-            </option>
-            <option value="quarter">
-              {{ t('tmcut.player.qualityQuarter') }}
-            </option>
-            <option value="proxy">
-              {{ t('tmcut.player.qualityProxy') }}
-            </option>
-          </select>
+            <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
+            {{ t('tmcut.proxy.active') }}
+          </span>
+          <span
+            v-if="isCurrentClipStabilized"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium"
+            :title="t('tmcut.stabilize.activeDesc')"
+          >
+            <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
+            {{ t('tmcut.stabilize.badge') }}
+          </span>
         </div>
-        <UButton
-          v-if="activeVideoClip"
-          icon="i-lucide-crop"
-          size="xs"
-          variant="soft"
-          :color="isCropActive ? 'primary' : 'neutral'"
-          :title="t('tmcut.crop.tool')"
-          @click="triggerCropTool"
-        />
-        <UButton
-          v-if="previewEngine.capabilities.proxyPreview"
-          :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
-          size="xs"
-          variant="soft"
-          :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
-          :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
-          @click="proxyPreview = !proxyPreview"
-        />
-        <UButton
-          v-for="toggle in overlayToggles"
-          :key="toggle.key"
-          :icon="toggle.icon"
-          size="xs"
-          variant="soft"
-          :color="toggle.active ? 'primary' : 'neutral'"
-          :title="toggle.label"
-          @click="toggle.onSelect()"
-        />
-        <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
+        <!-- Actions row -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
+          <div class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
+            <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
+            <select
+              v-model="previewQuality"
+              class="bg-transparent text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
+              :title="t('tmcut.player.quality')"
+            >
+              <option value="full">
+                {{ t('tmcut.player.qualityFull') }}
+              </option>
+              <option value="half">
+                {{ t('tmcut.player.qualityHalf') }}
+              </option>
+              <option value="quarter">
+                {{ t('tmcut.player.qualityQuarter') }}
+              </option>
+              <option value="proxy">
+                {{ t('tmcut.player.qualityProxy') }}
+              </option>
+            </select>
+          </div>
           <UButton
-            icon="i-lucide-zoom-in"
+            v-if="activeVideoClip"
+            icon="i-lucide-crop"
             size="xs"
             variant="soft"
-            :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
-            :title="t('tmcut.player.zoom')"
+            :color="isCropActive ? 'primary' : 'neutral'"
+            :title="t('tmcut.crop.tool')"
+            @click="triggerCropTool"
           />
-        </UDropdownMenu>
-        <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
           <UButton
-            icon="i-lucide-rectangle-horizontal"
+            v-if="previewEngine.capabilities.proxyPreview"
+            :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
             size="xs"
             variant="soft"
-            :color="ratioGuideId ? 'primary' : 'neutral'"
-            :title="t('tmcut.safeArea.ratioGuide')"
+            :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+            :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
+            @click="proxyPreview = !proxyPreview"
           />
-        </UDropdownMenu>
+          <UButton
+            v-for="toggle in overlayToggles"
+            :key="toggle.key"
+            :icon="toggle.icon"
+            size="xs"
+            variant="soft"
+            :color="toggle.active ? 'primary' : 'neutral'"
+            :title="toggle.label"
+            @click="toggle.onSelect()"
+          />
+          <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-zoom-in"
+              size="xs"
+              variant="soft"
+              :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
+              :title="t('tmcut.player.zoom')"
+            />
+          </UDropdownMenu>
+          <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-rectangle-horizontal"
+              size="xs"
+              variant="soft"
+              :color="ratioGuideId ? 'primary' : 'neutral'"
+              :title="t('tmcut.safeArea.ratioGuide')"
+            />
+          </UDropdownMenu>
+        </div>
         <UButton
           v-if="canExtractFrames && activeVideoClip"
           :icon="snapshotBusy ? 'i-lucide-loader-circle' : 'i-lucide-camera'"

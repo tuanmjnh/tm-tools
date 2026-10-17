@@ -29,6 +29,7 @@ const {
   toggleTrackLock,
   toggleTrackHidden,
   addTrackToProject,
+  moveTrackInProject,
   removeTrackFromProject,
   clipboard,
   rippleMode,
@@ -1209,6 +1210,25 @@ onUnmounted(() => {
               <span class="truncate">{{ track.name || track.type }}</span>
             </div>
             <div class="flex items-center shrink-0">
+              <!-- Stacking order (layer groundwork, R122): the preview
+                   takes the TOPMOST video track, so "up" = render above.
+                   A dropdown instead of two buttons keeps the 176px
+                   header row from overflowing. -->
+              <UDropdownMenu
+                :items="[[
+                  { label: t('tmcut.tracks.moveUp'), icon: 'i-lucide-arrow-up-to-line', onSelect: () => moveTrackInProject(track.id, 'up') },
+                  { label: t('tmcut.tracks.moveDown'), icon: 'i-lucide-arrow-down-to-line', onSelect: () => moveTrackInProject(track.id, 'down') }
+                ]]"
+                :content="{ align: 'end' }"
+              >
+                <UButton
+                  icon="i-lucide-layers"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  :title="t('tmcut.tracks.order')"
+                />
+              </UDropdownMenu>
               <UButton
                 :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
                 size="xs"

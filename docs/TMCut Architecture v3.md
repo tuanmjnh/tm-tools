@@ -8536,3 +8536,78 @@ Grepped every `hover:` / `group-hover:` scale / display / padding pattern:
 Deliberately kept: **tiny icons inside fixed containers** (star toggle hover:scale-110 on a 16px icon, avatar pencil, color dots in system settings, timeline color dots, icon-selector glyph). These transform inside a fixed-size box, overlap nothing, and are standard micro-feedback — no row or card grows.
 
 Gates: runner 23/23, lint 0, typecheck 0, build 0.
+
+# 186. R122 — Trim stability, HUD label/action rows, media-bin views, audio-only containers, parallel tracks
+
+User report set: left/right trim "sometimes works, sometimes not" and "dragging right is laggy"; the PROXY
+badge is covered in the preview HUD; the media bin needs grid/list views with smaller actions; a WebM that
+holds only audio cannot be dropped on an audio track; and the CapCut ask — several video/text tracks in
+parallel plus layering.
+
+## 186.1 Timeline trim / drag stability (TmcutTimelineClip)
+
+Three separate causes, three fixes:
+
+- **Left trim derived its offset from a clamped in-point.** Trimming left from `in = 0` produced a zero
+  delta, so the clip refused to move — "sometimes not work". The handle now does a CapCut-style SLIDING
+  trim: the left edge always follows the pointer (`newOffset = max(0, initialOffset + deltaTicks)`,
+  snapped), and the in-point follows it independently
+  (`newIn = clamp(initialIn + (newOffset - initialOffset) * speed, 0, out - MIN_SOURCE_TICKS)`). The edge
+  never stalls, the source range never goes negative.
+- **Per-frame persistence.** Every mousemove used to call `saveProject()` — a synchronous localStorage
+  write per frame, which is the "lag when dragging right". `updateClip(clipId, patch, persist = true)`
+  gained the third argument: gestures pass `false` while the pointer is down and flush ONCE in
+  `onMouseUp`. Drag, left trim and right trim all follow that shape.
+- **Handle hit-area fight.** On narrow clips the two 24px handles overlapped and the right one swallowed
+  the left's presses. Left handle is `w-3 z-20`, right `w-3 z-10`, both call `preventDefault` +
+  `stopPropagation`, and both stay visible when the clip is selected (hover-only otherwise), so the grab
+  target is always findable.
+
+## 186.2 Preview HUD: label row vs action row
+
+The proxy/stabilized pills used to sit in the same inline row as the canvas metadata and were pushed out
+of the visible area. The HUD header is now two blocks: left = status dot + canvas WxH + aspect + FPS +
+engine badge; right = a fixed two-line stacked column (`flex-col items-end`, amber PROXY above emerald
+STAB); actions (quality, crop, proxy toggle, overlays, zoom, ratio, snapshot, fullscreen) live in their
+own row underneath. Nothing overlaps at 1280px anymore.
+
+## 186.3 Media bin: grid is the default view, list is the data view
+
+- `mediaView: 'grid' | 'list'` (default **grid**, per the user's priority), toggled by an `i-lucide-list` /
+  `i-lucide-grid-2x2` pair rendered OUTSIDE the scroll container (it used to scroll away with the list) and
+  only for the asset tabs, where the toggle means something.
+- Grid: 2 columns at the panel's 360-560px width (3 made every filename unreadable), 16:9 thumbnail,
+  duration / ADDED / PXY badges, footer name + meta. Hover actions are a bottom-anchored strip over the
+  thumbnail — opacity only, geometry fixed, matching the §185 hover rule; the veil is `pointer-events-none`
+  and only the buttons re-enable pointer events.
+- List keeps the R121 horizontal card (actions already in the right column).
+- Every action button is `size="xs"` — there is no `2xs` size in Nuxt UI, the earlier guess rendered nothing.
+
+## 186.4 Audio-only containers (WebM without a video stream)
+
+`analyzeAsset` now records `meta.hasVideo` (probe found a video stream or not). A single helper,
+`effectiveAssetKind(asset)` in `app/utils/tmcut/assetKind.ts`, is the only place that decides:
+`kind === 'video' && meta.hasVideo === false` → `audio`. Only a POSITIVE probe finding flips the kind — an
+unprobed asset keeps its declared kind, so a normal video is never demoted. Everything asks the same
+question: bin kind tabs, card icon, meta label, waveform preload, proxy button, `unproxiedVideos`, the drag
+payload, and `addAssetToTimeline` routing (the drop then targets an audio track, auto-created when absent).
+The Electron `analyzeAsset` also falls back to a waveform extraction when the probe shows audio-only
+streams, so those assets get real art in the bin instead of a placeholder.
+
+## 186.5 Parallel tracks and stacking order
+
+Preview was scanning `tracks.find(type === 'video')` / `find(type === 'text')` — with two video tracks the
+second one was invisible in the player even though the timeline showed it. `activeVideoClip` now picks the
+TOP row among visible video tracks (the store array order IS the stacking order, index 0 = top row = topmost
+layer) and `activeTextClips` collects from EVERY visible text track, so captions and watermarks on separate
+tracks overlay together.
+
+`moveTrackInProject(trackId, 'up' | 'down')` reorders the store array (splices, `pushHistory`, one save) and
+is exposed per track through a `i-lucide-layers` dropdown next to eye/lock/mute. Core stays untouched: its
+ops key by id and never reorder, and the app-level history snapshot restores stacking on undo.
+
+Honesty note: `compileTimelineToFfmpeg` still consumes the FIRST video/text track. Until multi-track
+compositing lands, the export modal shows an amber banner (`tmcut.export.parallelTracksWarning`) whenever a
+second track of a rendered type carries clips, so upper layers are never silently dropped from a file.
+
+Gates: runner 23/23, lint 0, typecheck 0, build 0, i18n parity 2845/2845.

@@ -93,40 +93,48 @@ export function useTmcutPlayback() {
     return null
   })
 
-  // Active video clip at current playhead
+  // Active video clip at current playhead. With parallel video tracks
+  // (CapCut-style layering) the TOP track wins: the header/track rows
+  // render the store array in order, so index 0 IS the top row and also
+  // the topmost rendered layer.
   const activeVideoClip = computed(() => {
     if (!currentProject.value?.timeline?.tracks) return null
-    const videoTrack = currentProject.value.timeline.tracks.find(t => t.type === 'video')
-    if (!videoTrack) return null
-
     const crossfade = transitionCrossfade.value
-    for (const clip of videoTrack.items || []) {
-      // Inside a transition window the OUTGOING clip owns the second
-      // layer — the main element always renders the INCOMING clip.
-      if (crossfade && clip.id === crossfade.outgoing.id) continue
-      const clipStart = clipStartSec(clip)
-      const clipEnd = clipEndSec(clip)
-      if (playhead.value >= clipStart && playhead.value < clipEnd) {
-        return {
-          clip,
-          mediaCurrentTime: mediaTimeAt(clip, playhead.value)
+    const videoTracks = currentProject.value.timeline.tracks.filter(t => t.type === 'video')
+    for (const videoTrack of videoTracks) {
+      if (videoTrack.hidden) continue
+      for (const clip of videoTrack.items || []) {
+        // Inside a transition window the OUTGOING clip owns the second
+        // layer — the main element always renders the INCOMING clip.
+        if (crossfade && clip.id === crossfade.outgoing.id) continue
+        const clipStart = clipStartSec(clip)
+        const clipEnd = clipEndSec(clip)
+        if (playhead.value >= clipStart && playhead.value < clipEnd) {
+          return {
+            clip,
+            mediaCurrentTime: mediaTimeAt(clip, playhead.value)
+          }
         }
       }
     }
     return null
   })
 
-  // Active text overlays at current playhead
+  // Active text overlays at current playhead — across EVERY text track,
+  // so parallel caption/watermark tracks all render (R122).
   const activeTextClips = computed(() => {
-    if (!currentProject.value?.timeline?.tracks) return []
-    const textTrack = currentProject.value.timeline.tracks.find(t => t.type === 'text')
-    if (!textTrack) return []
-
-    return textTrack.items.filter((clip) => {
-      const clipStart = clipStartSec(clip)
-      const clipEnd = clipEndSec(clip)
-      return playhead.value >= clipStart && playhead.value <= clipEnd
-    })
+    const tracks = currentProject.value?.timeline?.tracks
+    if (!tracks) return []
+    const out: TmcutTimelineItem[] = []
+    for (const track of tracks) {
+      if (track.type !== 'text' || track.hidden) continue
+      for (const clip of track.items || []) {
+        const clipStart = clipStartSec(clip)
+        const clipEnd = clipEndSec(clip)
+        if (playhead.value >= clipStart && playhead.value <= clipEnd) out.push(clip)
+      }
+    }
+    return out
   })
 
   // Seek playhead to specific time in seconds
