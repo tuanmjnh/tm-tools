@@ -13,6 +13,12 @@ import {
   TICKS_PER_SECOND
 } from '@tmcut-core'
 import { normalizeCanvas, canvasFpsValue } from '~/utils/tmcut/canvas'
+import {
+  buildTemplateFile,
+  safeTemplateFileName,
+  parseTemplateFile,
+  MAX_IMPORT_BATCH
+} from '~/utils/tmcut/templateIo'
 
 // C16-R3: the storage key is the version stamp (same lesson as the
 // project schema — NEVER guess units from magnitudes). v1 payloads carry
@@ -222,6 +228,116 @@ export function useTmcutTemplates() {
     return false
   }
 
+  // ==========================================================================
+  // R131 — Template file exchange (docs §195): the library lives in this
+  // install's localStorage, so a JSON file is the only honest way to move a
+  // template between machines. Desktop path: native save/open dialogs +
+  // file-manager IPC. Web path (dev in a browser): Blob download + <input
+  // type=file>. Import always runs through parseTemplateFile (untrusted
+  // input: garbage is refused, ids regenerated, isBuiltin forced false).
+  // ==========================================================================
+
+  function isDesktop(): boolean {
+    return typeof window !== 'undefined' && !!window.electronAPI?.dialog && !!window.electronAPI?.fileManager
+  }
+
+  /** Web fallback: trigger a browser download of the file body. */
+  function downloadJsonFallback(fileName: string, text: string): void {
+    const blob = new Blob([text], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Revoke on the next tick so the download has taken the blob.
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  /**
+   * Export one template to a .tmcut-template.json file.
+   * Desktop: native Save dialog (user chooses the path — the renderer never
+   * writes to a path it invented). Web: browser download.
+   */
+  async function exportTemplate(template: TmcutTemplate): Promise<{ ok: boolean, path?: string, canceled?: boolean }> {
+    const text = buildTemplateFile(template)
+    const fileName = safeTemplateFileName(template)
+    const api = isDesktop() ? window.electronAPI : null
+    if (api?.dialog && api.fileManager) {
+      const target = await api.dialog.saveFile({
+        title: 'Export template',
+        defaultPath: fileName,
+        filters: [{ name: 'TMCut template', extensions: ['json'] }]
+      })
+      if (!target) return { ok: false, canceled: true }
+      await api.fileManager.write({ filePath: target, data: text })
+      return { ok: true, path: target }
+    }
+    downloadJsonFallback(fileName, text)
+    return { ok: true, path: fileName }
+  }
+
+  /**
+   * Import one or more template files (batch via the open dialog).
+   * Every file is parsed independently; the returned counts are the truth —
+   * failed files are skipped, never silently "repaired".
+   */
+  async function importTemplates(): Promise<{ imported: TmcutTemplate[], failed: number, canceled?: boolean }> {
+    const api = isDesktop() ? window.electronAPI : null
+    const dialog = api?.dialog
+    const fileManager = api?.fileManager
+    let texts: string[]
+    if (dialog && fileManager) {
+      const paths = await dialog.openFile({
+        title: 'Import template',
+        multiSelections: true,
+        filters: [{ name: 'TMCut template / JSON', extensions: ['json'] }]
+      })
+      if (!paths || paths.length === 0) return { imported: [], failed: 0, canceled: true }
+      texts = await Promise.all(
+        paths.slice(0, MAX_IMPORT_BATCH).map(p => fileManager.read(p))
+      )
+    } else {
+      texts = await pickFilesInBrowser()
+      if (texts.length === 0) return { imported: [], failed: 0, canceled: true }
+    }
+    const imported: TmcutTemplate[] = []
+    let failed = 0
+    for (const text of texts) {
+      const res = parseTemplateFile(text)
+      if (res.ok && res.template) imported.push(res.template)
+      else failed += 1
+    }
+    if (imported.length > 0) {
+      userTemplates.value = [...imported, ...userTemplates.value]
+      persistUserTemplates()
+    }
+    return { imported, failed }
+  }
+
+  /** Web fallback for import: a native file picker driven from JS. */
+  function pickFilesInBrowser(): Promise<string[]> {
+    return new Promise((resolve) => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'application/json,.json'
+      input.multiple = true
+      input.onchange = () => {
+        const files = Array.from(input.files || []).slice(0, MAX_IMPORT_BATCH)
+        if (files.length === 0) {
+          resolve([])
+          return
+        }
+        Promise.all(files.map(f => f.text())).then(resolve).catch(() => resolve([]))
+      }
+      // Browsers fire no event when the dialog is dismissed with Cancel in
+      // some engines; modern Chrome/Safari support 'cancel'.
+      input.oncancel = () => resolve([])
+      input.click()
+    })
+  }
+
   return {
     allTemplates,
     userTemplates,
@@ -233,6 +349,8 @@ export function useTmcutTemplates() {
     createProjectFromTemplate,
     saveCurrentProjectAsTemplate,
     deleteUserTemplate,
+    exportTemplate,
+    importTemplates,
     ticksToSeconds: (ticks: number) => (ticks / TICKS_PER_SECOND).toFixed(1)
   }
 }

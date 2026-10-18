@@ -9240,3 +9240,47 @@ saved env is the panel's picture.
 - core 217/217 (analysis 15 incl. 4 blend cases), unit 26/26 (new
   tmcut_ai_tasks 10 checks), gateway 36/36, nuxt typecheck 0, lint 0,
   build 0, i18n 2964/2964.
+
+## 195. R131 — Template file exchange (export/import .tmcut-template.json)
+
+The template library (R130 state) lives in localStorage, so templates were
+locked to one install. R131 adds the honest answer to "where do templates
+come from / can I reuse them": 6 builtins + Save-as-template from the
+editor, now exportable/importable as a versioned JSON file.
+
+### 195.1 Pure module (`app/utils/tmcut/templateIo.ts`)
+
+- Envelope `{kind:'tmcut-template', version:1, exportedAt, template}` —
+  `buildTemplateFile` / `parseTemplateFile` round-trip it; a bare template
+  object (hand-written / copied JSON) is also accepted.
+- Import is UNTRUSTED input (same doctrine as the AI parsers, §194):
+  never throws — typed errors `empty | too-large | invalid-json |
+  invalid-format | validation-failed` (with core validator details);
+  8 MB hard cap checked BEFORE JSON.parse; core `validateTemplate` gates
+  structure; `isBuiltin` is FORCED false and the id REGENERATED on every
+  import, so a file can never masquerade as an app builtin or collide
+  with an existing template. Only `createdAt` gets repaired (non-finite →
+  now). `safeTemplateFileName` slugs the display name for disk.
+- `MAX_IMPORT_BATCH` 50 bounds one selection.
+
+### 195.2 Composable + UI
+
+- `useTmcutTemplates.exportTemplate/importTemplates` — desktop path uses
+  the native save/open dialogs (`tools:dialog`) + file-manager IPC, so
+  the renderer never invents a path (user approves every location);
+  web/dev path falls back to Blob download + `<input type=file>`.
+  Imports are parsed independently; the toast counts are the truth
+  (N imported, M failed) — nothing is silently "repaired".
+- Templates page: per-card Export button (custom cards only — builtins
+  are already shipped with the app) + header Import button; toasts i18n
+  en+vi (7 keys, parity gate).
+
+### 195.3 Gates
+
+- New spec `tmcut_template_io.spec.ts` 7/7 (round-trip, bare-object,
+  typed errors, identity rules, size cap, filename slug, id uniqueness);
+  unit run 27/27; typecheck 0 (fault-proven gate); lint 0; live UI
+  12/12; Electron probe 3/3; build 0; i18n 2971/2971.
+- Known limit, stated honestly: the MCP roadmap v4 (docs) and the
+  template marketplace idea remain future work; this round only adds the
+  local file bridge, no new dependency.

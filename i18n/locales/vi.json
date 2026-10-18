@@ -1207,7 +1207,14 @@
       "createProjectBtn": "Tạo dự án ngay",
       "createdToast": "Đã tạo dự án từ mẫu \"{name}\"",
       "emptyTitle": "Không tìm thấy mẫu phù hợp",
-      "emptyDesc": "Thử xóa từ khóa tìm kiếm hoặc chọn danh mục khác để xem thêm mẫu."
+      "emptyDesc": "Thử xóa từ khóa tìm kiếm hoặc chọn danh mục khác để xem thêm mẫu.",
+      "importBtn": "Nhập",
+      "exportBtn": "Xuất template",
+      "exportedToast": "Đã xuất template: {name}",
+      "exportFailedToast": "Xuất template thất bại",
+      "importedToast": "Đã nhập {count} template",
+      "importFailedToast": "{count} tệp không nhập được (sai định dạng)",
+      "importEmptyToast": "Chưa chọn tệp template nào"
     },
     "aiScript": {
       "buttonLabel": "AI Kịch bản",

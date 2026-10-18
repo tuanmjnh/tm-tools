@@ -1207,7 +1207,14 @@
       "createProjectBtn": "Create Project Now",
       "createdToast": "Project created from template \"{name}\"",
       "emptyTitle": "No templates match your criteria",
-      "emptyDesc": "Try clearing search keywords or switching filters to browse other categories."
+      "emptyDesc": "Try clearing search keywords or switching filters to browse other categories.",
+      "importBtn": "Import",
+      "exportBtn": "Export template",
+      "exportedToast": "Template exported: {name}",
+      "exportFailedToast": "Template export failed",
+      "importedToast": "Imported {count} template(s)",
+      "importFailedToast": "{count} file(s) could not be imported",
+      "importEmptyToast": "No template files selected"
     },
     "aiScript": {
       "buttonLabel": "AI Script",

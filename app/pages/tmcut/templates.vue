@@ -14,6 +14,8 @@ const {
   searchQuery,
   createProjectFromTemplate,
   deleteUserTemplate,
+  exportTemplate,
+  importTemplates,
   ticksToSeconds
 } = useTmcutTemplates()
 
@@ -131,6 +133,70 @@ function promptDeleteTemplate(tpl: TmcutTemplate) {
   deleteModalOpen.value = true
 }
 
+// R131 — template file exchange (docs §195). Export opens the native save
+// dialog (desktop) or downloads (web); Import validates every file through
+// parseTemplateFile, so broken JSON is reported honestly as a failed count.
+async function handleExportTemplate(tpl: TmcutTemplate) {
+  try {
+    const res = await exportTemplate(tpl)
+    if (res.canceled) return
+    toast.add({
+      title: t('tmcut.templateLibrary.exportedToast', { name: tpl.name }),
+      description: res.path,
+      color: 'success',
+      icon: 'i-lucide-file-down'
+    })
+  } catch (err) {
+    console.error('Failed to export template', err)
+    toast.add({
+      title: t('tmcut.templateLibrary.exportFailedToast'),
+      color: 'error',
+      icon: 'i-lucide-alert-triangle'
+    })
+  }
+}
+
+const importing = ref(false)
+
+async function handleImportTemplates() {
+  if (importing.value) return
+  importing.value = true
+  try {
+    const res = await importTemplates()
+    if (res.canceled) return
+    if (res.imported.length > 0) {
+      toast.add({
+        title: t('tmcut.templateLibrary.importedToast', { count: res.imported.length }),
+        color: 'success',
+        icon: 'i-lucide-file-up'
+      })
+    }
+    if (res.failed > 0) {
+      toast.add({
+        title: t('tmcut.templateLibrary.importFailedToast', { count: res.failed }),
+        color: 'warning',
+        icon: 'i-lucide-file-x'
+      })
+    }
+    if (res.imported.length === 0 && res.failed === 0) {
+      toast.add({
+        title: t('tmcut.templateLibrary.importEmptyToast'),
+        color: 'neutral',
+        icon: 'i-lucide-file-question'
+      })
+    }
+  } catch (err) {
+    console.error('Failed to import templates', err)
+    toast.add({
+      title: t('tmcut.templateLibrary.importFailedToast', { count: 0 }),
+      color: 'error',
+      icon: 'i-lucide-alert-triangle'
+    })
+  } finally {
+    importing.value = false
+  }
+}
+
 function confirmDeleteTemplate() {
   if (targetDeleteId.value) {
     deleteUserTemplate(targetDeleteId.value)
@@ -171,6 +237,16 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
           size="sm"
         >
           <span class="hidden sm:inline">{{ t('tmcut.back') }}</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-file-up"
+          variant="soft"
+          color="neutral"
+          size="sm"
+          :loading="importing"
+          @click="handleImportTemplates"
+        >
+          <span class="hidden sm:inline">{{ t('tmcut.templateLibrary.importBtn') }}</span>
         </UButton>
         <UButton
           icon="i-lucide-plus"
@@ -305,15 +381,24 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
                 <h3 class="font-semibold text-base text-neutral-900 dark:text-neutral-100 group-hover:text-primary transition-colors">
                   {{ tpl.name }}
                 </h3>
-                <UButton
-                  v-if="!tpl.isBuiltin"
-                  icon="i-lucide-trash-2"
-                  size="xs"
-                  color="error"
-                  variant="ghost"
-                  :title="t('tmcut.templateLibrary.deleteTemplate')"
-                  @click.stop="promptDeleteTemplate(tpl)"
-                />
+                <div v-if="!tpl.isBuiltin" class="flex items-center gap-0.5 shrink-0">
+                  <UButton
+                    icon="i-lucide-file-down"
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    :title="t('tmcut.templateLibrary.exportBtn')"
+                    @click.stop="handleExportTemplate(tpl)"
+                  />
+                  <UButton
+                    icon="i-lucide-trash-2"
+                    size="xs"
+                    color="error"
+                    variant="ghost"
+                    :title="t('tmcut.templateLibrary.deleteTemplate')"
+                    @click.stop="promptDeleteTemplate(tpl)"
+                  />
+                </div>
               </div>
               <p class="text-xs text-neutral-500 mt-1 line-clamp-2">
                 {{ tpl.description || t('tmcut.templateLibrary.subtitle') }}
