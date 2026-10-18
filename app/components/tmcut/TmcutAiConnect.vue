@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '~~/types/electron'
 import { useTmcutAi } from '~/composables/useTmcutAi'
+import { AI_TASK_META, type AiTaskId } from '~/utils/tmcut/aiTasks'
 
 // =============================================================================
 //  AI connection panel (roadmap R128 / R129).
@@ -41,12 +42,12 @@ const surfaceTasks = ref<Record<string, AiTaskStatus> | null>(null)
 const form = ref({ provider: 'openai', baseUrl: '', apiKey: '', model: '' })
 
 /**
- * Editable surfaces = the two AI-powered parts of the app:
- * `plan` is the editor script writer, `transcribe` is AutoCut's audio pass
- * (the editor's caption button shares it — the gateway knows one task).
+ * Editable surfaces = every AI task with a real caller in the app:
+ * `plan` is the editor script writer, `transcribe` is AutoCut/caption audio,
+ * `triage` is the AutoCut content-analysis blend (docs §194).
  */
-type SurfaceTask = 'plan' | 'transcribe'
-const SURFACE_KEYS: SurfaceTask[] = ['plan', 'transcribe']
+type SurfaceTask = 'plan' | 'transcribe' | 'triage'
+const SURFACE_KEYS: SurfaceTask[] = ['plan', 'transcribe', 'triage']
 
 interface SurfaceForm {
   custom: boolean
@@ -58,7 +59,8 @@ interface SurfaceForm {
 
 const surfaces = ref<Record<SurfaceTask, SurfaceForm>>({
   plan: { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' },
-  transcribe: { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' }
+  transcribe: { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' },
+  triage: { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' }
 })
 
 const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tools?.aiGateway)
@@ -112,6 +114,14 @@ async function refresh() {
 
 function presetBaseUrl(provider: string): string | undefined {
   return presets.value.find(p => p.id === provider)?.baseUrl || undefined
+}
+
+/** Icons/labels for the surface cards come from the task registry. */
+function surfaceIcon(task: SurfaceTask): string {
+  return AI_TASK_META[task as AiTaskId].icon
+}
+function surfaceLabelKey(task: SurfaceTask): string {
+  return AI_TASK_META[task as AiTaskId].labelKey
 }
 
 async function loadPresets() {
@@ -425,8 +435,8 @@ const surfaceRows = computed(() => {
             @click="handleSurfaceToggle(task)"
           >
             <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-              <UIcon :name="task === 'plan' ? 'i-lucide-pen-line' : 'i-lucide-captions'" class="w-3.5 h-3.5 text-neutral-400" />
-              {{ task === 'plan' ? t('tmcut.aiConnect.surfaceEditor') : t('tmcut.aiConnect.surfaceTranscribe') }}
+              <UIcon :name="surfaceIcon(task)" class="w-3.5 h-3.5 text-neutral-400" />
+              {{ t(surfaceLabelKey(task)) }}
             </span>
             <UBadge :color="surfaces[task].custom ? 'primary' : 'neutral'" variant="subtle" size="xs">
               {{ surfaces[task].custom ? t('tmcut.aiConnect.surfaceCustom') : t('tmcut.aiConnect.surfaceGlobal') }}

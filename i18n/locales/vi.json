@@ -323,7 +323,8 @@
       "noSegments": "Không phát hiện đoạn nào trong video này",
       "analyzeFailed": "Phân tích thất bại",
       "retry": "Thử lại",
-      "acceptDraft": "Tạo nháp & mở trong editor"
+      "acceptDraft": "Tạo nháp & mở trong editor",
+      "stageAiAnalysis": "Đang phân tích nội dung bằng AI…"
     },
     "canvasRatio": "Tỉ lệ khung hình",
     "frameRate": "Tốc độ khung hình (FPS)",
@@ -1258,7 +1259,10 @@
       "deselectFillers": "Bỏ chọn từ thừa ({count})",
       "selectHighlights": "Chọn đoạn nổi bật ({count})",
       "fillerTag": "Từ thừa",
-      "highlightTag": "Điểm nhấn"
+      "highlightTag": "Điểm nhấn",
+      "aiAnalysisLabel": "AI phân tích nội dung (beta)",
+      "aiAnalysisDesc": "Lần chạy thứ hai tùy chọn: AI chấm điểm từng đoạn lời thoại và ý kiến của nó chỉ điều chỉnh điểm tối đa 25%. Chạy bằng AI đã cấu hình riêng cho AutoCut; tự bỏ qua khi không khả dụng.",
+      "aiBadge": "AI phân tích · {count} đoạn"
     },
     "aiConnect": {
       "title": "Kết nối AI",

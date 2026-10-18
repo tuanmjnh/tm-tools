@@ -8,11 +8,17 @@ import {
   CURATED_SCRIPT_PRESETS,
   exportScriptMarkdown,
   type TmcutAiScript,
-  type TmcutAiScriptScene,
   type GenerateScriptOptions
 } from '../utils/tmcut/aiScript'
+import {
+  planSystemPrompt,
+  planUserMessage,
+  parsePlanScript,
+  type AiPlanContext
+} from '../utils/tmcut/aiTasks'
 
 export * from '../utils/tmcut/aiScript'
+export * from '../utils/tmcut/aiTasks'
 
 /**
  * Composable providing AI Scriptwriting & Storyboard generation capabilities.
@@ -45,7 +51,6 @@ export function useTmcutAiScript() {
     error.value = null
 
     const targetSec = durationToSeconds(options.duration)
-    const lang = options.language || 'vi'
 
     try {
       const keyAvailable = await checkGatewayStatus()
@@ -64,67 +69,27 @@ export function useTmcutAiScript() {
         return customized
       }
 
-      const systemPrompt = `You are an expert video director and viral scriptwriter for short-form (TikTok, Reels, Shorts) and long-form (YouTube, Vlogs).
-Create an engaging, structured video storyboard script in ${lang === 'vi' ? 'Vietnamese' : 'English'}.
-The target total duration is approximately ${targetSec} seconds.
-Output strictly a JSON object with this exact structure:
-{
-  "title": "Compelling video title",
-  "synopsis": "One sentence summary of the video",
-  "platform": "${options.platform}",
-  "targetDurationSec": ${targetSec},
-  "scenes": [
-    {
-      "id": "scene-1",
-      "order": 1,
-      "title": "Hook / Intro",
-      "durationSec": 4,
-      "visualPrompt": "Detailed visual description for video/camera or B-roll",
-      "voiceover": "Spoken voiceover or dialogue text",
-      "onScreenText": "Short catchy text/caption displayed on screen"
-    }
-  ]
-}
-Make sure the sum of all scenes' durationSec equals approximately ${targetSec} seconds.
-Keep onScreenText punchy, short, and suited for video overlays.`
-
-      const userMessage = `Create a video script for the following topic/idea:
-"${options.prompt}"
-Target platform: ${options.platform}
-Target duration: ${options.duration}`
+      // Prompt + JSON contract + validation all come from the task
+      // registry (utils/tmcut/aiTasks.ts) — components never own prompts.
+      const ctx: AiPlanContext = {
+        prompt: options.prompt,
+        platform: options.platform,
+        duration: options.duration,
+        targetSec,
+        language: options.language
+      }
 
       const aiResponse = await complete({
         task: 'plan',
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
+          { role: 'system', content: planSystemPrompt(ctx) },
+          { role: 'user', content: planUserMessage(ctx) }
         ],
         jsonMode: true,
         temperature: 0.7
       })
 
-      const parsed = JSON.parse(aiResponse.content) as Partial<TmcutAiScript>
-
-      if (!parsed.scenes || !Array.isArray(parsed.scenes) || parsed.scenes.length === 0) {
-        throw new Error('AI returned invalid script structure')
-      }
-
-      const script: TmcutAiScript = {
-        title: parsed.title || options.prompt || 'Kịch bản Video AI',
-        synopsis: parsed.synopsis || '',
-        platform: options.platform,
-        targetDurationSec: targetSec,
-        scenes: parsed.scenes.map((s: Partial<TmcutAiScriptScene>, idx: number) => ({
-          id: s.id || `scene-${idx + 1}`,
-          order: s.order || idx + 1,
-          title: s.title || `Cảnh ${idx + 1}`,
-          durationSec: Number(s.durationSec) || 5,
-          visualPrompt: s.visualPrompt || '',
-          voiceover: s.voiceover || '',
-          onScreenText: s.onScreenText || s.title || ''
-        })),
-        createdAt: new Date().toISOString()
-      }
+      const script = parsePlanScript(aiResponse.content, ctx)
 
       generatedScript.value = script
       return script

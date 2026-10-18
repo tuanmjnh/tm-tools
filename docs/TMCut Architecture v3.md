@@ -9182,3 +9182,61 @@ AI_PROVIDER_<T>  AI_BASE_URL_<T>  AI_API_KEY_<T>  AI_MODEL_<T>   T = PLAN | TRIA
 - Ops note: two QA dev servers sharing port 3100 crashed the Nuxt
   worker (`worker exited with code 0`, HTTP 500). Exactly one :3100
   server at a time; kill first, verify the port is free, then start.
+
+## 194. R130 — Per-surface prompts/schemas + AutoCut AI triage
+
+R129 made each surface choose its own provider. R130 gives each TASK its
+own prompt/JSON contract and lights up the third task (`triage`) with a
+real caller, completing the two-surfaces design.
+
+### 194.1 Task registry (`app/utils/tmcut/aiTasks.ts`)
+
+Single source for every TEXT task the gateway routes:
+
+| task | surface | caller | prompt/schema |
+|---|---|---|---|
+| plan | Editor · script | useTmcutAiScript | planSystemPrompt/planUserMessage + parsePlanScript |
+| transcribe | AutoCut + captions | useTmcutAutocut / TmcutTimeline | (audio API — no prompt) |
+| triage | AutoCut · analysis | useTmcutAutocut (opt-in) | triageSystemPrompt/triageUserMessage + parseTriageItems |
+
+- Components never hold prompts or JSON shapes; `useTmcutAiScript` lost
+  its inline prompt to `parsePlanScript` (same output, stricter input:
+  durations clamp to [1,120]s, ≤40 scenes, garbage throws → the
+  existing curated-preset fallback owns degradation).
+- `AI_TASK_META` gives the connection panel icon + label key per task,
+  so UI and registry can never drift apart.
+
+### 194.2 AutoCut AI triage (`triage` task)
+
+- Opt-in `USwitch` in step 2 ("AI content analysis (beta)"). Pipeline
+  after the Whisper pass: `buildTriageSpans` (token budget ≈ 18k head
+  chars, model is TOLD when content was trimmed), `complete({task:
+  'triage', jsonMode:true, temperature:0.2})`, `parseTriageItems`.
+- Parser accepts `{"items":[{i,interest}]}` or bare `[{start,end,
+  interest}]`; clamps interest 0..1, drops out-of-range indices and
+  inverted/foreign spans, de-dupes overlaps (max wins). Empty/invalid
+  answer ⇒ `[]` ⇒ plain local scoring — never a fabricated score.
+- Core blend (`scoreSegments` + `blendSceneInterest`, @tmcut/core
+  2603212): beat-weighted average interest over overlaps; local score
+  moves toward interest by `aiWeight` (default 0.25, hard cap 0.5).
+  Guard rails: scenes without AI overlap are untouched (no `aiInterest`
+  field); a `reason: filler-word` segment may only be pushed DOWN by the
+  AI, never softened up (local transcript evidence outranks the AI
+  opinion). `analyzerVersion` becomes `triage-v3` ONLY when the blend
+  actually ran, and the review header badge shows the real item count.
+- Honesty: triage failure never fails the analysis (silent skip, badge
+  absent = triage didn't run); the switch defaults OFF.
+
+### 194.3 Three editable surfaces in the panel
+
+`TmcutAiConnect` surface list = exactly the tasks with real callers
+(plan | transcribe | triage). The old read-only "AutoCut · analysis"
+row became a full override card (Inherit ⇄ Custom + AI_PROVIDER_TRIAGE
+slots). Save still clears slot keys for every Inherit card, so the
+saved env is the panel's picture.
+
+### 194.4 Gates
+
+- core 217/217 (analysis 15 incl. 4 blend cases), unit 26/26 (new
+  tmcut_ai_tasks 10 checks), gateway 36/36, nuxt typecheck 0, lint 0,
+  build 0, i18n 2964/2964.

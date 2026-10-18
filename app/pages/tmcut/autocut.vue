@@ -25,6 +25,7 @@ const applying = ref(false)
 
 // AutoCut v2: transcript vocabulary analysis options
 const filterFillerWords = ref(true)
+const aiAnalysis = ref(false)
 const highlightKeywordsText = ref('')
 const highlightKeywords = computed(() =>
   highlightKeywordsText.value
@@ -239,7 +240,8 @@ async function startAnalysis() {
   reviewTime.value = 0
   const result = await analyzeSource(sourceAsset.value, selectedProfile.value, {
     filterFillerWords: filterFillerWords.value,
-    highlightKeywords: highlightKeywords.value
+    highlightKeywords: highlightKeywords.value,
+    aiAnalysis: aiAnalysis.value
   })
   if (!result) return
   edlResult.value = result
@@ -437,6 +439,13 @@ async function handleAccept() {
           <span class="px-2 py-1 rounded-lg bg-primary/10 font-mono text-[11px] text-primary font-semibold">
             {{ t('tmcut.wizard.avgScore', { pct: avgScore }) }}
           </span>
+          <!-- Only when a triage pass ACTUALLY returned opinions (§194) -->
+          <span
+            v-if="edlResult.aiAnalysisUsed"
+            class="px-2 py-1 rounded-lg bg-sky-500/10 font-mono text-[11px] text-sky-500 font-semibold"
+          >
+            {{ t('tmcut.autocutV2.aiBadge', { count: edlResult.aiItems.length }) }}
+          </span>
         </div>
       </div>
 
@@ -550,6 +559,25 @@ async function handleAccept() {
                 </p>
               </div>
               <USwitch v-model="filterFillerWords" />
+            </div>
+
+            <!-- AI content triage (docs §194) — runs on the `triage` task
+                 provider, blends opinions into segment scores (opt-in). -->
+            <div
+              class="flex items-center justify-between gap-4 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+            >
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-1.5">
+                  <UIcon name="i-lucide-sparkles" class="w-4 h-4 text-sky-500" />
+                  <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">
+                    {{ t('tmcut.autocutV2.aiAnalysisLabel') }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-neutral-500">
+                  {{ t('tmcut.autocutV2.aiAnalysisDesc') }}
+                </p>
+              </div>
+              <USwitch v-model="aiAnalysis" />
             </div>
 
             <!-- Priority Keywords Input -->

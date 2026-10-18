@@ -323,7 +323,8 @@
       "noSegments": "No segments detected in this video",
       "analyzeFailed": "Analysis failed",
       "retry": "Retry",
-      "acceptDraft": "Create draft & open in editor"
+      "acceptDraft": "Create draft & open in editor",
+      "stageAiAnalysis": "AI content analysis…"
     },
     "canvasRatio": "Aspect Ratio",
     "frameRate": "Frame Rate (FPS)",
@@ -1258,7 +1259,10 @@
       "deselectFillers": "Deselect Fillers ({count})",
       "selectHighlights": "Select Highlights ({count})",
       "fillerTag": "Filler Word",
-      "highlightTag": "Highlight"
+      "highlightTag": "Highlight",
+      "aiAnalysisLabel": "AI content analysis (beta)",
+      "aiAnalysisDesc": "An optional second pass: the AI rates transcript spans and its opinion nudges segment scores (max 25%). Runs on the AI configured for AutoCut; skipped automatically when unavailable.",
+      "aiBadge": "AI triage · {count} spans"
     },
     "aiConnect": {
       "title": "AI connection",

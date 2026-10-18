@@ -10,6 +10,13 @@ import {
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutAi } from '~/composables/useTmcutAi'
+import {
+  buildTriageSpans,
+  triageSystemPrompt,
+  triageUserMessage,
+  parseTriageItems,
+  type AiTriageItem
+} from '~/utils/tmcut/aiTasks'
 
 export type AutocutProfile = 'viral-shorts' | 'podcast-summary' | 'cinematic-vlog'
 
@@ -17,6 +24,13 @@ export interface AutocutOptions {
   filterFillerWords?: boolean
   highlightKeywords?: string[]
   customFillerWords?: string[]
+  /**
+   * Opt-in AI content triage (docs §194): ask the `triage`-routed model to
+   * rate the transcript and blend its opinions into the EDL scores.
+   * Requires a configured AI connection; skipped silently (honest, no
+   * fake data) when unavailable or the answer is unusable.
+   */
+  aiAnalysis?: boolean
 }
 
 export interface AutocutAnalysis {
@@ -37,6 +51,10 @@ export interface AutocutAnalysis {
   fillerSegmentCount: number
   /** count of segments boosted with highlight keywords */
   highlightSegmentCount: number
+  /** true when an AI triage pass actually blended opinions into the EDL */
+  aiAnalysisUsed: boolean
+  /** triage opinions the AI actually returned (validated) */
+  aiItems: AiTriageItem[]
 }
 
 function tmcutIpc() {
@@ -51,7 +69,7 @@ function tmcutIpc() {
 export function useTmcutAutocut() {
   const { createProject, addClipToTrack, switchCanvas } = useTmcutProject()
   const { linkAssetToProject } = useTmcutMedia()
-  const { transcribe, status } = useTmcutAi()
+  const { transcribe, complete, status } = useTmcutAi()
 
   const analyzing = ref(false)
   const stageKey = ref('')
@@ -104,6 +122,31 @@ export function useTmcutAutocut() {
       }
 
       stageKey.value = 'tmcut.steps.stageScoring'
+      // AI content triage (docs §194): a second, optional opinion pass on
+      // the transcript. Opt-in, degrades silently — the local scoring is
+      // always the baseline the AI only nudges (core caps the pull).
+      let aiItems: AiTriageItem[] = []
+      let aiAnalysisUsed = false
+      if (options?.aiAnalysis && transcriptText.length > 0) {
+        stageKey.value = 'tmcut.steps.stageAiAnalysis'
+        try {
+          const spans = buildTriageSpans(transcriptText)
+          const aiResponse = await complete({
+            task: 'triage',
+            messages: [
+              { role: 'system', content: triageSystemPrompt() },
+              { role: 'user', content: triageUserMessage(spans, spans.length < transcriptText.length) }
+            ],
+            jsonMode: true,
+            temperature: 0.2
+          })
+          aiItems = parseTriageItems(aiResponse.content, spans, durationSec)
+          aiAnalysisUsed = aiItems.length > 0
+        } catch {
+          // Triage is an enhancement — never fail the analysis over it.
+          aiItems = []
+        }
+      }
       const edl = scoreSegments({
         scenes: shotList,
         silences: silenceList,
@@ -111,10 +154,11 @@ export function useTmcutAutocut() {
         transcript: transcriptText,
         profile,
         assetId: asset.id,
-        analyzerVersion: 'transcript-v2',
+        analyzerVersion: aiAnalysisUsed ? 'triage-v3' : 'transcript-v2',
         filterFillerWords: options?.filterFillerWords,
         keywords: options?.highlightKeywords,
-        customFillerWords: options?.customFillerWords
+        customFillerWords: options?.customFillerWords,
+        aiScores: aiItems
       })
       const problems = validateEdl(edl)
       if (problems.length > 0) throw new Error(problems[0])
@@ -142,7 +186,9 @@ export function useTmcutAutocut() {
         speechSec,
         transcript: transcriptText,
         fillerSegmentCount,
-        highlightSegmentCount
+        highlightSegmentCount,
+        aiAnalysisUsed,
+        aiItems
       }
     } catch (err: unknown) {
       analysisError.value = err instanceof Error ? err.message : String(err)
