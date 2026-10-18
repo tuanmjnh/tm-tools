@@ -584,10 +584,44 @@ export interface AiCompleteResult {
   latencyMs: number
 }
 
+export interface AiModelInfo {
+  id: string
+  label: string
+}
+
+/** Picker entry for the provider select (electron/tools/ai-gateway.cjs presets). */
+export interface AiProviderPreset {
+  id: string
+  label: string
+  baseUrl: string
+  keyless: boolean
+  requiresModel: boolean
+  /** True when the provider has no built-in endpoint (aggregator/custom): AI_BASE_URL is required. */
+  needsBaseUrl: boolean
+}
+
+export interface AiGatewayStatus {
+  provider: string
+  providerLabel: string
+  baseUrl: string
+  model: string
+  hasKey: boolean
+  keyless: boolean
+  needsBaseUrl: boolean
+  needsModel: boolean
+  /** Endpoint + credentials + model all present. */
+  configured: boolean
+  rpm: number
+  timeoutMs: number
+}
+
 export interface AiGatewayNamespace {
   complete(args: AiCompleteInput): Promise<{ ok: boolean, data?: AiCompleteResult, code?: string, error?: string }>
   transcribe(args: { filePath: string, provider?: string, apiKey?: string, baseUrl?: string, model?: string, language?: string, format?: 'text' | 'verbose_json' }): Promise<{ ok: boolean, data?: { text: string, segments?: Array<{ start: number, end: number, text: string }> }, code?: string, error?: string }>
-  getStatus(): Promise<{ provider: string, baseUrl: string, model: string, hasKey: boolean, rpm: number, timeoutMs: number }>
+  getStatus(): Promise<AiGatewayStatus>
+  /** GET {base}/models — model discovery for multi-provider gateways (FreeLLMAPI et al.). */
+  models(args?: { provider?: string, apiKey?: string, baseUrl?: string }): Promise<{ ok: boolean, data?: { models: AiModelInfo[], provider: string, baseUrl: string, count: number }, code?: string, error?: string }>
+  presets(): Promise<{ ok: boolean, data?: { presets: AiProviderPreset[] } }>
 }
 
 export interface TmcutNamespace {

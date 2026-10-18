@@ -206,3 +206,124 @@ describe('transcribe', () => {
     )
   })
 })
+
+// ===== Aggregator support (one base URL, many providers/models) =============
+// FreeLLMAPI-style gateways: the endpoint and the model ids cannot be guessed,
+// so both must be explicit and every gap must fail loudly instead of silently
+// falling back to api.openai.com (the pre-R128 behaviour).
+
+describe('provider presets', () => {
+  it('exposes picker-ready presets including the multi-provider gateway', () => {
+    const presets = gw.providerPresets()
+    const byId = Object.fromEntries(presets.map(p => [p.id, p]))
+    assert.ok(byId.freellmapi && byId.custom)
+    assert.equal(byId.freellmapi.needsBaseUrl, true)
+    assert.equal(byId.freellmapi.requiresModel, true)
+    assert.equal(byId.ollama.keyless, true)
+    assert.equal(byId.gemini.baseUrl, 'https://generativelanguage.googleapis.com/v1beta/openai')
+  })
+
+  it('does not silently default an unknown provider to api.openai.com', () => {
+    assert.equal(gw.needsBaseUrl('some-aggregator'), true)
+    assert.equal(gw.needsBaseUrl('openai'), false)
+    assert.equal(gw.aiConfig({ AI_PROVIDER: 'some-aggregator' }).baseUrl, '')
+  })
+
+  it('reports configuration gaps in the masked status', () => {
+    const status = gw.maskedStatus()
+    assert.equal(typeof status.configured, 'boolean')
+    assert.equal(typeof status.needsBaseUrl, 'boolean')
+    assert.equal(typeof status.needsModel, 'boolean')
+    assert.ok('providerLabel' in status)
+  })
+})
+
+describe('listModels (multi-provider discovery)', () => {
+  const okBody = body => ({ status: 200, text: async () => JSON.stringify(body) })
+
+  it('parses the OpenAI {data:[{id}]} shape, sorted', async () => {
+    const out = await gw.listModels(
+      { provider: 'openai', apiKey: 'k', baseUrl: 'https://x/v1' },
+      { fetchImpl: async () => okBody({ data: [{ id: 'b-model' }, { id: 'a-model' }] }) }
+    )
+    assert.deepEqual(out.models.map(m => m.id), ['a-model', 'b-model'])
+    assert.equal(out.count, 2)
+    assert.equal(out.baseUrl, 'https://x/v1')
+    assert.equal(out.provider, 'openai')
+  })
+
+  it('parses an aggregator {models:[{id|name}]} shape and dedupes', async () => {
+    const out = await gw.listModels(
+      { provider: 'freellmapi', apiKey: 'k', baseUrl: 'https://gw/v1' },
+      { fetchImpl: async () => okBody({ models: [{ id: 'gpt-4o' }, { id: 'gpt-4o' }, { name: 'claude-sonnet' }] }) }
+    )
+    assert.deepEqual(out.models.map(m => m.id), ['claude-sonnet', 'gpt-4o'])
+  })
+
+  it('requires an endpoint and credentials before calling out', async () => {
+    await assert.rejects(
+      gw.listModels({ provider: 'freellmapi', apiKey: 'k', baseUrl: '' }),
+      err => err.code === 'ai.no-base-url'
+    )
+    await assert.rejects(
+      gw.listModels({ provider: 'custom', baseUrl: 'https://gw/v1' }),
+      err => err.code === 'ai.no-key'
+    )
+  })
+
+  it('maps an http error and keeps the status', async () => {
+    await assert.rejects(
+      gw.listModels(
+        { provider: 'custom', apiKey: 'k', baseUrl: 'https://gw/v1' },
+        { fetchImpl: async () => ({ status: 401, text: async () => JSON.stringify({ error: { message: 'bad key' } }) }) }
+      ),
+      err => err.code === 'ai.http-error' && err.status === 401
+    )
+  })
+
+  it('rejects a response without model ids', async () => {
+    await assert.rejects(
+      gw.listModels(
+        { provider: 'custom', apiKey: 'k', baseUrl: 'https://gw/v1' },
+        { fetchImpl: async () => okBody({ data: [] }) }
+      ),
+      err => err.code === 'ai.bad-shape'
+    )
+  })
+})
+
+describe('aggregator misconfiguration fails loudly', () => {
+  it('ai.no-base-url when the gateway endpoint is missing', async () => {
+    await assert.rejects(
+      gw.complete({ provider: 'freellmapi', apiKey: 'k', baseUrl: '', model: 'x', messages: [{ role: 'user', content: 'hi' }] }),
+      err => err.code === 'ai.no-base-url'
+    )
+  })
+
+  it('ai.no-model when the aggregator model is not chosen', async () => {
+    await assert.rejects(
+      gw.complete({ provider: 'freellmapi', apiKey: 'k', baseUrl: 'https://gw.test/v1', messages: [{ role: 'user', content: 'hi' }] }),
+      err => err.code === 'ai.no-model'
+    )
+  })
+
+  it('a fully configured aggregator reaches the endpoint', async () => {
+    const out = await gw.complete(
+      {
+        provider: 'freellmapi',
+        apiKey: 'k',
+        baseUrl: 'https://gw.test/v1',
+        model: 'some/model',
+        messages: [{ role: 'user', content: 'hi' }]
+      },
+      {
+        fetchImpl: async () => ({
+          status: 200,
+          text: async () => JSON.stringify({ choices: [{ message: { content: 'ok' } }] })
+        })
+      }
+    )
+    assert.equal(out.content, 'ok')
+    assert.equal(out.model, 'some/model')
+  })
+})

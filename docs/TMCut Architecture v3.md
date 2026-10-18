@@ -8983,3 +8983,123 @@ pass needed.
 
 Residual follow-ups unchanged: preload channel allow-list (the
 generic send/on passthrough).
+
+# 192. R128 — CapCut-scale FX library (45 transitions / 29 effects / 20 LUTs), richer inspector, multi-provider AI gateway
+
+CapCut's editor puts five tabs (labels, effects, transitions,
+filters, adjust) plus a context-aware right panel on every clip. This
+round closes most of that gap honestly: everything that ships in the
+UI now has a real FFmpeg mapping, and anything without a backing
+pipeline (stickers — no asset store yet) was deliberately left out
+and reported as a follow-up instead of being faked.
+
+## 192.1 The frozen cross-branch contract
+
+Three work branches (core registry, render wiring, UI) were built in
+parallel against one frozen list, so nothing could drift:
+
+- `KNOWN_TRANSITIONS` (core) = exactly 45 keys: the 6 legacy keys
+  first (`fade, dissolve, wipe-left, wipe-right, slide-left, zoom-in`
+  — stored projects depend on order/semantics), then the 39 remaining
+  FFmpeg `xfade` transition names in alphabetical order. The legacy
+  keys are aliases (`wipe-left -> wipeleft` …); the rest pass through
+  literally.
+- `EFFECT_REGISTRY` descriptors gained only an optional
+  `category` (blur/sharpen/light/color/stylize/distort/keying/motion/
+  retro/texture); param kinds unchanged; the 8 legacy effects stay
+  byte-identical at export.
+- Honesty rule, now enforced by `test/effects.test.mjs`: every
+  `renderReady: true` entry must emit >= 1 filter from
+  `buildFfmpegEffectFilters` at registry defaults. Allow-list:
+  `lut3d` only (its `neutral` preset is a deliberate no-op, every
+  other preset must emit). Filters must stay comma-chain-safe (no
+  `;` / `[` graph syntax) because the renderer comma-chains output.
+
+Anti-drift guard: `tests/unit/tmcut_fx_catalog.spec.ts` deep-compares
+the app catalog to core `KNOWN_TRANSITIONS` — if either side changes
+alone, CI goes red. (It went red exactly as designed while core
+landed after the apps; that was the guard working, not a bug.)
+
+## 192.2 Core (`@tmcut/core`)
+
+- `transitions.mjs`: KNOWN_TRANSITIONS 6 -> exactly frozen 45
+  (`test/transitions.test.mjs` re-pinned, plus a known-type check for
+  a new key through `canApplyTransition`).
+- `effects.mjs`: 8 -> 29 effects. New: pixelate, emboss, edge-detect,
+  letterbox, negate, vivid, bleach-bypass, teal-orange, vibrance,
+  mirror-h/v, rotate-90, chromatic, fisheye, motion-blur, afterimage,
+  denoise, deband, sepia, mono, vhs. All single-input linear filters
+  (split/blend graphs are impossible in the comma chain).
+- `eq-grade` grew hue/gamma/fade/vibrance (legacy param set exports
+  byte-identically; new sliders append filters only when non-neutral).
+- `lut3d` enum 5 -> 20 presets; the first five keep their stored
+  order so old projects resolve identical filter strings.
+- Core gates: 213/213 tests, boundaries PASS, eslint 0, tsc 0.
+
+## 192.3 Render side (both export paths, one source of truth)
+
+- New `app/utils/tmcut/fxCatalog.ts`: 45 catalog entries
+  (key/xfade/category/label) + `xfadeNameFor()` with a documented
+  FFmpeg-name fallback for unknown keys (garbage degrades to `fade`,
+  never to a broken graph).
+- `render/video.ts` and the legacy `electron/tools/ffmpeg.controller.cjs`
+  both resolve through the same mapping (the controller carries a
+  mirrored copy — unit-tested to agree with the TS catalog for every
+  input) so the two export paths can't disagree.
+- `tmcut_render_graph.spec.ts` extended: circleopen/fadeblack/
+  smoothleft/zoomin compile real `xfade=transition=...` strings and
+  an unknown key falls back to fade end-to-end.
+
+## 192.4 UI
+
+- `TmcutFxLibrary.vue`: tabbed browser (Effects / Transitions /
+  Filters) with category chips (localised via
+  `fxLib.effectCategories.*` / `transitionCategories.*`), search,
+  LUT swatch grid driven by the registry (20 presets), honest
+  "apply to selected clip" flow.
+- Inspector: Color Grade grew 4 sliders (hue/gamma/fade/vibrance) on
+  the same lazy-create + coalesced-history path; the Add-effect menu
+  groups all 29 effects by registry category (labels + separators)
+  instead of a flat wall of 29 rows.
+- i18n: +105 keys in BOTH locales (parity maintained), effect labels
+  for all 29 types + shared param names.
+
+## 192.5 AI: one endpoint, many providers (FreeLLMAPI-style)
+
+`electron/tools/ai-gateway.cjs` previously fell back to
+api.openai.com for ANY unknown provider — a real latent bug now that
+aggregators are first-class users.
+
+- `PROVIDER_PRESETS` is the single source of endpoints (openai,
+  anthropic, gemini, openrouter, groq, deepseek, mistral, together,
+  cerebras, ollama keyless, freellmapi + custom with empty baseUrl).
+  Unknown/aggregator providers fail LOUD: `ai.no-base-url` when no
+  endpoint is set, `ai.no-model` when the provider's model ids can't
+  be guessed (freellmapi/custom). No guessed URLs are ever invented.
+- `resolveCallModel()`: a per-call provider override re-derives that
+  provider's default model (the old code silently kept the env
+  provider's model id).
+- `listModels()` GETs `{base}/models` (OpenAI `{data:[{id}]}`,
+  aggregator `{models:[{id|name}]}`, bare array; dedupe + sort).
+  IPC `tools:ai-gateway:models` / `:presets`; preload + types +
+  `useTmcutAi` expose them.
+- New `TmcutAiConnect.vue` panel in the AI-script modal: provider
+  picker, base URL, write-only API key (never read back; masked
+  status only), model picker fed by Load-models, Save -> `setConfig`
+  (writes config.env + process.env live — gateway picks changes up
+  with no restart).
+- 29/29 gateway tests (18 kept + 11 new), lint 0.
+
+## 192.6 Gates & honest gaps
+
+- unit 25/25 specs, ai-gateway 29/29, core 213/213, vue-tsc 0,
+  eslint 0 on all touched files, nuxt build 0.
+- Honest gaps kept OUT of the UI: sticker/label assets (no asset
+  pipeline), keyframe-graph editor (preview-only today), file-based
+  .cube LUT loading (needs a `file` param kind in core).
+- Team note: the three spawned teammates died mid-round (provider
+  quota); their committed-to-disk work was kept where it was sound,
+  the rest (transitions pin, inspector, render_graph spec, branch D)
+  was completed by the lead. One teammate's unrelated reformat of
+  `TmcutPreviewPlayer.vue` was reverted to keep the round's diff
+  honest.

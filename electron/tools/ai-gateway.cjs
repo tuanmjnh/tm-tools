@@ -8,11 +8,21 @@
 //
 //  Families (selected by provider name):
 //   - openai    : POST {base}/chat/completions (OpenAI, OpenRouter, Groq,
-//                 Ollama, 9Router/OmniRoute, Gemini OpenAI endpoint, custom)
+//                 Ollama, Gemini OpenAI endpoint, and every OpenAI-compatible
+//                 AGGREGATOR — one base URL routing many providers/models,
+//                 e.g. FreeLLMAPI, 9Router/OmniRoute, LiteLLM)
 //   - anthropic : POST {base}/v1/messages
+//
+//  PROVIDER_PRESETS below is the single source for default endpoints, so a
+//  misconfigured provider can no longer silently fall back to api.openai.com:
+//  an unknown/aggregator provider without a built-in endpoint fails with
+//  ai.no-base-url and one without a documented default model with ai.no-model.
 //
 //  Transcription uses the OpenAI-compatible audio endpoint:
 //   - POST {base}/audio/transcriptions (Groq Whisper, OpenAI Whisper)
+//
+//  Model discovery (aggregator support):
+//   - GET {base}/models -> listModels() -> the renderer's model picker
 //
 //  Task routing (docs section 66): callers pass task: transcribe | triage |
 //  plan and the gateway resolves per-task model overrides from env
@@ -23,8 +33,8 @@
 //  Per-call overrides (e.g. from TM Hub app configs) win over env.
 //
 //  Stable error codes (AIGatewayError.code):
-//   ai.no-key | ai.rate-limited | ai.timeout | ai.network | ai.http-error |
-//   ai.api-error | ai.bad-shape | ai.no-file
+//   ai.no-key | ai.no-base-url | ai.no-model | ai.rate-limited | ai.timeout |
+//   ai.network | ai.http-error | ai.api-error | ai.bad-shape | ai.no-file
 // =============================================================================
 
 const fs = require('node:fs')
@@ -63,15 +73,78 @@ function aiConfig(env) {
   })
 }
 
+/**
+ * Provider presets — the single source for built-in endpoints and for the
+ * renderer's provider picker. `family` selects the request/response shape,
+ * `keyless` marks local runtimes that need no API key, `requiresModel` marks
+ * providers whose model ids cannot be guessed (aggregators proxy arbitrary
+ * provider/model pairs, so AI_MODEL must be chosen explicitly).
+ *
+ * `baseUrl: ''` means "no guessable endpoint": AI_BASE_URL is required.
+ */
+const PROVIDER_PRESETS = [
+  { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+  { id: 'anthropic', label: 'Anthropic', baseUrl: 'https://api.anthropic.com', family: 'anthropic' },
+  { id: 'gemini', label: 'Google Gemini (OpenAI-compatible)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai' },
+  { id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+  { id: 'groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1' },
+  { id: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1' },
+  { id: 'mistral', label: 'Mistral AI', baseUrl: 'https://api.mistral.ai/v1' },
+  { id: 'together', label: 'Together AI', baseUrl: 'https://api.together.xyz/v1' },
+  { id: 'cerebras', label: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1' },
+  { id: 'ollama', label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', keyless: true },
+  // Multi-provider gateway: one API surface in front of many providers/models.
+  { id: 'freellmapi', label: 'FreeLLMAPI (multi-provider gateway)', baseUrl: '', requiresModel: true },
+  { id: 'custom', label: 'Custom (OpenAI-compatible)', baseUrl: '', requiresModel: true }
+]
+
+function presetFor(provider) {
+  const id = String(provider || '').toLowerCase()
+  return PROVIDER_PRESETS.find(candidate => candidate.id === id) || null
+}
+
+/** JSON-safe preset list for the renderer's provider picker. */
+function providerPresets() {
+  return PROVIDER_PRESETS.map(preset => ({
+    id: preset.id,
+    label: preset.label,
+    baseUrl: preset.baseUrl,
+    keyless: preset.keyless === true,
+    requiresModel: preset.requiresModel === true,
+    needsBaseUrl: !preset.baseUrl
+  }))
+}
+
 function defaultBaseUrl(provider) {
-  if (provider === 'anthropic') return 'https://api.anthropic.com'
-  if (provider === 'ollama') return 'http://localhost:11434/v1'
-  return 'https://api.openai.com/v1'
+  const preset = presetFor(provider)
+  return preset ? preset.baseUrl : ''
 }
 
 function defaultModel(provider) {
   if (provider === 'anthropic') return 'claude-haiku-4-5'
+  const preset = presetFor(provider)
+  if (preset && preset.requiresModel) return ''
   return 'gpt-4o-mini'
+}
+
+/** The provider has no built-in endpoint, so AI_BASE_URL must be set. */
+function needsBaseUrl(provider) {
+  return defaultBaseUrl(provider) === ''
+}
+
+function assertEndpoint(cfg) {
+  if (!cfg.baseUrl) {
+    throw new AIGatewayError(
+      'ai.no-base-url',
+      `Provider "${cfg.provider}" has no built-in endpoint — set AI_BASE_URL to an OpenAI-compatible base URL`
+    )
+  }
+}
+
+function assertCredentials(cfg) {
+  const preset = presetFor(cfg.provider)
+  if (preset && preset.keyless) return
+  if (!cfg.apiKey) throw new AIGatewayError('ai.no-key', `Missing API key for provider "${cfg.provider}"`)
 }
 
 /** Resolve the model for a task: per-task env override wins, else default. */
@@ -81,6 +154,22 @@ function resolveTaskModel(task, cfg, env) {
   const override = String((source && source[key]) || '').trim()
   if (override) return override
   return cfg.model
+}
+
+/**
+ * Effective model for ONE call. A per-call `provider` override must also
+ * re-derive that provider's default model: without this, calling a
+ * multi-provider gateway would inherit the env provider's model id (e.g.
+ * gpt-4o-mini) and silently request a model the gateway may not expose.
+ * An explicit AI_MODEL always wins, then AI_MODEL_<TASK>, then the
+ * provider default ('' for aggregators, which forces ai.no-model).
+ */
+function resolveCallModel(input, envCfg, provider) {
+  if (input.model) return String(input.model)
+  const envModel = String((process.env && process.env.AI_MODEL) || '').trim()
+  const base = envModel || defaultModel(provider)
+  if (!input.task) return base
+  return resolveTaskModel(input.task, { ...envCfg, model: base })
 }
 
 /** Sliding-window rate limiter (rpm calls per 60s). */
@@ -220,13 +309,15 @@ async function complete(args, opts) {
     provider: String(input.provider || envCfg.provider).toLowerCase(),
     apiKey: input.apiKey !== undefined ? String(input.apiKey) : envCfg.apiKey,
     baseUrl: (input.baseUrl !== undefined ? String(input.baseUrl) : envCfg.baseUrl).replace(/\/+$/, ''),
-    model: input.model || (input.task ? resolveTaskModel(input.task, envCfg) : envCfg.model)
+    model: resolveCallModel(input, envCfg, String(input.provider || envCfg.provider).toLowerCase())
   }
   if (!input.messages || input.messages.length === 0) {
     throw new AIGatewayError('ai.bad-shape', 'messages must be a non-empty array')
   }
-  if (cfg.provider !== 'ollama' && !cfg.apiKey) {
-    throw new AIGatewayError('ai.no-key', `Missing API key for provider "${cfg.provider}"`)
+  assertEndpoint(cfg)
+  assertCredentials(cfg)
+  if (!cfg.model) {
+    throw new AIGatewayError('ai.no-model', `No model configured for provider "${cfg.provider}" — set AI_MODEL`)
   }
   const limiter = limiterFor(cfg.model, envCfg.rpm)
   const gate = limiter.attempt()
@@ -284,7 +375,7 @@ async function transcribe(args, opts) {
     provider: String(input.provider || envCfg.provider).toLowerCase(),
     apiKey: input.apiKey !== undefined ? String(input.apiKey) : envCfg.apiKey,
     baseUrl: (input.baseUrl !== undefined ? String(input.baseUrl) : envCfg.baseUrl).replace(/\/+$/, ''),
-    model: input.model || (input.task === 'transcribe' ? resolveTaskModel('transcribe', envCfg) : envCfg.model)
+    model: resolveCallModel({ ...input, task: input.task || 'transcribe' }, envCfg, String(input.provider || envCfg.provider).toLowerCase())
   }
   if (typeof input.filePath !== 'string' || !input.filePath) {
     throw new AIGatewayError('ai.no-file', 'filePath must be a non-empty string')
@@ -295,8 +386,10 @@ async function transcribe(args, opts) {
   } catch {
     throw new AIGatewayError('ai.no-file', `Cannot read file: ${input.filePath}`)
   }
-  if (!cfg.apiKey) {
-    throw new AIGatewayError('ai.no-key', `Missing API key for provider "${cfg.provider}"`)
+  assertEndpoint(cfg)
+  assertCredentials(cfg)
+  if (!cfg.model) {
+    throw new AIGatewayError('ai.no-model', `No transcription model configured for provider "${cfg.provider}" — set AI_MODEL_TRANSCRIBE or AI_MODEL`)
   }
   const form = new FormData()
   form.append('model', cfg.model)
@@ -343,15 +436,104 @@ async function transcribe(args, opts) {
   }
 }
 
+/**
+ * Discover the models an endpoint exposes (GET {base}/models). This is what
+ * makes a multi-provider gateway (FreeLLMAPI, OpenRouter, LiteLLM, …) usable:
+ * one base URL and one key, many provider/model ids to choose from.
+ *
+ * Tolerates the three response shapes seen in the wild:
+ *   { data: [{ id }] } | { models: [{ id | name }] } | [{ id }]
+ * `args` accepts the same per-call overrides as complete(): { provider?,
+ * apiKey?, baseUrl? }. `opts`: { fetchImpl? } for tests.
+ */
+async function listModels(args, opts) {
+  const input = args || {}
+  const options = opts || {}
+  const envCfg = aiConfig()
+  const cfg = {
+    ...envCfg,
+    provider: String(input.provider || envCfg.provider).toLowerCase(),
+    apiKey: input.apiKey !== undefined ? String(input.apiKey) : envCfg.apiKey,
+    baseUrl: (input.baseUrl !== undefined ? String(input.baseUrl) : envCfg.baseUrl).replace(/\/+$/, '')
+  }
+  assertEndpoint(cfg)
+  assertCredentials(cfg)
+
+  const headers = {}
+  if (cfg.apiKey) headers.authorization = `Bearer ${cfg.apiKey}`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), envCfg.timeoutMs)
+  try {
+    const fetchFn = options.fetchImpl || fetch
+    const res = await fetchFn(`${cfg.baseUrl}/models`, {
+      method: 'GET',
+      headers,
+      signal: controller.signal
+    })
+    const text = await res.text()
+    let json = null
+    try {
+      json = text ? JSON.parse(text) : null
+    } catch {
+      json = null
+    }
+    if (res.status === 429) throw new AIGatewayError('ai.rate-limited', 'Provider rate limit (429)')
+    if (res.status < 200 || res.status >= 300) {
+      const message = (json && (json.error?.message || json.message)) || text || `HTTP ${res.status}`
+      throw new AIGatewayError('ai.http-error', String(message).slice(0, 500), { status: res.status })
+    }
+    const rows = Array.isArray(json)
+      ? json
+      : Array.isArray(json && json.data)
+        ? json.data
+        : Array.isArray(json && json.models)
+          ? json.models
+          : []
+    const seen = new Map()
+    for (const row of rows) {
+      const raw = typeof row === 'string' ? row : (row && (row.id || row.name || row.model))
+      const id = String(raw || '').trim()
+      if (!id || seen.has(id)) continue
+      const label = row && typeof row === 'object' && typeof row.name === 'string' && row.name ? row.name : id
+      seen.set(id, { id, label })
+    }
+    if (seen.size === 0) {
+      throw new AIGatewayError('ai.bad-shape', 'Model list response has no model ids')
+    }
+    const models = [...seen.values()].sort((a, b) => a.id.localeCompare(b.id))
+    return { models, provider: cfg.provider, baseUrl: cfg.baseUrl, count: models.length }
+  } catch (err) {
+    if (err instanceof AIGatewayError) throw err
+    if (err && err.name === 'AbortError') {
+      throw new AIGatewayError('ai.timeout', `Model list timed out after ${envCfg.timeoutMs}ms`)
+    }
+    throw new AIGatewayError('ai.network', String((err && err.message) || err))
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 let auditDir = null
 
 function maskedStatus() {
   const cfg = aiConfig()
+  const preset = presetFor(cfg.provider)
+  const keyless = !!(preset && preset.keyless)
+  const requiresModel = !!(preset && preset.requiresModel)
+  const needsBase = !cfg.baseUrl
+  const needsKey = !keyless && cfg.apiKey.length === 0
+  const needsModel = requiresModel && !cfg.model
   return {
     provider: cfg.provider,
+    providerLabel: preset ? preset.label : cfg.provider,
     baseUrl: cfg.baseUrl,
     model: cfg.model,
     hasKey: cfg.apiKey.length > 0,
+    keyless,
+    needsBaseUrl: needsBase,
+    needsModel,
+    // A single boolean the UI can badge on: endpoint + credentials + model set.
+    configured: !needsBase && !needsKey && !needsModel,
     rpm: cfg.rpm,
     timeoutMs: cfg.timeoutMs
   }
@@ -382,6 +564,17 @@ function registerAiGateway() {
     }
   })
   ipcMain.handle('tools:ai-gateway:getStatus', () => maskedStatus())
+  // Model discovery: lets the renderer offer the model ids an aggregator
+  // (FreeLLMAPI et al.) exposes instead of asking the user to type them.
+  ipcMain.handle('tools:ai-gateway:models', async (_event, args) => {
+    try {
+      const result = await listModels(args, {})
+      return { ok: true, data: result }
+    } catch (err) {
+      return { ok: false, code: err.code || 'ai.network', error: err.message }
+    }
+  })
+  ipcMain.handle('tools:ai-gateway:presets', () => ({ ok: true, data: { presets: providerPresets() } }))
 }
 
 module.exports = {
@@ -393,6 +586,9 @@ module.exports = {
   parseChatResponse,
   complete,
   transcribe,
+  listModels,
   maskedStatus,
+  needsBaseUrl,
+  providerPresets,
   registerAiGateway
 }

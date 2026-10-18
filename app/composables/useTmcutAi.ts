@@ -1,4 +1,4 @@
-import type { AiCompleteInput } from '~~/types/electron'
+import type { AiCompleteInput, AiGatewayStatus, AiModelInfo, AiProviderPreset } from '~~/types/electron'
 
 function aiApi() {
   return typeof window !== 'undefined' ? window.electronAPI?.tools?.aiGateway : undefined
@@ -32,7 +32,7 @@ export function useTmcutAi() {
     return res.data
   }
 
-  async function status() {
+  async function status(): Promise<AiGatewayStatus | null> {
     const api = aiApi()
     if (!api) return null
     try {
@@ -42,10 +42,39 @@ export function useTmcutAi() {
     }
   }
 
+  /**
+   * Model discovery for multi-provider gateways (FreeLLMAPI et al.):
+   * GET {base}/models through the main process, so the key never reaches
+   * the renderer and the result can populate a model picker.
+   */
+  async function listModels(args: { provider?: string, apiKey?: string, baseUrl?: string } = {}): Promise<AiModelInfo[]> {
+    const api = aiApi()
+    if (!api) throw new Error('AI gateway requires the desktop (Electron) app')
+    const res = await api.models(args)
+    if (!res?.ok || !res.data) {
+      throw new Error(res?.error || `Model list failed (${res?.code || 'unknown'})`)
+    }
+    return res.data.models
+  }
+
+  /** Provider presets (built-in endpoints + aggregator entries). */
+  async function providerPresets(): Promise<AiProviderPreset[]> {
+    const api = aiApi()
+    if (!api) return []
+    try {
+      const res = await api.presets()
+      return res?.ok && res.data ? res.data.presets : []
+    } catch {
+      return []
+    }
+  }
+
   return {
     isDesktop,
     complete,
     transcribe,
-    status
+    status,
+    listModels,
+    providerPresets
   }
 }

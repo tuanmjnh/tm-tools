@@ -1,9 +1,16 @@
 <script setup lang="ts">
 // =============================================================================
-//  Effects / Transitions / Filters library (roadmap R112) — the "More" tab of
-//  the media library, replacing the old coming-soon placeholder. Data-driven
-//  from the core registries (EFFECT_REGISTRY, KNOWN_TRANSITIONS, lut3d enum)
-//  so the panel can never drift from what actually renders in preview/export.
+//  Effects / Transitions / Filters library (roadmap R112, R128 expansion) —
+//  the "More" tab of the media library, replacing the old coming-soon
+//  placeholder. Fully DATA-DRIVEN from the core registries at runtime:
+//  EFFECT_REGISTRY (effects + their `category`), the lut3d preset enum
+//  (filters) and app/utils/tmcut/fxCatalog.ts (transition names + grouping),
+//  so this panel can never drift from what actually renders in preview/export.
+//
+//  R128: a search box matches type + label, effects are grouped under their
+//  registry category with a category chip row, the Filters tab shows every
+//  lut3d preset the core ships (>= 18), and transitions are grouped by the
+//  catalog's category with readable labels.
 //
 //  Semantics: effects & filters apply to the SELECTED clip (add/toggle);
 //  transitions apply to the selected clip's cut with its left neighbor via
@@ -18,8 +25,20 @@ import {
   toggleEffectOnClip,
   setLutPresetOnClip,
   activeLutPreset,
-  transitionReasonKey
+  transitionReasonKey,
+  registryEntries,
+  searchEffects,
+  groupEffectsByCategory,
+  effectCategoryOf,
+  filterPresets,
+  lutSwatch,
+  humanizeKey,
+  groupsFromCatalog,
+  groupTransitions,
+  FX_OTHER_CATEGORY
 } from '~/utils/tmcut/fxLibrary'
+import type { FxRegistryEntry, FxTransitionEntry } from '~/utils/tmcut/fxLibrary'
+import { TRANSITION_CATALOG, TRANSITION_CATEGORIES, transitionsByCategory } from '~/utils/tmcut/fxCatalog'
 
 // R120: the media panel splits Effects / Transitions / Filters into their
 // own top-level tabs (mock #2 subtab bar); the component keeps its internal
@@ -45,16 +64,16 @@ const {
 } = useTmcutProject()
 
 const DEFAULT_TRANSITION_SEC = 0.5
-const LUT_OPTIONS = ['neutral', 'warm', 'cool', 'cinematic', 'vintage']
 
-// Swatch gradients are presentation constants for the LUT tiles.
-const LUT_SWATCH: Record<string, [string, string]> = {
-  neutral: ['#3f3f46', '#71717a'],
-  warm: ['#b45309', '#f59e0b'],
-  cool: ['#1e3a8a', '#38bdf8'],
-  cinematic: ['#0f172a', '#334155'],
-  vintage: ['#92400e', '#d6d3d1']
-}
+// --- Search + category filter (shared by the three sub-tabs) ---------------
+const search = ref('')
+const activeCategory = ref('all')
+// The chip row is per-tab: a category picked for effects makes no sense once
+// the user switches to transitions/filters.
+watch(fxTab, () => {
+  activeCategory.value = 'all'
+})
+const query = computed(() => search.value.trim())
 
 // Icon per effect type (registry owns the truth; this is presentation only).
 const EFFECT_ICONS: Record<string, string> = {
@@ -65,7 +84,29 @@ const EFFECT_ICONS: Record<string, string> = {
   'chromakey': 'i-lucide-droplet',
   'lut3d': 'i-lucide-palette',
   'stabilize': 'i-lucide-wind',
-  'eq-grade': 'i-lucide-contrast'
+  'eq-grade': 'i-lucide-contrast',
+  // R128 wave.
+  'pixelate': 'i-lucide-grid-2x2',
+  'emboss': 'i-lucide-layers',
+  'edge-detect': 'i-lucide-scan',
+  'letterbox': 'i-lucide-frame',
+  'mirror-h': 'i-lucide-flip-horizontal',
+  'mirror-v': 'i-lucide-flip-vertical',
+  'rotate-90': 'i-lucide-rotate-cw',
+  'chromatic': 'i-lucide-git-compare',
+  'fisheye': 'i-lucide-globe',
+  'motion-blur': 'i-lucide-wind',
+  'afterimage': 'i-lucide-copy',
+  'denoise': 'i-lucide-eraser',
+  'deband': 'i-lucide-layers',
+  'sepia': 'i-lucide-coffee',
+  'mono': 'i-lucide-contrast',
+  'vhs': 'i-lucide-tv',
+  'negate': 'i-lucide-circle-slash',
+  'vivid': 'i-lucide-sun',
+  'bleach-bypass': 'i-lucide-snowflake',
+  'teal-orange': 'i-lucide-paint-bucket',
+  'vibrance': 'i-lucide-waves'
 }
 
 const TRANSITION_ICONS: Record<string, string> = {
@@ -94,36 +135,133 @@ const activeTransition = computed(() => {
   return (ti?.duration ?? 0) > 0 ? ti!.type : null
 })
 
-const effectCards = computed(() =>
-  Object.values(EFFECT_REGISTRY)
-    // lut3d lives in the Filters tab; stabilize has its own E-5 section.
-    .filter(desc => desc.type !== 'lut3d' && desc.type !== 'stabilize')
-    .map(desc => ({
+// --- Localised labels (registry/catalog text is the English fallback) ------
+function effectIcon(type: string): string {
+  return EFFECT_ICONS[type] || 'i-lucide-sparkles'
+}
+
+function effectCategoryLabel(category: string): string {
+  return t(`tmcut.fxLib.effectCategories.${category}`, humanizeKey(category))
+}
+
+function transitionCategoryLabel(category: string): string {
+  return t(`tmcut.fxLib.transitionCategories.${category}`, humanizeKey(category))
+}
+
+function effectLabel(entry: FxRegistryEntry): string {
+  const key = entry.type === 'eq-grade' ? 'eqGrade' : entry.type
+  return t(`tmcut.effects.${key}`, entry.label || humanizeKey(entry.type))
+}
+
+function filterLabel(preset: string): string {
+  return t(`tmcut.fxLib.lut.${preset}`, humanizeKey(preset))
+}
+
+function transitionLabel(key: string, fallback?: string): string {
+  return t(`tmcut.clipMenu.types.${key}`, fallback || humanizeKey(key))
+}
+
+// --- Effects: registry-driven, grouped by category -------------------------
+// lut3d lives in the Filters tab; stabilize has its own E-5 inspector section.
+const allEffects = computed(() =>
+  registryEntries(EFFECT_REGISTRY).filter(desc => desc.type !== 'lut3d' && desc.type !== 'stabilize')
+)
+
+const matchedEffects = computed(() => searchEffects(allEffects.value, query.value))
+
+const categoryChips = computed(() => [
+  'all',
+  ...groupEffectsByCategory(allEffects.value).map(group => group.category)
+])
+
+const effectGroups = computed(() => {
+  // A live query searches across every category (never hides a match behind
+  // the chip row the user picked earlier).
+  const list = activeCategory.value === 'all' || query.value
+    ? matchedEffects.value
+    : matchedEffects.value.filter(desc => effectCategoryOf(desc) === activeCategory.value)
+  return groupEffectsByCategory(list).map(group => ({
+    category: group.category,
+    label: effectCategoryLabel(group.category),
+    items: group.items.map(desc => ({
       type: desc.type,
-      icon: EFFECT_ICONS[desc.type] || 'i-lucide-sparkles',
-      label: t(`tmcut.effects.${desc.type === 'eq-grade' ? 'eqGrade' : desc.type}`),
-      desc: t(`tmcut.effects.${desc.type === 'eq-grade' ? 'eqGradeDesc' : `${desc.type}Desc`}`),
+      icon: effectIcon(desc.type),
+      label: effectLabel(desc),
+      // Honest fallback: no per-effect description key yet -> name the
+      // category the registry filed it under instead of an empty line.
+      desc: t(
+        `tmcut.effects.${desc.type === 'eq-grade' ? 'eqGradeDesc' : `${desc.type}Desc`}`,
+        effectCategoryLabel(effectCategoryOf(desc))
+      ),
       active: activeEffectTypes.value.has(desc.type)
     }))
+  }))
+})
+
+const matchedEffectCount = computed(() =>
+  effectGroups.value.reduce((total, group) => total + group.items.length, 0)
 )
 
-const transitionCards = computed(() =>
-  KNOWN_TRANSITIONS.map(type => ({
-    type,
-    icon: TRANSITION_ICONS[type] || 'i-lucide-shapes',
-    label: t(`tmcut.clipMenu.types.${type}`),
-    active: activeTransition.value === type
-  }))
+// --- Filters: every lut3d preset the core registry ships -------------------
+const lutPresets = computed(() => filterPresets(EFFECT_REGISTRY))
+
+const filterCards = computed(() => {
+  const needle = query.value.toLowerCase()
+  return lutPresets.value
+    .filter(preset => !needle
+      || preset.toLowerCase().includes(needle)
+      || filterLabel(preset).toLowerCase().includes(needle))
+    .map(preset => ({
+      preset,
+      label: filterLabel(preset),
+      active: activeLut.value === preset,
+      swatch: lutSwatch(preset)
+    }))
+})
+
+// --- Transitions: fxCatalog categories + readable labels -------------------
+// transitionsByCategory() keeps every xfade alias pair (zoom-in vs zoomin) as
+// its own row, so tiles are keyed by `key`, never by the xfade name.
+const transitionGroups = computed(() => {
+  const groups: Array<{ category: string, items: Array<{ key: string, label: string }> }> = []
+  if (TRANSITION_CATALOG.length) {
+    // Normalize the catalog Record so a key the catalog does not mention yet
+    // still renders (never hide a transition the core accepts).
+    const buckets: Record<string, readonly FxTransitionEntry[]> = {}
+    for (const [category, entries] of Object.entries(transitionsByCategory())) buckets[category] = entries
+    for (const group of groupsFromCatalog(KNOWN_TRANSITIONS, buckets, [...TRANSITION_CATEGORIES, FX_OTHER_CATEGORY])) {
+      groups.push({ category: group.category, items: group.items })
+    }
+  } else {
+    for (const group of groupTransitions(KNOWN_TRANSITIONS)) {
+      groups.push({ category: group.category, items: group.items })
+    }
+  }
+  const needle = query.value.toLowerCase()
+  return groups
+    .map(group => ({
+      category: group.category,
+      label: transitionCategoryLabel(group.category),
+      items: group.items
+        .map(item => ({
+          key: item.key,
+          icon: TRANSITION_ICONS[item.key] || 'i-lucide-shapes',
+          label: transitionLabel(item.key, item.label),
+          active: activeTransition.value === item.key
+        }))
+        .filter(card => !needle || card.key.toLowerCase().includes(needle) || card.label.toLowerCase().includes(needle))
+    }))
+    .filter(group => group.items.length > 0)
+})
+
+const matchedTransitionCount = computed(() =>
+  transitionGroups.value.reduce((total, group) => total + group.items.length, 0)
 )
 
-const filterCards = computed(() =>
-  LUT_OPTIONS.map(preset => ({
-    preset,
-    label: t(`tmcut.fxLib.lut.${preset}`),
-    active: activeLut.value === preset,
-    swatch: `linear-gradient(135deg, ${LUT_SWATCH[preset]?.[0] ?? '#3f3f46'}, ${LUT_SWATCH[preset]?.[1] ?? '#71717a'})`
-  }))
-)
+const emptyKey = computed(() => {
+  if (fxTab.value === 'filters') return lutPresets.value.length ? 'noMatches' : 'noPresets'
+  return 'noMatches'
+})
 
 function toastNeedClip() {
   toast.add({ title: t('tmcut.fxLib.needClip'), color: 'neutral' })
@@ -224,71 +362,139 @@ function handlePickTransition(type: string) {
       <span>{{ t('tmcut.fxLib.targetHint', { clip: selectedClip?.item?.name || selectedClip?.item?.text || t('tmcut.fxLib.unnamedClip') }) }}</span>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 p-2 overflow-y-auto min-h-0">
-      <!-- Effects grid (core EFFECT_REGISTRY, minus the tabs' own members) -->
+    <!-- Search (matches registry type + label, catalog key + label) -->
+    <div class="px-2 pt-2">
+      <UInput
+        v-model="search"
+        icon="i-lucide-search"
+        size="xs"
+        class="w-full"
+        :placeholder="t('tmcut.fxLib.searchPlaceholder')"
+      />
+    </div>
+
+    <!-- Category filter row (effects only; scrolls instead of overflowing) -->
+    <div
+      v-if="fxTab === 'effects' && categoryChips.length > 2"
+      class="flex items-center gap-1 px-2 pt-2 overflow-x-auto"
+    >
+      <button
+        v-for="chip in categoryChips"
+        :key="chip"
+        type="button"
+        class="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors cursor-pointer"
+        :class="activeCategory === chip
+          ? 'border-primary bg-primary/15 text-primary'
+          : 'border-neutral-300 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'"
+        @click="activeCategory = chip"
+      >
+        {{ chip === 'all' ? t('tmcut.fxLib.categoryAll') : effectCategoryLabel(chip) }}
+      </button>
+    </div>
+
+    <div class="p-2 space-y-3 overflow-y-auto min-h-0">
+      <!-- Effects: one grid per registry category -->
       <template v-if="fxTab === 'effects'">
-        <button
-          v-for="card in effectCards"
-          :key="card.type"
-          type="button"
-          class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
-          :class="card.active
-            ? 'border-primary bg-primary/10'
-            : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
-          :title="card.desc"
-          @click="handleToggleEffect(card.type)"
-        >
-          <div class="flex items-center justify-between w-full">
-            <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-            <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+        <div v-for="group in effectGroups" :key="group.category" class="space-y-1.5">
+          <span class="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+            {{ group.label }}
+          </span>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="card in group.items"
+              :key="card.type"
+              type="button"
+              class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
+              :class="card.active
+                ? 'border-primary bg-primary/10'
+                : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+              :title="card.desc"
+              @click="handleToggleEffect(card.type)"
+            >
+              <div class="flex items-center justify-between w-full">
+                <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
+                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+              </div>
+              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
+              <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug line-clamp-2">{{ card.desc }}</span>
+            </button>
           </div>
-          <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
-          <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug line-clamp-2">{{ card.desc }}</span>
-        </button>
+        </div>
+
+        <!-- Honest empty state: registry/query produced no tile -->
+        <div
+          v-if="matchedEffectCount === 0"
+          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
+        >
+          {{ t(`tmcut.fxLib.${emptyKey}`) }}
+        </div>
       </template>
 
-      <!-- Transitions grid (core KNOWN_TRANSITIONS — single source) -->
-      <template v-else-if="fxTab === 'transitions'">
-        <button
-          v-for="card in transitionCards"
-          :key="card.type"
-          type="button"
-          class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
-          :class="card.active
-            ? 'border-primary bg-primary/10'
-            : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
-          @click="handlePickTransition(card.type)"
+      <!-- Filters: every lut3d preset from the registry enum -->
+      <template v-else-if="fxTab === 'filters'">
+        <div class="grid grid-cols-2 gap-2">
+          <button
+            v-for="card in filterCards"
+            :key="card.preset"
+            type="button"
+            class="flex flex-col items-stretch gap-1.5 p-2 rounded-lg border text-left transition-colors cursor-pointer"
+            :class="card.active
+              ? 'border-primary bg-primary/10'
+              : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+            @click="handleToggleLut(card.preset)"
+          >
+            <span
+              class="h-10 rounded-md border border-neutral-300 dark:border-neutral-700"
+              :style="{ background: card.swatch }"
+            />
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">{{ card.label }}</span>
+              <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+            </div>
+          </button>
+        </div>
+
+        <div
+          v-if="filterCards.length === 0"
+          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
         >
-          <div class="flex items-center justify-between w-full">
-            <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-            <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
-          </div>
-          <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
-          <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug">{{ t('tmcut.fxLib.transitionDefault') }}</span>
-        </button>
+          {{ t(`tmcut.fxLib.${emptyKey}`) }}
+        </div>
       </template>
 
-      <!-- Filters grid (lut3d presets — single effect, five grades) -->
+      <!-- Transitions: grouped by fxCatalog category, readable labels -->
       <template v-else>
-        <button
-          v-for="card in filterCards"
-          :key="card.preset"
-          type="button"
-          class="flex flex-col items-stretch gap-1.5 p-2 rounded-lg border text-left transition-colors cursor-pointer"
-          :class="card.active
-            ? 'border-primary bg-primary/10'
-            : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
-          @click="handleToggleLut(card.preset)"
-        >
-          <span
-            class="h-10 rounded-md border border-neutral-300 dark:border-neutral-700"
-            :style="{ background: card.swatch }"
-          />
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">{{ card.label }}</span>
-            <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+        <div v-for="group in transitionGroups" :key="group.category" class="space-y-1.5">
+          <span class="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+            {{ group.label }}
+          </span>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="card in group.items"
+              :key="card.key"
+              type="button"
+              class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
+              :class="card.active
+                ? 'border-primary bg-primary/10'
+                : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+              @click="handlePickTransition(card.key)"
+            >
+              <div class="flex items-center justify-between w-full">
+                <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
+                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+              </div>
+              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
+              <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug">{{ t('tmcut.fxLib.transitionDefault') }}</span>
+            </button>
           </div>
-        </button>
+        </div>
+
+        <div
+          v-if="matchedTransitionCount === 0"
+          class="py-6 text-center text-[11px] text-neutral-500 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg"
+        >
+          {{ t(`tmcut.fxLib.${emptyKey}`) }}
+        </div>
       </template>
     </div>
   </div>

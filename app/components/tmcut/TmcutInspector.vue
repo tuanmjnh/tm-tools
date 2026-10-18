@@ -8,7 +8,7 @@ import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
-import { applyMediaAnimPreset, effectDefaultParams } from '~/utils/tmcut/fxLibrary'
+import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey } from '~/utils/tmcut/fxLibrary'
 import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
 
 const { t } = useI18n()
@@ -382,6 +382,11 @@ const eqBrightness = computed(() => eqParam('brightness', 0))
 const eqContrast = computed(() => eqParam('contrast', 100))
 const eqSaturation = computed(() => eqParam('saturation', 100))
 const tempValue = computed(() => eqParam('temp', 0))
+// R128 grading params (core eq-grade grew hue/gamma/fade/vibrance).
+const eqHue = computed(() => eqParam('hue', 0))
+const eqGamma = computed(() => eqParam('gamma', 100))
+const eqFade = computed(() => eqParam('fade', 0))
+const eqVibrance = computed(() => eqParam('vibrance', 0))
 
 const blendMode = computed(() => clip.value?.blend || 'normal')
 
@@ -556,12 +561,25 @@ function getEffectParams(type: string) {
   return EFFECT_REGISTRY[type]?.params || []
 }
 
+// R128: 29 registry effects would be an unreadable flat wall in the narrow
+// panel — group them by registry category (same helper the FX Library uses),
+// in the library's category order. Unknown categories land under 'other'.
 const effectMenuItems = computed(() => {
-  return Object.values(EFFECT_REGISTRY).map(desc => ({
-    label: effectLabel(desc.type),
-    icon: effectIcon(desc.type),
-    onSelect: () => handleAddEffect(desc.type)
-  }))
+  const groups = groupEffectsByCategory(registryEntries(EFFECT_REGISTRY))
+  const items: Array<Record<string, unknown>> = []
+  for (const group of groups) {
+    items.push({ label: t('tmcut.fxLib.effectCategories.' + group.category, humanizeKey(group.category)), type: 'label' })
+    for (const entry of group.items) {
+      items.push({
+        label: effectLabel(entry.type),
+        icon: effectIcon(entry.type),
+        onSelect: () => handleAddEffect(entry.type)
+      })
+    }
+    items.push({ type: 'separator' })
+  }
+  items.pop() // no trailing separator
+  return items
 })
 
 function handleAddEffect(type: string) {
@@ -1411,6 +1429,64 @@ const saveStateLabel = computed(() => {
             :value="tempValue"
             class="w-full accent-primary"
             @input="e => ensureEqGradeAndUpdate('temp', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <!-- R128 grading sliders: same lazy-create + coalesced-history path
+             as the sliders above (ensureEqGradeAndUpdate). -->
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.hue') }}</label>
+            <span class="font-mono text-[10px]">{{ eqHue }}°</span>
+          </div>
+          <input
+            type="range"
+            min="-180"
+            max="180"
+            :value="eqHue"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('hue', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.gamma') }}</label>
+            <span class="font-mono text-[10px]">{{ eqGamma }}</span>
+          </div>
+          <input
+            type="range"
+            min="10"
+            max="300"
+            :value="eqGamma"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('gamma', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.fade') }}</label>
+            <span class="font-mono text-[10px]">{{ eqFade }}</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            :value="eqFade"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('fade', Number((e.target as HTMLInputElement).value))"
+          >
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
+            <label>{{ t('tmcut.inspectorProps.vibrance') }}</label>
+            <span class="font-mono text-[10px]">{{ eqVibrance }}</span>
+          </div>
+          <input
+            type="range"
+            min="-100"
+            max="100"
+            :value="eqVibrance"
+            class="w-full accent-primary"
+            @input="e => ensureEqGradeAndUpdate('vibrance', Number((e.target as HTMLInputElement).value))"
           >
         </div>
       </div>

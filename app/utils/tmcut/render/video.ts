@@ -4,27 +4,18 @@ import { renderClipDuration } from './clip'
 import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
+import { xfadeNameFor } from '../fxCatalog'
 import { keyframeExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
 
 /**
- * Maps a TMCut transition type into an FFmpeg xfade transition name (roadmap R3, core C5).
+ * Maps a TMCut transition type into an FFmpeg xfade transition name
+ * (roadmap R3, core C5). R128: the mapping lives in the shared render-side
+ * catalog (`app/utils/tmcut/fxCatalog.ts`) so the app graph and the legacy
+ * Electron ffmpeg controller resolve every key through the same table and can
+ * never disagree; unknown keys fall back to a valid xfade name.
  */
 export function mapXfadeTransition(type: string | undefined): string {
-  switch (type) {
-    case 'dissolve':
-      return 'dissolve'
-    case 'wipe-left':
-      return 'wipeleft'
-    case 'wipe-right':
-      return 'wiperight'
-    case 'slide-left':
-      return 'slideleft'
-    case 'zoom-in':
-      return 'zoomin'
-    case 'fade':
-    default:
-      return 'fade'
-  }
+  return xfadeNameFor(type)
 }
 
 export interface VideoPipelineContext {

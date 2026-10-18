@@ -61,7 +61,7 @@ const profiles = exposeNamespace('tools:profiles', {
 })
 
 const aiGateway = exposeNamespace('tools:ai-gateway', {
-  invoke: ['complete', 'transcribe', 'getStatus'],
+  invoke: ['complete', 'transcribe', 'getStatus', 'models', 'presets'],
   on: []
 })
 

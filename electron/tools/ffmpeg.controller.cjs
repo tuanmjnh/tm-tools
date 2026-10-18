@@ -79,7 +79,9 @@ function detectGpuSupport() {
       try {
         execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_nvenc -f null -`, { stdio: 'pipe' })
         nvenc = true
-      } catch (_) { }
+      } catch {
+        // probe failed — encoder unavailable at runtime
+      }
     }
 
     let amf = false
@@ -87,7 +89,9 @@ function detectGpuSupport() {
       try {
         execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_amf -f null -`, { stdio: 'pipe' })
         amf = true
-      } catch (_) { }
+      } catch {
+        // probe failed — encoder unavailable at runtime
+      }
     }
 
     let qsv = false
@@ -95,7 +99,9 @@ function detectGpuSupport() {
       try {
         execSync(`"${ffmpegExe}" -hide_banner -f lavfi -i color=s=64x64:d=0.04 -c:v h264_qsv -f null -`, { stdio: 'pipe' })
         qsv = true
-      } catch (_) { }
+      } catch {
+        // probe failed — encoder unavailable at runtime
+      }
     }
 
     cachedGpuSupport = {
@@ -818,6 +824,59 @@ const XFADE_TRANSITIONS = [
   'dissolve', 'pixelize'
 ]
 
+// ---------------------------------------------------------------------------
+// Shared transition resolution (R128).
+//
+// Mirror of the render-side catalog `app/utils/tmcut/fxCatalog.ts`. The
+// packaged app ships only electron/** and .output/** (electron-builder.yml
+// `files:`), so this CommonJS main-process file cannot `require` the
+// Nuxt/TypeScript module — this block is therefore the CJS twin of
+// `xfadeNameFor()`. tests/unit/tmcut_fx_catalog.spec.ts extracts the block
+// between the markers below and asserts it resolves identically — table for
+// table and input for input — to the app catalog, so the app graph and the
+// legacy image2video path can never disagree.
+// FXCATALOG-MIRROR-BEGIN
+const FXCATALOG_LEGACY_ALIASES = [
+  ['fade', 'fade'],
+  ['dissolve', 'dissolve'],
+  ['wipe-left', 'wipeleft'],
+  ['wipe-right', 'wiperight'],
+  ['slide-left', 'slideleft'],
+  ['zoom-in', 'zoomin']
+]
+
+// Documented FFmpeg xfade names (`ffmpeg -h filter=xfade`). Kept verbatim in
+// sync with FFMPEG_XFADE_NAMES in app/utils/tmcut/fxCatalog.ts.
+const FFMPEG_XFADE_NAMES = [
+  'circleclose', 'circlecrop', 'circleopen', 'coverdown', 'coverleft', 'coverright',
+  'coverup', 'custom', 'diagbl', 'diagbr', 'diagtl', 'diagtr', 'distance', 'dissolve',
+  'fade', 'fadeblack', 'fadefast', 'fadegrays', 'fadeslow', 'fadewhite', 'hblur',
+  'hlslice', 'hlwind', 'horzclose', 'horzopen', 'hrslice', 'hrwind', 'pixelize',
+  'radial', 'rectcrop', 'revealdown', 'revealleft', 'revealright', 'revealup',
+  'slideleft', 'slideright', 'slidedown', 'slideup', 'smoothdown', 'smoothleft',
+  'smoothright', 'smoothup', 'squeezeh', 'squeezev', 'vertclose', 'vertopen',
+  'vdslice', 'vdwind', 'vuslice', 'vuwind', 'wipebl', 'wipebr', 'wipedown',
+  'wipeleft', 'wiperight', 'wipetl', 'wipetr', 'wipeup', 'zoomin'
+]
+
+/**
+ * Resolves a stored transition key to an FFmpeg xfade name. Legacy TMCut keys
+ * resolve through their alias; an unknown key that is already a documented
+ * xfade name passes through (except `custom`, which needs an expr); anything
+ * else falls back to `fade` so an unknown/garbage key can never produce a
+ * broken filter graph.
+ */
+function xfadeNameFor(key) {
+  if (typeof key === 'string') {
+    for (const [name, xfade] of FXCATALOG_LEGACY_ALIASES) {
+      if (name === key) return xfade
+    }
+    if (key !== 'custom' && FFMPEG_XFADE_NAMES.includes(key)) return key
+  }
+  return 'fade'
+}
+// FXCATALOG-MIRROR-END
+
 function buildImage2VideoArgs(images, output, settings = {}, gpuSupport = {}, chosenEncoder = 'cpu') {
   const fps = settings.fps || 30
   const width = settings.width || 1920
@@ -915,7 +974,7 @@ function buildImage2VideoArgs(images, output, settings = {}, gpuSupport = {}, ch
     cumulativeOffset += (durPrev - tDur)
     const offsetVal = Math.max(0, cumulativeOffset).toFixed(3)
 
-    const trans = availableTransitions[Math.floor(Math.random() * availableTransitions.length)] || 'fade'
+    const trans = xfadeNameFor(availableTransitions[Math.floor(Math.random() * availableTransitions.length)] || 'fade')
 
     const newV = `[vt${i}]`
     filterComplex.push(`${currentV}[v${i}]xfade=transition=${trans}:duration=${tDur.toFixed(2)}:offset=${offsetVal}${newV}`)

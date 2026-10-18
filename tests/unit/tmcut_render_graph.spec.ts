@@ -142,6 +142,51 @@ function main() {
     assert.ok(result.args.includes('20'))
   })
 
+  check('R128: new xfade keys compile end-to-end and unknown keys fall back to fade', () => {
+    const projectWith = (transitionType: string): TmcutProject => ({
+      version: 1,
+      name: 'xfade Test',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              { id: 'vclip1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), speed: 1 },
+              {
+                id: 'vclip2',
+                trackId: 'v1',
+                src: 'clip2.mp4',
+                offset: tk(3.5),
+                in: 0,
+                out: tk(4),
+                speed: 1,
+                transitionIn: { type: transitionType, duration: tk(0.5) }
+              }
+            ]
+          }
+        ]
+      }
+    })
+    const filterComplex = (transitionType: string) => {
+      const result = compileTimelineToFfmpeg(projectWith(transitionType), 'out.mp4')
+      return result.args[result.args.indexOf('-filter_complex') + 1]!
+    }
+    // R128 keys pass through fxCatalog -> xfadeNameFor -> literal xfade name.
+    for (const transitionType of ['circleopen', 'fadeblack', 'smoothleft', 'zoomin']) {
+      assert.ok(
+        filterComplex(transitionType).includes(`xfade=transition=${transitionType}:duration=0.500:offset=3.500`),
+        `missing xfade for ${transitionType}`
+      )
+    }
+    // An unknown key must never break the graph: it degrades to a safe fade.
+    const unknownFc = filterComplex('star-wipe')
+    assert.ok(unknownFc.includes('xfade=transition=fade:duration=0.500:offset=3.500'))
+    assert.ok(unknownFc.includes('acrossfade='))
+  })
+
   check('compileTimelineToFfmpeg supports GIF output with palettegen/paletteuse', () => {
     const project: TmcutProject = {
       version: 1,

@@ -186,6 +186,11 @@ function closeModal() {
       <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto">
         <!-- Left Panel: Configuration -->
         <div class="lg:col-span-5 flex flex-col gap-4">
+          <!-- R128: provider / base URL / key / model setup, built for
+               multi-provider gateways (FreeLLMAPI style: one endpoint,
+               many models). Badge above reflects the stored config. -->
+          <TmcutAiConnect @saved="checkGatewayStatus()" />
+
           <div>
             <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.aiScript.topicLabel') }}
