@@ -932,7 +932,8 @@
     "save": {
       "saving": "Saving…",
       "saved": "Saved",
-      "error": "Save failed"
+      "error": "Save failed",
+      "staleRevision": "Stale"
     },
     "media": {
       "library": "Media Library",
@@ -1214,7 +1215,9 @@
       "exportFailedToast": "Template export failed",
       "importedToast": "Imported {count} template(s)",
       "importFailedToast": "{count} file(s) could not be imported",
-      "importEmptyToast": "No template files selected"
+      "importEmptyToast": "No template files selected",
+      "importedIntoProject": "Imported template into project: {name}",
+      "importIntoProject": "Import template into project"
     },
     "aiScript": {
       "buttonLabel": "AI Script",

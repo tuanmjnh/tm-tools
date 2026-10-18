@@ -166,6 +166,17 @@ export interface TmcutProject {
   pinned?: boolean
   /** Project-file schema version (see TM CUT_PROJECT_SCHEMA_VERSION). */
   schemaVersion?: number
+  /**
+   * R132 — monotonic mutation counter (docs §196). Every save bumps it by
+   * one; loadProject reports the on-disk value. It is the ONLY honest
+   * answer to "was this project edited while I had it open" — the
+   * alternative (comparing updated_at strings, or diffing the whole
+   * object) is either ambiguous or O(n). Future automation/MCP writers
+   * will read it before persisting, so a stale write can refuse instead
+   * of silently overwriting another writer's edit. It is NOT a lock: the
+   * app is still the single writer, and the counter is advisory.
+   */
+  revision?: number
 }
 
 // Global project state
@@ -177,6 +188,14 @@ const isCropEditing = ref(false)
 const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
 const lastSavedAt = ref<string | null>(null)
 const pendingRecovery = ref<{ id: string, updatedAt: string } | null>(null)
+/**
+ * R132 — the project revision captured by the LAST loadProject for the
+ * currently open project. Exposed read-only: the editor (and future
+ * automation writers) can compare it against currentProject.revision to
+ * detect "this file was written outside this session while I held it".
+ * null until the first load completes.
+ */
+const revisionAtLoad = ref<number | null>(null)
 const snapshots = ref<Array<{ ts: number, name: string, updatedAt: string }>>([])
 
 function toggleCropEditing(active?: boolean) {
@@ -377,12 +396,19 @@ async function loadProject(projectId: string) {
   // they were built on.
   resetHistory()
 
+  // R132: remember the revision the file was at when we opened it. The
+  // editor never bumps it (saveProject does), so anything larger than
+  // this means another process wrote to the file while we had it open —
+  // the honest signal for a "your edits may be stale" prompt.
+  revisionAtLoad.value = null
+
   const ipc = tmcutIpc()
   if (ipc && !import.meta.server) {
     try {
       const disk = (await ipc.readProject(projectId)) as TmcutProject | null
       if (disk && disk.id && Array.isArray(disk.timeline?.tracks)) {
         currentProject.value = disk
+        revisionAtLoad.value = typeof disk.revision === 'number' ? disk.revision : 0
         applyProjectMigration(disk)
         syncProjectIndex(disk)
         await detectRecovery(projectId)
@@ -404,6 +430,7 @@ async function loadProject(projectId: string) {
       try {
         const local = JSON.parse(stored) as TmcutProject
         currentProject.value = local
+        revisionAtLoad.value = typeof local.revision === 'number' ? local.revision : 0
         applyProjectMigration(local)
         syncProjectIndex(local)
         // R105: the disk file can be missing while a recovery file is not
@@ -421,6 +448,7 @@ async function loadProject(projectId: string) {
 
   const newProj = buildDefaultProject(projectId)
   currentProject.value = newProj
+  revisionAtLoad.value = 0
   await detectRecovery(projectId) // R105: same orphan case
   isLoading.value = false
 }
@@ -522,11 +550,19 @@ async function refreshProjects() {
 }
 
 // Save project (localStorage mirror + scheduled disk write)
-function saveProject() {
+function saveProject(options?: { revision?: number }) {
   if (!currentProject.value || import.meta.server) return
 
   currentProject.value.updated_at = new Date().toISOString()
   currentProject.value.durationMs = Math.round(totalDuration.value * 1000)
+  // R132: the mutation counter is the single source of truth for "did
+  // anything change since I opened this". Bumped on every save, never on
+  // open (lastOpenedAt is independent of it, see the field comment).
+  const nextRevision = options?.revision ?? (currentProject.value.revision ?? 0)
+  currentProject.value.revision = (typeof nextRevision === 'number' ? Math.max(0, nextRevision) : 0) + 1
+  // When creating a fresh project we already set revision to 0; we must not
+  // bump it on the first save — the first save is the creation baseline.
+  if (options?.revision === 0) currentProject.value.revision = 0
 
   const idx = projects.value.findIndex(p => p.id === currentProject.value!.id)
   if (idx !== -1) {
@@ -558,14 +594,20 @@ function createProject(
 
   flushDiskSave() // outgoing project keeps its pending edit (R95)
   currentProject.value = newProject
+  // Fresh project starts at revision 0 (the initial save) so the counter
+  // is the honest answer to "has this project been changed since I opened
+  // it". The very first save must not record as a "mutation" yet.
+  newProject.revision = 0
   resetHistory() // openProject paths reset the stacks — see R94
   // The same rule covers the other per-project module state (R106): a
   // selection or a recovery prompt from the OUTGOING project must not
   // leak into the freshly created one.
   selectedClipId.value = null
   pendingRecovery.value = null
+  revisionAtLoad.value = 0
   projects.value.unshift(newProject)
-  saveProject()
+  currentProject.value.revision = 0
+  saveProject({ revision: 0 })
 
   return newProject
 }
@@ -1717,6 +1759,11 @@ export function useTmcutProject() {
     switchCanvas,
     setCanvasBackground,
     duplicateAsProject,
+    // R132 — monotonic mutation counter + the revision at open time.
+    // Exposed so the editor (and future automation writers) can detect a
+    // file that was written outside this session while it was held open.
+    revisionAtLoad,
+    currentRevision: () => currentProject.value?.revision ?? 0,
     persistProjectToDisk,
     refreshProjects,
     applyRecovery,

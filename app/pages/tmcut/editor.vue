@@ -7,13 +7,16 @@ import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useFileSystem } from '~/composables/useFileSystem'
+import { useTmcutTemplates } from '~/composables/useTmcutTemplates'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
 import { TMCUT_ASSET_MIME } from '~/utils/tmcut/dnd'
 import type { TmcutAssetDragPayload } from '~/utils/tmcut/dnd'
-import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND } from '@tmcut-core'
+import { TMUTCANVAS_PRESETS, TMUTCUT_SOCIAL_PRESETS, findCanvasPreset, findCanvasPresetByDimensions, ratioLabel, canvasFpsValue, normalizeCanvas } from '~/utils/tmcut/canvas'
+import { filterAssetsByFolder, secToTicks, TICKS_PER_SECOND, instantiateTemplate } from '@tmcut-core'
 import { clipDurationSec } from '~/utils/tmcut/clipTime'
 import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
+import { parseTemplateFile } from '~/utils/tmcut/templateIo'
+import type { TmcutTrack } from '~/composables/useTmcutProject'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -37,7 +40,9 @@ const {
   switchCanvas,
   setCanvasBackground,
   duplicateAsProject,
-  addClipToTrack
+  addClipToTrack,
+  revisionAtLoad,
+  currentRevision
 } = useTmcutProject()
 
 const {
@@ -928,6 +933,11 @@ const editorExtraActions = computed(() => [
       onSelect: () => handleSaveAsTemplate()
     },
     {
+      label: t('tmcut.templateLibrary.importIntoProject'),
+      icon: 'i-lucide-file-down',
+      onSelect: () => handleImportTemplateIntoProject()
+    },
+    {
       label: t('nav.tmcut_autocut'),
       icon: 'i-lucide-scissors',
       onSelect: () => router.push('/tmcut/autocut')
@@ -950,6 +960,62 @@ function handleSaveAsTemplate() {
       color: 'success',
       icon: 'i-lucide-check-circle'
     })
+  }
+}
+
+/**
+ * R132 — import a template file directly from the editor's Save-as menu.
+ * The file is parsed through parseTemplateFile (untrusted input: garbage is
+ * refused, ids regenerate, isBuiltin forced false), then instantiated into
+ * the CURRENT project — unlike the library's importTemplates(), which
+ * drops a template into the library, this one writes the timeline into
+ * the project the user is editing, so it needs the same save gate as any
+ * other mutation.
+ */
+async function handleImportTemplateIntoProject() {
+  if (!currentProject.value) return
+  const api = window.electronAPI
+  if (!api?.dialog || !api?.fileManager) {
+    toast.add({ title: t('tmcut.templateLibrary.importFailedToast', { count: 0 }), color: 'error', icon: 'i-lucide-file-x' })
+    return
+  }
+  try {
+    const paths = await api.dialog.openFile({
+      title: 'Import template into project',
+      filters: [{ name: 'TMCut template / JSON', extensions: ['json'] }]
+    })
+    if (!paths || paths.length === 0) return
+    const firstPath = paths[0]
+    if (!firstPath) return
+    const text = await api.fileManager.read(firstPath)
+    const res = parseTemplateFile(text)
+    if (!res.ok || !res.template) {
+      toast.add({ title: t('tmcut.templateLibrary.importFailedToast', { count: 1 }), color: 'error', icon: 'i-lucide-file-x' })
+      return
+    }
+    const tpl = res.template
+    const instantiated = instantiateTemplate(tpl)
+    const live = currentProject.value
+    live.canvas = normalizeCanvas({
+      width: instantiated.canvas.width,
+      height: instantiated.canvas.height,
+      fps: instantiated.canvas.fps
+    })
+    live.timeline = {
+      version: 1,
+      tracks: instantiated.timeline.tracks as unknown as TmcutTrack[],
+      durationMs: instantiated.durationMs,
+      markers: instantiated.timeline.markers || []
+    }
+    saveProject()
+    toast.add({
+      title: t('tmcut.templateLibrary.importedIntoProject', { name: tpl.name }),
+      color: 'success',
+      icon: 'i-lucide-file-down'
+    })
+  } catch (err) {
+    console.error('Failed to import template into project', err)
+    toast.add({ title: t('tmcut.templateLibrary.importFailedToast', { count: 0 }), color: 'error', icon: 'i-lucide-alert-triangle' })
   }
 }
 
@@ -992,7 +1058,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
           v-if="currentProject"
           v-model="currentProject.name"
           class="bg-transparent border-none font-semibold text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary rounded px-1.5 py-0.5 max-w-50 truncate"
-          @blur="saveProject"
+          @blur="saveProject()"
         >
       </div>
     </template>
@@ -1044,12 +1110,26 @@ function handleEditorKeydown(e: KeyboardEvent) {
       >
         {{ saveLabel }}
       </span>
+      <!-- R132: the project revision is the single honest answer to
+           "was this file written outside this session while I held it
+           open". It is advisory, not a lock — the app is still the
+           single writer. -->
+      <UButton
+        v-if="revisionAtLoad !== null && currentRevision() > revisionAtLoad"
+        icon="i-lucide-file-pen"
+        size="xs"
+        color="warning"
+        variant="soft"
+        :title="t('tmcut.save.staleRevision')"
+      >
+        <span class="hidden md:inline">{{ t('tmcut.save.staleRevision') }}</span>
+      </UButton>
       <UButton
         icon="i-lucide-save"
         size="sm"
         color="primary"
         variant="soft"
-        @click="saveProject"
+        @click="saveProject()"
       >
         <span class="hidden md:inline">{{ t('global.save') }}</span>
       </UButton>

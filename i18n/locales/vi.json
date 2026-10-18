@@ -932,7 +932,8 @@
     "save": {
       "saving": "Đang lưu…",
       "saved": "Đã lưu",
-      "error": "Lưu thất bại"
+      "error": "Lưu thất bại",
+      "staleRevision": "Lỗi bản"
     },
     "media": {
       "library": "Thư viện media",
@@ -1214,7 +1215,9 @@
       "exportFailedToast": "Xuất template thất bại",
       "importedToast": "Đã nhập {count} template",
       "importFailedToast": "{count} tệp không nhập được (sai định dạng)",
-      "importEmptyToast": "Chưa chọn tệp template nào"
+      "importEmptyToast": "Chưa chọn tệp template nào",
+      "importedIntoProject": "Đã nhập template vào dự án: {name}",
+      "importIntoProject": "Nhập template vào dự án"
     },
     "aiScript": {
       "buttonLabel": "AI Kịch bản",

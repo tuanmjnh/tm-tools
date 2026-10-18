@@ -9284,3 +9284,46 @@ editor, now exportable/importable as a versioned JSON file.
 - Known limit, stated honestly: the MCP roadmap v4 (docs) and the
   template marketplace idea remain future work; this round only adds the
   local file bridge, no new dependency.
+
+## 196. R132 — Project revision counter + template import from the editor
+
+Two honest gaps from the Phase-0 audit, both prerequisites for future
+automation (and useful on their own):
+
+### 196.1 Revision counter (previously: none — grep 'revision' = 0 hits)
+
+- `TmcutProject.revision` — a monotonic mutation counter on the project
+  file. `saveProject()` bumps it by one on every real save; fresh
+  projects start at **0** (the initial save is the creation baseline,
+  not a mutation); metadata-only writes (pin, lastOpenedAt) never touch
+  it.
+- `revisionAtLoad` — the value captured by the last `loadProject`/
+  `createProject`, exposed read-only. Comparing `currentRevision()`
+  against it is the only O(1), honest answer to "was this file written
+  outside this session while I held it open". It is **advisory, not a
+  lock** — the app remains the single writer.
+- The editor shows a compact `tmcut.save.staleRevision` chip next to the
+  save status only when the current revision exceeds the open-time value.
+- The Phase-0 audit's REVISION_CONFLICT requirement for future MCP/
+  automation writers is now implementable: an external writer that
+  persists its own revision makes the next app save detectable, and a
+  future apply-tool can refuse a stale base instead of overwriting.
+
+### 196.2 Template import from the editor
+
+- The editor's project menu gains "Import template into project"
+  (Save-as-template's sibling): native open dialog → `parseTemplateFile`
+  (same untrusted-input pipeline as the library import: garbage refused,
+  id regenerated, `isBuiltin` forced false) → `instantiateTemplate` →
+  timeline + canvas written into the CURRENT project → `saveProject()`.
+  Library import keeps dropping templates into the library; this one
+  applies a template straight to the open project — the two flows are
+  distinct on purpose.
+
+### 196.3 Gates
+
+- `tmcut_projects_lifecycle.spec.ts` +4 revision checks (fresh starts 0,
+  bump-per-save, monotonic across reload, metadata no-bump, external
+  bump detectable); unit run 27/27; typecheck 0; lint 0; live UI 12/12;
+  i18n 2974/2974 (en=vi, +3×2). Build + Electron probe run with the
+  commit gate below.

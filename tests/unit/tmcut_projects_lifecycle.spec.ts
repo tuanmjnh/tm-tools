@@ -95,6 +95,59 @@ async function main() {
     if (audioItem.src !== 'C:\\Other\\keep.wav') throw new Error('unrelated clip was touched')
   })
 
+  // ===== R132 — monotonic project revision counter (docs §196) =====
+  // The revision is the single honest answer to "was this project edited
+  // while I had it open": it bumps on every save, never on open, and is
+  // reported by the mirror so a reload can be compared against the
+  // revision-at-load snapshot. It is advisory, not a lock.
+  await check('fresh projects start at revision 0 and bump on every save', async () => {
+    const s = await freshStore()
+    const id = s.currentProject.value!.id
+    if (s.currentRevision() !== 0) throw new Error(`fresh project revision: ${s.currentRevision()}`)
+    s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: 480000, offset: 0 })
+    if (s.currentRevision() !== 1) throw new Error('first save did not bump revision')
+    s.addClipToTrack('audio', { src: 'b.wav', in: 0, out: 240000, offset: 0 })
+    if (s.currentRevision() !== 2) throw new Error('second save did not bump revision')
+    if (mirror(id).revision !== 2) throw new Error('mirror does not carry the revision')
+  })
+
+  await check('revision is monotonic and survives a reload', async () => {
+    const s = await freshStore()
+    const id = s.currentProject.value!.id
+    s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: 480000, offset: 0 })
+    const before = s.currentRevision()
+    // Reload the same project from the mirror: revision must be preserved.
+    await s.loadProject(id)
+    if (s.currentRevision() !== before) throw new Error(`reload lost revision: ${s.currentRevision()} != ${before}`)
+    if ((s.revisionAtLoad.value ?? 0) !== before) throw new Error('revisionAtLoad not pinned at open')
+    s.addClipToTrack('audio', { src: 'b.wav', in: 0, out: 240000, offset: 0 })
+    if (s.currentRevision() !== before + 1) throw new Error('revision not monotonic after reload')
+  })
+
+  await check('metadata-only writes do not bump the revision', async () => {
+    const s = await freshStore()
+    const id = s.currentProject.value!.id
+    s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: 480000, offset: 0 })
+    const before = s.currentRevision()
+    const beforeUpdated = mirror(id).updated_at
+    await s.togglePinProject(id)
+    if (s.currentRevision() !== before) throw new Error('pin write bumped the revision')
+    if (mirror(id).updated_at !== beforeUpdated) throw new Error('pin write bumped updated_at')
+  })
+
+  await check('an external writer bumping the file is detectable while open', async () => {
+    const s = await freshStore()
+    const id = s.currentProject.value!.id
+    s.addClipToTrack('video', { src: 'a.mp4', in: 0, out: 480000, offset: 0 })
+    const atLoad = s.revisionAtLoad.value!
+    // Simulate another process writing the file (mirror + current project)
+    // while this session held it open: bump the revision without an edit.
+    s.currentProject.value!.revision = atLoad + 5
+    mirror(id).revision = atLoad + 5
+    if (s.currentRevision() <= atLoad) throw new Error('external bump not visible')
+    if (s.currentRevision() <= s.revisionAtLoad.value!) throw new Error('stale signal missing')
+  })
+
   console.log(`\n=== All ${passed} project-lifecycle checks passed ===`)
 }
 

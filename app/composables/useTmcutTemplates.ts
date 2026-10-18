@@ -5,6 +5,7 @@ import type {
 import type { TmcutTrack } from './useTmcutProject'
 import {
   getBuiltinTemplates,
+  getTemplateById,
   instantiateTemplate,
   filterTemplates,
   createTemplateFromTimeline,
@@ -351,6 +352,7 @@ export function useTmcutTemplates() {
     deleteUserTemplate,
     exportTemplate,
     importTemplates,
+    getTemplateById,
     ticksToSeconds: (ticks: number) => (ticks / TICKS_PER_SECOND).toFixed(1)
   }
 }
