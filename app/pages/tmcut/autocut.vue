@@ -579,6 +579,10 @@ async function handleAccept() {
           </div>
         </div>
 
+        <!-- AI connection for this surface: transcription can run on its own
+             provider (AI_*_TRANSCRIBE slots), independent of the editor AI. -->
+        <TmcutAiConnect />
+
         <div class="flex justify-between pt-4">
           <UButton variant="soft" color="neutral" @click="currentStep = 1">
             {{ t('tmcut.back') }}

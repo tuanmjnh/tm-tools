@@ -327,3 +327,115 @@ describe('aggregator misconfiguration fails loudly', () => {
     assert.equal(out.model, 'some/model')
   })
 })
+
+// ===== Per-surface task routing (editor script vs AutoCut captions) ========
+// config.env slots: AI_PROVIDER_<T> / AI_BASE_URL_<T> / AI_API_KEY_<T> /
+// AI_MODEL_<T> for T in PLAN | TRIAGE | TRANSCRIBE. Surfaces without slots
+// keep the global config, so one gateway can run script-writing on one
+// provider and transcription on another.
+
+describe('task config slots', () => {
+  const env = {
+    AI_PROVIDER: 'openai',
+    AI_API_KEY: 'global-key',
+    AI_MODEL: 'gpt-4o-mini',
+    AI_PROVIDER_TRANSCRIBE: 'groq',
+    AI_API_KEY_TRANSCRIBE: 'groq-key',
+    AI_MODEL_TRANSCRIBE: 'whisper-large-v3'
+  }
+
+  it('global task keeps the global config', () => {
+    const plan = gw.taskConfig('plan', env)
+    assert.equal(plan.provider, 'openai')
+    assert.equal(plan.model, 'gpt-4o-mini')
+    assert.equal(plan.baseUrl, 'https://api.openai.com/v1')
+    assert.equal(plan.apiKey, 'global-key')
+  })
+
+  it('a slotted task switches provider AND re-scopes endpoint + model', () => {
+    const stt = gw.taskConfig('transcribe', env)
+    assert.equal(stt.provider, 'groq')
+    assert.equal(stt.baseUrl, 'https://api.groq.com/openai/v1')
+    assert.equal(stt.apiKey, 'groq-key')
+    assert.equal(stt.model, 'whisper-large-v3')
+    assert.equal(stt.task, 'TRANSCRIBE')
+  })
+
+  it('a switched provider without a model slot gets the new provider default, not the global model', () => {
+    const switched = gw.taskConfig('triage', {
+      ...env,
+      AI_PROVIDER_TRIAGE: 'anthropic'
+    })
+    assert.equal(switched.provider, 'anthropic')
+    assert.equal(switched.model, 'claude-haiku-4-5')
+    assert.equal(switched.apiKey, 'global-key') // key falls back to global
+  })
+
+  it('unknown task names get no slots (no invented env keys)', () => {
+    const odd = gw.taskConfig('exfiltrate', env)
+    assert.equal(odd.provider, 'openai')
+    assert.equal(odd.model, 'gpt-4o-mini')
+  })
+
+  it('aiConfig stays the no-task shape (back-compat)', () => {
+    const cfg = gw.aiConfig(env)
+    assert.equal(cfg.provider, 'openai')
+    assert.equal(cfg.task, '')
+  })
+
+  it('complete() honours the task slots end to end', async () => {
+    const saved = { ...process.env }
+    let asked = null
+    try {
+      process.env.AI_PROVIDER = 'openai'
+      delete process.env.AI_API_KEY // the keyless ollama slot must not see a global key
+      process.env.AI_MODEL = 'gpt-4o-mini'
+      process.env.AI_PROVIDER_TRANSCRIBE = 'ollama'
+      process.env.AI_API_KEY_TRANSCRIBE = ''
+      process.env.AI_MODEL_TRANSCRIBE = 'whisper'
+      const out = await gw.complete(
+        { task: 'transcribe', messages: [{ role: 'user', content: 'hi' }] },
+        {
+          fetchImpl: async (url, init) => {
+            asked = { url, auth: init.headers.authorization || null }
+            return { status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'ok' } }] }) }
+          }
+        }
+      )
+      assert.equal(out.content, 'ok')
+      // The TRANSCRIBE slot re-scoped the endpoint (not openai) and used
+      // its model; keyless ollama sends no auth header.
+      assert.ok(asked.url.startsWith('http://localhost:11434/v1/chat/completions'))
+      assert.equal(asked.auth, null)
+      assert.equal(out.model, 'whisper')
+    } finally {
+      for (const key of ['AI_PROVIDER', 'AI_API_KEY', 'AI_MODEL', 'AI_PROVIDER_TRANSCRIBE', 'AI_API_KEY_TRANSCRIBE', 'AI_MODEL_TRANSCRIBE']) {
+        if (saved[key] === undefined) delete process.env[key]
+        else process.env[key] = saved[key]
+      }
+    }
+  })
+
+  it('tasksStatus reports every surface with its own provider', () => {
+    const saved = { ...process.env }
+    try {
+      process.env.AI_PROVIDER = 'openai'
+      process.env.AI_API_KEY = 'k'
+      process.env.AI_MODEL = 'gpt-4o-mini'
+      process.env.AI_PROVIDER_TRANSCRIBE = 'ollama'
+      process.env.AI_MODEL_TRANSCRIBE = 'whisper'
+      const st = gw.tasksStatus()
+      assert.equal(st.plan.provider, 'openai')
+      assert.equal(st.plan.overridden, false)
+      assert.equal(st.plan.configured, true)
+      assert.equal(st.transcribe.provider, 'ollama')
+      assert.equal(st.transcribe.overridden, true)
+      assert.equal(st.transcribe.configured, true) // keyless counts
+    } finally {
+      for (const key of ['AI_PROVIDER', 'AI_API_KEY', 'AI_MODEL', 'AI_PROVIDER_TRANSCRIBE', 'AI_MODEL_TRANSCRIBE']) {
+        if (saved[key] === undefined) delete process.env[key]
+        else process.env[key] = saved[key]
+      }
+    }
+  })
+})

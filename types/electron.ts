@@ -615,10 +615,26 @@ export interface AiGatewayStatus {
   timeoutMs: number
 }
 
+/** Per-surface entry from tools:ai-gateway:tasks (taskConfig resolution). */
+export interface AiTaskStatus {
+  provider: string
+  providerLabel: string
+  baseUrl: string
+  model: string
+  hasKey: boolean
+  /** True when this task's provider differs from the global AI_PROVIDER. */
+  overridden: boolean
+  /** True when any AI_*_<TASK> slot is set (override editor is active). */
+  customized: boolean
+  configured: boolean
+}
+
 export interface AiGatewayNamespace {
   complete(args: AiCompleteInput): Promise<{ ok: boolean, data?: AiCompleteResult, code?: string, error?: string }>
   transcribe(args: { filePath: string, provider?: string, apiKey?: string, baseUrl?: string, model?: string, language?: string, format?: 'text' | 'verbose_json' }): Promise<{ ok: boolean, data?: { text: string, segments?: Array<{ start: number, end: number, text: string }> }, code?: string, error?: string }>
   getStatus(): Promise<AiGatewayStatus>
+  /** Per-surface providers (plan = script, triage = autocut, transcribe = captions). */
+  tasks(): Promise<{ ok: boolean, data?: { tasks: Record<'plan' | 'triage' | 'transcribe', AiTaskStatus> } }>
   /** GET {base}/models — model discovery for multi-provider gateways (FreeLLMAPI et al.). */
   models(args?: { provider?: string, apiKey?: string, baseUrl?: string }): Promise<{ ok: boolean, data?: { models: AiModelInfo[], provider: string, baseUrl: string, count: number }, code?: string, error?: string }>
   presets(): Promise<{ ok: boolean, data?: { presets: AiProviderPreset[] } }>

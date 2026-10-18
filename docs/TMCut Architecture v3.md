@@ -9103,3 +9103,82 @@ aggregators are first-class users.
   was completed by the lead. One teammate's unrelated reformat of
   `TmcutPreviewPlayer.vue` was reverted to keep the round's diff
   honest.
+
+## 193. R129 — Two AI surfaces, one gateway (per-surface routing)
+
+The app has exactly TWO AI surfaces and the user asked how multiple
+providers map onto them. Answer: providers are not bound to surfaces —
+the gateway routes by TASK, and each task may point at a different
+provider while anything unset inherits one global config.
+
+### 193.1 The layer model
+
+- L0 `electron/tools/ai-gateway.cjs` — the ONLY place that talks to a
+  network AI endpoint. Reads config PER CALL from process.env (which
+  `setConfig` keeps in sync live), so config changes never need a
+  restart and no renderer code ever holds a key.
+- L1 `app/composables/useTmcutAi.ts` — thin typed IPC wrapper
+  (`complete / transcribe / status / tasks / listModels / providerPresets`).
+  Surfaces never call IPC directly.
+- L2 surfaces (task ids are the routing keys):
+  - **Editor** — `useTmcutAiScript.ts` calls `complete({task:'plan'})`;
+    the same surface's caption button calls `transcribe` (`task:'transcribe'`).
+  - **AutoCut** — `useTmcutAutocut.ts` calls `transcribe(..., verbose_json)`
+    (`task:'transcribe'`); scene/silence detection stays local FFmpeg
+    (honesty: no fake AI claim); `triage` is the reserved slot for a
+    future content-analysis pass.
+- L3 UI — ONE `TmcutAiConnect.vue` component mounted in BOTH surfaces
+  (AI-script modal + AutoCut step 2). It edits the layered config and
+  shows, per surface, the model it ACTUALLY runs on.
+
+### 193.2 Task slots (the routing contract)
+
+`taskConfig(task)` (exported; `aiConfig()` = `taskConfig(null)`):
+
+```
+AI_PROVIDER_<T>  AI_BASE_URL_<T>  AI_API_KEY_<T>  AI_MODEL_<T>   T = PLAN | TRIAGE | TRANSCRIBE
+```
+
+- Unknown task names get NO slots (whitelist `AI_TASKS`) — a stray
+  `task:'foo'` can never invent config keys.
+- An unset slot inherits the global value verbatim.
+- A slotted `AI_PROVIDER_<T>` SWITCH re-scopes the defaults: endpoint
+  becomes that provider's preset URL and model its default (aggregator
+  ⇒ '' ⇒ loud `ai.no-model`). An explicit global AI_MODEL applies only
+  while the task did not switch providers — model ids are
+  provider-specific, inheriting `gpt-4o-mini` into a groq slot is a bug.
+- `resolveCallModel`: per-call `model` wins; per-call `provider`
+  switch re-derives the default; otherwise the task-resolved model.
+- `resolveTaskModel` kept as the standalone model-slot helper.
+- Example one config.env: global = openai key; `AI_PROVIDER_TRANSCRIBE=groq`
+  + `AI_MODEL_TRANSCRIBE=whisper-large-v3-turbo` ⇒ script writing on
+  GPT-4o while AutoCut captions run on Groq Whisper, zero code changes.
+
+### 193.3 Status & UI
+
+- `tasksStatus()` → IPC `tools:ai-gateway:tasks` (preload +
+  `AiTaskStatus` type + `useTmcutAi().tasks()`): per task the RESOLVED
+  provider/label/baseUrl/model/hasKey + `overridden` (provider
+  differs from global) + `customized` (any slot non-empty — the UI
+  restores the override editor from this) + `configured`.
+- Panel layout: resolved-surface rows on top (editor · script /
+  captions · transcription / AutoCut · analysis), then the DEFAULT
+  form (provider, model + Load models, base URL, write-only key),
+  then one override card per editable surface (`plan`, `transcribe`)
+  toggling Inherit ⇄ Custom. Save writes global + slot values and
+  CLEARS slot keys for cards shown as Inherit, so config.env always
+  matches what the panel displays. Key fields stay write-only.
+- `triage` is displayed read-only ("AutoCut · analysis") until a triage
+  caller exists — no UI control without a real backend (honesty rule).
+
+### 193.4 Gates
+
+- ai-gateway tests 36/36 (+7: slot resolution, provider-switch
+  re-scope, unknown-task guard, end-to-end complete() hitting the
+  groq/ollama slot endpoint, tasksStatus shapes).
+- unit 25/25 specs, vue-tsc 0, eslint 0 on touched files, nuxt build 0,
+  live UI harness 12/12 on :3100, Electron media probe 3/3,
+  i18n parity 2960/2960.
+- Ops note: two QA dev servers sharing port 3100 crashed the Nuxt
+  worker (`worker exited with code 0`, HTTP 500). Exactly one :3100
+  server at a time; kill first, verify the port is free, then start.

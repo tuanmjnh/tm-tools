@@ -1286,7 +1286,17 @@
       "desktopOnly": "AI connection setup runs in the desktop app.",
       "needsBaseHint": "This provider needs a base URL.",
       "needsBaseTitle": "Base URL required",
-      "needsBaseDesc": "Enter the OpenAI-compatible base URL for this provider."
+      "needsBaseDesc": "Enter the OpenAI-compatible base URL for this provider.",
+      "surfaceHint": "Each part of the app shows the model it actually runs on. Override a surface to use a different provider for it.",
+      "globalLabel": "Default (all AI features)",
+      "overridesLabel": "Per-part overrides",
+      "surfaceEditor": "Editor — AI script",
+      "surfaceTranscribe": "AutoCut & captions — transcription",
+      "surfaceEditorScript": "Editor · script",
+      "surfaceCaptions": "Captions · transcription",
+      "surfaceAutocut": "AutoCut · analysis",
+      "surfaceCustom": "Custom",
+      "surfaceGlobal": "Inherit"
     }
   },
   "dashboard": {

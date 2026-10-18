@@ -1,4 +1,4 @@
-import type { AiCompleteInput, AiGatewayStatus, AiModelInfo, AiProviderPreset } from '~~/types/electron'
+import type { AiCompleteInput, AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '~~/types/electron'
 
 function aiApi() {
   return typeof window !== 'undefined' ? window.electronAPI?.tools?.aiGateway : undefined
@@ -69,12 +69,29 @@ export function useTmcutAi() {
     }
   }
 
+  /**
+   * Per-surface routing (editor vs AutoCut): which provider/model each AI
+   * task ACTUALLY runs on. A task can differ from the global config when
+   * the AI_*_<TASK> slots are set, so surfaces badge their own model.
+   */
+  async function tasks(): Promise<Record<string, AiTaskStatus> | null> {
+    const api = aiApi()
+    if (!api) return null
+    try {
+      const res = await api.tasks()
+      return res?.ok && res.data ? res.data.tasks : null
+    } catch {
+      return null
+    }
+  }
+
   return {
     isDesktop,
     complete,
     transcribe,
     status,
     listModels,
-    providerPresets
+    providerPresets,
+    tasks
   }
 }

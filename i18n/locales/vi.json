@@ -1286,7 +1286,17 @@
       "desktopOnly": "Cấu hình kết nối AI chỉ khả dụng trong bản desktop.",
       "needsBaseHint": "Provider này cần Base URL.",
       "needsBaseTitle": "Cần Base URL",
-      "needsBaseDesc": "Nhập Base URL tương thích OpenAI cho provider này."
+      "needsBaseDesc": "Nhập Base URL tương thích OpenAI cho provider này.",
+      "surfaceHint": "Mỗi phần của ứng dụng hiển thị model đang thực sự chạy. Bật ghi đè để dùng provider khác riêng cho phần đó.",
+      "globalLabel": "Mặc định (mọi tính năng AI)",
+      "overridesLabel": "Ghi đè theo từng phần",
+      "surfaceEditor": "Editor — AI kịch bản",
+      "surfaceTranscribe": "AutoCut & phụ đề — chuyển âm",
+      "surfaceEditorScript": "Editor · kịch bản",
+      "surfaceCaptions": "Phụ đề · chuyển âm",
+      "surfaceAutocut": "AutoCut · phân tích",
+      "surfaceCustom": "Riêng",
+      "surfaceGlobal": "Kế thừa"
     }
   },
   "dashboard": {

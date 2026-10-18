@@ -50,8 +50,28 @@ class AIGatewayError extends Error {
   }
 }
 
-/** Build config from env (pure — tests pass their own env object). */
-function aiConfig(env) {
+/**
+ * AI tasks with dedicated configuration slots. The two AI surfaces of the
+ * app route through these ids: `plan` = script generation (editor modal),
+ * `transcribe` = captions/subtitles (editor + AutoCut), `triage` = AutoCut
+ * content analysis. Each task can run on a DIFFERENT provider/model while
+ * everything unset falls back to the global AI_* config.
+ */
+const AI_TASKS = ['plan', 'triage', 'transcribe']
+
+/**
+ * Build config from env (pure — tests pass their own env object).
+ *
+ * With `task` (see AI_TASKS) the per-task slots apply on ONE simple rule:
+ * explicit per-task fields win, and a per-task PROVIDER override re-scopes
+ * the *defaults* (that provider's endpoint + model) so one gateway can run
+ * plan -> anthropic and transcribe -> groq from a single config.env:
+ *
+ *   AI_PROVIDER_<T> | AI_BASE_URL_<T> | AI_API_KEY_<T> | AI_MODEL_<T>   (T = PLAN/TRIAGE/TRANSCRIBE)
+ *
+ * Without a task this is exactly legacy aiConfig().
+ */
+function taskConfig(task, env) {
   const source = env || process.env
   // Numeric env vars must be guarded: a typo such as AI_TIMEOUT_MS=abc would
   // otherwise yield NaN and every call would abort as ai.timeout.
@@ -59,18 +79,43 @@ function aiConfig(env) {
     const n = Number(raw)
     return raw === undefined || raw === '' || !Number.isFinite(n) ? fallback : n
   }
-  const provider = String(source.AI_PROVIDER || 'openai').toLowerCase()
+  // Only the known surfaces get slots — an arbitrary task string must not
+  // silently invent config keys.
+  const up = AI_TASKS.includes(String(task || '').toLowerCase()) ? String(task).toUpperCase() : ''
+  const slot = base => (up ? String(source[`${base}_${up}`] || '').trim() : '')
+  const globalProvider = String(source.AI_PROVIDER || 'openai').toLowerCase()
+  const provider = (slot('AI_PROVIDER') || globalProvider).toLowerCase()
+  // An explicit global base URL applies only while the task did NOT switch
+  // providers; a switched provider re-scopes to its own endpoint unless
+  // AI_BASE_URL_<T> is explicit (that is the whole point of a switch).
+  const globalBaseUrl = String(source.AI_BASE_URL || '').trim()
+  const baseUrl = slot('AI_BASE_URL')
+    || (provider === globalProvider
+      ? (globalBaseUrl || defaultBaseUrl(provider))
+      : defaultBaseUrl(provider))
+  const apiKey = slot('AI_API_KEY') || String(source.AI_API_KEY || '').trim()
+  // Model follows the same switch rule: a different provider must not
+  // inherit the global model id (aggregator ids are provider-specific).
+  const globalModel = String(source.AI_MODEL || '').trim()
+  const model = slot('AI_MODEL')
+    || (provider === globalProvider ? (globalModel || defaultModel(provider)) : defaultModel(provider))
   return Object.freeze({
     provider,
-    apiKey: String(source.AI_API_KEY || '').trim(),
-    baseUrl: String(source.AI_BASE_URL || defaultBaseUrl(provider)).replace(/\/+$/, ''),
-    model: String(source.AI_MODEL || defaultModel(provider)).trim(),
+    apiKey,
+    baseUrl: baseUrl.replace(/\/+$/, ''),
+    model,
+    task: up || '',
     maxTokens: num(source.AI_MAX_TOKENS, 1024),
     timeoutMs: num(source.AI_TIMEOUT_MS, 60000),
     rpm: num(source.AI_RPM, 30),
     temperature: num(source.AI_TEMPERATURE, 0.3),
     logDir: String(source.AI_LOG_DIR || '').trim()
   })
+}
+
+/** Global config (no task slot applied). Kept as the stable public entry. */
+function aiConfig(env) {
+  return taskConfig(null, env)
 }
 
 /**
@@ -147,7 +192,13 @@ function assertCredentials(cfg) {
   if (!cfg.apiKey) throw new AIGatewayError('ai.no-key', `Missing API key for provider "${cfg.provider}"`)
 }
 
-/** Resolve the model for a task: per-task env override wins, else default. */
+/**
+ * Task routing helpers (docs §66). The config slots themselves live in
+ * taskConfig(): AI_PROVIDER_<T> / AI_BASE_URL_<T> / AI_API_KEY_<T> /
+ * AI_MODEL_<T> for the T = PLAN | TRIAGE | TRANSCRIBE surfaces.
+ * This helper resolves just the model slot on top of an already-resolved
+ * config (kept for callers that resolve config once, then route tasks).
+ */
 function resolveTaskModel(task, cfg, env) {
   const source = env || process.env
   const key = `AI_MODEL_${String(task || '').toUpperCase()}`
@@ -157,19 +208,20 @@ function resolveTaskModel(task, cfg, env) {
 }
 
 /**
- * Effective model for ONE call. A per-call `provider` override must also
- * re-derive that provider's default model: without this, calling a
- * multi-provider gateway would inherit the env provider's model id (e.g.
- * gpt-4o-mini) and silently request a model the gateway may not expose.
- * An explicit AI_MODEL always wins, then AI_MODEL_<TASK>, then the
- * provider default ('' for aggregators, which forces ai.no-model).
+ * Effective model for ONE call. taskConfig() already resolved the model:
+ * global AI_MODEL, then the AI_MODEL_<TASK> slot, then the provider default.
+ * The one case that must NOT inherit the configured model: a per-call
+ * `provider` override that differs from it — model ids are provider-
+ * specific, so switching providers re-derives that provider's default
+ * ('' for aggregators, which forces ai.no-model instead of silently
+ * requesting a model the new endpoint may not expose).
  */
 function resolveCallModel(input, envCfg, provider) {
   if (input.model) return String(input.model)
-  const envModel = String((process.env && process.env.AI_MODEL) || '').trim()
-  const base = envModel || defaultModel(provider)
-  if (!input.task) return base
-  return resolveTaskModel(input.task, { ...envCfg, model: base })
+  if (input.provider && String(input.provider).toLowerCase() !== envCfg.provider) {
+    return defaultModel(provider)
+  }
+  return envCfg.model
 }
 
 /** Sliding-window rate limiter (rpm calls per 60s). */
@@ -303,7 +355,9 @@ function limiterFor(key, rpm) {
 async function complete(args, opts) {
   const input = args || {}
   const options = opts || {}
-  const envCfg = aiConfig()
+  // Task routing (docs §66 + R128): AI_PROVIDER_<T>/AI_BASE_URL_<T>/
+  // AI_API_KEY_<T>/AI_MODEL_<T> let each app surface run its own model.
+  const envCfg = taskConfig(input.task)
   const cfg = {
     ...envCfg,
     provider: String(input.provider || envCfg.provider).toLowerCase(),
@@ -369,13 +423,13 @@ async function complete(args, opts) {
 async function transcribe(args, opts) {
   const input = args || {}
   const options = opts || {}
-  const envCfg = aiConfig()
+  const envCfg = taskConfig(input.task || 'transcribe')
   const cfg = {
     ...envCfg,
     provider: String(input.provider || envCfg.provider).toLowerCase(),
     apiKey: input.apiKey !== undefined ? String(input.apiKey) : envCfg.apiKey,
     baseUrl: (input.baseUrl !== undefined ? String(input.baseUrl) : envCfg.baseUrl).replace(/\/+$/, ''),
-    model: resolveCallModel({ ...input, task: input.task || 'transcribe' }, envCfg, String(input.provider || envCfg.provider).toLowerCase())
+    model: resolveCallModel(input, envCfg, String(input.provider || envCfg.provider).toLowerCase())
   }
   if (typeof input.filePath !== 'string' || !input.filePath) {
     throw new AIGatewayError('ai.no-file', 'filePath must be a non-empty string')
@@ -539,6 +593,38 @@ function maskedStatus() {
   }
 }
 
+/**
+ * Per-surface status: one masked entry per AI task, so the editor and the
+ * AutoCut panels can each badge the provider/model THEY actually run on
+ * (a task may differ from the global config when AI_*_<TASK> slots are set).
+ */
+function tasksStatus() {
+  const out = {}
+  const globalCfg = aiConfig()
+  for (const task of AI_TASKS) {
+    const cfg = taskConfig(task)
+    const preset = presetFor(cfg.provider)
+    const keyless = !!(preset && preset.keyless)
+    const up = task.toUpperCase()
+    // True when the surface has its own AI_*_<TASK> slot set, so the UI can
+    // render the override editor as active after a reload.
+    const customized = ['AI_PROVIDER', 'AI_BASE_URL', 'AI_API_KEY', 'AI_MODEL']
+      .some(base => String((process.env && process.env[`${base}_${up}`]) || '').trim() !== '')
+    out[task] = {
+      provider: cfg.provider,
+      providerLabel: preset ? preset.label : cfg.provider,
+      baseUrl: cfg.baseUrl,
+      model: cfg.model,
+      hasKey: keyless || cfg.apiKey.length > 0,
+      // True when this task's provider differs from the global one.
+      overridden: cfg.provider !== globalCfg.provider,
+      customized,
+      configured: !!cfg.baseUrl && (keyless || cfg.apiKey.length > 0) && !!cfg.model
+    }
+  }
+  return out
+}
+
 /** Register IPC handlers. Requires Electron (called from main process only). */
 function registerAiGateway() {
   const { app, ipcMain } = require('electron')
@@ -564,6 +650,7 @@ function registerAiGateway() {
     }
   })
   ipcMain.handle('tools:ai-gateway:getStatus', () => maskedStatus())
+  ipcMain.handle('tools:ai-gateway:tasks', () => ({ ok: true, data: { tasks: tasksStatus() } }))
   // Model discovery: lets the renderer offer the model ids an aggregator
   // (FreeLLMAPI et al.) exposes instead of asking the user to type them.
   ipcMain.handle('tools:ai-gateway:models', async (_event, args) => {
@@ -579,7 +666,9 @@ function registerAiGateway() {
 
 module.exports = {
   AIGatewayError,
+  AI_TASKS,
   aiConfig,
+  taskConfig,
   RateLimiter,
   resolveTaskModel,
   buildChatRequest,
@@ -588,6 +677,7 @@ module.exports = {
   transcribe,
   listModels,
   maskedStatus,
+  tasksStatus,
   needsBaseUrl,
   providerPresets,
   registerAiGateway
