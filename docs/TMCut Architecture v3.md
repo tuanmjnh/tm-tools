@@ -8921,3 +8921,65 @@ Run: with ELECTRON_RUN_AS_NODE unset,
 Known edge: if a future feature needs a NEW cross-origin fetch of
 media:// from a different local port, extend appOrigins() in main.cjs
 (one line) — the handler is already origin-list driven.
+
+---
+
+# 191. Electron 43 → 44.9.0 — supported-version window restored
+
+Audit WARN #13 ("Electron version outside the supported window") is
+closed by moving to the newest stable line, 44.9.0 — the first upgrade
+round where the runtime itself, not just the config, was proven on the
+new binary.
+
+## 191.1 Why 44 is safe for this app (breaking-change review first)
+
+Checked the official v44 release notes against the actual codebase:
+
+- clipboard no longer exposed to renderers — the app never imports
+  clipboard in electron/**; renderer clipboard use is navigator-based.
+- openAsHidden / wasOpenedAsHidden / restoreState removed from
+  app.setLoginItemSettings — no call sites (grep clean).
+- net.request Sec-Fetch-Dest restriction — the app uses net.fetch
+  nowhere in the main process (media-protocol.cjs only mentions it in
+  a comment explaining why protocol.handle replaced it).
+- 32-bit Windows builds dropped — the app already ships x64-only NSIS
+  (electron-builder.yml has no ia32 target).
+- libEGL/libGLESv2 no longer shipped (ANGLE statically linked) — the
+  packaging never referenced those DLLs (asarUnpack only touches
+  .output/server).
+- Unity-on-Linux dropped — irrelevant (win target only in practice).
+
+## 191.2 Install gotcha (worth remembering)
+
+pnpm swapped the electron package but SKIPPED the postinstall binary
+download (dist/ absent; electron.exe existed only as the stale
+package). Fixed by running node install.js inside node_modules/electron
+once. On any future Electron bump: verify
+node_modules\electron\dist\electron.exe --version before trusting
+anything, and note ELECTRON_RUN_AS_NODE=1 in this shell must be
+cleared or the binary starts in node mode.
+
+Also required for a full prod simulation: bundle the TS main with the
+esbuild binary under .pnpm (the .bin shim is a document PowerShell
+cannot exec in a pipeline) so electron/dist/index.cjs exists — the
+same artifact build:electron:main produces.
+
+## 191.3 Native-module ABI proof
+
+better-sqlite3 and the side-loaded fontmanager.node are the two
+ABI-sensitive binaries. The real Electron 44.9.0 binary booted the
+actual app main (dev mode, --no-sandbox): BOOT_OK — process alive at
+20s, main.cjs + controllers loaded, window shown. No @electron/rebuild
+pass needed.
+
+## 191.4 Gates on the new binary
+
+- media protocol probe under 44.9.0: 3/3 (play, clock, CORS fetch).
+- unit 24/24, lint 0, nuxt build 0.
+- live web harness 12/12 against the restarted :3100 dev server.
+- MCP security audit re-run: 12/13, 0 FAIL — #13 now PASS ("Electron
+  44 is within the supported range"). Only the known #14 heuristic
+  WARN remains (both shell.openExternal call sites do validate).
+
+Residual follow-ups unchanged: preload channel allow-list (the
+generic send/on passthrough).
