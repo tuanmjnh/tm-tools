@@ -2237,7 +2237,8 @@
     "aiKeysVaultOffDesc": "Keychain OS không thể truy cập trong phiên này, nên key lưu dạng plaintext. Save key trên máy có keychain để mã hóa.",
     "aiKeysEncryptNow": "Mã hóa ngay",
     "aiKeysEncryptNowTitle": "Mã hóa lại các key đã lưu bằng keychain OS (chạy đúng phép migration app thử lúc khởi động)",
-    "aiKeysEncryptedNow": "Mọi key đã lưu giờ được mã hóa tại chỗ."
+    "aiKeysEncryptedNow": "Mọi key đã lưu giờ được mã hóa tại chỗ.",
+    "aiKeysRefresh": "Làm mới trạng thái vault"
   },
   "seed": {
     "desc": "Seed các vai trò và tài khoản mặc định. Seed idempotent chỉ thêm phần còn thiếu, còn Reset sẽ xóa toàn bộ dữ liệu trước khi seed lại.",

@@ -154,8 +154,8 @@ async function handleEncrypt() {
         size="xs"
         icon="i-lucide-refresh-cw"
         :loading="loading"
-        :title="t('tmcut.captions.refreshStatus')"
-        :aria-label="t('tmcut.captions.refreshStatus')"
+        :title="t('settings.aiKeysRefresh')"
+        :aria-label="t('settings.aiKeysRefresh')"
         @click="refresh"
       />
     </template>
