@@ -9574,3 +9574,49 @@ of truth, so nothing saved by R136 invalidates.
   HARD reload → X removes → Backspace-on-empty removes the last chip.
 - Unit run 29/29; typecheck 0; lint 0; live UI r124 12/12; build 0;
   i18n 2977/2977.
+
+## 202. R138 — Keyboard review on the EDL step
+
+Reviewing a 60-segment EDL was 60 mouse hits: clicking each row,
+clicking its checkbox, clicking play. Step 3 now answers arrows.
+
+### 202.1 The decision is pure; the page just wires
+
+- `app/utils/tmcut/autocutReview.ts` owns `nextActiveIndex(current,
+  count, delta)` — the ONLY nontrivial choice (which row next).
+  Semantics pinned by spec: NO wrapping (ends are hard stops — wrap
+  would teleport the reviewer across the timeline), null-current means
+  Down→first / Up→last, a stale selection (re-score shrank the list)
+  clamps from the travel direction, empty/invalid count never throws.
+- autocut.vue: one window `keydown` listener (mounted/unmounted with
+  the page, same pattern as the editor's R124 hook), ACTIVE ONLY on
+  step 3 while not analyzing. Ignored while focus is in
+  INPUT/TEXTAREA/SELECT/VIDEO (the keyword chip draft and caption
+  fields keep their keys) and on any modified key (no stolen Ctrl/⌘
+  shortcuts). Map: ↑/↓ move + scroll the row into view
+  (`block:'nearest'` — no-op when already visible), Space toggles the
+  active row's include, Enter plays the active segment. Only consumed
+  keys call preventDefault.
+
+### 202.2 Scope honesty
+
+- The live harness stops at step 2: step 3 requires a REAL analysis,
+  which needs Electron media IPC (ffprobe/silence) — unreachable from
+  the web runtime. So the WIRING (listener, focus guards, scroll) is
+  covered by typecheck + the pure spec pinning the decision; a future
+  Electron-mode harness should drive real key events end-to-end.
+- Space-as-toggle only acts when a row is active (never with nothing
+  selected), and never while a checkbox has focus (native Space already
+  toggles it — the listener ignores INPUT-tag focus).
+
+### 202.3 Proof
+
+- New spec `tmcut_autocut_review` 5/5: middle steps, hard clamps both
+  ends (no wrap), null-start directions, stale clamp, degenerate
+  inputs (count 0/NaN/2.5, delta 0), one-row list.
+- Harness lesson (flaky run observed then 3× green): a dev-server
+  HMR restart mid-run reloads the page and Playwright locators go
+  stale — harnesses that seed-then-act must run against a quiet
+  server; rerun on first failure before believing it.
+- Unit run 30/30; typecheck 0; lint 0; live UI r136 16/16, r124 12/12;
+  build 0; i18n unchanged 2977/2977.

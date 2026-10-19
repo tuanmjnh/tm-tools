@@ -8,6 +8,7 @@ import type { TmcutAsset } from '~/types/tmcut'
 import { formatDurationSec } from '~/utils/tmcut/media'
 import { toURL } from '~/utils/ffmpegHelper'
 import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs, splitKeywords, joinKeywords } from '~/utils/tmcut/autocutPrefs'
+import { nextActiveIndex } from '~/utils/tmcut/autocutReview'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -396,8 +397,60 @@ function seekReview(event: MouseEvent) {
   reviewTime.value = video.currentTime
 }
 
+// ===== Step-3 keyboard review (docs §202, R138) =====
+// Click-only review forced 60 mouse hits on a 60-segment EDL. Same
+// window-listener pattern as the editor (R124): typing fields stay
+// inert, no modifier combos are claimed, and the next-index decision
+// lives in the pure, unit-tested nextActiveIndex (no wrapping — the
+// ends of the list are hard stops, wrapping silently teleports the
+// reviewer across the timeline).
+const listRef = ref<HTMLElement | null>(null)
+function scrollToActiveSegment() {
+  const list = listRef.value
+  const active = activeSegmentIndex.value
+  const row = list?.children[active ?? -1] as HTMLElement | undefined
+  // scrollIntoView(block:'nearest') no-ops when the row is already fully
+  // visible — no jarring re-centering while stepping through rows.
+  row?.scrollIntoView({ block: 'nearest' })
+}
+
+function onReviewKeydown(event: KeyboardEvent) {
+  if (currentStep.value !== 3 || analyzing.value) return
+  const target = event.target as HTMLElement | null
+  if (target && ['INPUT', 'TEXTAREA', 'SELECT', 'VIDEO'].includes(target.tagName)) return
+  if (event.metaKey || event.ctrlKey || event.altKey) return
+  const count = segments.value.length
+  if (count === 0) return
+  let handled = true
+  switch (event.key) {
+    case 'ArrowDown':
+      selectSegment(nextActiveIndex(activeSegmentIndex.value, count, 1)!)
+      scrollToActiveSegment()
+      break
+    case 'ArrowUp':
+      selectSegment(nextActiveIndex(activeSegmentIndex.value, count, -1)!)
+      scrollToActiveSegment()
+      break
+    case ' ': {
+      const active = activeSegmentIndex.value
+      if (active !== null) toggleInclude(active)
+      break
+    }
+    case 'Enter': {
+      const active = activeSegmentIndex.value
+      if (active !== null) selectSegment(active, true)
+      break
+    }
+    default:
+      handled = false
+  }
+  if (handled) event.preventDefault()
+}
+onMounted(() => window.addEventListener('keydown', onReviewKeydown))
+
 onUnmounted(() => {
   reviewVideo.value?.pause()
+  window.removeEventListener('keydown', onReviewKeydown)
 })
 
 // ===== Accept draft (step 4) =====
@@ -895,7 +948,7 @@ async function handleAccept() {
                 </p>
               </div>
 
-              <div v-else class="flex flex-col gap-1.5 max-h-120 overflow-y-auto pr-1">
+              <div v-else ref="listRef" class="flex flex-col gap-1.5 max-h-120 overflow-y-auto pr-1">
                 <div
                   v-for="(segment, index) in segments"
                   :key="index"
