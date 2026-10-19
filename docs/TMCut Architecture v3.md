@@ -9724,3 +9724,52 @@ works (some providers publish no model list) → `warn`, not `fail`.
   / `AI_API_KEY` / `apiKey` references (contract spec 7/7).
 - Unit run 31/31; typecheck 0; lint 0; secure probe 7/7; live UI r136
   16/16; i18n 2995/2995.
+
+## 205. R141 — One config parser: exists vs empty
+
+The vault dashboard went up and immediately exposed a lie by
+omission: on a fresh install (no `config.env` — the AI panel has never
+saved) the banner showed "keys encrypted at rest — 0 encrypted". A
+missing file and an emptied file both parsed to the same `{}`, and
+`isEncryptionAvailable()` reported the keychain — green shield, zero
+keys. Honest status needs the file's existence as a separate fact.
+
+### 205.1 The parser becomes a module
+
+`readConfigFile` had been quietly growing a second and third job:
+startup `loadUserConfig`, `get-config`, `ai-key-status`, and
+`set-config` all read config.env through slightly different code, and
+the inline copy in main.cjs swallowed every error into `{}`. Now
+`electron/tools/config-file.cjs` is the ONLY reader, and its shape is
+the fix:
+
+```
+readConfigFile(file) -> { exists: boolean, values: object }
+```
+
+- `exists: false` — file missing/unreadable. Callers treat it as "no
+  config yet", never as "config with nothing in it".
+- `exists: true` + empty `values` — the panel saved once and the keys
+  were wiped: a real state with a real message.
+- Value parsing pinned by spec: split on the FIRST `=` (ai-secure
+  base64 tokens end in `=` padding and must survive), surrounding
+  quotes stripped, last duplicate wins (matches the merge it feeds).
+
+### 205.2 Three honest banner states
+
+The vault banner is now a pure computed over `{available, exists}`:
+fresh install (neutral "no keys yet"), keychain
+available (green), keychain unavailable (amber). The counts row was
+already correct; it just lacked the context to be meaningful.
+`get-config` deliberately keeps its flat `Record<string,string>` shape
+(system/tools.vue and system/browsers.vue iterate it and would render
+a synthetic flag key as a fake config row).
+
+### 205.3 Proof
+
+- New spec `tmcut_config_file` 7/7: exists matrix (missing / empty /
+  comments-only), value contract (comments, quotes, duplicates,
+  base64-`=`-padding safety).
+- Vault spec +1: the handler must report `exists: parsed.exists`.
+- Unit run 32/32; AI suite 45/45; typecheck 0; lint 0; secure probe
+  ALL PASS; live UI r136 16/16; i18n 2998/2998 (+3×2 vault states).

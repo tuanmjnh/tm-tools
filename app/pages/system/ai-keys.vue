@@ -18,6 +18,33 @@ const gatewayStatus = ref<AiGatewayStatus | null>(null)
 const surfaceTasks = ref<Record<string, AiTaskStatus> | null>(null)
 const vault = ref<AiKeyVaultStatus | null>(null)
 
+// R141: three distinguishable states — fresh install (no config file yet),
+// keychain available (keys encrypted), keychain unavailable (keys
+// plaintext). Without `exists` the first two both reported 0/0 and the
+// banner lied about the OS keychain.
+const vaultBanner = computed(() => {
+  const v = vault.value
+  if (!v) return { icon: 'i-lucide-loader', color: 'text-neutral-500 dark:text-neutral-400', title: '', desc: '' }
+  if (!v.exists) return {
+    icon: 'i-lucide-file-x',
+    color: 'text-neutral-500 dark:text-neutral-400',
+    title: t('settings.aiKeysVaultEmpty'),
+    desc: t('settings.aiKeysVaultEmptyDesc')
+  }
+  if (v.available) return {
+    icon: 'i-lucide-shield-check',
+    color: 'text-emerald-600 dark:text-emerald-400',
+    title: t('settings.aiKeysVaultOn'),
+    desc: t('settings.aiKeysVaultDesc')
+  }
+  return {
+    icon: 'i-lucide-shield-alert',
+    color: 'text-amber-600 dark:text-amber-400',
+    title: t('settings.aiKeysVaultOff'),
+    desc: t('settings.aiKeysVaultOffDesc')
+  }
+})
+
 type TestTarget = 'global' | 'plan' | 'transcribe' | 'triage'
 interface TestResult { state: 'ok' | 'warn' | 'fail', detail: string }
 const testResults = ref<Record<string, TestResult>>({})
@@ -114,16 +141,16 @@ async function handleTest(task: TestTarget) {
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex items-center gap-2 min-w-0">
               <UIcon
-                :name="vault?.available ? 'i-lucide-shield-check' : 'i-lucide-shield-alert'"
+                :name="vaultBanner.icon"
                 class="w-5 h-5 shrink-0"
-                :class="vault?.available ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'"
+                :class="vaultBanner.color"
               />
               <div class="min-w-0">
                 <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                  {{ vault?.available ? t('settings.aiKeysVaultOn') : t('settings.aiKeysVaultOff') }}
+                  {{ vaultBanner.title }}
                 </p>
                 <p class="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
-                  {{ t('settings.aiKeysVaultDesc') }}
+                  {{ vaultBanner.desc }}
                 </p>
               </div>
             </div>

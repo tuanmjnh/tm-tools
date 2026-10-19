@@ -2231,7 +2231,10 @@
     "aiKeysWhereTitle": "Where keys are managed",
     "aiKeysWhere1": "Edit keys in the AI connection panel — AutoCut step 2, the editor sidebar, or Settings → Connections.",
     "aiKeysWhere2": "Every test on this page signs the request with the SAVED key inside the main process; the key itself never appears here.",
-    "aiKeysWhere3": "Keys are encrypted with your OS account. Copying the config file to another machine or user account makes them unreadable — re-enter them there."
+    "aiKeysWhere3": "Keys are encrypted with your OS account. Copying the config file to another machine or user account makes them unreadable — re-enter them there.",
+    "aiKeysVaultEmpty": "No AI keys yet",
+    "aiKeysVaultEmptyDesc": "Nothing has been saved to config.env — the AI connection panel has not run yet. Save a key there to see it protected here.",
+    "aiKeysVaultOffDesc": "The OS keychain is not reachable this session, so keys are stored as plaintext. Save a key on a machine with a keychain to encrypt it."
   },
   "seed": {
     "desc": "Seed roles and default accounts. Idempotent seed only adds what is missing, while Reset wipes all data first.",

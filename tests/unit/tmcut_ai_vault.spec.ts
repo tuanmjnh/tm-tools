@@ -29,6 +29,9 @@ describe('TMCut AI key vault — channel contract (R140)', () => {
     const body = handler.slice(0, handler.indexOf('ipcMain.handle(', 10))
     assert.ok(body.includes('SECRET_SLOT_RE'), 'counts must flow through SECRET_SLOT_RE')
     assert.ok(body.includes('isEncryptionAvailable()'), 'availability must be reported')
+    // R141: a fresh install (no config.env) must be distinguishable from
+    // a parsed file with zero secret slots, or the banner lies.
+    assert.ok(body.includes('exists: parsed.exists'), 'handler must report whether config.env exists')
     // Counts only: the handler must not stringify or return stored values.
     assert.ok(!/--return\s*cfg|return cfg\b|JSON\.stringify\(cfg\)/.test(body), 'handler must never return config values')
   })

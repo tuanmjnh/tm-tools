@@ -17,6 +17,10 @@ const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 // rate limiter/audit/abort behavior is battle-tested, don't touch it).
 // decrypt() passes plaintext through, so pre-encryption files keep working.
 const { encrypt, decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
+// R141 (§205): the config.env parser is shared by get-config, ai-key-status
+// and set-config — one implementation, so "file missing" can never be
+// read differently by two handlers. Shape: { exists, values }.
+const { readConfigFile } = require('./tools/config-file.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
 
 // Secret config slots: the AI panel writes exactly KEY / KEY_<TASK>.
@@ -47,31 +51,21 @@ function appOrigins() {
 let win = null
 
 function loadUserConfig() {
-  const userConfigPath = path.join(app.getPath('userData'), 'config.env')
-  try {
-    const content = fs.readFileSync(userConfigPath, 'utf8')
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const eqIdx = trimmed.indexOf('=')
-      if (eqIdx === -1) continue
-      const key = trimmed.slice(0, eqIdx).trim()
-      let value = trimmed.slice(eqIdx + 1).trim()
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
-        value = value.slice(1, -1)
-      }
-      // R139: the file holds keychain TOKENS; env carries plaintext so the
-      // gateway and every existing consumer stay untouched. decrypt()
-      // passes plaintext through (pre-R139 files) and yields null for a
-      // corrupt token — dropped here, which the gateway reports honestly
-      // as ai.no-key (re-enter the key) instead of sending garbage.
-      if (SECRET_SLOT_RE.test(key)) value = decrypt(value)
-      if (!process.env[key] && value !== null) {
-        process.env[key] = value
-      }
+  // R141 (§205): parse through the SAME module every config reader uses —
+  // startup, get-config, ai-key-status and set-config can no longer
+  // disagree about what a line means (each private copy had drifted on
+  // error handling and quote stripping).
+  const { values } = readConfigFile(path.join(app.getPath('userData'), 'config.env'))
+  for (const [key, raw] of Object.entries(values)) {
+    // R139: the file holds keychain TOKENS; env carries plaintext so the
+    // gateway and every existing consumer stay untouched. decrypt()
+    // passes plaintext through (pre-R139 files) and yields null for a
+    // corrupt token — dropped here, which the gateway reports honestly
+    // as ai.no-key (re-enter the key) instead of sending garbage.
+    const value = SECRET_SLOT_RE.test(key) ? decrypt(raw) : raw
+    if (!process.env[key] && value !== null) {
+      process.env[key] = value
     }
-  } catch {
-    // No user config yet, defaults in server/config/index.ts will be used
   }
 }
 
@@ -303,33 +297,19 @@ const isTrustedSender = createSenderGate({ isDev, port: PORT })
 // FUNCTION ITSELF is gated once.
 gateIpcMainHandle(ipcMain, isTrustedSender)
 
-// Config parsing shared by get/set (was duplicated three times inline).
-function readConfigFile(file) {
-  const result = {}
-  try {
-    const content = fs.readFileSync(file, 'utf8')
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const eqIdx = trimmed.indexOf('=')
-      if (eqIdx === -1) continue
-      const key = trimmed.slice(0, eqIdx).trim()
-      let value = trimmed.slice(eqIdx + 1).trim()
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
-        value = value.slice(1, -1)
-      }
-      result[key] = value
-    }
-  } catch {
-    // no config yet
-  }
-  return result
-}
+// R141 (§205): the config.env parser is shared by get-config,
+// ai-key-status and set-config via `electron/tools/config-file.cjs`.
+// One implementation means "file missing" can never be read
+// differently by two handlers — the old inline copy here returned a
+// bare {} on every read failure, so a fresh install (no config.env
+// yet) looked identical to a parsed file with zero secret slots and
+// the vault banner lied about the OS keychain.
 
 ipcMain.handle('get-config', (event) => {
   if (!isTrustedSender(event)) return {}
+  const parsed = readConfigFile(userConfigPath())
   const result = {}
-  for (const [key, raw] of Object.entries(readConfigFile(userConfigPath()))) {
+  for (const [key, raw] of Object.entries(parsed.values)) {
     // R139: the file holds keychain TOKENS for secret slots; a renderer
     // must never see either form. The panel only needs to know whether a
     // key EXISTS (hasKey badges come from the gateway status), so secret
@@ -337,7 +317,6 @@ ipcMain.handle('get-config', (event) => {
     // "unset") instead of leaking base64 noise into the UI.
     if (SECRET_SLOT_RE.test(key)) {
       const plain = decrypt(raw)
-      delete result[key]
       result[key] = plain ? '********' : ''
       continue
     }
@@ -348,17 +327,30 @@ ipcMain.handle('get-config', (event) => {
 
 ipcMain.handle('ai-key-status', (event) => {
   if (!isTrustedSender(event)) return { ok: false }
-  // R140: the vault dashboard asks "how many keys are protected?" —
+  // R140 + R141: the vault dashboard asks "how many keys are protected?" —
   // counts only, never tokens or values (the renderer never sees them).
-  const cfg = readConfigFile(userConfigPath())
+  // `exists` distinguishes a fresh install (no config file yet) from a
+  // parsed file with zero secret slots — without it both look like
+  // "0 encrypted / 0 plaintext" and the banner lies about the keychain.
+  // The loop stays CLOSED to the secret slots: a stray non-secret value
+  // with the magic prefix must never be counted as an encrypted key.
+  const parsed = readConfigFile(userConfigPath())
   let encrypted = 0
   let plaintext = 0
-  for (const [key, raw] of Object.entries(cfg)) {
+  for (const [key, raw] of Object.entries(parsed.values)) {
     if (!SECRET_SLOT_RE.test(key) || !raw) continue
     if (raw.startsWith(magicPrefix())) encrypted++
     else plaintext++
   }
-  return { ok: true, data: { available: isEncryptionAvailable(), encrypted, plaintext } }
+  return {
+    ok: true,
+    data: {
+      available: isEncryptionAvailable(),
+      exists: parsed.exists,
+      encrypted,
+      plaintext
+    }
+  }
 })
 
 ipcMain.handle('set-config', (event, values) => {
@@ -366,7 +358,7 @@ ipcMain.handle('set-config', (event, values) => {
   const configFile = userConfigPath()
   const existing = readConfigFile(configFile)
   const incoming = values && typeof values === 'object' ? values : {}
-  const merged = { ...existing, ...incoming }
+  const merged = { ...existing.values, ...incoming }
   const lines = Object.entries(merged)
     // R139: a masked value coming BACK from get-config ('********')
     // means the UI echoed the placeholder — keep the stored token.

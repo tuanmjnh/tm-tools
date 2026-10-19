@@ -632,10 +632,16 @@ export interface AiTaskStatus {
 /**
  * R140: at-rest key vault status (main:ai-key-status). COUNTS ONLY —
  * tokens and plaintext values never leave the main process.
+ * R141 adds `exists`: a missing config file (fresh install, panel
+ * never saved) must not be indistinguishable from a parsed file with
+ * zero secret slots — both previously reported 0/0 and looked like a
+ * broken migration.
  */
 export interface AiKeyVaultStatus {
   /** OS keychain (safeStorage) usable this session. */
   available: boolean
+  /** config.env exists on disk (panel has saved at least once). */
+  exists: boolean
   /** Secret slots stored encrypted at rest. */
   encrypted: number
   /** Secret slots still in plaintext (pre-R139 or keychain unavailable). */
