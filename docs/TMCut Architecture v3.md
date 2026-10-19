@@ -9851,3 +9851,26 @@ exists, link is gated, flag is hydrate-safe.
   errors at HEAD → 0; doctrine: every touched file ends clean).
 - i18n 3003/3003; unit 32/32; typecheck 0; hub seed synced —
   `Updated System Route 'system_ai_keys'` observed in seed output.
+
+## 207. R145 — one definition beats two pinned copies
+
+The §206.2 audit left the slot regex as TWO byte-identical literals
+(main.cjs masks/decrypts, key-migrate.cjs filters) with the vault spec
+as the drift alarm. The alarm is the wrong kind of safety for a
+security rule: it turns red AFTER the second copy has drifted in
+review. The rule "every secret slot is encrypted AND masked" only
+holds while both sides agree on what a slot is — a one-line regex edit
+on either side is the entire failure mode.
+
+R145: `electron/tools/secret-slots.cjs` declares the regex ONCE; both
+consumers `require` it (plus the future `isSecretSlot(key)` helper for
+readers who don't need the RegExp object). The vault spec's drift test
+inverts from "the two literals match" to "exactly one literal exists,
+and it lives in the shared module" — a redeclared copy is itself the
+red. Behavior pins survive verbatim from the §206.2 audit: bare
+`AI_API_KEY` qualifies, `AI_API_KEY_PLAN` qualifies, `AI_BASE_URL`
+never does.
+
+Proof: node --check on all three modules, secure probe ALL PASS
+(real-keychain migration now runs through the shared import chain),
+AI suite 45/45, vault 12/12, run-all 32/32, lint 0.
