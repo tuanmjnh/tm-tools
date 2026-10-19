@@ -167,8 +167,13 @@ useHead({ title })
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" :loading="roles.loading.value"
-          @click="roles.refresh()" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          size="sm"
+          :loading="roles.loading.value"
+          @click="roles.refresh()"
+        />
       </div>
     </template>
 
@@ -176,8 +181,13 @@ useHead({ title })
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UInput v-model="searchQuery" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
-              class="w-full sm:w-64" />
+            <UInput
+              v-model="searchQuery"
+              icon="i-lucide-search"
+              :placeholder="t('common.search')"
+              size="sm"
+              class="w-full sm:w-64"
+            />
           </div>
         </template>
         <template #right>
@@ -191,10 +201,21 @@ useHead({ title })
     </template>
 
     <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
-      <LazyGridList v-model:selected="selected" v-model:view-mode="viewMode" :items="filteredRoles" :columns="columns"
-        :loading="roles.initialLoading.value || roles.loading.value" :can-load-more="roles.hasMore.value"
-        :action-options="rowActions" :selectable="isRoot" item-key="id" storage-key="roles-view-mode"
-        @load-more="roles.loadMore()" @refresh="roles.refresh()" @click="openEdit">
+      <LazyGridList
+        v-model:selected="selected"
+        v-model:view-mode="viewMode"
+        :items="filteredRoles"
+        :columns="columns"
+        :loading="roles.initialLoading.value || roles.loading.value"
+        :can-load-more="roles.hasMore.value"
+        :action-options="rowActions"
+        :selectable="isRoot"
+        item-key="id"
+        storage-key="roles-view-mode"
+        @load-more="roles.loadMore()"
+        @refresh="roles.refresh()"
+        @click="openEdit"
+      >
         <template #name="{ item }">
           <div class="min-w-0">
             <span class="font-medium text-xs text-highlighted truncate block">{{ item.name }}</span>
@@ -210,11 +231,22 @@ useHead({ title })
 
         <template #permissions="{ item }">
           <div class="flex flex-wrap gap-1">
-            <UBadge v-if="isFullAccessRole(item.permissions)" :label="t('admin.fullAccess')" color="success"
-              variant="subtle" size="xs" icon="i-lucide-crown" />
+            <UBadge
+              v-if="isFullAccessRole(item.permissions)"
+              :label="t('admin.fullAccess')"
+              color="success"
+              variant="subtle"
+              size="xs"
+              icon="i-lucide-crown"
+            />
             <template v-else>
-              <UBadge v-for="p in (item.permissions || []).slice(0, 3)" :key="p.module" :label="moduleLabel(p.module)"
-                variant="subtle" size="xs" />
+              <UBadge
+                v-for="p in (item.permissions || []).slice(0, 3)"
+                :key="p.module"
+                :label="moduleLabel(p.module)"
+                variant="subtle"
+                size="xs"
+              />
               <span v-if="(item.permissions || []).length > 3" class="text-xs text-muted">
                 +{{ item.permissions.length - 3 }}
               </span>
@@ -223,8 +255,13 @@ useHead({ title })
         </template>
 
         <template #allowedRoutes="{ item }">
-          <UBadge v-if="hasAllRoutes(item.allowedRoutes)" :label="t('admin.allRoutes')" color="info" variant="subtle"
-            size="xs" />
+          <UBadge
+            v-if="hasAllRoutes(item.allowedRoutes)"
+            :label="t('admin.allRoutes')"
+            color="info"
+            variant="subtle"
+            size="xs"
+          />
           <span v-else class="text-xs text-muted">
             {{ t('admin.routesCount', { n: (item.allowedRoutes || []).length }) }}
           </span>
@@ -248,14 +285,30 @@ useHead({ title })
                 {{ item.description || '—' }}
               </p>
               <div class="flex flex-wrap gap-1 mt-2">
-                <UBadge v-if="isFullAccessRole(item.permissions)" :label="t('admin.fullAccess')" color="success"
-                  variant="subtle" size="xs" icon="i-lucide-crown" />
+                <UBadge
+                  v-if="isFullAccessRole(item.permissions)"
+                  :label="t('admin.fullAccess')"
+                  color="success"
+                  variant="subtle"
+                  size="xs"
+                  icon="i-lucide-crown"
+                />
                 <template v-else>
-                  <UBadge v-for="p in (item.permissions || []).slice(0, 4)" :key="p.module"
-                    :label="moduleLabel(p.module)" variant="subtle" size="xs" />
+                  <UBadge
+                    v-for="p in (item.permissions || []).slice(0, 4)"
+                    :key="p.module"
+                    :label="moduleLabel(p.module)"
+                    variant="subtle"
+                    size="xs"
+                  />
                 </template>
-                <UBadge v-if="hasAllRoutes(item.allowedRoutes)" :label="t('admin.allRoutes')" color="info"
-                  variant="subtle" size="xs" />
+                <UBadge
+                  v-if="hasAllRoutes(item.allowedRoutes)"
+                  :label="t('admin.allRoutes')"
+                  color="info"
+                  variant="subtle"
+                  size="xs"
+                />
               </div>
             </div>
             <AdminRowActions :items="rowActions(item)" />
@@ -268,13 +321,32 @@ useHead({ title })
       </LazyGridList>
     </div>
 
-    <RolesCreateModal v-model:open="isCreateOpen" :app-id="appId" :routes="roles.routes.value"
-      :initial-data="copySource" :route-tree="roles.routeTree.value" @created="roles.refresh()" />
-    <RolesEditModal v-model:open="isEditOpen" :role="editingRole" :app-id="appId" :routes="roles.routes.value"
-      :route-tree="roles.routeTree.value" @updated="roles.refresh()" />
-    <BaseConfirmModal v-model:open="isDeleteOpen" :title="t('admin.deleteRoleConfirm')"
-      :description="t('admin.deleteRoleConfirmDesc', { name: deletingNames })" :confirm-label="t('common.delete')"
-      :cancel-label="t('common.cancel')" color="error" icon="i-lucide-alert-triangle" :loading="roles.mutating.value"
-      @confirm="handleDelete" />
+    <RolesCreateModal
+      v-model:open="isCreateOpen"
+      :app-id="appId"
+      :routes="roles.routes.value"
+      :initial-data="copySource"
+      :route-tree="roles.routeTree.value"
+      @created="roles.refresh()"
+    />
+    <RolesEditModal
+      v-model:open="isEditOpen"
+      :role="editingRole"
+      :app-id="appId"
+      :routes="roles.routes.value"
+      :route-tree="roles.routeTree.value"
+      @updated="roles.refresh()"
+    />
+    <BaseConfirmModal
+      v-model:open="isDeleteOpen"
+      :title="t('admin.deleteRoleConfirm')"
+      :description="t('admin.deleteRoleConfirmDesc', { name: deletingNames })"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      color="error"
+      icon="i-lucide-alert-triangle"
+      :loading="roles.mutating.value"
+      @confirm="handleDelete"
+    />
   </BasePage>
 </template>

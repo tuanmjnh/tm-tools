@@ -13,7 +13,13 @@ const { t } = useI18n()
 
 <template>
   <UDropdownMenu :items="items" :content="{ align }">
-    <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs"
-      :aria-label="t('common.actions')" @click.stop />
+    <UButton
+      icon="i-lucide-ellipsis-vertical"
+      color="neutral"
+      variant="ghost"
+      size="xs"
+      :aria-label="t('common.actions')"
+      @click.stop
+    />
   </UDropdownMenu>
 </template>

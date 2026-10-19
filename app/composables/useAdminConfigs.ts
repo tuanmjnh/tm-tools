@@ -95,7 +95,7 @@ export const useAdminConfigs = () => {
   const saveSingleConfig = async (
     key: string,
     value: unknown,
-    options?: { category?: string; isSecret?: boolean; isPublic?: boolean; description?: string },
+    options?: { category?: string, isSecret?: boolean, isPublic?: boolean, description?: string },
     appId?: string
   ) => {
     const targetApp = appId || list.targetAppId.value

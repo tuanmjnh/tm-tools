@@ -181,42 +181,88 @@ const contextOptions = computed(() => [
 <template>
   <div
     class="relative group bg-black/80 border border-gray-300 dark:border-gray-800 rounded-lg overflow-hidden select-none"
-    :style="{ width: `${frameSize.w}px`, height: `${frameSize.h}px` }">
+    :style="{ width: `${frameSize.w}px`, height: `${frameSize.h}px` }"
+  >
     <!-- Background layer -->
     <template v-if="background.type === 'file' && background.file">
-      <video v-if="isVideoFile(background.file)" :src="toURL(background.file)" autoplay loop muted playsinline
+      <video
+        v-if="isVideoFile(background.file)"
+        :src="toURL(background.file)"
+        autoplay
+        loop
+        muted
+        playsinline
         class="absolute inset-0 w-full h-full object-cover"
-        @loadedmetadata="($event.target as HTMLVideoElement).play()" />
+        @loadedmetadata="($event.target as HTMLVideoElement).play()"
+      />
       <img v-else :src="toURL(background.file)" class="absolute inset-0 w-full h-full object-cover">
     </template>
     <template v-else-if="background.type === 'boxblur' && previewFile && previewFile.path">
-      <video v-if="isVideoFile(previewFile.path)" :src="toURL(previewFile.path)" autoplay loop muted playsinline
-        class="absolute inset-0 w-full h-full object-cover" :style="`filter: blur(${background.boxblur}px)`"
-        @loadedmetadata="($event.target as HTMLVideoElement).play()" />
-      <img v-else :src="toURL(previewFile.path)" class="absolute inset-0 w-full h-full object-cover"
-        :style="`filter: blur(${background.boxblur}px)`">
+      <video
+        v-if="isVideoFile(previewFile.path)"
+        :src="toURL(previewFile.path)"
+        autoplay
+        loop
+        muted
+        playsinline
+        class="absolute inset-0 w-full h-full object-cover"
+        :style="`filter: blur(${background.boxblur}px)`"
+        @loadedmetadata="($event.target as HTMLVideoElement).play()"
+      />
+      <img
+        v-else
+        :src="toURL(previewFile.path)"
+        class="absolute inset-0 w-full h-full object-cover"
+        :style="`filter: blur(${background.boxblur}px)`"
+      >
     </template>
     <div v-else class="absolute inset-0" :style="{ backgroundColor: background.color }" />
 
     <!-- Main file -->
-    <VueDraggableResizable v-if="previewFile && previewFile.path && !hasMainError" :x="toDisplay(previewFile.x, sx)"
-      :y="toDisplay(previewFile.y, sy)" :w="Math.max(toDisplay(previewFile.w, sx), 20)"
-      :h="Math.max(toDisplay(previewFile.h, sy), 20)" :parent="false" :lock-aspect-ratio="false" :draggable="!readonly"
-      :resizable="!readonly" :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
-      :drag-handle="readonly ? '' : '.drag-handle'" class="z-10" @drag-stop="onDragStopMain"
-      @resize-stop="onResizeStopMain">
+    <VueDraggableResizable
+      v-if="previewFile && previewFile.path && !hasMainError"
+      :x="toDisplay(previewFile.x, sx)"
+      :y="toDisplay(previewFile.y, sy)"
+      :w="Math.max(toDisplay(previewFile.w, sx), 20)"
+      :h="Math.max(toDisplay(previewFile.h, sy), 20)"
+      :parent="false"
+      :lock-aspect-ratio="false"
+      :draggable="!readonly"
+      :resizable="!readonly"
+      :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
+      :drag-handle="readonly ? '' : '.drag-handle'"
+      class="z-10"
+      @drag-stop="onDragStopMain"
+      @resize-stop="onResizeStopMain"
+    >
       <div
-        :class="readonly ? 'w-full h-full overflow-hidden' : 'drag-handle w-full h-full bg-white/10 overflow-hidden'">
-        <video v-if="isVideoFile(previewFile.path)" :src="toURL(previewFile.path)" autoplay loop muted playsinline
-          class="w-full h-full object-fill" @loadedmetadata="($event.target as HTMLVideoElement).play()"
-          @error="hasMainError = true" />
-        <img v-else :src="toURL(previewFile.path)" class="w-full h-full object-fill" @error="hasMainError = true">
+        :class="readonly ? 'w-full h-full overflow-hidden' : 'drag-handle w-full h-full bg-white/10 overflow-hidden'"
+      >
+        <video
+          v-if="isVideoFile(previewFile.path)"
+          :src="toURL(previewFile.path)"
+          autoplay
+          loop
+          muted
+          playsinline
+          class="w-full h-full object-fill"
+          @loadedmetadata="($event.target as HTMLVideoElement).play()"
+          @error="hasMainError = true"
+        />
+        <img
+          v-else
+          :src="toURL(previewFile.path)"
+          class="w-full h-full object-fill"
+          @error="hasMainError = true"
+        >
       </div>
     </VueDraggableResizable>
 
     <!-- Corrupted / Error overlay -->
-    <div v-if="hasMainError"
-      class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-red-950/70 backdrop-blur-xs border rounded-lg border-red-500/50 p-4 text-center select-none">
+    <div
+      v-if="hasMainError"
+      class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-red-950/70 backdrop-blur-xs border rounded-lg border-red-500/50 p-4 text-center select-none"
+    >
       <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400 mb-2 shrink-0 animate-pulse" />
       <p class="text-xs font-semibold text-red-200 mb-0.5">
         {{ t('tools.invalidMediaFile') }}
@@ -227,83 +273,160 @@ const contextOptions = computed(() => [
     </div>
 
     <!-- Sub files -->
-    <VueDraggableResizable v-for="sub in subs.filter(s => !s.hidden)" :key="sub.id || sub.path"
-      :x="toDisplay(sub.x, sx)" :y="toDisplay(sub.y, sy)" :w="Math.max(toDisplay(sub.w, sx), 20)"
-      :h="Math.max(toDisplay(sub.h, sy), 20)" :parent="false" :lock-aspect-ratio="false" :draggable="!readonly"
-      :resizable="!readonly" :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
+    <VueDraggableResizable
+      v-for="sub in subs.filter(s => !s.hidden)"
+      :key="sub.id || sub.path"
+      :x="toDisplay(sub.x, sx)"
+      :y="toDisplay(sub.y, sy)"
+      :w="Math.max(toDisplay(sub.w, sx), 20)"
+      :h="Math.max(toDisplay(sub.h, sy), 20)"
+      :parent="false"
+      :lock-aspect-ratio="false"
+      :draggable="!readonly"
+      :resizable="!readonly"
+      :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
       :drag-handle="readonly ? '' : '.drag-handle'"
       :class="[!readonly && selectedItem?.key === 'file' && selectedItem?.value === sub ? 'ring-2 ring-primary' : '']"
-      class="z-20" tabindex="0" @contextmenu.prevent="handleContextMenu($event, sub, 'file')"
-      @keydown="onKeyDown($event, sub, 'file')" @drag-stop="(x: number, y: number) => onDragStop(sub, x, y)"
-      @resize-stop="(x: number, y: number, w: number, h: number) => onResizeStop(sub, x, y, w, h)">
+      class="z-20"
+      tabindex="0"
+      @contextmenu.prevent="handleContextMenu($event, sub, 'file')"
+      @keydown="onKeyDown($event, sub, 'file')"
+      @drag-stop="(x: number, y: number) => onDragStop(sub, x, y)"
+      @resize-stop="(x: number, y: number, w: number, h: number) => onResizeStop(sub, x, y, w, h)"
+    >
       <div
-        :class="readonly ? 'w-full h-full overflow-hidden' : 'drag-handle w-full h-full bg-white/10 overflow-hidden'">
-        <video v-if="isVideoFile(sub.path)" :src="toURL(sub.path)" autoplay loop muted playsinline
-          class="w-full h-full object-fill" @loadedmetadata="($event.target as HTMLVideoElement).play()" />
+        :class="readonly ? 'w-full h-full overflow-hidden' : 'drag-handle w-full h-full bg-white/10 overflow-hidden'"
+      >
+        <video
+          v-if="isVideoFile(sub.path)"
+          :src="toURL(sub.path)"
+          autoplay
+          loop
+          muted
+          playsinline
+          class="w-full h-full object-fill"
+          @loadedmetadata="($event.target as HTMLVideoElement).play()"
+        />
         <img v-else :src="toURL(sub.path)" class="w-full h-full object-fill">
       </div>
     </VueDraggableResizable>
 
     <!-- Text labels -->
-    <VueDraggableResizable v-for="txt in texts.filter(t => !t.hidden)" :key="txt.id || txt.text"
-      :x="toDisplay(txt.x, sx)" :y="toDisplay(txt.y, sy)"
+    <VueDraggableResizable
+      v-for="txt in texts.filter(t => !t.hidden)"
+      :key="txt.id || txt.text"
+      :x="toDisplay(txt.x, sx)"
+      :y="toDisplay(txt.y, sy)"
       :w="Math.max(toDisplay(getTextRenderTransform(txt).width, sx), 20)"
-      :h="Math.max(toDisplay(getTextRenderTransform(txt).height, sy), 20)" :parent="false"
-      :lock-aspect-ratio="(txt.resizeMode || 'scale') === 'scale'" :draggable="!readonly" :resizable="!readonly"
+      :h="Math.max(toDisplay(getTextRenderTransform(txt).height, sy), 20)"
+      :parent="false"
+      :lock-aspect-ratio="(txt.resizeMode || 'scale') === 'scale'"
+      :draggable="!readonly"
+      :resizable="!readonly"
       :handles="readonly ? [] : ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml']"
       :drag-handle="readonly ? '' : '.drag-handle'"
       :class="[!readonly && selectedItem?.key === 'text' && selectedItem?.value === txt ? 'ring-2 ring-primary' : '']"
-      class="z-30" tabindex="0" @contextmenu.prevent="handleContextMenu($event, txt, 'text')"
-      @keydown="onKeyDown($event, txt, 'text')" @drag-stop="(x: number, y: number) => onDragStop(txt, x, y)"
-      @resize-stop="(x: number, y: number, w: number, h: number) => onResizeStop(txt, x, y, w, h)">
+      class="z-30"
+      tabindex="0"
+      @contextmenu.prevent="handleContextMenu($event, txt, 'text')"
+      @keydown="onKeyDown($event, txt, 'text')"
+      @drag-stop="(x: number, y: number) => onDragStop(txt, x, y)"
+      @resize-stop="(x: number, y: number, w: number, h: number) => onResizeStop(txt, x, y, w, h)"
+    >
       <div
-        :class="readonly ? 'w-full h-full flex items-center justify-center' : 'drag-handle w-full h-full flex items-center justify-center cursor-move'">
-        <div class="text-center leading-tight flex items-center justify-center h-full w-full"
-          :class="txt.resizeMode === 'box' ? 'whitespace-pre-wrap' : 'whitespace-nowrap'" :style="{
+        :class="readonly ? 'w-full h-full flex items-center justify-center' : 'drag-handle w-full h-full flex items-center justify-center cursor-move'"
+      >
+        <div
+          class="text-center leading-tight flex items-center justify-center h-full w-full"
+          :class="txt.resizeMode === 'box' ? 'whitespace-pre-wrap' : 'whitespace-nowrap'"
+          :style="{
             color: txt.color,
             fontSize: `${(getTextRenderTransform(txt).fontSize * sx).toFixed(2)}px`,
             backgroundColor: txt.box ? hexToRgba(txt.boxColor || '#A3A3A3', txt.boxOpacity || 0.5) : 'transparent',
             padding: txt.box ? `${Math.max(toDisplay(getTextRenderTransform(txt).boxBorderW, sx), 1)}px` : '0',
             ...fontToStyle(txt)
-          }">
+          }"
+        >
           {{ txt.text }}
         </div>
       </div>
     </VueDraggableResizable>
 
-    <div v-if="!texts.length && !subs.length && !previewFile"
-      class="absolute inset-0 flex items-center justify-center pointer-events-none">
+    <div
+      v-if="!texts.length && !subs.length && !previewFile"
+      class="absolute inset-0 flex items-center justify-center pointer-events-none"
+    >
       <p class="text-xs text-muted bg-black/50 px-2 py-1 rounded">
         {{ t('tools.noPreview') }}
       </p>
     </div>
 
     <!-- Hover Fullscreen Action Button -->
-    <div v-if="allowFullscreen && !hasMainError && (previewFile || texts.length || subs.length)"
-      class="absolute top-2 right-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto">
-      <UButton icon="i-lucide-maximize-2" size="xs" color="neutral" variant="solid" :title="t('global.fullscreen')"
+    <div
+      v-if="allowFullscreen && !hasMainError && (previewFile || texts.length || subs.length)"
+      class="absolute top-2 right-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-auto"
+    >
+      <UButton
+        icon="i-lucide-maximize-2"
+        size="xs"
+        color="neutral"
+        variant="solid"
+        :title="t('global.fullscreen')"
         class="bg-black/60 hover:bg-black/90 text-white backdrop-blur-xs rounded shadow cursor-pointer"
-        @click.stop="openFullscreenModal = true" />
+        @click.stop="openFullscreenModal = true"
+      />
     </div>
 
     <!-- Context menu -->
-    <div v-if="isContextmenu" class="fixed z-50 min-w-3.75 rounded-lg border border-default bg-elevated shadow-lg p-1"
-      :style="{ left: `${xContextmenu}px`, top: `${yContextmenu}px` }" @click.stop>
-      <UButton v-for="opt in contextOptions" :key="opt.key" block size="sm" variant="ghost" :icon="opt.icon"
-        :label="opt.label" :color="opt.key === 'delete' ? 'error' : 'neutral'" class="justify-start"
-        @click="handleSelect(opt.key as 'edit' | 'delete')" />
+    <div
+      v-if="isContextmenu"
+      class="fixed z-50 min-w-3.75 rounded-lg border border-default bg-elevated shadow-lg p-1"
+      :style="{ left: `${xContextmenu}px`, top: `${yContextmenu}px` }"
+      @click.stop
+    >
+      <UButton
+        v-for="opt in contextOptions"
+        :key="opt.key"
+        block
+        size="sm"
+        variant="ghost"
+        :icon="opt.icon"
+        :label="opt.label"
+        :color="opt.key === 'delete' ? 'error' : 'neutral'"
+        class="justify-start"
+        @click="handleSelect(opt.key as 'edit' | 'delete')"
+      />
     </div>
-    <div v-if="isContextmenu" class="fixed inset-0 z-40" @click="isContextmenu = false"
-      @contextmenu.prevent="isContextmenu = false" />
+    <div
+      v-if="isContextmenu"
+      class="fixed inset-0 z-40"
+      @click="isContextmenu = false"
+      @contextmenu.prevent="isContextmenu = false"
+    />
   </div>
 
   <!-- Fullscreen Preview Modal -->
-  <BaseResponsiveModal v-if="allowFullscreen" v-model:open="openFullscreenModal" v-model="openFullscreenModal"
-    :title="t('tools.previewVideo')" :ui="{ content: 'sm:max-w-4xl' }">
-    <div ref="fullscreenContainerEl"
-      class="w-full flex items-center justify-center p-4 bg-neutral-950/90 dark:bg-black/90 rounded-xl min-h-[60vh] max-h-[75vh] overflow-hidden">
-      <ToolsVideoFramePreview :preview-file="previewFile" :background="background" :texts="texts" :subs="subs"
-        :base-size="baseSize" :frame-size="fullscreenFrameSize" :readonly="true" :allow-fullscreen="false" />
+  <BaseResponsiveModal
+    v-if="allowFullscreen"
+    v-model:open="openFullscreenModal"
+    v-model="openFullscreenModal"
+    :title="t('tools.previewVideo')"
+    :ui="{ content: 'sm:max-w-4xl' }"
+  >
+    <div
+      ref="fullscreenContainerEl"
+      class="w-full flex items-center justify-center p-4 bg-neutral-950/90 dark:bg-black/90 rounded-xl min-h-[60vh] max-h-[75vh] overflow-hidden"
+    >
+      <ToolsVideoFramePreview
+        :preview-file="previewFile"
+        :background="background"
+        :texts="texts"
+        :subs="subs"
+        :base-size="baseSize"
+        :frame-size="fullscreenFrameSize"
+        :readonly="true"
+        :allow-fullscreen="false"
+      />
     </div>
   </BaseResponsiveModal>
 </template>

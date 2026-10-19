@@ -112,8 +112,16 @@ async function onSubmit() {
 </script>
 
 <template>
-  <BaseFormModal v-model:open="open" :title="t('routes.edit')" :description="route?.id" :schema="schema" :state="state"
-    :loading="loading" :submit-label="t('common.save')" @submit="onSubmit">
+  <BaseFormModal
+    v-model:open="open"
+    :title="t('routes.edit')"
+    :description="route?.id"
+    :schema="schema"
+    :state="state"
+    :loading="loading"
+    :submit-label="t('common.save')"
+    @submit="onSubmit"
+  >
     <UFormField :label="t('routes.path')" name="path" required>
       <UInput v-model="state.path" class="w-full" />
     </UFormField>
@@ -127,14 +135,24 @@ async function onSubmit() {
       <InputsIconSelector v-model="state.icon" class="w-full" />
     </UFormField>
     <UFormField :label="t('routes.permission')" name="requiredPermission">
-      <USelect v-model="permissionSelectValue" :items="permissionOptions" value-key="value" class="w-full" />
+      <USelect
+        v-model="permissionSelectValue"
+        :items="permissionOptions"
+        value-key="value"
+        class="w-full"
+      />
     </UFormField>
     <div class="grid grid-cols-2 gap-3">
       <UFormField :label="t('routes.sort')" name="sort">
         <UInput v-model.number="state.sort" type="number" class="w-full" />
       </UFormField>
       <UFormField :label="t('routes.parent')" name="parentId">
-        <USelect v-model="parentSelectValue" :items="parentOptions" value-key="value" class="w-full" />
+        <USelect
+          v-model="parentSelectValue"
+          :items="parentOptions"
+          value-key="value"
+          class="w-full"
+        />
       </UFormField>
     </div>
     <UFormField name="isVisible">

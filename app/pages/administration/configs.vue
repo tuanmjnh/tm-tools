@@ -105,7 +105,7 @@ const typeOptions = computed(() => [
   { label: t('configs.typeTextarea'), value: 'textarea', icon: 'i-lucide-align-left' },
   { label: t('configs.typeJson'), value: 'json', icon: 'i-lucide-braces' },
   { label: t('configs.typeSecret'), value: 'secret', icon: 'i-lucide-key' },
-  { label: t('configs.typeBoolean'), value: 'boolean', icon: 'i-lucide-toggle-left' },
+  { label: t('configs.typeBoolean'), value: 'boolean', icon: 'i-lucide-toggle-left' }
 ])
 
 function selectType(newType: ConfigValueType) {
@@ -468,8 +468,14 @@ onMounted(() => load(true))
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :loading="loading"
-          @click="refresh" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          color="neutral"
+          size="sm"
+          :loading="loading"
+          @click="refresh"
+        />
       </div>
     </template>
 
@@ -477,11 +483,22 @@ onMounted(() => load(true))
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UInput v-model="search" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
-              class="flex-1 min-w-0 sm:flex-none sm:w-56" />
+            <UInput
+              v-model="search"
+              icon="i-lucide-search"
+              :placeholder="t('common.search')"
+              size="sm"
+              class="flex-1 min-w-0 sm:flex-none sm:w-56"
+            />
             <AdminFilterPopover>
-              <USelect v-model="categoryFilter" :items="categoryItems" value-key="value" size="sm"
-                class="w-full md:w-36" :aria-label="t('configs.category')" />
+              <USelect
+                v-model="categoryFilter"
+                :items="categoryItems"
+                value-key="value"
+                size="sm"
+                class="w-full md:w-36"
+                :aria-label="t('configs.category')"
+              />
             </AdminFilterPopover>
           </div>
         </template>
@@ -497,9 +514,19 @@ onMounted(() => load(true))
 
     <template #default>
       <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
-        <LazyGridList :items="displayItems" :columns="columns" :loading="initialLoading" item-key="key"
-          :can-load-more="hasMore" :action-options="getActionOptions" v-model:view-mode="viewMode"
-          storage-key="configs-view-mode" @load-more="loadMore" @refresh="refresh" @click="openEdit">
+        <LazyGridList
+          v-model:view-mode="viewMode"
+          :items="displayItems"
+          :columns="columns"
+          :loading="initialLoading"
+          item-key="key"
+          :can-load-more="hasMore"
+          :action-options="getActionOptions"
+          storage-key="configs-view-mode"
+          @load-more="loadMore"
+          @refresh="refresh"
+          @click="openEdit"
+        >
           <template #key="{ item }">
             <div class="min-w-0">
               <span class="font-mono text-xs font-medium text-highlighted truncate block">{{ item.key }}</span>
@@ -514,15 +541,29 @@ onMounted(() => load(true))
               <code class="text-[11px] py-1 rounded truncate max-w-full flex-1">
                 {{ item.isSecret && !revealed[item.key] ? '••••••••' : item.value }}
               </code>
-              <UButton v-if="item.isSecret" :icon="revealed[item.key] ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                variant="soft" size="xs" @click.stop="revealed[item.key] = !revealed[item.key]" />
-              <UButton icon="i-lucide-copy" variant="soft" size="xs" @click.stop="copyValue(item.value)" />
+              <UButton
+                v-if="item.isSecret"
+                :icon="revealed[item.key] ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                variant="soft"
+                size="xs"
+                @click.stop="revealed[item.key] = !revealed[item.key]"
+              />
+              <UButton
+                icon="i-lucide-copy"
+                variant="soft"
+                size="xs"
+                @click.stop="copyValue(item.value)"
+              />
             </div>
           </template>
 
           <template #type="{ item }">
-            <UBadge :label="getTypeBadgeLabel(detectConfigType(item.value, item.isSecret))"
-              :color="getTypeBadgeColor(detectConfigType(item.value, item.isSecret))" variant="subtle" size="xs" />
+            <UBadge
+              :label="getTypeBadgeLabel(detectConfigType(item.value, item.isSecret))"
+              :color="getTypeBadgeColor(detectConfigType(item.value, item.isSecret))"
+              variant="subtle"
+              size="xs"
+            />
           </template>
 
           <template #category="{ item }">
@@ -530,8 +571,20 @@ onMounted(() => load(true))
           </template>
 
           <template #isSecret="{ item }">
-            <UBadge v-if="item.isSecret" :label="t('configs.secret')" color="warning" variant="subtle" size="xs" />
-            <UBadge v-else-if="item.isPublic" :label="t('configs.public')" color="success" variant="subtle" size="xs" />
+            <UBadge
+              v-if="item.isSecret"
+              :label="t('configs.secret')"
+              color="warning"
+              variant="subtle"
+              size="xs"
+            />
+            <UBadge
+              v-else-if="item.isPublic"
+              :label="t('configs.public')"
+              color="success"
+              variant="subtle"
+              size="xs"
+            />
           </template>
 
           <template #mobile-content="{ item }">
@@ -539,22 +592,35 @@ onMounted(() => load(true))
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-mono text-xs font-semibold text-highlighted truncate">{{ item.key }}</span>
-                  <UBadge :label="getTypeBadgeLabel(detectConfigType(item.value, item.isSecret))"
-                    :color="getTypeBadgeColor(detectConfigType(item.value, item.isSecret))" variant="subtle"
-                    size="xs" />
+                  <UBadge
+                    :label="getTypeBadgeLabel(detectConfigType(item.value, item.isSecret))"
+                    :color="getTypeBadgeColor(detectConfigType(item.value, item.isSecret))"
+                    variant="subtle"
+                    size="xs"
+                  />
                   <UBadge :label="item.category" variant="subtle" size="xs" />
-                  <UBadge v-if="item.isSecret" :label="t('configs.secret')" color="warning" variant="subtle"
-                    size="xs" />
+                  <UBadge
+                    v-if="item.isSecret"
+                    :label="t('configs.secret')"
+                    color="warning"
+                    variant="subtle"
+                    size="xs"
+                  />
                 </div>
                 <code class="text-[11px] py-0.5 rounded break-all block">
-                {{ item.isSecret && !revealed[item.key] ? '••••••••' : item.value }}
-              </code>
+                  {{ item.isSecret && !revealed[item.key] ? '••••••••' : item.value }}
+                </code>
                 <p v-if="item.description" class="text-[11px] text-muted truncate">
                   {{ item.description }}
                 </p>
               </div>
               <UDropdownMenu :items="getActionOptions(item)">
-                <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs" />
+                <UButton
+                  icon="i-lucide-ellipsis-vertical"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                />
               </UDropdownMenu>
             </div>
           </template>
@@ -571,14 +637,25 @@ onMounted(() => load(true))
       </div>
 
       <!-- Unified Form Modal -->
-      <BaseFormModal v-model:open="isModalOpen" :title="editingKey ? t('common.edit') : t('configs.new')"
-        :description="editingKey" :state="formState" :loading="saving"
-        :submit-label="editingKey ? t('common.save') : t('common.create')" class="max-w-2xl" @submit="handleSave">
+      <BaseFormModal
+        v-model:open="isModalOpen"
+        :title="editingKey ? t('common.edit') : t('configs.new')"
+        :description="editingKey"
+        :state="formState"
+        :loading="saving"
+        :submit-label="editingKey ? t('common.save') : t('common.create')"
+        class="max-w-2xl"
+        @submit="handleSave"
+      >
         <div class="space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <UFormField :label="t('configs.key')" required>
-              <UInput v-model="formState.key" class="w-full font-mono text-xs" placeholder="APP_NAME"
-                :disabled="!!editingKey" />
+              <UInput
+                v-model="formState.key"
+                class="w-full font-mono text-xs"
+                placeholder="APP_NAME"
+                :disabled="!!editingKey"
+              />
             </UFormField>
 
             <UFormField :label="t('configs.category')">
@@ -589,44 +666,92 @@ onMounted(() => load(true))
           <!-- Data Type Selection -->
           <UFormField :label="t('configs.type')">
             <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-default/40 rounded-lg border border-default">
-              <UButton v-for="opt in typeOptions" :key="opt.value" :label="opt.label" :icon="opt.icon" size="xs"
+              <UButton
+                v-for="opt in typeOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :icon="opt.icon"
+                size="xs"
                 :variant="formState.type === opt.value ? 'solid' : 'ghost'"
-                :color="formState.type === opt.value ? 'primary' : 'neutral'" class="justify-center"
-                @click="selectType(opt.value as ConfigValueType)" />
+                :color="formState.type === opt.value ? 'primary' : 'neutral'"
+                class="justify-center"
+                @click="selectType(opt.value as ConfigValueType)"
+              />
             </div>
           </UFormField>
 
           <!-- Dynamic Value Editor based on type -->
           <UFormField :label="t('configs.value')">
             <!-- 1. Text -->
-            <UInput v-if="formState.type === 'text'" v-model="formState.value" class="w-full font-mono text-xs"
-              :placeholder="t('configs.value')" />
+            <UInput
+              v-if="formState.type === 'text'"
+              v-model="formState.value"
+              class="w-full font-mono text-xs"
+              :placeholder="t('configs.value')"
+            />
 
             <!-- 2. Textarea -->
-            <UTextarea v-else-if="formState.type === 'textarea'" v-model="formState.value" :rows="6"
-              class="w-full font-mono text-xs" :placeholder="t('configs.typeTextarea')" />
+            <UTextarea
+              v-else-if="formState.type === 'textarea'"
+              v-model="formState.value"
+              :rows="6"
+              class="w-full font-mono text-xs"
+              :placeholder="t('configs.typeTextarea')"
+            />
 
             <!-- 3. JSON Editor (Supports visual tree editor & raw code mode) -->
             <div v-else-if="formState.type === 'json'" class="space-y-2 w-full">
               <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-1 bg-default/40 p-0.5 rounded-lg border border-default">
-                  <UButton label="Visual Tree" icon="i-lucide-network" size="xs"
+                  <UButton
+                    label="Visual Tree"
+                    icon="i-lucide-network"
+                    size="xs"
                     :variant="jsonEditMode === 'tree' ? 'solid' : 'ghost'"
-                    :color="jsonEditMode === 'tree' ? 'primary' : 'neutral'" @click="switchJsonEditMode('tree')" />
-                  <UButton label="Raw Code" icon="i-lucide-code" size="xs"
+                    :color="jsonEditMode === 'tree' ? 'primary' : 'neutral'"
+                    @click="switchJsonEditMode('tree')"
+                  />
+                  <UButton
+                    label="Raw Code"
+                    icon="i-lucide-code"
+                    size="xs"
                     :variant="jsonEditMode === 'code' ? 'solid' : 'ghost'"
-                    :color="jsonEditMode === 'code' ? 'primary' : 'neutral'" @click="switchJsonEditMode('code')" />
+                    :color="jsonEditMode === 'code' ? 'primary' : 'neutral'"
+                    @click="switchJsonEditMode('code')"
+                  />
                 </div>
 
                 <div class="flex items-center gap-1.5">
-                  <UBadge v-if="!jsonError && formState.value.trim()" :label="t('configs.validJson')" color="success"
-                    variant="subtle" size="xs" />
-                  <UBadge v-else-if="jsonError" :label="t('configs.invalidJson')" color="error" variant="subtle"
-                    size="xs" />
-                  <UButton :label="t('configs.formatJson')" icon="i-lucide-code" size="xs" variant="soft"
-                    color="neutral" @click="tryFormatJson" />
-                  <UButton :label="t('configs.minifyJson')" icon="i-lucide-minimize-2" size="xs" variant="soft"
-                    color="neutral" @click="tryMinifyJson" />
+                  <UBadge
+                    v-if="!jsonError && formState.value.trim()"
+                    :label="t('configs.validJson')"
+                    color="success"
+                    variant="subtle"
+                    size="xs"
+                  />
+                  <UBadge
+                    v-else-if="jsonError"
+                    :label="t('configs.invalidJson')"
+                    color="error"
+                    variant="subtle"
+                    size="xs"
+                  />
+                  <UButton
+                    :label="t('configs.formatJson')"
+                    icon="i-lucide-code"
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    @click="tryFormatJson"
+                  />
+                  <UButton
+                    :label="t('configs.minifyJson')"
+                    icon="i-lucide-minimize-2"
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    @click="tryMinifyJson"
+                  />
                 </div>
               </div>
 
@@ -637,30 +762,52 @@ onMounted(() => load(true))
 
               <!-- Raw Textarea Code Editor -->
               <div v-else class="space-y-1">
-                <UTextarea v-model="formState.value" :rows="8" class="w-full font-mono text-xs"
-                  placeholder="{ &quot;key&quot;: &quot;value&quot; }" />
+                <UTextarea
+                  v-model="formState.value"
+                  :rows="8"
+                  class="w-full font-mono text-xs"
+                  placeholder="{ &quot;key&quot;: &quot;value&quot; }"
+                />
               </div>
-              <p v-if="jsonError" class="text-xs text-error font-mono">{{ jsonError }}</p>
+              <p v-if="jsonError" class="text-xs text-error font-mono">
+                {{ jsonError }}
+              </p>
             </div>
 
             <!-- 4. Secret -->
             <div v-else-if="formState.type === 'secret'" class="space-y-2 w-full">
-              <UAlert v-if="editingKey && !formState.value" color="info" variant="subtle" icon="i-lucide-info"
-                :description="t('configs.secretHint')" />
+              <UAlert
+                v-if="editingKey && !formState.value"
+                color="info"
+                variant="subtle"
+                icon="i-lucide-info"
+                :description="t('configs.secretHint')"
+              />
               <div class="relative flex items-center">
-                <UInput v-model="formState.value" :type="showSecret ? 'text' : 'password'"
-                  class="w-full font-mono text-xs pr-10" :placeholder="editingKey ? '••••••••' : t('configs.secret')" />
-                <UButton :icon="showSecret ? 'i-lucide-eye-off' : 'i-lucide-eye'" variant="ghost" color="neutral"
-                  size="xs" class="absolute right-2"
+                <UInput
+                  v-model="formState.value"
+                  :type="showSecret ? 'text' : 'password'"
+                  class="w-full font-mono text-xs pr-10"
+                  :placeholder="editingKey ? '••••••••' : t('configs.secret')"
+                />
+                <UButton
+                  :icon="showSecret ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  variant="ghost"
+                  color="neutral"
+                  size="xs"
+                  class="absolute right-2"
                   :title="showSecret ? t('configs.hideSecret') : t('configs.showSecret')"
-                  @click="showSecret = !showSecret" />
+                  @click="showSecret = !showSecret"
+                />
               </div>
             </div>
 
             <!-- 5. Boolean -->
             <div v-else-if="formState.type === 'boolean'" class="flex items-center gap-3 py-2">
-              <USwitch :model-value="formState.value === 'true'"
-                @update:model-value="(val: boolean) => formState.value = val ? 'true' : 'false'" />
+              <USwitch
+                :model-value="formState.value === 'true'"
+                @update:model-value="(val: boolean) => formState.value = val ? 'true' : 'false'"
+              />
               <span class="font-mono text-xs font-semibold">{{ formState.value === 'true' ? 'true' : 'false' }}</span>
             </div>
           </UFormField>
@@ -673,8 +820,11 @@ onMounted(() => load(true))
           <!-- Flags: isSecret & isPublic -->
           <div class="flex items-center gap-6 pt-2 border-t border-default">
             <div class="flex items-center gap-2">
-              <USwitch v-model="formState.isSecret" :disabled="formState.type === 'secret'"
-                @update:model-value="(val: boolean) => { if (val) formState.isPublic = false }" />
+              <USwitch
+                v-model="formState.isSecret"
+                :disabled="formState.type === 'secret'"
+                @update:model-value="(val: boolean) => { if (val) formState.isPublic = false }"
+              />
               <span class="text-xs font-medium">{{ t('configs.secret') }}</span>
             </div>
             <div class="flex items-center gap-2">
@@ -685,10 +835,17 @@ onMounted(() => load(true))
         </div>
       </BaseFormModal>
 
-      <LazyBaseConfirmModal v-model:open="isDeleteOpen" :title="t('confirm.delete_title')"
-        :description="t('confirm.delete_desc_name', [deletingKey])" :confirm-label="t('common.delete')"
-        :cancel-label="t('common.cancel')" :loading="deleting" color="error" icon="i-lucide-trash-2"
-        @confirm="handleDelete" />
+      <LazyBaseConfirmModal
+        v-model:open="isDeleteOpen"
+        :title="t('confirm.delete_title')"
+        :description="t('confirm.delete_desc_name', [deletingKey])"
+        :confirm-label="t('common.delete')"
+        :cancel-label="t('common.cancel')"
+        :loading="deleting"
+        color="error"
+        icon="i-lucide-trash-2"
+        @confirm="handleDelete"
+      />
     </template>
   </BasePage>
 </template>

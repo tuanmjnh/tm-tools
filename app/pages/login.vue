@@ -110,8 +110,14 @@ useHead({ title: computed(() => t('auth.signIn')) })
   <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
     <div class="absolute top-4 right-4 flex items-center gap-2">
       <UTooltip :text="t('settings.title')">
-        <UButton icon="i-lucide-settings" color="neutral" variant="soft" size="sm" :aria-label="t('settings.title')"
-          @click="isSettingsSlideoverOpen = true" />
+        <UButton
+          icon="i-lucide-settings"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          :aria-label="t('settings.title')"
+          @click="isSettingsSlideoverOpen = true"
+        />
       </UTooltip>
     </div>
 
@@ -119,7 +125,8 @@ useHead({ title: computed(() => t('auth.signIn')) })
       <template #header>
         <div class="text-center">
           <div
-            class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto">
+            class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto"
+          >
             <UIcon v-if="totpChallenge" name="i-lucide-shield-check" class="size-6" />
             <MediaVisual v-else src="/logo.svg" size="size-7" />
           </div>
@@ -133,9 +140,20 @@ useHead({ title: computed(() => t('auth.signIn')) })
         </div>
       </template>
 
-      <UForm v-if="!totpChallenge" :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UForm
+        v-if="!totpChallenge"
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="onSubmit"
+      >
         <UFormField :label="$t('auth.emailOrUsername')" name="email">
-          <UInput v-model="state.email" type="text" :placeholder="$t('auth.emailPlaceholder')" class="w-full" />
+          <UInput
+            v-model="state.email"
+            type="text"
+            :placeholder="$t('auth.emailPlaceholder')"
+            class="w-full"
+          />
         </UFormField>
 
         <UFormField :label="$t('auth.password')" name="password">
@@ -149,7 +167,13 @@ useHead({ title: computed(() => t('auth.signIn')) })
           </NuxtLink>
         </div>
 
-        <UButton type="submit" variant="soft" block :loading="auth.loading.value" :disabled="auth.loading.value">
+        <UButton
+          type="submit"
+          variant="soft"
+          block
+          :loading="auth.loading.value"
+          :disabled="auth.loading.value"
+        >
           {{ $t('auth.signIn') }}
         </UButton>
       </UForm>
@@ -160,21 +184,48 @@ useHead({ title: computed(() => t('auth.signIn')) })
         <USeparator class="flex-1" />
       </div>
 
-      <UButton v-if="!totpChallenge" class="mt-4" icon="i-lucide-fingerprint" variant="outline" block
-        :loading="passkeyLoading" :disabled="auth.loading.value" @click="onPasskeyLogin">
+      <UButton
+        v-if="!totpChallenge"
+        class="mt-4"
+        icon="i-lucide-fingerprint"
+        variant="outline"
+        block
+        :loading="passkeyLoading"
+        :disabled="auth.loading.value"
+        @click="onPasskeyLogin"
+      >
         {{ $t('auth.passkeySignIn') }}
       </UButton>
 
       <form v-else class="space-y-4" @submit.prevent="onVerifyTotp">
         <UFormField :label="$t('auth.totpCodeLabel')" name="code" required>
-          <UInput v-model="totpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
-            :placeholder="$t('auth.totpCodePlaceholder')" class="w-full text-center tracking-[0.5em]" size="lg" />
+          <UInput
+            v-model="totpCode"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            :placeholder="$t('auth.totpCodePlaceholder')"
+            class="w-full text-center tracking-[0.5em]"
+            size="lg"
+          />
         </UFormField>
-        <UButton type="submit" variant="soft" block :loading="auth.loading.value"
-          :disabled="auth.loading.value || totpCode.trim().length < 6">
+        <UButton
+          type="submit"
+          variant="soft"
+          block
+          :loading="auth.loading.value"
+          :disabled="auth.loading.value || totpCode.trim().length < 6"
+        >
           {{ $t('auth.totpVerify') }}
         </UButton>
-        <UButton type="button" color="neutral" variant="ghost" block @click="resetTotp">
+        <UButton
+          type="button"
+          color="neutral"
+          variant="ghost"
+          block
+          @click="resetTotp"
+        >
           {{ $t('auth.totpBack') }}
         </UButton>
       </form>

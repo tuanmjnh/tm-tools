@@ -66,8 +66,10 @@ useHead({ title: computed(() => t('notifications.pushTitle')) })
       <UCard>
         <div class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated/50 p-4">
           <div class="flex items-center gap-3 min-w-0">
-            <span class="inline-flex shrink-0 items-center justify-center rounded-lg p-2.5"
-              :class="pushSubscribed ? 'bg-success/10 text-success' : 'bg-muted text-muted'">
+            <span
+              class="inline-flex shrink-0 items-center justify-center rounded-lg p-2.5"
+              :class="pushSubscribed ? 'bg-success/10 text-success' : 'bg-muted text-muted'"
+            >
               <UIcon :name="pushSubscribed ? 'i-lucide-bell-ring' : 'i-lucide-bell-off'" class="size-5" />
             </span>
             <div class="min-w-0">
@@ -79,18 +81,28 @@ useHead({ title: computed(() => t('notifications.pushTitle')) })
               </p>
             </div>
           </div>
-          <USwitch :model-value="pushSubscribed" :loading="pushLoading" :disabled="!pushSupported" size="lg"
-            :aria-label="t('notifications.pushTitle')" @update:model-value="onPushSwitch" />
+          <USwitch
+            :model-value="pushSubscribed"
+            :loading="pushLoading"
+            :disabled="!pushSupported"
+            size="lg"
+            :aria-label="t('notifications.pushTitle')"
+            @update:model-value="onPushSwitch"
+          />
         </div>
       </UCard>
     </BaseSectionNav>
 
-    <BaseConfirmModal v-model:open="isPushConfirmOpen"
+    <BaseConfirmModal
+      v-model:open="isPushConfirmOpen"
       :title="pushAction === 'enable' ? t('notifications.enablePushTitle') : t('notifications.disablePushTitle')"
       :description="pushAction === 'enable' ? t('notifications.enablePushDesc') : t('notifications.disablePushDesc')"
       :confirm-label="pushAction === 'enable' ? t('notifications.enablePush') : t('notifications.disablePush')"
-      :cancel-label="t('common.cancel')" :color="pushAction === 'enable' ? 'primary' : 'warning'"
-      :icon="pushAction === 'enable' ? 'i-lucide-bell-ring' : 'i-lucide-bell-off'" :loading="pushLoading"
-      @confirm="confirmPush" />
+      :cancel-label="t('common.cancel')"
+      :color="pushAction === 'enable' ? 'primary' : 'warning'"
+      :icon="pushAction === 'enable' ? 'i-lucide-bell-ring' : 'i-lucide-bell-off'"
+      :loading="pushLoading"
+      @confirm="confirmPush"
+    />
   </BasePage>
 </template>

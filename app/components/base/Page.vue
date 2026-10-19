@@ -25,10 +25,13 @@ useHead(() => ({
   <UDashboardPanel :id="id" :ui="panelUi">
     <template #header>
       <div class="shrink-0">
-        <UDashboardNavbar :title="title" :ui="{
-          title: description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
-          ...navbarUi
-        }">
+        <UDashboardNavbar
+          :title="title"
+          :ui="{
+            title: description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
+            ...navbarUi
+          }"
+        >
           <template v-if="description" #title>
             <span class="truncate font-semibold">{{ title }}</span>
             <span class="truncate text-xs font-normal text-muted">{{ description }}</span>
@@ -45,9 +48,16 @@ useHead(() => ({
             <div class="flex items-center gap-2">
               <slot name="right" />
               <LazyDashboardBellButton />
-              <UButton v-if="auth.isAuthenticated.value" icon="i-lucide-settings" color="neutral" variant="ghost" square
-                :aria-label="t('settings.title')" :ui="{ leadingIcon: 'text-dimmed' }"
-                @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen" />
+              <UButton
+                v-if="auth.isAuthenticated.value"
+                icon="i-lucide-settings"
+                color="neutral"
+                variant="ghost"
+                square
+                :aria-label="t('settings.title')"
+                :ui="{ leadingIcon: 'text-dimmed' }"
+                @click="isSettingsSlideoverOpen = !isSettingsSlideoverOpen"
+              />
             </div>
           </template>
         </UDashboardNavbar>
@@ -62,8 +72,10 @@ useHead(() => ({
     </template>
 
     <template #footer>
-      <div v-if="$slots.footer"
-        class="hidden sm:block shrink-0 border-t border-default bg-elevated/50 backdrop-blur-md px-4 sm:px-6 py-2 z-10 empty:hidden">
+      <div
+        v-if="$slots.footer"
+        class="hidden sm:block shrink-0 border-t border-default bg-elevated/50 backdrop-blur-md px-4 sm:px-6 py-2 z-10 empty:hidden"
+      >
         <slot name="footer" />
       </div>
     </template>

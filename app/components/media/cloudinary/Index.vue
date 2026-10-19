@@ -299,7 +299,6 @@ const getStats = () => ({
 })
 
 defineExpose({ openUpload, reload, toggleSidebar, setSearch, getStats })
-
 </script>
 
 <template>
@@ -311,26 +310,46 @@ defineExpose({ openUpload, reload, toggleSidebar, setSearch, getStats })
     <!-- Main UI Grid: modal = header/content/footer rows, page = content only (header/footer live in BasePage slots) -->
     <div class="grid h-full w-full overflow-hidden" :class="isModal ? 'grid-rows-[auto_1fr_auto]' : 'grid-rows-[1fr]'">
       <!-- Header: Row 1 (modal mode only — page mode renders search/upload via BasePage toolbar/header slots) -->
-      <div v-if="isModal"
-        class="shrink-0 flex flex-col sm:flex-row items-center justify-between border-b border-default gap-3 pb-3 px-1">
+      <div
+        v-if="isModal"
+        class="shrink-0 flex flex-col sm:flex-row items-center justify-between border-b border-default gap-3 pb-3 px-1"
+      >
         <div class="w-full sm:w-auto flex items-center gap-2 sm:flex-1 sm:max-w-md">
           <!-- Sidebar Toggle -->
           <UTooltip :text="$t('media.folder_text', 'Folders list')" class="hidden md:flex">
-            <UButton color="neutral" variant="ghost"
+            <UButton
+              color="neutral"
+              variant="ghost"
               :icon="isDesktopSidebarOpen ? 'i-lucide-panel-left-close' : 'i-lucide-panel-left-open'"
-              @click="toggleSidebar" />
+              @click="toggleSidebar"
+            />
           </UTooltip>
           <!-- Search -->
-          <UInput v-model="searchQuery" icon="i-lucide-search" :placeholder="$t('common.search_placeholder')"
-            class="w-full" />
+          <UInput
+            v-model="searchQuery"
+            icon="i-lucide-search"
+            :placeholder="$t('common.search_placeholder')"
+            class="w-full"
+          />
         </div>
         <div class="hidden sm:flex items-center justify-end gap-2 w-full sm:w-auto">
-          <UButton v-if="isModal && selectedFiles.length > 0" color="success" variant="soft" icon="i-lucide-check"
-            class="flex-1 sm:flex-none justify-center" @click="handleConfirmSelection">
+          <UButton
+            v-if="isModal && selectedFiles.length > 0"
+            color="success"
+            variant="soft"
+            icon="i-lucide-check"
+            class="flex-1 sm:flex-none justify-center"
+            @click="handleConfirmSelection"
+          >
             {{ $t('common.select', selectText) }} ({{ selectedFiles.length }})
           </UButton>
-          <UButton color="primary" variant="soft" icon="i-lucide-upload" class="flex-1 sm:flex-none justify-center"
-            @click="showUpload = true">
+          <UButton
+            color="primary"
+            variant="soft"
+            icon="i-lucide-upload"
+            class="flex-1 sm:flex-none justify-center"
+            @click="showUpload = true"
+          >
             {{ $t('media.upload_text', uploadText) }}
           </UButton>
         </div>
@@ -339,50 +358,85 @@ defineExpose({ openUpload, reload, toggleSidebar, setSearch, getStats })
       <!-- Main Content: Row 2 (1fr) -->
       <div class="flex min-h-0 overflow-hidden relative">
         <!-- Sidebar - Folder Tree -->
-        <div class="hidden md:block transition-all duration-300 border-r border-default h-full overflow-hidden"
-          :class="[isDesktopSidebarOpen ? 'w-64' : 'w-0 border-none']">
+        <div
+          class="hidden md:block transition-all duration-300 border-r border-default h-full overflow-hidden"
+          :class="[isDesktopSidebarOpen ? 'w-64' : 'w-0 border-none']"
+        >
           <div class="w-64 h-full p-2">
-            <LazyMediaCloudinaryFolderTree :folders="folders" :current-folder="currentFolder" :loading="loadingFolders"
-              @select="handleFolderSelect" @create="handleCreateFolder" @delete="handleDeleteFolder"
-              @load-children="loadFolders" />
+            <LazyMediaCloudinaryFolderTree
+              :folders="folders"
+              :current-folder="currentFolder"
+              :loading="loadingFolders"
+              @select="handleFolderSelect"
+              @create="handleCreateFolder"
+              @delete="handleDeleteFolder"
+              @load-children="loadFolders"
+            />
           </div>
         </div>
 
         <!-- Mobile Slideover -->
-        <LazyBaseResponsiveSlideover v-model:open="isSidebarOpen" side="left"
-          :title="$t('media.folder_text', 'Folders list')" :description="$t('media.cloudinary', 'Cloudinary Manager')">
+        <LazyBaseResponsiveSlideover
+          v-model:open="isSidebarOpen"
+          side="left"
+          :title="$t('media.folder_text', 'Folders list')"
+          :description="$t('media.cloudinary', 'Cloudinary Manager')"
+        >
           <template #body>
             <div class="h-full p-2">
-              <LazyMediaCloudinaryFolderTree :folders="folders" :current-folder="currentFolder"
-                :loading="loadingFolders" @select="(f) => { handleFolderSelect(f); isSidebarOpen = false }"
-                @create="handleCreateFolder" @delete="handleDeleteFolder" @load-children="loadFolders" />
+              <LazyMediaCloudinaryFolderTree
+                :folders="folders"
+                :current-folder="currentFolder"
+                :loading="loadingFolders"
+                @select="(f) => { handleFolderSelect(f); isSidebarOpen = false }"
+                @create="handleCreateFolder"
+                @delete="handleDeleteFolder"
+                @load-children="loadFolders"
+              />
             </div>
           </template>
         </LazyBaseResponsiveSlideover>
 
         <!-- File Grid Area -->
         <div class="flex-1 min-h-0 relative p-2 overflow-hidden flex flex-col">
-          <div ref="fileContainer" class="flex-1 min-h-0 relative overflow-y-auto custom-scrollbar"
-            :class="isModal ? '' : 'pb-24 lg:pb-4'">
-            <LazyMediaCloudinaryFileGrid :files="filteredFiles" :selected-files="selectedFiles" :multiple="multiple"
-              :loading="loadingFiles" class="w-full min-h-full flex flex-col" @select="handleFileSelect"
-              @delete="handleDeleteFile" @rename="handleRenameFile" />
+          <div
+            ref="fileContainer"
+            class="flex-1 min-h-0 relative overflow-y-auto custom-scrollbar"
+            :class="isModal ? '' : 'pb-24 lg:pb-4'"
+          >
+            <LazyMediaCloudinaryFileGrid
+              :files="filteredFiles"
+              :selected-files="selectedFiles"
+              :multiple="multiple"
+              :loading="loadingFiles"
+              class="w-full min-h-full flex flex-col"
+              @select="handleFileSelect"
+              @delete="handleDeleteFile"
+              @rename="handleRenameFile"
+            />
           </div>
           <!-- Loading Indicator -->
-          <div v-if="loadingFiles || loadingMore || processingAction"
-            class="absolute inset-0 z-50 flex items-center justify-center bg-default/50 backdrop-blur-sm">
+          <div
+            v-if="loadingFiles || loadingMore || processingAction"
+            class="absolute inset-0 z-50 flex items-center justify-center bg-default/50 backdrop-blur-sm"
+          >
             <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-primary" />
           </div>
         </div>
       </div>
 
       <!-- Footer Desktop: Row 3 (modal mode only — page mode uses BasePage #footer / SharedListFooter) -->
-      <div v-if="isModal"
-        class="shrink-0 hidden md:flex px-4 py-3 border-t border-default justify-between items-center bg-elevated/80 backdrop-blur-sm z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+      <div
+        v-if="isModal"
+        class="shrink-0 hidden md:flex px-4 py-3 border-t border-default justify-between items-center bg-elevated/80 backdrop-blur-sm z-30 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]"
+      >
         <div class="text-xs text-muted font-medium flex items-center gap-3">
           <div class="flex items-center gap-1.5 px-2 py-1 bg-elevated rounded-md">
-            <UIcon :name="isModal ? 'i-lucide-check-square' : 'i-lucide-files'" class="w-4 h-4"
-              :class="isModal && selectedFiles.length > 0 ? 'text-primary' : 'text-dimmed'" />
+            <UIcon
+              :name="isModal ? 'i-lucide-check-square' : 'i-lucide-files'"
+              class="w-4 h-4"
+              :class="isModal && selectedFiles.length > 0 ? 'text-primary' : 'text-dimmed'"
+            />
             <span v-if="isModal" class="tabular-nums">
               {{ selectedFiles.length }} {{ $t('media.selected_files_text') || selectedText }}
             </span>
@@ -395,11 +449,23 @@ defineExpose({ openUpload, reload, toggleSidebar, setSearch, getStats })
             : currentFolder }}</span>
         </div>
         <div v-if="isModal && selectedFiles.length > 0" class="flex gap-2">
-          <UButton color="error" variant="ghost" icon="i-lucide-trash" size="xs" class="px-3"
-            @click="selectedFiles = []">
+          <UButton
+            color="error"
+            variant="ghost"
+            icon="i-lucide-trash"
+            size="xs"
+            class="px-3"
+            @click="selectedFiles = []"
+          >
             {{ $t('common.clear', 'Clear') }}
           </UButton>
-          <UButton color="success" variant="soft" icon="i-lucide-check" size="xs" @click="handleConfirmSelection">
+          <UButton
+            color="success"
+            variant="soft"
+            icon="i-lucide-check"
+            size="xs"
+            @click="handleConfirmSelection"
+          >
             {{ $t('common.select', selectText) }} ({{ selectedFiles.length }})
           </UButton>
         </div>
@@ -407,30 +473,62 @@ defineExpose({ openUpload, reload, toggleSidebar, setSearch, getStats })
     </div>
 
     <!-- Mobile Sticky Footer (modal mode only — page mode uses app BottomNav + Actions sheet) -->
-    <div v-if="isModal"
-      class="md:hidden fixed bottom-0 left-0 right-0 z-50 py-3 px-5 bg-elevated/90 backdrop-blur-md flex items-center justify-between gap-3 shadow-2xl border-t border-default">
-      <UButton color="neutral" variant="ghost" icon="i-lucide-menu" class="md:hidden" @click="toggleSidebar" />
+    <div
+      v-if="isModal"
+      class="md:hidden fixed bottom-0 left-0 right-0 z-50 py-3 px-5 bg-elevated/90 backdrop-blur-md flex items-center justify-between gap-3 shadow-2xl border-t border-default"
+    >
+      <UButton
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-menu"
+        class="md:hidden"
+        @click="toggleSidebar"
+      />
       <div v-if="isModal" class="flex flex-col flex-1 gap-1">
-        <UButton :disabled="selectedFiles.length === 0" color="success" variant="soft" icon="i-lucide-check"
-          class="justify-center w-full" :label="`${$t('common.select', selectText)} (${selectedFiles.length})`"
-          @click="handleConfirmSelection" />
+        <UButton
+          :disabled="selectedFiles.length === 0"
+          color="success"
+          variant="soft"
+          icon="i-lucide-check"
+          class="justify-center w-full"
+          :label="`${$t('common.select', selectText)} (${selectedFiles.length})`"
+          @click="handleConfirmSelection"
+        />
       </div>
-      <UButton color="primary" variant="soft" icon="i-lucide-upload" class="flex-1 justify-center"
-        @click="showUpload = true">
+      <UButton
+        color="primary"
+        variant="soft"
+        icon="i-lucide-upload"
+        class="flex-1 justify-center"
+        @click="showUpload = true"
+      >
         {{ $t('media.upload_text', uploadText) }}
       </UButton>
     </div>
 
     <!-- Modals -->
-    <LazyBaseResponsiveModal v-model:open="showUpload" :ui="{ width: 'w-full sm:max-w-2xl' }" :disabled="isUploading"
-      :title="$t('media.upload_title', uploadTitle)">
+    <LazyBaseResponsiveModal
+      v-model:open="showUpload"
+      :ui="{ width: 'w-full sm:max-w-2xl' }"
+      :disabled="isUploading"
+      :title="$t('media.upload_title', uploadTitle)"
+    >
       <template #body>
-        <LazyMediaCloudinaryCloudUpload :folder="currentFolder" :accept="uploadAccept" @close="showUpload = false"
-          @complete="handleUploadComplete" @uploading="isUploading = $event" />
+        <LazyMediaCloudinaryCloudUpload
+          :folder="currentFolder"
+          :accept="uploadAccept"
+          @close="showUpload = false"
+          @complete="handleUploadComplete"
+          @uploading="isUploading = $event"
+        />
       </template>
     </LazyBaseResponsiveModal>
 
-    <LazyMediaConfirmModal v-model="showConfirmDelete" :file="itemToDelete" @confirm="confirmDelete"
-      @cancel="showConfirmDelete = false" />
+    <LazyMediaConfirmModal
+      v-model="showConfirmDelete"
+      :file="itemToDelete"
+      @confirm="confirmDelete"
+      @cancel="showConfirmDelete = false"
+    />
   </div>
 </template>

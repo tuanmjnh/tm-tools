@@ -230,8 +230,13 @@ useHead({ title })
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" :loading="routesAdmin.loading.value"
-          @click="routesAdmin.refresh()" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          size="sm"
+          :loading="routesAdmin.loading.value"
+          @click="routesAdmin.refresh()"
+        />
       </div>
     </template>
 
@@ -239,13 +244,23 @@ useHead({ title })
       <UDashboardToolbar>
         <template #left>
           <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <UInput v-model="searchQuery" icon="i-lucide-search" :placeholder="t('common.search')"
-              class="w-full sm:w-64" size="sm" />
+            <UInput
+              v-model="searchQuery"
+              icon="i-lucide-search"
+              :placeholder="t('common.search')"
+              class="w-full sm:w-64"
+              size="sm"
+            />
           </div>
         </template>
         <template #right>
-          <UButton :icon="treeRef?.isAllExpanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'" variant="soft"
-            color="neutral" size="sm" @click="treeRef?.toggleAll()" />
+          <UButton
+            :icon="treeRef?.isAllExpanded ? 'i-lucide-minimize-2' : 'i-lucide-maximize-2'"
+            variant="soft"
+            color="neutral"
+            size="sm"
+            @click="treeRef?.toggleAll()"
+          />
         </template>
       </UDashboardToolbar>
     </template>
@@ -260,19 +275,28 @@ useHead({ title })
       </div>
 
       <template v-else>
-        <div class="text-xs text-muted px-1">{{ t('routes.dragHint') }}</div>
+        <div class="text-xs text-muted px-1">
+          {{ t('routes.dragHint') }}
+        </div>
 
         <div v-if="flat.length === 0" class="py-8">
           <AdminEmptyState :title="t('routes.empty')" icon="i-lucide-menu" />
         </div>
 
         <div v-else class="flex-1 min-h-0 overflow-auto pe-1">
-          <SharedHeTreeMenu ref="treeRef" :model-value="searchQuery ? filteredTree : tree" class="w-full"
-            :field-names="{ id: 'id', label: 'label', children: 'children' }" :selected-keys="selectedRoutes"
-            :default-expand-all="!!searchQuery" :draggable="!searchQuery"
+          <SharedHeTreeMenu
+            ref="treeRef"
+            :model-value="searchQuery ? filteredTree : tree"
+            class="w-full"
+            :field-names="{ id: 'id', label: 'label', children: 'children' }"
+            :selected-keys="selectedRoutes"
+            :default-expand-all="!!searchQuery"
+            :draggable="!searchQuery"
             :action-options="(node: SystemRoute) => rowActions(node)"
-            @update:model-value="onTreeUpdate" @node:select="onNodeSelect"
-            @node:click="(node: SystemRoute) => openEdit(node)">
+            @update:model-value="onTreeUpdate"
+            @node:select="onNodeSelect"
+            @node:click="(node: SystemRoute) => openEdit(node)"
+          >
             <template #title="{ node }">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-medium truncate">{{ translateRouteLabel(node.label, node.name) }}</span>
@@ -283,17 +307,26 @@ useHead({ title })
             <template #description="{ node }">
               <span class="text-[11px] text-muted truncate">
                 {{ node.name }} · #{{ node.sort }}
-                <code v-if="node.requiredPermission"
-                  class="text-primary bg-primary/10 px-1 rounded">{{ node.requiredPermission }}</code>
+                <code
+                  v-if="node.requiredPermission"
+                  class="text-primary bg-primary/10 px-1 rounded"
+                >{{ node.requiredPermission }}</code>
               </span>
             </template>
 
             <template #right-text="{ node }">
-              <AdminStatusBadge :label="node.isVisible ? t('common.active') : t('common.inactive')"
-                :color="node.isVisible ? 'success' : 'neutral'" />
+              <AdminStatusBadge
+                :label="node.isVisible ? t('common.active') : t('common.inactive')"
+                :color="node.isVisible ? 'success' : 'neutral'"
+              />
               <UTooltip v-if="allRoles.length" :text="accessLabel(node.id)">
-                <UBadge :label="`${rolesForRoute(node.id).length}`" color="secondary" variant="subtle" size="xs"
-                  icon="i-lucide-users" />
+                <UBadge
+                  :label="`${rolesForRoute(node.id).length}`"
+                  color="secondary"
+                  variant="subtle"
+                  size="xs"
+                  icon="i-lucide-users"
+                />
               </UTooltip>
             </template>
 
@@ -305,10 +338,27 @@ useHead({ title })
       </template>
     </div>
 
-    <RoutesCreateModal v-model:open="isCreateOpen" :app-id="targetApp" :routes="flat" :initial-data="copySource" />
-    <RoutesEditModal v-model:open="isEditOpen" :route="editingRoute" :app-id="targetApp" :routes="flat" />
-    <BaseConfirmModal v-model:open="isDeleteOpen" :title="t('routes.deleteConfirm')"
-      :description="t('routes.deleteConfirmDesc', { id: deletingId })" :confirm-label="t('common.delete')"
-      :cancel-label="t('common.cancel')" color="error" icon="i-lucide-alert-triangle" @confirm="handleDelete" />
+    <RoutesCreateModal
+      v-model:open="isCreateOpen"
+      :app-id="targetApp"
+      :routes="flat"
+      :initial-data="copySource"
+    />
+    <RoutesEditModal
+      v-model:open="isEditOpen"
+      :route="editingRoute"
+      :app-id="targetApp"
+      :routes="flat"
+    />
+    <BaseConfirmModal
+      v-model:open="isDeleteOpen"
+      :title="t('routes.deleteConfirm')"
+      :description="t('routes.deleteConfirmDesc', { id: deletingId })"
+      :confirm-label="t('common.delete')"
+      :cancel-label="t('common.cancel')"
+      color="error"
+      icon="i-lucide-alert-triangle"
+      @confirm="handleDelete"
+    />
   </BasePage>
 </template>

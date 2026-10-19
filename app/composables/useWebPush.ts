@@ -157,7 +157,7 @@ export const useWebPush = () => {
 
     // 2. Standard Web Browser environment (Chrome, Edge, Firefox, Brave)
     try {
-      const resConfig = await hubFetch<{ success: boolean; data: any }>(`/api/v1/apps/${appId}/configs/public`)
+      const resConfig = await hubFetch<{ success: boolean, data: any }>(`/api/v1/apps/${appId}/configs/public`)
       const sysConfig: Record<string, string> = resConfig?.data?.values || resConfig?.data || {}
 
       let registration: ServiceWorkerRegistration | null = null

@@ -39,7 +39,7 @@ const statusLabel = (p: ConnectionProvider) => {
 }
 function cleanVal(v: unknown): string {
   let s = String(v ?? '').trim()
-  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+  while ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith('\'') && s.endsWith('\''))) {
     if (s.length < 2) break
     s = s.slice(1, -1).trim()
   }
@@ -261,12 +261,17 @@ async function doDisconnect() {
 <template>
   <BasePage id="system-connections" :title="$t('connections.title')" :description="$t('connections.description')">
     <template #right>
-      <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" :loading="loading" @click="refresh()" />
+      <UButton
+        icon="i-lucide-refresh-cw"
+        variant="soft"
+        size="sm"
+        :loading="loading"
+        @click="refresh()"
+      />
     </template>
 
     <template #default>
       <div class="flex flex-col gap-4 pb-6">
-
         <div v-if="loading && !providers.length" class="flex items-center justify-center py-20">
           <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
         </div>
@@ -279,8 +284,11 @@ async function doDisconnect() {
         </div>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <div v-for="p in providers" :key="p.key"
-            class="rounded-xl border border-primary/30 p-4 flex flex-col gap-3 shadow-xs">
+          <div
+            v-for="p in providers"
+            :key="p.key"
+            class="rounded-xl border border-primary/30 p-4 flex flex-col gap-3 shadow-xs"
+          >
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-center gap-3 min-w-0">
                 <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/50 shrink-0">
@@ -289,16 +297,24 @@ async function doDisconnect() {
                 <div class="min-w-0">
                   <div class="flex items-center gap-2">
                     <span class="font-semibold text-highlighted truncate">{{ p.name }}</span>
-                    <UBadge :label="p.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')"
-                      variant="subtle" size="xs" />
+                    <UBadge
+                      :label="p.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')"
+                      variant="subtle"
+                      size="xs"
+                    />
                   </div>
                   <p class="text-xs text-muted truncate">
                     {{ p.description }}
                   </p>
                 </div>
               </div>
-              <UBadge :label="statusLabel(p)" :color="p.connection ? (isConnected(p) ? 'success' : 'error') : 'neutral'"
-                variant="subtle" size="sm" class="shrink-0" />
+              <UBadge
+                :label="statusLabel(p)"
+                :color="p.connection ? (isConnected(p) ? 'success' : 'error') : 'neutral'"
+                variant="subtle"
+                size="sm"
+                class="shrink-0"
+              />
             </div>
 
             <div v-if="hasRow(p)" class="text-xs text-muted space-y-1">
@@ -319,12 +335,19 @@ async function doDisconnect() {
               </p>
             </div>
 
-            <p v-if="p.mode === 'oauth' && p.scopes?.length"
-              class="text-xs text-muted flex items-center gap-1 flex-wrap">
+            <p
+              v-if="p.mode === 'oauth' && p.scopes?.length"
+              class="text-xs text-muted flex items-center gap-1 flex-wrap"
+            >
               <span class="text-toned">{{ t('connections.scopes') }}:</span>
               <UPopover :content="{ align: 'start', side: 'bottom', sideOffset: 8 }">
-                <UButton color="neutral" variant="subtle" size="xs" icon="i-lucide-shield-check"
-                  :label="String(p.scopes.length)" />
+                <UButton
+                  color="neutral"
+                  variant="subtle"
+                  size="xs"
+                  icon="i-lucide-shield-check"
+                  :label="String(p.scopes.length)"
+                />
                 <template #content>
                   <div class="p-3 max-w-80 space-y-2">
                     <p class="text-xs font-semibold text-highlighted">
@@ -342,38 +365,102 @@ async function doDisconnect() {
             </p>
 
             <div class="flex items-center gap-2 mt-auto pt-1 flex-wrap">
-              <UButton v-if="p.mode === 'oauth' && !isConnected(p)" :label="t('connections.connect')"
-                icon="i-lucide-external-link" color="primary" variant="soft" size="sm" @click="connectOAuth(p)" />
-              <UButton v-if="p.mode === 'oauth' && isConnected(p)" :label="t('connections.reconnect')"
-                icon="i-lucide-refresh-cw" color="warning" variant="soft" size="sm" @click="connectOAuth(p)" />
-              <UButton v-if="p.quick && !isConnected(p)" :label="t('connections.quick_connect')" icon="i-lucide-zap"
-                color="primary" variant="soft" size="sm" :loading="quickingKey === p.key" @click="quickConnect(p)" />
-              <UButton v-if="p.mode === 'manual'"
-                :label="hasRow(p) ? t('connections.configure') : t('connections.connect')" icon="i-lucide-key-round"
-                color="primary" variant="soft" size="sm" @click="openManual(p)" />
-              <UButton v-if="hasRow(p)" :label="t('connections.test')" icon="i-lucide-activity"
-                :loading="testingKey === p.key" color="success" variant="soft" size="sm" @click="testConnection(p)" />
-              <UButton v-if="hasRow(p)" :label="t('connections.disconnect')" icon="i-lucide-unplug" color="error"
-                variant="soft" size="sm" @click="askDisconnect(p)" />
+              <UButton
+                v-if="p.mode === 'oauth' && !isConnected(p)"
+                :label="t('connections.connect')"
+                icon="i-lucide-external-link"
+                color="primary"
+                variant="soft"
+                size="sm"
+                @click="connectOAuth(p)"
+              />
+              <UButton
+                v-if="p.mode === 'oauth' && isConnected(p)"
+                :label="t('connections.reconnect')"
+                icon="i-lucide-refresh-cw"
+                color="warning"
+                variant="soft"
+                size="sm"
+                @click="connectOAuth(p)"
+              />
+              <UButton
+                v-if="p.quick && !isConnected(p)"
+                :label="t('connections.quick_connect')"
+                icon="i-lucide-zap"
+                color="primary"
+                variant="soft"
+                size="sm"
+                :loading="quickingKey === p.key"
+                @click="quickConnect(p)"
+              />
+              <UButton
+                v-if="p.mode === 'manual'"
+                :label="hasRow(p) ? t('connections.configure') : t('connections.connect')"
+                icon="i-lucide-key-round"
+                color="primary"
+                variant="soft"
+                size="sm"
+                @click="openManual(p)"
+              />
+              <UButton
+                v-if="hasRow(p)"
+                :label="t('connections.test')"
+                icon="i-lucide-activity"
+                :loading="testingKey === p.key"
+                color="success"
+                variant="soft"
+                size="sm"
+                @click="testConnection(p)"
+              />
+              <UButton
+                v-if="hasRow(p)"
+                :label="t('connections.disconnect')"
+                icon="i-lucide-unplug"
+                color="error"
+                variant="soft"
+                size="sm"
+                @click="askDisconnect(p)"
+              />
             </div>
           </div>
         </div>
       </div>
 
-      <BaseFormModal v-model:open="isManualOpen"
-        :title="`${t('connections.configure')} - ${manualProvider?.name || ''}`" :state="manualValues"
-        :loading="manualSaving" :submit-label="t('global.save')" @submit="saveManual">
-        <UFormField v-for="field in manualProvider?.fields" :key="field.key" :label="field.label"
-          :required="field.required" class="mb-3">
-          <UInput v-model="manualValues[field.key]" :type="field.type === 'password' ? 'password' : 'text'"
-            class="w-full" :placeholder="field.type === 'password' ? '••••••••' : field.label" autocomplete="off" />
+      <BaseFormModal
+        v-model:open="isManualOpen"
+        :title="`${t('connections.configure')} - ${manualProvider?.name || ''}`"
+        :state="manualValues"
+        :loading="manualSaving"
+        :submit-label="t('global.save')"
+        @submit="saveManual"
+      >
+        <UFormField
+          v-for="field in manualProvider?.fields"
+          :key="field.key"
+          :label="field.label"
+          :required="field.required"
+          class="mb-3"
+        >
+          <UInput
+            v-model="manualValues[field.key]"
+            :type="field.type === 'password' ? 'password' : 'text'"
+            class="w-full"
+            :placeholder="field.type === 'password' ? '••••••••' : field.label"
+            autocomplete="off"
+          />
         </UFormField>
       </BaseFormModal>
 
-      <LazyBaseConfirmModal v-model:open="isDisconnectOpen" :title="t('connections.disconnect_title')"
+      <LazyBaseConfirmModal
+        v-model:open="isDisconnectOpen"
+        :title="t('connections.disconnect_title')"
         :description="t('connections.disconnect_desc', [disconnectProvider?.name || ''])"
-        :confirm-label="t('connections.disconnect')" :cancel-label="t('common.cancel')" color="error"
-        icon="i-lucide-unplug" @confirm="doDisconnect" />
+        :confirm-label="t('connections.disconnect')"
+        :cancel-label="t('common.cancel')"
+        color="error"
+        icon="i-lucide-unplug"
+        @confirm="doDisconnect"
+      />
     </template>
   </BasePage>
 </template>

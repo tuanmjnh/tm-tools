@@ -111,61 +111,130 @@ function loadSample() {
   <div class="space-y-4">
     <!-- Top Action Toolbars: Categories Grid -->
     <div
-      class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm space-y-4">
+      class="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm space-y-4"
+    >
       <!-- 1. Case Conversions -->
       <div class="space-y-2">
         <div class="flex items-center justify-between gap-2">
           <div
-            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+          >
             <UIcon name="i-lucide-case-sensitive" class="size-4 text-primary-500" />
             <span>{{ t('utilities.text.categories.case') }}</span>
           </div>
 
           <div class="flex items-center gap-2">
-            <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-file-text"
-              :label="t('utilities.text.sampleText')" @click="loadSample" />
-            <UButton size="xs" color="error" variant="soft" icon="i-lucide-trash-2" :label="t('utilities.text.clear')"
-              @click="clearAll" />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-file-text"
+              :label="t('utilities.text.sampleText')"
+              @click="loadSample"
+            />
+            <UButton
+              size="xs"
+              color="error"
+              variant="soft"
+              icon="i-lucide-trash-2"
+              :label="t('utilities.text.clear')"
+              @click="clearAll"
+            />
           </div>
         </div>
 
         <div class="flex flex-wrap gap-1.5">
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toUpperCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toUpperCase)"
+          >
             {{ t('utilities.text.actions.upper') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toLowerCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toLowerCase)"
+          >
             {{ t('utilities.text.actions.lower') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toCapitalize)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toCapitalize)"
+          >
             {{ t('utilities.text.actions.capitalize') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toSentenceCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toSentenceCase)"
+          >
             {{ t('utilities.text.actions.sentence') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" class="font-mono"
-            @click="applyTransform(transform.toCamelCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            class="font-mono"
+            @click="applyTransform(transform.toCamelCase)"
+          >
             {{ t('utilities.text.actions.camel') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" class="font-mono"
-            @click="applyTransform(transform.toPascalCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            class="font-mono"
+            @click="applyTransform(transform.toPascalCase)"
+          >
             {{ t('utilities.text.actions.pascal') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" class="font-mono"
-            @click="applyTransform(transform.toKebabCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            class="font-mono"
+            @click="applyTransform(transform.toKebabCase)"
+          >
             {{ t('utilities.text.actions.kebab') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" class="font-mono"
-            @click="applyTransform(transform.toSnakeCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            class="font-mono"
+            @click="applyTransform(transform.toSnakeCase)"
+          >
             {{ t('utilities.text.actions.snake') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" class="font-mono"
-            @click="applyTransform(transform.toConstantCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            class="font-mono"
+            @click="applyTransform(transform.toConstantCase)"
+          >
             {{ t('utilities.text.actions.constant') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toAlternatingCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toAlternatingCase)"
+          >
             {{ t('utilities.text.actions.alternating') }}
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.toInverseCase)">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="applyTransform(transform.toInverseCase)"
+          >
             {{ t('utilities.text.actions.inverse') }}
           </UButton>
         </div>
@@ -176,16 +245,26 @@ function loadSample() {
         <!-- Vietnamese & SEO -->
         <div class="space-y-2">
           <div
-            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+          >
             <UIcon name="i-lucide-globe" class="size-4 text-emerald-500" />
             <span>{{ t('utilities.text.categories.vietnamese') }}</span>
           </div>
           <div class="flex flex-wrap gap-1.5">
-            <UButton size="xs" color="primary" variant="soft"
-              @click="applyTransform(transform.removeVietnameseAccents)">
+            <UButton
+              size="xs"
+              color="primary"
+              variant="soft"
+              @click="applyTransform(transform.removeVietnameseAccents)"
+            >
               {{ t('utilities.text.actions.removeAccents') }}
             </UButton>
-            <UButton size="xs" color="primary" variant="soft" @click="applyTransform(transform.toSlug)">
+            <UButton
+              size="xs"
+              color="primary"
+              variant="soft"
+              @click="applyTransform(transform.toSlug)"
+            >
               {{ t('utilities.text.actions.slug') }}
             </UButton>
           </div>
@@ -194,35 +273,76 @@ function loadSample() {
         <!-- Lines & Whitespace -->
         <div class="space-y-2">
           <div
-            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+          >
             <UIcon name="i-lucide-align-left" class="size-4 text-blue-500" />
             <span>{{ t('utilities.text.categories.lines') }}</span>
           </div>
           <div class="flex flex-wrap gap-1.5">
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.cleanSpaces)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.cleanSpaces)"
+            >
               {{ t('utilities.text.actions.cleanSpaces') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.removeEmptyLines)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.removeEmptyLines)"
+            >
               {{ t('utilities.text.actions.removeEmptyLines') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.removeDuplicateLines)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.removeDuplicateLines)"
+            >
               {{ t('utilities.text.actions.removeDuplicates') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-arrow-down-a-z"
-              @click="applyTransform(transform.sortLinesAsc)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-arrow-down-a-z"
+              @click="applyTransform(transform.sortLinesAsc)"
+            >
               {{ t('utilities.text.actions.sortAsc') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-arrow-down-z-a"
-              @click="applyTransform(transform.sortLinesDesc)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-arrow-down-z-a"
+              @click="applyTransform(transform.sortLinesDesc)"
+            >
               {{ t('utilities.text.actions.sortDesc') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.reverseLines)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.reverseLines)"
+            >
               {{ t('utilities.text.actions.reverseLines') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.reverseCharacters)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.reverseCharacters)"
+            >
               {{ t('utilities.text.actions.reverseCharacters') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.numberLines)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.numberLines)"
+            >
               {{ t('utilities.text.actions.numberLines') }}
             </UButton>
           </div>
@@ -231,27 +351,58 @@ function loadSample() {
         <!-- Encodings -->
         <div class="space-y-2">
           <div
-            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+            class="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+          >
             <UIcon name="i-lucide-binary" class="size-4 text-purple-500" />
             <span>{{ t('utilities.text.categories.encode') }}</span>
           </div>
           <div class="flex flex-wrap gap-1.5">
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.encodeBase64)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.encodeBase64)"
+            >
               {{ t('utilities.text.actions.base64Encode') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.decodeBase64)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.decodeBase64)"
+            >
               {{ t('utilities.text.actions.base64Decode') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.encodeUrl)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.encodeUrl)"
+            >
               {{ t('utilities.text.actions.urlEncode') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.decodeUrl)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.decodeUrl)"
+            >
               {{ t('utilities.text.actions.urlDecode') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.escapeHtml)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.escapeHtml)"
+            >
               {{ t('utilities.text.actions.htmlEscape') }}
             </UButton>
-            <UButton size="xs" color="neutral" variant="soft" @click="applyTransform(transform.unescapeHtml)">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              @click="applyTransform(transform.unescapeHtml)"
+            >
               {{ t('utilities.text.actions.htmlUnescape') }}
             </UButton>
           </div>
@@ -263,36 +414,64 @@ function loadSample() {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-90">
       <!-- Left Pane: Input -->
       <div
-        class="flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+        class="flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden"
+      >
         <div
-          class="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/40 border-b border-gray-200 dark:border-gray-800 shrink-0 gap-2">
+          class="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/40 border-b border-gray-200 dark:border-gray-800 shrink-0 gap-2"
+        >
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider truncate">
               {{ t('utilities.text.inputLabel') }}
             </span>
-            <UBadge color="neutral" variant="subtle" size="xs" class="shrink-0">
+            <UBadge
+              color="neutral"
+              variant="subtle"
+              size="xs"
+              class="shrink-0"
+            >
               {{ inputStats.chars }} {{ t('utilities.text.stats.chars') }}
             </UBadge>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-clipboard-paste"
-              :title="t('utilities.text.paste')" @click="pasteToInput" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-copy" :title="t('utilities.text.copy')"
-              @click="copyInput" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" :title="t('utilities.text.clear')"
-              @click="inputText = ''" />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-clipboard-paste"
+              :title="t('utilities.text.paste')"
+              @click="pasteToInput"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-copy"
+              :title="t('utilities.text.copy')"
+              @click="copyInput"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-x"
+              :title="t('utilities.text.clear')"
+              @click="inputText = ''"
+            />
           </div>
         </div>
 
         <div class="flex-1 p-3 flex flex-col min-h-0">
-          <textarea v-model="inputText"
+          <textarea
+            v-model="inputText"
             class="w-full flex-1 min-h-50 resize-none font-mono text-sm bg-transparent border-0 focus:ring-0 focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 leading-relaxed overflow-y-auto"
-            :placeholder="t('utilities.text.inputPlaceholder')" />
+            :placeholder="t('utilities.text.inputPlaceholder')"
+          />
         </div>
 
         <!-- Input Stats Footer -->
         <div
-          class="px-4 py-2 bg-gray-50/50 dark:bg-gray-950/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-500 font-mono shrink-0">
+          class="px-4 py-2 bg-gray-50/50 dark:bg-gray-950/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-500 font-mono shrink-0"
+        >
           <div class="flex items-center gap-3">
             <span>{{ inputStats.words }} {{ t('utilities.text.stats.words') }}</span>
             <span>{{ inputStats.lines }} {{ t('utilities.text.stats.lines') }}</span>
@@ -304,40 +483,83 @@ function loadSample() {
 
       <!-- Right Pane: Output -->
       <div
-        class="flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+        class="flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden"
+      >
         <div
-          class="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/40 border-b border-gray-200 dark:border-gray-800 shrink-0 gap-2">
+          class="flex items-center justify-between px-4 py-2.5 bg-gray-50/70 dark:bg-gray-800/40 border-b border-gray-200 dark:border-gray-800 shrink-0 gap-2"
+        >
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider truncate">
               {{ t('utilities.text.outputLabel') }}
             </span>
-            <UBadge color="primary" variant="subtle" size="xs" class="shrink-0">
+            <UBadge
+              color="primary"
+              variant="subtle"
+              size="xs"
+              class="shrink-0"
+            >
               {{ outputStats.chars }} {{ t('utilities.text.stats.chars') }}
             </UBadge>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-arrow-left-right"
-              :title="t('utilities.text.swap')" @click="swapInputOutput" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-undo-2" :disabled="historyIndex <= 0"
-              :title="t('utilities.text.undo')" @click="handleUndo" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-redo-2"
-              :disabled="historyIndex >= history.length - 1" :title="t('utilities.text.redo')" @click="handleRedo" />
-            <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-download"
-              :title="t('utilities.text.download')" @click="downloadOutput" />
-            <UButton size="xs" color="primary" variant="soft" icon="i-lucide-copy" :label="t('utilities.text.copy')"
-              :title="t('utilities.text.copy')" @click="copyOutput" />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-arrow-left-right"
+              :title="t('utilities.text.swap')"
+              @click="swapInputOutput"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-undo-2"
+              :disabled="historyIndex <= 0"
+              :title="t('utilities.text.undo')"
+              @click="handleUndo"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-redo-2"
+              :disabled="historyIndex >= history.length - 1"
+              :title="t('utilities.text.redo')"
+              @click="handleRedo"
+            />
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-download"
+              :title="t('utilities.text.download')"
+              @click="downloadOutput"
+            />
+            <UButton
+              size="xs"
+              color="primary"
+              variant="soft"
+              icon="i-lucide-copy"
+              :label="t('utilities.text.copy')"
+              :title="t('utilities.text.copy')"
+              @click="copyOutput"
+            />
           </div>
         </div>
 
         <div class="flex-1 p-3 flex flex-col min-h-0 bg-gray-50/20 dark:bg-gray-950/20">
-          <textarea v-model="outputText"
+          <textarea
+            v-model="outputText"
             class="w-full flex-1 min-h-50 resize-none font-mono text-sm bg-transparent border-0 focus:ring-0 focus:outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-600 leading-relaxed overflow-y-auto"
-            :placeholder="t('utilities.text.outputPlaceholder')" />
+            :placeholder="t('utilities.text.outputPlaceholder')"
+          />
         </div>
 
         <!-- Output Stats Footer -->
         <div
-          class="px-4 py-2 bg-gray-50/50 dark:bg-gray-950/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-500 font-mono shrink-0">
+          class="px-4 py-2 bg-gray-50/50 dark:bg-gray-950/40 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[11px] text-gray-500 font-mono shrink-0"
+        >
           <div class="flex items-center gap-3">
             <span>{{ outputStats.words }} {{ t('utilities.text.stats.words') }}</span>
             <span>{{ outputStats.lines }} {{ t('utilities.text.stats.lines') }}</span>

@@ -124,9 +124,11 @@ function copyName(icon: string) {
 function copySnippet(kind: 'vue' | 'button' | 'class') {
   const name = selected.value
   if (!name) return
-  const code =
-    kind === 'vue' ? `<UIcon name="${name}" />`
-      : kind === 'button' ? `<UButton icon="${name}" />`
+  const code
+    = kind === 'vue'
+      ? `<UIcon name="${name}" />`
+      : kind === 'button'
+        ? `<UButton icon="${name}" />`
         : name
   copyText(code, t('utilities.icons.copiedNotification', { name }))
 }
@@ -135,28 +137,62 @@ function copySnippet(kind: 'vue' | 'button' | 'class') {
 <template>
   <div class="space-y-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <UInput v-model="search" :placeholder="t('utilities.icons.searchPlaceholder')" icon="i-lucide-search"
-        class="flex-1" :loading="isFetching" />
+      <UInput
+        v-model="search"
+        :placeholder="t('utilities.icons.searchPlaceholder')"
+        icon="i-lucide-search"
+        class="flex-1"
+        :loading="isFetching"
+      />
       <div class="flex flex-wrap gap-1.5">
-        <UButton v-for="c in collections" :key="c.value" :label="c.label" size="xs"
-          :color="collection === c.value ? 'primary' : 'neutral'" variant="soft" @click="collection = c.value" />
-        <UButton v-if="showFavorites" :label="t('utilities.icons.favorites')" icon="i-lucide-star" size="xs"
-          color="warning" variant="soft" @click="showFavorites = false" />
-        <UButton v-else :label="`${t('utilities.icons.favorites')} (${favorites.length})`" icon="i-lucide-star"
-          size="xs" color="neutral" variant="soft" @click="showFavorites = true" />
+        <UButton
+          v-for="c in collections"
+          :key="c.value"
+          :label="c.label"
+          size="xs"
+          :color="collection === c.value ? 'primary' : 'neutral'"
+          variant="soft"
+          @click="collection = c.value"
+        />
+        <UButton
+          v-if="showFavorites"
+          :label="t('utilities.icons.favorites')"
+          icon="i-lucide-star"
+          size="xs"
+          color="warning"
+          variant="soft"
+          @click="showFavorites = false"
+        />
+        <UButton
+          v-else
+          :label="`${t('utilities.icons.favorites')} (${favorites.length})`"
+          icon="i-lucide-star"
+          size="xs"
+          color="neutral"
+          variant="soft"
+          @click="showFavorites = true"
+        />
       </div>
     </div>
 
     <div class="flex flex-wrap items-center gap-4 text-xs text-muted">
       <div class="flex items-center gap-2">
         <span>{{ t('utilities.icons.size') }}</span>
-        <USlider v-model="previewSize" :min="16" :max="48" class="w-28" />
+        <USlider
+          v-model="previewSize"
+          :min="16"
+          :max="48"
+          class="w-28"
+        />
         <span class="w-8 font-mono">{{ previewSize }}</span>
       </div>
       <div class="flex items-center gap-2">
         <span>{{ t('utilities.icons.color') }}</span>
-        <input v-model="previewColor" type="color"
-          class="h-6 w-8 cursor-pointer rounded border border-default bg-transparent" />
+        <input
+          v-model="previewColor"
+          type="color"
+          class="h-6 w-8 cursor-pointer rounded border border-default bg-transparent"
+        >
       </div>
       <span v-if="!showFavorites">
         <b class="text-highlighted">{{ icons.length }}</b> {{ t('utilities.icons.iconCount') }}
@@ -168,18 +204,29 @@ function copySnippet(kind: 'vue' | 'button' | 'class') {
 
     <div ref="scrollParent" class="max-h-[60vh] overflow-y-auto rounded-xl border border-default p-3">
       <div class="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-        <button v-for="icon in displayedIcons" :key="icon" type="button"
+        <button
+          v-for="icon in displayedIcons"
+          :key="icon"
+          type="button"
           class="group relative flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-transparent p-2 transition-all hover:border-primary/40 hover:bg-elevated"
-          :class="{ 'border-primary bg-primary/10': selected === icon }" :title="icon" @click="selected = icon"
-          @dblclick="copyName(icon)">
+          :class="{ 'border-primary bg-primary/10': selected === icon }"
+          :title="icon"
+          @click="selected = icon"
+          @dblclick="copyName(icon)"
+        >
           <UIcon :name="icon" :style="{ width: previewSize + 'px', height: previewSize + 'px', color: previewColor }" />
           <span class="w-full truncate text-[9px] leading-tight text-muted group-hover:text-highlighted">
             {{ shortName(icon) }}
           </span>
-          <UButton :icon="isFavorite(icon) ? 'i-lucide-star' : 'i-lucide-star-off'" size="xs" color="warning"
-            variant="ghost" class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100"
+          <UButton
+            :icon="isFavorite(icon) ? 'i-lucide-star' : 'i-lucide-star-off'"
+            size="xs"
+            color="warning"
+            variant="ghost"
+            class="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100"
             :aria-label="isFavorite(icon) ? t('utilities.icons.removeFromFavorites') : t('utilities.icons.addToFavorites')"
-            @click.stop="toggleFavorite(icon)" />
+            @click.stop="toggleFavorite(icon)"
+          />
         </button>
       </div>
 
@@ -192,7 +239,9 @@ function copySnippet(kind: 'vue' | 'button' | 'class') {
         </template>
         <template v-else>
           <p>{{ t('utilities.icons.noIconsFound') }}</p>
-          <p class="mt-1 text-xs">{{ t('utilities.icons.tryAnotherQuery') }}</p>
+          <p class="mt-1 text-xs">
+            {{ t('utilities.icons.tryAnotherQuery') }}
+          </p>
         </template>
       </div>
       <div v-else-if="!hasMore && !showFavorites" class="col-span-full py-3 text-center text-xs text-dimmed">
@@ -206,22 +255,39 @@ function copySnippet(kind: 'vue' | 'button' | 'class') {
         <div class="flex items-center gap-3">
           <UIcon :name="selected" :style="{ width: '32px', height: '32px', color: previewColor }" />
           <div>
-            <div class="font-mono text-sm font-semibold text-highlighted">{{ selected }}</div>
-            <div class="text-xs text-muted">{{ t('utilities.icons.previewDetails') }}</div>
+            <div class="font-mono text-sm font-semibold text-highlighted">
+              {{ selected }}
+            </div>
+            <div class="text-xs text-muted">
+              {{ t('utilities.icons.previewDetails') }}
+            </div>
           </div>
         </div>
-        <UButton :label="t('utilities.icons.addToFavorites')" icon="i-lucide-star" size="xs" color="warning"
-          variant="soft" @click="toggleFavorite(selected)" />
+        <UButton
+          :label="t('utilities.icons.addToFavorites')"
+          icon="i-lucide-star"
+          size="xs"
+          color="warning"
+          variant="soft"
+          @click="toggleFavorite(selected)"
+        />
       </div>
 
       <div class="space-y-2">
-        <div class="text-xs font-semibold text-muted">{{ t('utilities.icons.snippets') }}</div>
+        <div class="text-xs font-semibold text-muted">
+          {{ t('utilities.icons.snippets') }}
+        </div>
         <div class="grid gap-2 lg:grid-cols-3">
           <div v-for="snip in snippets" :key="snip.label" class="space-y-1">
             <div class="flex items-center justify-between">
               <span class="text-xs text-muted">{{ snip.label }}</span>
-              <UButton icon="i-lucide-copy" size="xs" color="neutral" variant="ghost"
-                @click="copyText(snip.code, t('utilities.icons.copiedNotification', { name: selected }))" />
+              <UButton
+                icon="i-lucide-copy"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                @click="copyText(snip.code, t('utilities.icons.copiedNotification', { name: selected }))"
+              />
             </div>
             <pre class="overflow-auto rounded-lg bg-default/50 p-2 font-mono text-[11px]">{{ snip.code }}</pre>
           </div>
@@ -229,14 +295,38 @@ function copySnippet(kind: 'vue' | 'button' | 'class') {
       </div>
 
       <div class="flex flex-wrap gap-2">
-        <UButton :label="t('utilities.icons.copyName')" icon="i-lucide-tag" size="xs" color="neutral" variant="soft"
-          @click="copyName(selected)" />
-        <UButton :label="t('utilities.icons.copyVue')" icon="i-lucide-code-xml" size="xs" color="neutral" variant="soft"
-          @click="copySnippet('vue')" />
-        <UButton :label="t('utilities.icons.copyButton')" icon="i-lucide-square" size="xs" color="neutral"
-          variant="soft" @click="copySnippet('button')" />
-        <UButton :label="t('utilities.icons.copyClass')" icon="i-lucide-braces" size="xs" color="neutral" variant="soft"
-          @click="copySnippet('class')" />
+        <UButton
+          :label="t('utilities.icons.copyName')"
+          icon="i-lucide-tag"
+          size="xs"
+          color="neutral"
+          variant="soft"
+          @click="copyName(selected)"
+        />
+        <UButton
+          :label="t('utilities.icons.copyVue')"
+          icon="i-lucide-code-xml"
+          size="xs"
+          color="neutral"
+          variant="soft"
+          @click="copySnippet('vue')"
+        />
+        <UButton
+          :label="t('utilities.icons.copyButton')"
+          icon="i-lucide-square"
+          size="xs"
+          color="neutral"
+          variant="soft"
+          @click="copySnippet('button')"
+        />
+        <UButton
+          :label="t('utilities.icons.copyClass')"
+          icon="i-lucide-braces"
+          size="xs"
+          color="neutral"
+          variant="soft"
+          @click="copySnippet('class')"
+        />
       </div>
     </div>
   </div>

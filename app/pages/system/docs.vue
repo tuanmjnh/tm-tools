@@ -64,24 +64,40 @@ mobileBar.registerInfo(computed(() => ({
 <template>
   <BasePage id="docs" :title="title" :description="description">
     <template #right>
-      <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" @click="reloadNuxtApp()" />
+      <UButton
+        icon="i-lucide-refresh-cw"
+        variant="soft"
+        size="sm"
+        @click="reloadNuxtApp()"
+      />
     </template>
 
     <template #toolbar>
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UInput v-model="searchQuery" icon="i-lucide-search" :placeholder="t('docs.searchPlaceholder')" size="sm"
-              class="flex-1 min-w-0 sm:flex-none sm:w-64" />
-            <USelect v-model="selectedModule"
-              :items="modulesList.map(m => ({ label: m === 'ALL' ? t('docs.allModules') : m, value: m }))" size="sm"
-              class="w-36 shrink-0 sm:w-40" />
+            <UInput
+              v-model="searchQuery"
+              icon="i-lucide-search"
+              :placeholder="t('docs.searchPlaceholder')"
+              size="sm"
+              class="flex-1 min-w-0 sm:flex-none sm:w-64"
+            />
+            <USelect
+              v-model="selectedModule"
+              :items="modulesList.map(m => ({ label: m === 'ALL' ? t('docs.allModules') : m, value: m }))"
+              size="sm"
+              class="w-36 shrink-0 sm:w-40"
+            />
           </div>
         </template>
         <template #right>
           <div class="hidden sm:flex">
-            <UBadge :label="t('docs.endpointsCount', { filtered: filteredApis.length, total: apis.length })"
-              variant="subtle" size="sm" />
+            <UBadge
+              :label="t('docs.endpointsCount', { filtered: filteredApis.length, total: apis.length })"
+              variant="subtle"
+              size="sm"
+            />
           </div>
         </template>
       </UDashboardToolbar>
@@ -100,7 +116,9 @@ mobileBar.registerInfo(computed(() => ({
               <UIcon name="i-lucide-shield-check" class="flex w-5 h-5" />
             </div>
             <div class="space-y-1 min-w-0">
-              <h3 class="font-semibold text-sm truncate">{{ t('docs.architecture.iamTitle') }}</h3>
+              <h3 class="font-semibold text-sm truncate">
+                {{ t('docs.architecture.iamTitle') }}
+              </h3>
               <p class="text-xs text-muted leading-relaxed line-clamp-3">
                 {{ t('docs.architecture.iamDesc') }}
               </p>
@@ -114,7 +132,9 @@ mobileBar.registerInfo(computed(() => ({
               <UIcon name="i-lucide-sliders" class="flex w-5 h-5" />
             </div>
             <div class="space-y-1 min-w-0">
-              <h3 class="font-semibold text-sm truncate">{{ t('docs.architecture.remoteConfigsTitle') }}</h3>
+              <h3 class="font-semibold text-sm truncate">
+                {{ t('docs.architecture.remoteConfigsTitle') }}
+              </h3>
               <p class="text-xs text-muted leading-relaxed line-clamp-3">
                 {{ t('docs.architecture.remoteConfigsDesc') }}
               </p>
@@ -128,7 +148,9 @@ mobileBar.registerInfo(computed(() => ({
               <UIcon name="i-lucide-cloud-upload" class="flex w-5 h-5" />
             </div>
             <div class="space-y-1 min-w-0">
-              <h3 class="font-semibold text-sm truncate">{{ t('docs.architecture.mediaGatewayTitle') }}</h3>
+              <h3 class="font-semibold text-sm truncate">
+                {{ t('docs.architecture.mediaGatewayTitle') }}
+              </h3>
               <p class="text-xs text-muted leading-relaxed line-clamp-3">
                 {{ t('docs.architecture.mediaGatewayDesc') }}
               </p>
@@ -142,7 +164,9 @@ mobileBar.registerInfo(computed(() => ({
               <UIcon name="i-lucide-bell-ring" class="flex w-5 h-5" />
             </div>
             <div class="space-y-1 min-w-0">
-              <h3 class="font-semibold text-sm truncate">{{ t('docs.architecture.notificationsTitle') }}</h3>
+              <h3 class="font-semibold text-sm truncate">
+                {{ t('docs.architecture.notificationsTitle') }}
+              </h3>
               <p class="text-xs text-muted leading-relaxed line-clamp-3">
                 {{ t('docs.architecture.notificationsDesc') }}
               </p>
@@ -156,7 +180,9 @@ mobileBar.registerInfo(computed(() => ({
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-terminal" class="w-4 h-4 text-primary" />
-            <h3 class="font-semibold text-sm">{{ t('docs.sdk.title') }}</h3>
+            <h3 class="font-semibold text-sm">
+              {{ t('docs.sdk.title') }}
+            </h3>
           </div>
         </template>
 
@@ -189,7 +215,9 @@ mobileBar.registerInfo(computed(() => ({
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-network" class="w-4 h-4 text-primary" />
-              <h3 class="font-semibold text-sm">{{ t('docs.api.title') }}</h3>
+              <h3 class="font-semibold text-sm">
+                {{ t('docs.api.title') }}
+              </h3>
             </div>
             <UBadge :label="t('docs.api.prefix')" variant="subtle" size="xs" />
           </div>
@@ -199,23 +227,40 @@ mobileBar.registerInfo(computed(() => ({
           <table class="w-full text-left text-xs border-collapse">
             <thead>
               <tr class="border-b border-neutral-200 dark:border-neutral-800 text-muted font-medium">
-                <th class="py-2.5 px-3">{{ t('docs.api.module') }}</th>
-                <th class="py-2.5 px-3">{{ t('docs.api.method') }}</th>
-                <th class="py-2.5 px-3 font-mono">{{ t('docs.api.endpoint') }}</th>
-                <th class="py-2.5 px-3">{{ t('docs.api.description') }}</th>
+                <th class="py-2.5 px-3">
+                  {{ t('docs.api.module') }}
+                </th>
+                <th class="py-2.5 px-3">
+                  {{ t('docs.api.method') }}
+                </th>
+                <th class="py-2.5 px-3 font-mono">
+                  {{ t('docs.api.endpoint') }}
+                </th>
+                <th class="py-2.5 px-3">
+                  {{ t('docs.api.description') }}
+                </th>
               </tr>
             </thead>
             <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800/60">
-              <tr v-for="api in filteredApis" :key="api.path + api.method"
-                class="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors">
-                <td class="py-2.5 px-3 font-medium whitespace-nowrap text-highlighted">{{ api.module }}</td>
+              <tr
+                v-for="api in filteredApis"
+                :key="api.path + api.method"
+                class="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/50 transition-colors"
+              >
+                <td class="py-2.5 px-3 font-medium whitespace-nowrap text-highlighted">
+                  {{ api.module }}
+                </td>
                 <td class="py-2.5 px-3 whitespace-nowrap">
                   <UBadge :color="getMethodBadgeColor(api.method)" variant="subtle" size="xs">
                     {{ api.method }}
                   </UBadge>
                 </td>
-                <td class="py-2.5 px-3 font-mono text-primary font-medium whitespace-nowrap">{{ api.path }}</td>
-                <td class="py-2.5 px-3 text-muted">{{ api.desc }}</td>
+                <td class="py-2.5 px-3 font-mono text-primary font-medium whitespace-nowrap">
+                  {{ api.path }}
+                </td>
+                <td class="py-2.5 px-3 text-muted">
+                  {{ api.desc }}
+                </td>
               </tr>
             </tbody>
           </table>

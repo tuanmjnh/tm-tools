@@ -124,13 +124,19 @@ function onSubmit() {
     <!-- Action Selection Tabs / Pills -->
     <UFormField :label="t('tools.audioAction')">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <button v-for="action in actionOptions" :key="action.value" type="button"
+        <button
+          v-for="action in actionOptions"
+          :key="action.value"
+          type="button"
           class="flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer"
           :class="[
             audioAction === action.value
               ? 'border-primary bg-primary/10 text-primary font-semibold shadow-xs'
               : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 hover:border-neutral-300 dark:hover:border-neutral-700'
-          ]" :disabled="disabled" @click="audioAction = action.value as AudioAction">
+          ]"
+          :disabled="disabled"
+          @click="audioAction = action.value as AudioAction"
+        >
           <UIcon :name="action.icon" class="size-5 mb-1.5 shrink-0" />
           <span class="text-xs">{{ action.label }}</span>
         </button>
@@ -139,54 +145,101 @@ function onSubmit() {
 
     <!-- Video Input File -->
     <UFormField name="inputPath" :label="t('tools.inputVideo')">
-      <BaseFilePicker v-model="inputPath" mode="file" placeholder="D:/videos/input.mp4" :disabled="disabled"
-        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]" />
+      <BaseFilePicker
+        v-model="inputPath"
+        mode="file"
+        placeholder="D:/videos/input.mp4"
+        :disabled="disabled"
+        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]"
+      />
     </UFormField>
 
     <!-- Specific options based on selected action -->
     <!-- 1. Extract -->
-    <div v-if="audioAction === 'extract'"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-3">
+    <div
+      v-if="audioAction === 'extract'"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-3"
+    >
       <UFormField :label="t('tools.outputAudioFormat')">
-        <USelect v-model="audioFormat" :items="formatOptions" class="w-full" :disabled="disabled" />
+        <USelect
+          v-model="audioFormat"
+          :items="formatOptions"
+          class="w-full"
+          :disabled="disabled"
+        />
       </UFormField>
     </div>
 
     <!-- 2. Replace Audio -->
-    <div v-else-if="audioAction === 'replace_bgm'"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-3">
+    <div
+      v-else-if="audioAction === 'replace_bgm'"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-3"
+    >
       <UFormField :label="t('tools.newAudioFile')">
-        <BaseFilePicker v-model="bgmFile" mode="file" placeholder="D:/music/new_audio.mp3" :disabled="disabled"
-          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]" />
+        <BaseFilePicker
+          v-model="bgmFile"
+          mode="file"
+          placeholder="D:/music/new_audio.mp3"
+          :disabled="disabled"
+          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
+        />
       </UFormField>
       <UFormField :label="t('tools.volume')">
         <div class="flex items-center gap-3">
-          <input v-model.number="singleVolume" type="range" min="0" max="2" step="0.05" class="flex-1 accent-primary"
-            :disabled="disabled">
+          <input
+            v-model.number="singleVolume"
+            type="range"
+            min="0"
+            max="2"
+            step="0.05"
+            class="flex-1 accent-primary"
+            :disabled="disabled"
+          >
           <span class="text-xs font-mono w-12 text-right">{{ Math.round(singleVolume * 100) }}%</span>
         </div>
       </UFormField>
     </div>
 
     <!-- 3. Mix Audio -->
-    <div v-else-if="audioAction === 'mix_bgm'"
-      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4">
+    <div
+      v-else-if="audioAction === 'mix_bgm'"
+      class="p-4 border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50 dark:bg-neutral-900/30 space-y-4"
+    >
       <UFormField :label="t('tools.bgMusic')">
-        <BaseFilePicker v-model="bgmFile" mode="file" placeholder="D:/music/background_music.mp3" :disabled="disabled"
-          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]" />
+        <BaseFilePicker
+          v-model="bgmFile"
+          mode="file"
+          placeholder="D:/music/background_music.mp3"
+          :disabled="disabled"
+          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
+        />
       </UFormField>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <UFormField :label="t('tools.originalAudioVolume')">
           <div class="flex items-center gap-3">
-            <input v-model.number="origVolume" type="range" min="0" max="2" step="0.05" class="flex-1 accent-primary"
-              :disabled="disabled">
+            <input
+              v-model.number="origVolume"
+              type="range"
+              min="0"
+              max="2"
+              step="0.05"
+              class="flex-1 accent-primary"
+              :disabled="disabled"
+            >
             <span class="text-xs font-mono w-10 text-right">{{ Math.round(origVolume * 100) }}%</span>
           </div>
         </UFormField>
         <UFormField :label="t('tools.bgmVolume')">
           <div class="flex items-center gap-3">
-            <input v-model.number="bgmVolume" type="range" min="0" max="2" step="0.05" class="flex-1 accent-primary"
-              :disabled="disabled">
+            <input
+              v-model.number="bgmVolume"
+              type="range"
+              min="0"
+              max="2"
+              step="0.05"
+              class="flex-1 accent-primary"
+              :disabled="disabled"
+            >
             <span class="text-xs font-mono w-10 text-right">{{ Math.round(bgmVolume * 100) }}%</span>
           </div>
         </UFormField>
@@ -195,15 +248,30 @@ function onSubmit() {
 
     <!-- Output File -->
     <UFormField :label="t('tools.output')">
-      <BaseFilePicker v-model="outputPath" mode="save" placeholder="D:/videos/output.mp4" :disabled="disabled" :filters="audioAction === 'extract'
-        ? [{ name: 'Audio', extensions: [audioFormat] }]
-        : [{ name: 'Videos', extensions: ['mp4', 'mkv', 'mov'] }]" />
+      <BaseFilePicker
+        v-model="outputPath"
+        mode="save"
+        placeholder="D:/videos/output.mp4"
+        :disabled="disabled"
+        :filters="audioAction === 'extract'
+          ? [{ name: 'Audio', extensions: [audioFormat] }]
+          : [{ name: 'Videos', extensions: ['mp4', 'mkv', 'mov'] }]"
+      />
     </UFormField>
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton icon="i-lucide-play" :label="t('tools.start')" variant="soft" color="primary" size="lg" block
-        :loading="loading" :disabled="!inputPath || disabled" @click="onSubmit" />
+      <UButton
+        icon="i-lucide-play"
+        :label="t('tools.start')"
+        variant="soft"
+        color="primary"
+        size="lg"
+        block
+        :loading="loading"
+        :disabled="!inputPath || disabled"
+        @click="onSubmit"
+      />
     </div>
   </div>
 </template>

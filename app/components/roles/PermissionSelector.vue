@@ -54,9 +54,9 @@ const visibleModules = computed(() => {
     const actions = moduleHit
       ? m.actions
       : m.actions.filter(a =>
-        a.toLowerCase().includes(q)
-        || code(m.key, a).toLowerCase().includes(q)
-        || actionLabel(m.key, a).toLowerCase().includes(q))
+          a.toLowerCase().includes(q)
+          || code(m.key, a).toLowerCase().includes(q)
+          || actionLabel(m.key, a).toLowerCase().includes(q))
     if (actions.length) rows.push({ mod: m, actions })
   }
   return rows
@@ -89,10 +89,21 @@ const clearModule = (moduleKey: string, actions: string[]) => {
 <template>
   <div class="w-full border border-default rounded-lg overflow-hidden">
     <div class="flex items-center gap-2 p-2 border-b border-default bg-default/40">
-      <UInput v-model="search" icon="i-lucide-search" size="sm" class="flex-1 min-w-0" :placeholder="t('common.search')"
-        :disabled="disabled" />
-      <UBadge :label="t('admin.permissionsSelected', { n: selected.length })" color="primary" variant="subtle" size="sm"
-        class="shrink-0" />
+      <UInput
+        v-model="search"
+        icon="i-lucide-search"
+        size="sm"
+        class="flex-1 min-w-0"
+        :placeholder="t('common.search')"
+        :disabled="disabled"
+      />
+      <UBadge
+        :label="t('admin.permissionsSelected', { n: selected.length })"
+        color="primary"
+        variant="subtle"
+        size="sm"
+        class="shrink-0"
+      />
       <span class="text-[11px] text-muted tabular-nums shrink-0 hidden sm:inline">/ {{ totalCount }}</span>
     </div>
 
@@ -106,20 +117,40 @@ const clearModule = (moduleKey: string, actions: string[]) => {
             </span>
             <template v-if="!disabled">
               <UTooltip :text="t('admin.selectAll')">
-                <UButton icon="i-lucide-list-checks" size="xs" color="neutral" variant="ghost" type="button"
-                  @click="selectAllModule(row.mod.key, row.mod.actions)" />
+                <UButton
+                  icon="i-lucide-list-checks"
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  type="button"
+                  @click="selectAllModule(row.mod.key, row.mod.actions)"
+                />
               </UTooltip>
               <UTooltip :text="t('admin.clearSelection')">
-                <UButton icon="i-lucide-circle-x" size="xs" color="neutral" variant="ghost" type="button"
-                  @click="clearModule(row.mod.key, row.mod.actions)" />
+                <UButton
+                  icon="i-lucide-circle-x"
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  type="button"
+                  @click="clearModule(row.mod.key, row.mod.actions)"
+                />
               </UTooltip>
             </template>
           </div>
         </div>
         <div class="flex flex-wrap gap-1.5">
-          <UButton v-for="act in row.actions" :key="act" :label="actionLabel(row.mod.key, act)" size="xs" type="button"
-            :disabled="disabled" :variant="has(row.mod.key, act) ? 'solid' : 'soft'"
-            :color="has(row.mod.key, act) ? 'primary' : 'neutral'" @click="toggle(row.mod.key, act)" />
+          <UButton
+            v-for="act in row.actions"
+            :key="act"
+            :label="actionLabel(row.mod.key, act)"
+            size="xs"
+            type="button"
+            :disabled="disabled"
+            :variant="has(row.mod.key, act) ? 'solid' : 'soft'"
+            :color="has(row.mod.key, act) ? 'primary' : 'neutral'"
+            @click="toggle(row.mod.key, act)"
+          />
         </div>
       </section>
 

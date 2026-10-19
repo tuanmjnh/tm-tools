@@ -70,9 +70,13 @@ const actionColor = (action: string): 'primary' | 'success' | 'error' | 'warning
     </button>
 
     <div v-if="expanded" class="px-3 pb-3 border-t border-default pt-2">
-      <p v-if="!item.changes" class="text-xs text-muted italic">{{ t('logs.noChanges') }}</p>
+      <p v-if="!item.changes" class="text-xs text-muted italic">
+        {{ t('logs.noChanges') }}
+      </p>
       <template v-else>
-        <p class="text-[11px] font-semibold text-dimmed uppercase mb-1.5">{{ t('logs.changes') }}</p>
+        <p class="text-[11px] font-semibold text-dimmed uppercase mb-1.5">
+          {{ t('logs.changes') }}
+        </p>
         <div class="space-y-1.5">
           <div
             v-for="(change, field) in item.changes"

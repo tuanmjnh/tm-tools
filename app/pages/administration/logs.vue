@@ -71,11 +71,11 @@ const filteredLogs = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (q) {
     list = list.filter(l =>
-      l.action.toLowerCase().includes(q) ||
-      l.modelName?.toLowerCase().includes(q) ||
-      l.docId?.toLowerCase().includes(q) ||
-      l.by?.name?.toLowerCase().includes(q) ||
-      l.by?.email?.toLowerCase().includes(q)
+      l.action.toLowerCase().includes(q)
+      || l.modelName?.toLowerCase().includes(q)
+      || l.docId?.toLowerCase().includes(q)
+      || l.by?.name?.toLowerCase().includes(q)
+      || l.by?.email?.toLowerCase().includes(q)
     )
   }
   return list
@@ -133,8 +133,14 @@ onMounted(onRefresh)
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :loading="loading"
-          @click="onRefresh" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          color="neutral"
+          size="sm"
+          :loading="loading"
+          @click="onRefresh"
+        />
       </div>
     </template>
 
@@ -142,11 +148,22 @@ onMounted(onRefresh)
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UInput v-model="search" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
-              class="flex-1 min-w-0 sm:flex-none sm:w-56" />
+            <UInput
+              v-model="search"
+              icon="i-lucide-search"
+              :placeholder="t('common.search')"
+              size="sm"
+              class="flex-1 min-w-0 sm:flex-none sm:w-56"
+            />
             <AdminFilterPopover>
-              <USelectMenu v-model="actionFilter" :items="actionOptions" value-key="value"
-                :placeholder="t('logs.allActions')" size="sm" class="w-full md:w-48" />
+              <USelectMenu
+                v-model="actionFilter"
+                :items="actionOptions"
+                value-key="value"
+                :placeholder="t('logs.allActions')"
+                size="sm"
+                class="w-full md:w-48"
+              />
             </AdminFilterPopover>
           </div>
         </template>
@@ -162,12 +179,26 @@ onMounted(onRefresh)
 
     <template #default>
       <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
-        <LazyGridList :items="filteredLogs" :columns="columns" :loading="loading" item-key="_id"
-          :can-load-more="hasMore" v-model:view-mode="viewMode" storage-key="logs-view-mode" @load-more="onLoadMore"
-          @refresh="onRefresh" @click="openDetail">
+        <LazyGridList
+          v-model:view-mode="viewMode"
+          :items="filteredLogs"
+          :columns="columns"
+          :loading="loading"
+          item-key="_id"
+          :can-load-more="hasMore"
+          storage-key="logs-view-mode"
+          @load-more="onLoadMore"
+          @refresh="onRefresh"
+          @click="openDetail"
+        >
           <template #action="{ item }">
-            <UBadge :label="item.action" :color="actionColor(item.action)" variant="subtle" size="sm"
-              class="font-mono" />
+            <UBadge
+              :label="item.action"
+              :color="actionColor(item.action)"
+              variant="subtle"
+              size="sm"
+              class="font-mono"
+            />
           </template>
 
           <template #modelName="{ item }">
@@ -194,8 +225,13 @@ onMounted(onRefresh)
 
           <template #mobile-content="{ item }">
             <div class="flex items-start gap-3">
-              <UBadge :label="item.action" :color="actionColor(item.action)" variant="subtle" size="sm"
-                class="font-mono shrink-0" />
+              <UBadge
+                :label="item.action"
+                :color="actionColor(item.action)"
+                variant="subtle"
+                size="sm"
+                class="font-mono shrink-0"
+              />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 text-xs">
                   <span class="font-semibold text-highlighted truncate">{{ item.modelName }}</span>
@@ -223,15 +259,30 @@ onMounted(onRefresh)
         </LazyGridList>
       </div>
 
-      <BaseResponsiveSlideover v-if="selectedLog" v-model:open="isDetailOpen" :title="$t('logs.detail')"
-        :description="`${selectedLog.modelName} · ${selectedLog.docId}`" icon="i-lucide-scroll-text"
-        :ui="{ content: 'w-screen max-w-2xl' }">
+      <BaseResponsiveSlideover
+        v-if="selectedLog"
+        v-model:open="isDetailOpen"
+        :title="$t('logs.detail')"
+        :description="`${selectedLog.modelName} · ${selectedLog.docId}`"
+        icon="i-lucide-scroll-text"
+        :ui="{ content: 'w-screen max-w-2xl' }"
+      >
         <template #body>
           <div class="space-y-4">
             <div class="flex items-center gap-2">
-              <UBadge :label="selectedLog.action" :color="actionColor(selectedLog.action)" variant="subtle" size="sm"
-                class="font-mono" />
-              <UBadge :label="selectedLog.source || '-'" color="neutral" variant="soft" size="sm" />
+              <UBadge
+                :label="selectedLog.action"
+                :color="actionColor(selectedLog.action)"
+                variant="subtle"
+                size="sm"
+                class="font-mono"
+              />
+              <UBadge
+                :label="selectedLog.source || '-'"
+                color="neutral"
+                variant="soft"
+                size="sm"
+              />
             </div>
 
             <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -261,8 +312,11 @@ onMounted(onRefresh)
                 {{ $t('logs.noChanges') }}
               </p>
               <div v-else class="space-y-1.5">
-                <div v-for="[field, change] in changeEntries(selectedLog)" :key="field"
-                  class="rounded-lg border border-default p-2 text-xs font-mono">
+                <div
+                  v-for="[field, change] in changeEntries(selectedLog)"
+                  :key="field"
+                  class="rounded-lg border border-default p-2 text-xs font-mono"
+                >
                   <p class="font-semibold text-highlighted mb-1">
                     {{ field }}
                   </p>

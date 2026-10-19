@@ -10,7 +10,14 @@ const { t } = useI18n()
 
   <!-- Mobile: collapse filters into popover -->
   <UPopover class="md:hidden shrink-0">
-    <UButton icon="i-lucide-filter" color="neutral" variant="soft" size="sm" square :aria-label="t('common.filter')" />
+    <UButton
+      icon="i-lucide-filter"
+      color="neutral"
+      variant="soft"
+      size="sm"
+      square
+      :aria-label="t('common.filter')"
+    />
     <template #content>
       <div class="p-4 min-w-70 max-w-[min(90vw,360px)] space-y-3 flex flex-col">
         <slot />

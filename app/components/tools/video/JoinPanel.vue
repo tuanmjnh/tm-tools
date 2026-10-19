@@ -262,35 +262,72 @@ function onSubmit() {
           {{ t('tools.joinModeFiles') }} ({{ selectedFiles.length }})
         </label>
         <div class="flex items-center gap-2">
-          <UButton icon="i-lucide-plus" size="sm" color="primary" variant="soft" :disabled="disabled"
-            @click="onPickFiles">
+          <UButton
+            icon="i-lucide-plus"
+            size="sm"
+            color="primary"
+            variant="soft"
+            :disabled="disabled"
+            @click="onPickFiles"
+          >
             {{ t('tools.joinAddFiles') }}
           </UButton>
-          <UButton v-if="selectedFiles.length > 0" icon="i-lucide-trash" size="sm" color="neutral" variant="ghost"
-            :disabled="disabled" @click="clearFiles">
+          <UButton
+            v-if="selectedFiles.length > 0"
+            icon="i-lucide-trash"
+            size="sm"
+            color="neutral"
+            variant="ghost"
+            :disabled="disabled"
+            @click="clearFiles"
+          >
             {{ t('tools.clearAll') }}
           </UButton>
         </div>
       </div>
 
       <!-- File list preview -->
-      <div v-if="selectedFiles.length > 0"
-        class="max-h-60 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
-        <div v-for="(f, idx) in selectedFiles" :key="f"
-          class="flex items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 text-xs">
+      <div
+        v-if="selectedFiles.length > 0"
+        class="max-h-60 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50"
+      >
+        <div
+          v-for="(f, idx) in selectedFiles"
+          :key="f"
+          class="flex items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 text-xs"
+        >
           <div class="flex items-center gap-2 truncate min-w-0">
             <span class="w-5 text-center font-mono text-neutral-400 shrink-0">{{ idx + 1 }}.</span>
             <UIcon name="i-lucide-film" class="w-4 h-4 text-primary-500 shrink-0" />
             <span class="truncate font-mono text-neutral-700 dark:text-neutral-300" :title="f">{{ f }}</span>
           </div>
           <div class="flex items-center gap-1 shrink-0">
-            <UButton icon="i-lucide-arrow-up" size="xs" color="neutral" variant="ghost"
-              :disabled="idx === 0 || disabled" :title="t('tools.moveUp')" @click="moveFile(idx, 'up')" />
-            <UButton icon="i-lucide-arrow-down" size="xs" color="neutral" variant="ghost"
-              :disabled="idx === selectedFiles.length - 1 || disabled" :title="t('tools.moveDown')"
-              @click="moveFile(idx, 'down')" />
-            <UButton icon="i-lucide-x" size="xs" color="error" variant="ghost" :disabled="disabled"
-              @click="removeFile(idx)" />
+            <UButton
+              icon="i-lucide-arrow-up"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :disabled="idx === 0 || disabled"
+              :title="t('tools.moveUp')"
+              @click="moveFile(idx, 'up')"
+            />
+            <UButton
+              icon="i-lucide-arrow-down"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              :disabled="idx === selectedFiles.length - 1 || disabled"
+              :title="t('tools.moveDown')"
+              @click="moveFile(idx, 'down')"
+            />
+            <UButton
+              icon="i-lucide-x"
+              size="xs"
+              color="error"
+              variant="ghost"
+              :disabled="disabled"
+              @click="removeFile(idx)"
+            />
           </div>
         </div>
       </div>
@@ -299,8 +336,14 @@ function onSubmit() {
         <p class="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
           {{ t('tools.errorNumberFileJoin') }}
         </p>
-        <UButton icon="i-lucide-plus" size="sm" color="primary" variant="subtle" :disabled="disabled"
-          @click="onPickFiles">
+        <UButton
+          icon="i-lucide-plus"
+          size="sm"
+          color="primary"
+          variant="subtle"
+          :disabled="disabled"
+          @click="onPickFiles"
+        >
           {{ t('tools.joinAddFiles') }}
         </UButton>
       </div>
@@ -312,27 +355,61 @@ function onSubmit() {
         <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
           {{ t('tools.joinSelectRootFolder') }}
         </label>
-        <BaseFilePicker v-model="rootFolder" mode="folder" placeholder="D:/Videos/InputFolder"
-          :title="t('tools.joinSelectRootFolder')" :disabled="disabled" @select="onRootFolderSelected" />
+        <BaseFilePicker
+          v-model="rootFolder"
+          mode="folder"
+          placeholder="D:/Videos/InputFolder"
+          :title="t('tools.joinSelectRootFolder')"
+          :disabled="disabled"
+          @select="onRootFolderSelected"
+        />
       </div>
 
       <!-- Extensions filter -->
       <div class="flex flex-wrap items-center gap-3">
         <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400 shrink-0">Extensions:</span>
-        <USelectMenu v-model="selectedExtensions" :items="availableExtensions" multiple size="sm" class="w-64"
-          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }" />
+        <USelectMenu
+          v-model="selectedExtensions"
+          :items="availableExtensions"
+          multiple
+          size="sm"
+          class="w-64"
+          :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
+        />
         <div class="flex items-center gap-1.5">
-          <UButton size="xs" color="neutral" variant="soft" @click="setExtType('video')">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="setExtType('video')"
+          >
             Video
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="setExtType('image')">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="setExtType('image')"
+          >
             Image
           </UButton>
-          <UButton size="xs" color="neutral" variant="soft" @click="setExtType('mixed')">
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            @click="setExtType('mixed')"
+          >
             Mixed
           </UButton>
-          <UButton v-if="rootFolder" icon="i-lucide-refresh-cw" size="xs" color="neutral" variant="ghost"
-            :loading="scanning" @click="scanFolders" />
+          <UButton
+            v-if="rootFolder"
+            icon="i-lucide-refresh-cw"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            :loading="scanning"
+            @click="scanFolders"
+          />
         </div>
       </div>
 
@@ -351,12 +428,18 @@ function onSubmit() {
           </span>
         </div>
         <div
-          class="max-h-56 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50">
-          <div v-for="item in scannedFolders" :key="item.path"
-            class="p-2.5 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 flex items-center justify-between text-xs">
+          class="max-h-56 overflow-y-auto space-y-1.5 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50"
+        >
+          <div
+            v-for="item in scannedFolders"
+            :key="item.path"
+            class="p-2.5 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200/70 dark:border-neutral-800/70 flex items-center justify-between text-xs"
+          >
             <div class="flex items-center gap-2 truncate">
-              <UIcon :name="joinMode === 'subfolder' ? 'i-lucide-folder' : 'i-lucide-film'"
-                class="w-4 h-4 text-primary-500 shrink-0" />
+              <UIcon
+                :name="joinMode === 'subfolder' ? 'i-lucide-folder' : 'i-lucide-film'"
+                class="w-4 h-4 text-primary-500 shrink-0"
+              />
               <span class="font-medium text-neutral-700 dark:text-neutral-200 truncate">{{ item.name }}</span>
             </div>
             <UBadge size="xs" color="neutral" variant="subtle">
@@ -365,8 +448,10 @@ function onSubmit() {
           </div>
         </div>
       </div>
-      <div v-else-if="rootFolder"
-        class="p-4 text-center text-xs text-neutral-400 border border-neutral-200 dark:border-neutral-800 rounded-xl">
+      <div
+        v-else-if="rootFolder"
+        class="p-4 text-center text-xs text-neutral-400 border border-neutral-200 dark:border-neutral-800 rounded-xl"
+      >
         {{ t('tools.noTasks') }}
       </div>
     </div>
@@ -377,25 +462,50 @@ function onSubmit() {
         <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
           {{ joinMode === 'subfolder' ? t('tools.joinSelectOutputDir') : t('tools.joinSelectOutput') }}
         </label>
-        <BaseFilePicker v-if="joinMode === 'subfolder'" v-model="outputDir" mode="folder"
-          placeholder="D:/Videos/JoinedOutput" :title="t('tools.joinSelectOutputDir')" :disabled="disabled" />
-        <BaseFilePicker v-else v-model="outputPath" mode="save" placeholder="D:/Videos/output.mp4"
-          :title="t('tools.joinSelectOutput')" :disabled="disabled"
-          :filters="[{ name: 'MP4 Video', extensions: ['mp4'] }]" />
+        <BaseFilePicker
+          v-if="joinMode === 'subfolder'"
+          v-model="outputDir"
+          mode="folder"
+          placeholder="D:/Videos/JoinedOutput"
+          :title="t('tools.joinSelectOutputDir')"
+          :disabled="disabled"
+        />
+        <BaseFilePicker
+          v-else
+          v-model="outputPath"
+          mode="save"
+          placeholder="D:/Videos/output.mp4"
+          :title="t('tools.joinSelectOutput')"
+          :disabled="disabled"
+          :filters="[{ name: 'MP4 Video', extensions: ['mp4'] }]"
+        />
       </div>
 
       <div v-if="joinMode === 'subfolder'" class="flex flex-col gap-2">
         <label class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
           {{ t('tools.threads') }}
         </label>
-        <UInput v-model.number="threads" type="number" :min="1" :max="8" :disabled="disabled" />
+        <UInput
+          v-model.number="threads"
+          type="number"
+          :min="1"
+          :max="8"
+          :disabled="disabled"
+        />
       </div>
     </div>
 
     <!-- Action Button -->
     <div class="pt-2">
-      <UButton icon="i-lucide-merge" variant="soft" color="primary" size="lg" block :disabled="!canSubmit"
-        @click="onSubmit">
+      <UButton
+        icon="i-lucide-merge"
+        variant="soft"
+        color="primary"
+        size="lg"
+        block
+        :disabled="!canSubmit"
+        @click="onSubmit"
+      >
         {{ t('tools.joinVideo') }}
       </UButton>
     </div>

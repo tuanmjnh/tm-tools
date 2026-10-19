@@ -84,8 +84,8 @@ const FROZEN_TRANSITIONS = [
 
 /** Legacy TMCut key -> FFmpeg xfade name (fade/dissolve are identity). */
 const LEGACY_ALIASES: Record<string, string> = {
-  fade: 'fade',
-  dissolve: 'dissolve',
+  'fade': 'fade',
+  'dissolve': 'dissolve',
   'wipe-left': 'wipeleft',
   'wipe-right': 'wiperight',
   'slide-left': 'slideleft',

@@ -93,7 +93,12 @@ watch(open, (val) => {
         <div class="flex items-center gap-2 text-xs text-muted">
           <UIcon name="i-lucide-hash" class="size-3.5" />
           <code class="font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">{{ docId }}</code>
-          <UBadge v-if="modelName" :label="modelName" variant="subtle" size="xs" />
+          <UBadge
+            v-if="modelName"
+            :label="modelName"
+            variant="subtle"
+            size="xs"
+          />
         </div>
 
         <div v-if="isLoading && logs.length === 0" class="flex flex-col items-center justify-center py-12 gap-2">
@@ -105,7 +110,9 @@ watch(open, (val) => {
           <div class="p-3.5 rounded-full bg-primary/10 text-primary">
             <UIcon name="i-lucide-file-x" class="size-6" />
           </div>
-          <p class="text-sm text-muted">{{ t('logs.empty') }}</p>
+          <p class="text-sm text-muted">
+            {{ t('logs.empty') }}
+          </p>
         </div>
 
         <div v-else class="space-y-2">
@@ -129,7 +136,13 @@ watch(open, (val) => {
     <template #footer>
       <div class="flex items-center justify-between w-full gap-2">
         <SharedListFooter :count="logs.length" :has-more="hasMore" :loading="isLoading" />
-        <UButton :label="t('common.close')" color="neutral" variant="soft" size="sm" @click="open = false" />
+        <UButton
+          :label="t('common.close')"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          @click="open = false"
+        />
       </div>
     </template>
   </BaseResponsiveSlideover>

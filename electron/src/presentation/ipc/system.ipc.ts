@@ -67,7 +67,7 @@ export function registerSystemIpc(): void {
     }
   )
 
-  registerIpcHandler<{ title: string; body?: string; icon?: string }, boolean>(
+  registerIpcHandler<{ title: string, body?: string, icon?: string }, boolean>(
     'system:showNotification',
     null,
     (input) => {

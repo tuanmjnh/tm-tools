@@ -68,26 +68,55 @@ function selectPopular() {
 </script>
 
 <template>
-  <BaseResponsiveModal v-model:open="isOpen" :title="t('tools.transitionModalTitle')"
-    :description="t('tools.transitionModalDesc')" class="sm:max-w-3xl">
+  <BaseResponsiveModal
+    v-model:open="isOpen"
+    :title="t('tools.transitionModalTitle')"
+    :description="t('tools.transitionModalDesc')"
+    class="sm:max-w-3xl"
+  >
     <template #body>
       <div class="space-y-4">
         <!-- Search and Quick Actions Bar -->
         <div class="flex flex-col sm:flex-row gap-2 justify-between items-stretch sm:items-center">
           <div class="flex-1 max-w-sm">
-            <UInput v-model="search" icon="i-lucide-search" :placeholder="t('global.search')" class="w-full" />
+            <UInput
+              v-model="search"
+              icon="i-lucide-search"
+              :placeholder="t('global.search')"
+              class="w-full"
+            />
           </div>
           <div class="flex items-center gap-1.5 flex-wrap">
-            <UButton size="xs" variant="soft" color="neutral" @click="selectAll">
+            <UButton
+              size="xs"
+              variant="soft"
+              color="neutral"
+              @click="selectAll"
+            >
               {{ t('tools.selectAll') }}
             </UButton>
-            <UButton size="xs" variant="soft" color="neutral" @click="selectPopular">
+            <UButton
+              size="xs"
+              variant="soft"
+              color="neutral"
+              @click="selectPopular"
+            >
               {{ t('tools.selectPopular') }}
             </UButton>
-            <UButton size="xs" variant="soft" color="neutral" @click="deselectAll">
+            <UButton
+              size="xs"
+              variant="soft"
+              color="neutral"
+              @click="deselectAll"
+            >
               {{ t('tools.deselectAll') }}
             </UButton>
-            <UBadge color="primary" variant="subtle" size="sm" class="ml-1">
+            <UBadge
+              color="primary"
+              variant="subtle"
+              size="sm"
+              class="ml-1"
+            >
               {{ modelValue.length }} / {{ ALL_XFADE_TRANSITIONS.length }}
             </UBadge>
           </div>
@@ -96,10 +125,15 @@ function selectPopular() {
         <!-- Transitions Grid -->
         <div class="max-h-[60vh] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            <div v-for="item in filteredTransitions" :key="item.id"
-              class="p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 select-none" :class="isSelected(item.id)
+            <div
+              v-for="item in filteredTransitions"
+              :key="item.id"
+              class="p-2.5 rounded-lg border cursor-pointer transition-all flex items-start gap-2.5 select-none"
+              :class="isSelected(item.id)
                 ? 'border-primary bg-primary/5 dark:bg-primary/10'
-                : 'border-default hover:border-primary/50 hover:bg-muted/40'" @click="toggleTransition(item.id)">
+                : 'border-default hover:border-primary/50 hover:bg-muted/40'"
+              @click="toggleTransition(item.id)"
+            >
               <UCheckbox :model-value="isSelected(item.id)" class="mt-0.5 pointer-events-none" />
               <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between gap-1">

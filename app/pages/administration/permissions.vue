@@ -139,7 +139,13 @@ useHead({ title })
       <div class="flex items-center gap-2">
         <UBadge color="neutral" variant="subtle" :label="`${total} ${t('common.total')}`" />
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" :loading="loading" @click="fetchPermissions" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          size="sm"
+          :loading="loading"
+          @click="fetchPermissions"
+        />
       </div>
     </template>
 
@@ -151,8 +157,13 @@ useHead({ title })
           </div>
         </template>
         <template #right>
-          <UInput v-model="search" icon="i-lucide-search" :placeholder="t('common.search')" size="sm"
-            class="w-full sm:w-56" />
+          <UInput
+            v-model="search"
+            icon="i-lucide-search"
+            :placeholder="t('common.search')"
+            size="sm"
+            class="w-full sm:w-56"
+          />
         </template>
       </UDashboardToolbar>
     </template>
@@ -167,25 +178,47 @@ useHead({ title })
 
       <div v-for="[mod, rows] in grouped" :key="mod" class="space-y-3">
         <div class="flex items-center gap-2">
-          <h3 class="text-sm font-semibold text-highlighted">{{ moduleLabel(mod) }}</h3>
-          <UBadge :color="isPlatformModule(mod) ? 'warning' : 'neutral'" variant="subtle" size="sm"
-            :label="isPlatformModule(mod) ? t('admin.platformOnly') : `${rows.length}`" />
+          <h3 class="text-sm font-semibold text-highlighted">
+            {{ moduleLabel(mod) }}
+          </h3>
+          <UBadge
+            :color="isPlatformModule(mod) ? 'warning' : 'neutral'"
+            variant="subtle"
+            size="sm"
+            :label="isPlatformModule(mod) ? t('admin.platformOnly') : `${rows.length}`"
+          />
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          <div v-for="p in rows" :key="p.code"
-            class="flex items-start justify-between gap-2 rounded-lg border border-default bg-default p-3">
+          <div
+            v-for="p in rows"
+            :key="p.code"
+            class="flex items-start justify-between gap-2 rounded-lg border border-default bg-default p-3"
+          >
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <code class="text-xs font-mono text-highlighted truncate">{{ p.code }}</code>
-                <UIcon v-if="p.isSystem" name="i-lucide-shield-check" class="size-3.5 text-success shrink-0"
-                  :aria-label="t('admin.system')" />
+                <UIcon
+                  v-if="p.isSystem"
+                  name="i-lucide-shield-check"
+                  class="size-3.5 text-success shrink-0"
+                  :aria-label="t('admin.system')"
+                />
               </div>
-              <p v-if="p.description" class="text-xs text-muted mt-1 line-clamp-2">{{ permDesc(p) }}</p>
-              <p v-else class="text-xs text-muted mt-1">{{ p.name }}</p>
+              <p v-if="p.description" class="text-xs text-muted mt-1 line-clamp-2">
+                {{ permDesc(p) }}
+              </p>
+              <p v-else class="text-xs text-muted mt-1">
+                {{ p.name }}
+              </p>
             </div>
-            <UBadge v-if="hasOwn(p.code)" color="success" variant="subtle" size="sm"
-              :label="t('admin.ownGrant')" />
+            <UBadge
+              v-if="hasOwn(p.code)"
+              color="success"
+              variant="subtle"
+              size="sm"
+              :label="t('admin.ownGrant')"
+            />
           </div>
         </div>
       </div>

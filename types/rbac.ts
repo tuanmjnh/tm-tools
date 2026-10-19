@@ -1,13 +1,13 @@
-export type PermissionAction =
-  | 'read'
-  | 'create'
-  | 'update'
-  | 'write'
-  | 'delete'
-  | 'send'
-  | 'manage'
-  | 'rotateSecret'
-  | '*'
+export type PermissionAction
+  = | 'read'
+    | 'create'
+    | 'update'
+    | 'write'
+    | 'delete'
+    | 'send'
+    | 'manage'
+    | 'rotateSecret'
+    | '*'
 
 export interface ModulePermission {
   module: string

@@ -30,8 +30,10 @@ const props = withDefaults(defineProps<{
           <span class="hidden sm:inline text-xs">{{ t('common.loading_text') }}</span>
         </div>
 
-        <div v-else-if="!props.hasMore && props.count > 0"
-          class="hidden sm:flex items-center gap-1.5 text-dimmed italic">
+        <div
+          v-else-if="!props.hasMore && props.count > 0"
+          class="hidden sm:flex items-center gap-1.5 text-dimmed italic"
+        >
           <UIcon name="i-lucide-check-circle-2" class="size-3.5" />
           {{ t('common.no_more_data') }}
         </div>

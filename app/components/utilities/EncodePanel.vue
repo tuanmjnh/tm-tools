@@ -313,7 +313,9 @@
               <h3 class="text-sm font-semibold text-highlighted">
                 {{ t('utilities.crypto.keyGen.title') }}
               </h3>
-              <p class="text-xs text-muted">{{ t('utilities.crypto.keyGen.desc') }}</p>
+              <p class="text-xs text-muted">
+                {{ t('utilities.crypto.keyGen.desc') }}
+              </p>
             </div>
           </div>
           <div class="flex flex-wrap items-center gap-1.5">
@@ -347,7 +349,13 @@
         <div class="flex items-center gap-3">
           <label class="text-xs font-medium text-muted w-24">{{ t('utilities.crypto.keyGen.length') }}</label>
           <div class="flex items-center gap-3 flex-1">
-            <USlider v-model="keyLength" :min="16" :max="128" :step="16" class="flex-1" />
+            <USlider
+              v-model="keyLength"
+              :min="16"
+              :max="128"
+              :step="16"
+              class="flex-1"
+            />
             <span class="w-16 text-right font-mono text-xs font-semibold">{{ keyLength }} {{ t('utilities.crypto.keyGen.chars') }}</span>
           </div>
         </div>
@@ -369,7 +377,9 @@
             {{ generatedKey }}
           </div>
         </div>
-        <p v-else class="text-xs text-dimmed">{{ t('utilities.crypto.keyGen.hint') }}</p>
+        <p v-else class="text-xs text-dimmed">
+          {{ t('utilities.crypto.keyGen.hint') }}
+        </p>
       </div>
     </UCard>
   </div>

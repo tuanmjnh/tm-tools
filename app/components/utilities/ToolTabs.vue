@@ -1,8 +1,13 @@
 <template>
   <div class="space-y-4">
-    <UTabs :model-value="active" :items="items" class="w-full" :content="false"
+    <UTabs
+      :model-value="active"
+      :items="items"
+      class="w-full"
+      :content="false"
       :ui="{ list: 'px-4 sm:px-6 flex-nowrap overflow-x-auto scrollbar-hide shrink-0', trigger: 'flex-shrink-0', content: 'flex-1 min-h-0 overflow-y-auto custom-scrollbar py-4 sm:py-6 px-4 sm:px-6 pb-24' }"
-      @update:model-value="onSelect" />
+      @update:model-value="onSelect"
+    />
     <slot />
   </div>
 </template>

@@ -72,8 +72,15 @@ async function onSubmit() {
 </script>
 
 <template>
-  <BaseFormModal v-model:open="open" :title="t('admin.addRole')" :schema="schema" :state="state" :loading="loading"
-    :submit-label="t('common.create')" @submit="onSubmit">
+  <BaseFormModal
+    v-model:open="open"
+    :title="t('admin.addRole')"
+    :schema="schema"
+    :state="state"
+    :loading="loading"
+    :submit-label="t('common.create')"
+    @submit="onSubmit"
+  >
     <UFormField :label="t('common.name')" name="name" required>
       <UInput v-model="state.name" class="w-full" />
     </UFormField>
@@ -81,7 +88,12 @@ async function onSubmit() {
       <UInput v-model="state.description" class="w-full" />
     </UFormField>
 
-    <UFormField :label="t('admin.permissions.title')" name="permissions" required :help="t('admin.actionsHelp')">
+    <UFormField
+      :label="t('admin.permissions.title')"
+      name="permissions"
+      required
+      :help="t('admin.actionsHelp')"
+    >
       <RolesPermissionSelector v-model="state.permissions" />
     </UFormField>
 

@@ -126,28 +126,64 @@ defineShortcuts({
       <!-- Mobile Folder Dropdown + Compose button -->
       <div v-if="folderDropdownItems?.length" class="lg:hidden flex items-center justify-between gap-2">
         <UDropdownMenu :items="folderDropdownItems as any">
-          <UButton :label="activeFolderLabel" :icon="activeFolderIcon" color="neutral" variant="outline" size="xs"
-            trailing-icon="i-lucide-chevron-down" />
+          <UButton
+            :label="activeFolderLabel"
+            :icon="activeFolderIcon"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            trailing-icon="i-lucide-chevron-down"
+          />
         </UDropdownMenu>
 
-        <UButton color="primary" variant="soft" size="xs" icon="i-lucide-square-pen" :label="t('inbox.compose')"
-          @click="emit('compose')" />
+        <UButton
+          color="primary"
+          variant="soft"
+          size="xs"
+          icon="i-lucide-square-pen"
+          :label="t('inbox.compose')"
+          @click="emit('compose')"
+        />
       </div>
 
       <!-- Integrated Search Input -->
-      <UInput v-model="search" icon="i-lucide-search" :placeholder="t('inbox.searchPlaceholder')" size="sm"
-        class="w-full" :ui="{ trailing: 'pe-1' }" @keydown.enter="emit('search')">
+      <UInput
+        v-model="search"
+        icon="i-lucide-search"
+        :placeholder="t('inbox.searchPlaceholder')"
+        size="sm"
+        class="w-full"
+        :ui="{ trailing: 'pe-1' }"
+        @keydown.enter="emit('search')"
+      >
         <template #trailing>
-          <UButton v-if="search" icon="i-lucide-x" color="neutral" variant="ghost" size="xs"
-            @click="emit('clearSearch')" />
-          <UButton v-else icon="i-lucide-arrow-right" color="neutral" variant="ghost" size="xs"
-            @click="emit('search')" />
+          <UButton
+            v-if="search"
+            icon="i-lucide-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="emit('clearSearch')"
+          />
+          <UButton
+            v-else
+            icon="i-lucide-arrow-right"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="emit('search')"
+          />
         </template>
       </UInput>
 
       <!-- Active Search Filter Badge -->
       <div v-if="activeQuery" class="flex items-center justify-between gap-1 text-xs pt-0.5">
-        <UBadge :label="t('inbox.filtered', [activeQuery])" color="info" variant="subtle" size="xs">
+        <UBadge
+          :label="t('inbox.filtered', [activeQuery])"
+          color="info"
+          variant="subtle"
+          size="xs"
+        >
           <template #trailing>
             <button type="button" class="cursor-pointer hover:opacity-75 ms-1" @click="emit('clearSearch')">
               <UIcon name="i-lucide-x" class="size-3" />
@@ -155,36 +191,73 @@ defineShortcuts({
           </template>
         </UBadge>
 
-        <button type="button" class="text-[11px] text-muted hover:text-highlighted cursor-pointer"
-          @click="emit('clearSearch')">
+        <button
+          type="button"
+          class="text-[11px] text-muted hover:text-highlighted cursor-pointer"
+          @click="emit('clearSearch')"
+        >
           {{ t('inbox.clearSearch') }}
         </button>
       </div>
 
       <!-- Batch Actions Bar (when 1+ items selected) -->
       <div v-if="selectedIds.length > 0" class="flex items-center gap-1.5 min-w-0 pt-0.5">
-        <UCheckbox :model-value="isAllSelected" :indeterminate="isIndeterminate"
-          @update:model-value="toggleSelectAll" />
-        <UBadge :label="t('inbox.selectedCount', [selectedIds.length])" color="primary" variant="subtle" size="xs" />
+        <UCheckbox
+          :model-value="isAllSelected"
+          :indeterminate="isIndeterminate"
+          @update:model-value="toggleSelectAll"
+        />
+        <UBadge
+          :label="t('inbox.selectedCount', [selectedIds.length])"
+          color="primary"
+          variant="subtle"
+          size="xs"
+        />
         <div class="h-3.5 w-px bg-default mx-0.5" />
         <UTooltip :text="t('inbox.batchMarkRead')">
-          <UButton icon="i-lucide-mail-open" color="neutral" variant="ghost" size="xs"
-            @click="emit('batchMarkRead', [...selectedIds])" />
+          <UButton
+            icon="i-lucide-mail-open"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="emit('batchMarkRead', [...selectedIds])"
+          />
         </UTooltip>
         <UTooltip :text="t('inbox.batchMarkUnread')">
-          <UButton icon="i-lucide-mail" color="neutral" variant="ghost" size="xs"
-            @click="emit('batchMarkUnread', [...selectedIds])" />
+          <UButton
+            icon="i-lucide-mail"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="emit('batchMarkUnread', [...selectedIds])"
+          />
         </UTooltip>
         <UTooltip :text="t('inbox.batchStar')">
-          <UButton icon="i-lucide-star" color="neutral" variant="ghost" size="xs"
-            @click="emit('batchStar', [...selectedIds])" />
+          <UButton
+            icon="i-lucide-star"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="emit('batchStar', [...selectedIds])"
+          />
         </UTooltip>
         <UTooltip :text="t('inbox.batchTrash')">
-          <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs"
-            @click="emit('batchTrash', [...selectedIds])" />
+          <UButton
+            icon="i-lucide-trash-2"
+            color="error"
+            variant="ghost"
+            size="xs"
+            @click="emit('batchTrash', [...selectedIds])"
+          />
         </UTooltip>
-        <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" class="ms-auto"
-          @click="selectedIds = []" />
+        <UButton
+          icon="i-lucide-x"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          class="ms-auto"
+          @click="selectedIds = []"
+        />
       </div>
 
       <!-- Normal Row: Master Checkbox + Quick Filter Tabs + Refresh -->
@@ -192,20 +265,32 @@ defineShortcuts({
         <div class="flex items-center gap-1.5 min-w-0">
           <UCheckbox :model-value="false" :disabled="!messages.length" @update:model-value="toggleSelectAll" />
           <div class="flex items-center gap-1">
-            <button v-for="tab in filterTabs" :key="tab.id" type="button"
-              class="px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer" :class="[
+            <button
+              v-for="tab in filterTabs"
+              :key="tab.id"
+              type="button"
+              class="px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer"
+              :class="[
                 (filterTab || 'all') === tab.id
                   ? 'bg-primary/10 text-primary font-semibold'
                   : 'text-muted hover:text-highlighted hover:bg-elevated/50'
-              ]" @click="emit('update:filterTab', tab.id)">
+              ]"
+              @click="emit('update:filterTab', tab.id)"
+            >
               {{ t(tab.labelKey) }}
             </button>
           </div>
         </div>
 
         <UTooltip :text="t('common.refresh')">
-          <UButton icon="i-lucide-rotate-cw" color="neutral" variant="ghost" size="xs" :loading="loading"
-            @click="emit('refresh')" />
+          <UButton
+            icon="i-lucide-rotate-cw"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            :loading="loading"
+            @click="emit('refresh')"
+          />
         </UTooltip>
       </div>
     </div>
@@ -225,13 +310,19 @@ defineShortcuts({
       </div>
 
       <!-- Messages Loop -->
-      <div v-for="mail in messages" :key="mail.id" :ref="(el) => { itemsRef[mail.id] = el as Element | null }"
-        class="group relative p-3 sm:p-3.5 text-xs sm:text-sm cursor-pointer border-l-2 transition-all" :class="[
+      <div
+        v-for="mail in messages"
+        :key="mail.id"
+        :ref="(el) => { itemsRef[mail.id] = el as Element | null }"
+        class="group relative p-3 sm:p-3.5 text-xs sm:text-sm cursor-pointer border-l-2 transition-all"
+        :class="[
           mail.unread ? 'bg-primary/3 text-highlighted' : 'text-toned',
           selectedId === mail.id
             ? 'border-primary bg-primary/10'
             : 'border-transparent hover:border-primary/50 hover:bg-elevated/40'
-        ]" @click="selectedId = mail.id">
+        ]"
+        @click="selectedId = mail.id"
+      >
         <div class="flex items-start gap-2.5">
           <!-- Selection Checkbox -->
           <div class="pt-0.5 shrink-0" @click.stop>
@@ -239,19 +330,27 @@ defineShortcuts({
           </div>
 
           <!-- Star Button -->
-          <button type="button" class="pt-0.5 shrink-0 text-muted hover:text-warning transition-colors cursor-pointer"
-            @click.stop="emit('toggleStar', mail)">
-            <UIcon name="i-lucide-star" class="size-4 transition-transform hover:scale-110"
-              :class="[mail.starred ? 'text-amber-500 fill-amber-500' : 'text-muted']" />
+          <button
+            type="button"
+            class="pt-0.5 shrink-0 text-muted hover:text-warning transition-colors cursor-pointer"
+            @click.stop="emit('toggleStar', mail)"
+          >
+            <UIcon
+              name="i-lucide-star"
+              class="size-4 transition-transform hover:scale-110"
+              :class="[mail.starred ? 'text-amber-500 fill-amber-500' : 'text-muted']"
+            />
           </button>
 
           <!-- Avatar / Initials -->
-          <div class="size-7 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 border"
+          <div
+            class="size-7 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 border"
             :class="[
               mail.unread
                 ? 'bg-primary/15 text-primary border-primary/20'
                 : 'bg-elevated text-muted border-default'
-            ]">
+            ]"
+          >
             {{ getInitials(senderOf(mail).name) }}
           </div>
 
@@ -260,8 +359,10 @@ defineShortcuts({
             <!-- Sender & Date Row -->
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5 min-w-0">
-                <span class="truncate text-xs"
-                  :class="[mail.unread ? 'font-bold text-highlighted' : 'font-medium text-toned']">
+                <span
+                  class="truncate text-xs"
+                  :class="[mail.unread ? 'font-bold text-highlighted' : 'font-medium text-toned']"
+                >
                   {{ senderOf(mail).name }}
                 </span>
                 <span v-if="mail.unread" class="size-1.5 rounded-full bg-primary shrink-0" />
@@ -287,25 +388,43 @@ defineShortcuts({
         <!-- Floating Quick Action Buttons on Hover (Desktop) -->
         <div
           class="hidden group-hover:flex absolute right-2 bottom-2 items-center gap-1 bg-elevated/90 backdrop-blur px-1.5 py-0.5 rounded-md border border-default shadow-xs"
-          @click.stop>
+          @click.stop
+        >
           <UTooltip :text="mail.unread ? t('inbox.markRead') : t('inbox.markUnread')">
-            <UButton :icon="mail.unread ? 'i-lucide-mail-open' : 'i-lucide-mail'" color="neutral" variant="ghost"
-              size="xs" @click="emit('toggleUnread', mail)" />
+            <UButton
+              :icon="mail.unread ? 'i-lucide-mail-open' : 'i-lucide-mail'"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              @click="emit('toggleUnread', mail)"
+            />
           </UTooltip>
           <UTooltip :text="t('inbox.batchTrash')">
-            <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" @click="emit('trash', mail)" />
+            <UButton
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="ghost"
+              size="xs"
+              @click="emit('trash', mail)"
+            />
           </UTooltip>
         </div>
       </div>
 
       <!-- Empty State -->
-      <div v-if="!loading && !messages.length"
-        class="p-8 text-center flex flex-col items-center justify-center space-y-2">
+      <div
+        v-if="!loading && !messages.length"
+        class="p-8 text-center flex flex-col items-center justify-center space-y-2"
+      >
         <div class="size-12 rounded-full bg-elevated flex items-center justify-center text-muted mb-1">
           <UIcon name="i-lucide-inbox" class="size-6" />
         </div>
-        <p class="text-sm font-medium text-highlighted">{{ t('inbox.emptyList') }}</p>
-        <p class="text-xs text-muted max-w-xs">{{ t('inbox.noMessagesInFolder') }}</p>
+        <p class="text-sm font-medium text-highlighted">
+          {{ t('inbox.emptyList') }}
+        </p>
+        <p class="text-xs text-muted max-w-xs">
+          {{ t('inbox.noMessagesInFolder') }}
+        </p>
       </div>
     </div>
   </div>

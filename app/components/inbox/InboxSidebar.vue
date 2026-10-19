@@ -40,8 +40,16 @@ function selectFolder(f: FolderItem) {
   <aside class="flex flex-col h-full bg-default border-r border-default select-none">
     <!-- Top Compose Button -->
     <div class="p-3 border-b border-default shrink-0">
-      <UButton block color="primary" variant="soft" size="md" icon="i-lucide-square-pen" :label="t('inbox.compose')"
-        :disabled="!connected" @click="emit('compose')" />
+      <UButton
+        block
+        color="primary"
+        variant="soft"
+        size="md"
+        icon="i-lucide-square-pen"
+        :label="t('inbox.compose')"
+        :disabled="!connected"
+        @click="emit('compose')"
+      />
     </div>
 
     <!-- Folders List -->
@@ -50,23 +58,38 @@ function selectFolder(f: FolderItem) {
         {{ t('inbox.folders') }}
       </div>
 
-      <button v-for="folder in folders" :key="folder.id" type="button"
+      <button
+        v-for="folder in folders"
+        :key="folder.id"
+        type="button"
         class="w-full flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all group"
         :class="[
           activeFolder === folder.id
             ? 'bg-primary/10 text-primary font-semibold'
             : 'text-toned hover:text-highlighted hover:bg-elevated/50'
-        ]" @click="selectFolder(folder)">
+        ]"
+        @click="selectFolder(folder)"
+      >
         <div class="flex items-center gap-2.5 min-w-0">
-          <UIcon :name="folder.icon" class="size-4 shrink-0 transition-transform group-hover:scale-110" :class="[
-            activeFolder === folder.id ? 'text-primary' : (folder.color || 'text-muted group-hover:text-highlighted'),
-            folder.id === 'starred' && activeFolder === 'starred' ? 'fill-amber-500' : ''
-          ]" />
+          <UIcon
+            :name="folder.icon"
+            class="size-4 shrink-0 transition-transform group-hover:scale-110"
+            :class="[
+              activeFolder === folder.id ? 'text-primary' : (folder.color || 'text-muted group-hover:text-highlighted'),
+              folder.id === 'starred' && activeFolder === 'starred' ? 'fill-amber-500' : ''
+            ]"
+          />
           <span class="truncate">{{ t(folder.labelKey) }}</span>
         </div>
 
-        <UBadge v-if="folder.id === 'inbox' && profile?.messagesTotal" :label="`${profile.messagesTotal}`"
-          color="neutral" variant="subtle" size="xs" class="shrink-0" />
+        <UBadge
+          v-if="folder.id === 'inbox' && profile?.messagesTotal"
+          :label="`${profile.messagesTotal}`"
+          color="neutral"
+          variant="subtle"
+          size="xs"
+          class="shrink-0"
+        />
       </button>
     </div>
 
@@ -74,7 +97,8 @@ function selectFolder(f: FolderItem) {
     <div v-if="profile && connected" class="p-3 border-t border-default shrink-0 bg-elevated/20">
       <div class="flex items-center gap-2.5 min-w-0">
         <div
-          class="size-7 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+          class="size-7 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0"
+        >
           <UIcon name="i-lucide-mail" class="size-3.5" />
         </div>
         <div class="min-w-0 flex-1">

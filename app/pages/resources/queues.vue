@@ -253,7 +253,14 @@ useHead({ title })
           size="sm"
         />
         <BaseHeaderActions :actions="headerActions" />
-        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :loading="loading" @click="load()" />
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="soft"
+          color="neutral"
+          size="sm"
+          :loading="loading"
+          @click="load()"
+        />
       </div>
     </template>
 
@@ -305,22 +312,46 @@ useHead({ title })
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-default text-left">
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.priority') }}</th>
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.statWaiting') }}</th>
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.statActive') }}</th>
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.statCompleted') }}</th>
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.statFailed') }}</th>
-                <th class="px-4 py-2 font-medium text-muted">{{ t('queues.statDelayed') }}</th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.priority') }}
+                </th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.statWaiting') }}
+                </th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.statActive') }}
+                </th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.statCompleted') }}
+                </th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.statFailed') }}
+                </th>
+                <th class="px-4 py-2 font-medium text-muted">
+                  {{ t('queues.statDelayed') }}
+                </th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in priorityRows" :key="row.key" class="border-b border-default last:border-0">
-                <td class="px-4 py-2 font-medium text-highlighted">{{ row.label }}</td>
-                <td class="px-4 py-2 text-muted">{{ row.bucket.waiting }}</td>
-                <td class="px-4 py-2 text-muted">{{ row.bucket.active }}</td>
-                <td class="px-4 py-2 text-muted">{{ row.bucket.completed }}</td>
-                <td class="px-4 py-2 text-muted">{{ row.bucket.failed }}</td>
-                <td class="px-4 py-2 text-muted">{{ row.bucket.delayed }}</td>
+                <td class="px-4 py-2 font-medium text-highlighted">
+                  {{ row.label }}
+                </td>
+                <td class="px-4 py-2 text-muted">
+                  {{ row.bucket.waiting }}
+                </td>
+                <td class="px-4 py-2 text-muted">
+                  {{ row.bucket.active }}
+                </td>
+                <td class="px-4 py-2 text-muted">
+                  {{ row.bucket.completed }}
+                </td>
+                <td class="px-4 py-2 text-muted">
+                  {{ row.bucket.failed }}
+                </td>
+                <td class="px-4 py-2 text-muted">
+                  {{ row.bucket.delayed }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -338,7 +369,12 @@ useHead({ title })
           @refresh="load()"
         >
           <template #queue="{ item }">
-            <UBadge :label="item.queue" color="neutral" variant="subtle" size="xs" />
+            <UBadge
+              :label="item.queue"
+              color="neutral"
+              variant="subtle"
+              size="xs"
+            />
           </template>
 
           <template #state="{ item }">
@@ -350,8 +386,12 @@ useHead({ title })
 
           <template #summary="{ item }">
             <div class="min-w-0">
-              <p class="text-xs text-highlighted truncate">{{ item.summary || '—' }}</p>
-              <p v-if="item.failedReason" class="text-[10px] text-error truncate">{{ item.failedReason }}</p>
+              <p class="text-xs text-highlighted truncate">
+                {{ item.summary || '—' }}
+              </p>
+              <p v-if="item.failedReason" class="text-[10px] text-error truncate">
+                {{ item.failedReason }}
+              </p>
             </div>
           </template>
 

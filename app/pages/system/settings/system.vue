@@ -33,12 +33,14 @@ const formatUptime = (sec?: number) => {
   return `${r}s`
 }
 
-const stats = computed(() => health.value ? [
-  { label: t('settings.hubVersion'), value: health.value.version || '—' },
-  { label: t('settings.primaryDatabase'), value: health.value.db || '—' },
-  { label: t('settings.uptime'), value: formatUptime(health.value.uptimeSec) },
-  { label: t('settings.defaultPort'), value: '3000' }
-] : [])
+const stats = computed(() => health.value
+  ? [
+      { label: t('settings.hubVersion'), value: health.value.version || '—' },
+      { label: t('settings.primaryDatabase'), value: health.value.db || '—' },
+      { label: t('settings.uptime'), value: formatUptime(health.value.uptimeSec) },
+      { label: t('settings.defaultPort'), value: '3000' }
+    ]
+  : [])
 
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: t('settings.appearance'), icon: 'i-lucide-palette', to: '/system/settings' },
@@ -61,8 +63,16 @@ useHead({ title: computed(() => t('nav.system')) })
 <template>
   <BasePage id="settings" :title="t('nav.system')" :description="t('settings.systemDesc')">
     <template #right>
-      <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" size="sm" square :loading="healthLoading"
-        :aria-label="t('common.refresh')" @click="loadHealth" />
+      <UButton
+        icon="i-lucide-refresh-cw"
+        color="neutral"
+        variant="soft"
+        size="sm"
+        square
+        :loading="healthLoading"
+        :aria-label="t('common.refresh')"
+        @click="loadHealth"
+      />
     </template>
 
     <BaseSectionNav :items="navItems">
@@ -70,12 +80,18 @@ useHead({ title: computed(() => t('nav.system')) })
         <USkeleton v-if="healthLoading && !health" class="h-40 w-full" />
 
         <div v-else-if="health" class="space-y-5">
-          <UAlert :color="health.status === 'healthy' ? 'success' : 'warning'" variant="subtle"
+          <UAlert
+            :color="health.status === 'healthy' ? 'success' : 'warning'"
+            variant="subtle"
             :icon="health.status === 'healthy' ? 'i-lucide-check-circle' : 'i-lucide-alert-triangle'"
-            :title="health.status" :description="`${t('settings.primaryDatabase')}: ${health.db}`" />
+            :title="health.status"
+            :description="`${t('settings.primaryDatabase')}: ${health.db}`"
+          />
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div v-for="stat in stats" :key="stat.label" class="rounded-xl border border-default bg-elevated/40 p-4">
-              <p class="text-xs font-medium text-muted">{{ stat.label }}</p>
+              <p class="text-xs font-medium text-muted">
+                {{ stat.label }}
+              </p>
               <p class="mt-1 truncate text-sm font-semibold text-highlighted font-mono">
                 {{ stat.value }}
               </p>
@@ -83,13 +99,23 @@ useHead({ title: computed(() => t('nav.system')) })
           </div>
         </div>
 
-        <UAlert v-else color="warning" variant="subtle" icon="i-lucide-alert-triangle"
-          :title="t('error.serverError')" />
+        <UAlert
+          v-else
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-alert-triangle"
+          :title="t('error.serverError')"
+        />
 
         <template #footer>
           <div class="flex justify-start">
-            <UButton :label="t('nav.docs')" icon="i-lucide-book-open" color="neutral" variant="soft"
-              to="/system/docs" />
+            <UButton
+              :label="t('nav.docs')"
+              icon="i-lucide-book-open"
+              color="neutral"
+              variant="soft"
+              to="/system/docs"
+            />
           </div>
         </template>
       </UCard>

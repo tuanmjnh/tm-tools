@@ -1,7 +1,9 @@
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-4">
-      <h2 class="text-xl font-bold">{{ t('utilities.editor.title') }}</h2>
+      <h2 class="text-xl font-bold">
+        {{ t('utilities.editor.title') }}
+      </h2>
 
       <!-- Editor Type Switcher -->
       <div class="flex items-center gap-2">

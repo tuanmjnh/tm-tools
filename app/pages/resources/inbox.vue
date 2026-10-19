@@ -406,11 +406,22 @@ useHead({ title })
 </script>
 
 <template>
-  <BasePage id="inbox" flush :title="title" :description="description">
+  <BasePage
+    id="inbox"
+    flush
+    :title="title"
+    :description="description"
+  >
     <template #right>
       <div class="flex items-center gap-2">
-        <UBadge v-if="profile" :label="connected && profile.email ? profile.email : t('inbox.notConnected')"
-          :color="connected ? 'success' : 'neutral'" variant="subtle" size="sm" class="max-w-56 truncate" />
+        <UBadge
+          v-if="profile"
+          :label="connected && profile.email ? profile.email : t('inbox.notConnected')"
+          :color="connected ? 'success' : 'neutral'"
+          variant="subtle"
+          size="sm"
+          class="max-w-56 truncate"
+        />
 
         <BaseHeaderActions :actions="headerActions" />
       </div>
@@ -419,56 +430,111 @@ useHead({ title })
     <div class="flex-1 min-h-0 flex flex-col w-full h-full overflow-hidden">
       <!-- Disconnected State Alert -->
       <div v-if="profile && !connected" class="flex-1 flex items-center justify-center p-6">
-        <UAlert color="info" variant="subtle" icon="i-lucide-plug" :title="t('inbox.notConnectedTitle')"
-          :description="t('inbox.notConnectedDesc')" class="max-w-lg shadow-xs">
+        <UAlert
+          color="info"
+          variant="subtle"
+          icon="i-lucide-plug"
+          :title="t('inbox.notConnectedTitle')"
+          :description="t('inbox.notConnectedDesc')"
+          class="max-w-lg shadow-xs"
+        >
           <template #actions>
-            <UButton :label="t('inbox.goToConnections')" icon="i-lucide-plug" size="sm" color="primary" variant="soft"
-              @click="navigateTo('/resources/connections')" />
+            <UButton
+              :label="t('inbox.goToConnections')"
+              icon="i-lucide-plug"
+              size="sm"
+              color="primary"
+              variant="soft"
+              @click="navigateTo('/resources/connections')"
+            />
           </template>
         </UAlert>
       </div>
 
       <!-- Connected State: 3-column Full Flush Client -->
-      <div v-else-if="connected"
-        class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[220px_minmax(320px,380px)_1fr] border-t border-default bg-default">
+      <div
+        v-else-if="connected"
+        class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[220px_minmax(320px,380px)_1fr] border-t border-default bg-default"
+      >
         <!-- 1. Left Folder Sidebar (Desktop) -->
         <div class="hidden lg:block min-h-0">
-          <InboxSidebar :profile="profile" :connected="connected" :active-folder="activeFolder"
-            @update:active-folder="onSelectFolder" @compose="isComposeOpen = true" />
+          <InboxSidebar
+            :profile="profile"
+            :connected="connected"
+            :active-folder="activeFolder"
+            @update:active-folder="onSelectFolder"
+            @compose="isComposeOpen = true"
+          />
         </div>
 
         <!-- 2. Middle Message List Column -->
-        <div class="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-default"
-          :class="selectedId ? 'hidden lg:flex' : 'flex'">
+        <div
+          class="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r border-default"
+          :class="selectedId ? 'hidden lg:flex' : 'flex'"
+        >
           <div class="flex-1 min-h-0">
-            <InboxList v-model:selected-id="selectedId" v-model:search="searchInput" :messages="messages"
-              :loading="listLoading" :filter-tab="activeFilterTab" :active-query="q"
-              :folder-dropdown-items="folderDropdownItems" :active-folder-label="activeFolderLabel"
-              :active-folder-icon="activeFolderIcon" @update:filter-tab="onSelectFilterTab" @search="runSearch"
-              @clear-search="clearSearch" @compose="isComposeOpen = true" @toggle-star="toggleStar"
-              @toggle-unread="toggleUnread" @trash="confirmTrashSingle" @batch-mark-read="batchMarkRead"
-              @batch-mark-unread="batchMarkUnread" @batch-star="batchStar" @batch-unstar="batchUnstar"
-              @batch-trash="confirmTrashBatch" @refresh="() => loadMessages(true)" />
+            <InboxList
+              v-model:selected-id="selectedId"
+              v-model:search="searchInput"
+              :messages="messages"
+              :loading="listLoading"
+              :filter-tab="activeFilterTab"
+              :active-query="q"
+              :folder-dropdown-items="folderDropdownItems"
+              :active-folder-label="activeFolderLabel"
+              :active-folder-icon="activeFolderIcon"
+              @update:filter-tab="onSelectFilterTab"
+              @search="runSearch"
+              @clear-search="clearSearch"
+              @compose="isComposeOpen = true"
+              @toggle-star="toggleStar"
+              @toggle-unread="toggleUnread"
+              @trash="confirmTrashSingle"
+              @batch-mark-read="batchMarkRead"
+              @batch-mark-unread="batchMarkUnread"
+              @batch-star="batchStar"
+              @batch-unstar="batchUnstar"
+              @batch-trash="confirmTrashBatch"
+              @refresh="() => loadMessages(true)"
+            />
           </div>
 
           <!-- Bottom Pagination / Load More -->
           <div v-if="nextPageToken" class="p-2 border-t border-default flex justify-center shrink-0 bg-elevated/20">
-            <UButton :label="t('inbox.loadMore')" icon="i-lucide-chevron-down" color="neutral" variant="soft" size="xs"
-              :loading="listLoading" @click="loadMessages(false)" />
+            <UButton
+              :label="t('inbox.loadMore')"
+              icon="i-lucide-chevron-down"
+              color="neutral"
+              variant="soft"
+              size="xs"
+              :loading="listLoading"
+              @click="loadMessages(false)"
+            />
           </div>
         </div>
 
         <!-- 3. Right Reading Pane / Message Thread -->
         <div class="min-h-0" :class="selectedId ? 'block' : 'hidden lg:block'">
-          <InboxMail v-if="selectedId" :thread="thread" :loading="threadLoading" @back="backToList" @reply="sendReply"
-            @toggle-unread="toggleUnread" @toggle-star="toggleStar" @trash="confirmTrashSingle"
-            @download="(msg, attId, filename, mimeType) => downloadAttachment(msg, attId, filename, mimeType)" />
+          <InboxMail
+            v-if="selectedId"
+            :thread="thread"
+            :loading="threadLoading"
+            @back="backToList"
+            @reply="sendReply"
+            @toggle-unread="toggleUnread"
+            @toggle-star="toggleStar"
+            @trash="confirmTrashSingle"
+            @download="(msg, attId, filename, mimeType) => downloadAttachment(msg, attId, filename, mimeType)"
+          />
 
           <!-- Empty Reading Pane State -->
-          <div v-else
-            class="hidden lg:flex flex-col h-full items-center justify-center p-8 text-center bg-elevated/10 space-y-3 select-none">
+          <div
+            v-else
+            class="hidden lg:flex flex-col h-full items-center justify-center p-8 text-center bg-elevated/10 space-y-3 select-none"
+          >
             <div
-              class="size-16 rounded-2xl bg-elevated/80 border border-default flex items-center justify-center text-muted shadow-xs">
+              class="size-16 rounded-2xl bg-elevated/80 border border-default flex items-center justify-center text-muted shadow-xs"
+            >
               <UIcon name="i-lucide-mail" class="size-8 text-dimmed" />
             </div>
             <div>
@@ -493,8 +559,14 @@ useHead({ title })
     <InboxComposeModal v-model:open="isComposeOpen" :base="base" @sent="() => loadMessages(true)" />
 
     <!-- Trash Confirmation Modal -->
-    <BaseConfirmModal v-model:open="isTrashModalOpen" :title="t('inbox.deleteConfirm')"
-      :description="t('inbox.deleteConfirmDesc', [trashTargetIds.length])" color="error" confirm-icon="i-lucide-trash-2"
-      :confirm-label="t('inbox.batchTrash')" @confirm="executeTrash" />
+    <BaseConfirmModal
+      v-model:open="isTrashModalOpen"
+      :title="t('inbox.deleteConfirm')"
+      :description="t('inbox.deleteConfirmDesc', [trashTargetIds.length])"
+      color="error"
+      confirm-icon="i-lucide-trash-2"
+      :confirm-label="t('inbox.batchTrash')"
+      @confirm="executeTrash"
+    />
   </BasePage>
 </template>

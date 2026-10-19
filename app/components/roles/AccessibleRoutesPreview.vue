@@ -92,14 +92,25 @@ const displayNodes = computed(() => {
 
 <template>
   <div class="w-full">
-    <UButton type="button" color="neutral" variant="soft" size="sm" class="w-full justify-between gap-2"
-      @click="open = true">
+    <UButton
+      type="button"
+      color="neutral"
+      variant="soft"
+      size="sm"
+      class="w-full justify-between gap-2"
+      @click="open = true"
+    >
       <span class="flex items-center gap-2 min-w-0">
         <UIcon name="i-lucide-route" class="size-4 text-primary shrink-0" />
         <span class="font-medium truncate">{{ t('admin.accessibleRoutes') }}</span>
       </span>
       <span class="flex items-center gap-1.5 shrink-0">
-        <UBadge :label="summaryLabel" color="info" variant="subtle" size="xs" />
+        <UBadge
+          :label="summaryLabel"
+          color="info"
+          variant="subtle"
+          size="xs"
+        />
         <UIcon name="i-lucide-chevron-right" class="size-4 text-muted" />
       </span>
     </UButton>
@@ -107,27 +118,52 @@ const displayNodes = computed(() => {
       {{ t('admin.accessibleRoutesHint') }}
     </p>
 
-    <BaseResponsiveModal v-model:open="open" :title="t('admin.accessibleRoutes')" :description="summaryLabel"
-      icon="i-lucide-route">
+    <BaseResponsiveModal
+      v-model:open="open"
+      :title="t('admin.accessibleRoutes')"
+      :description="summaryLabel"
+      icon="i-lucide-route"
+    >
       <div class="space-y-3">
-        <UInput v-model="search" icon="i-lucide-search" size="sm" class="w-full" :placeholder="t('common.search')" />
+        <UInput
+          v-model="search"
+          icon="i-lucide-search"
+          size="sm"
+          class="w-full"
+          :placeholder="t('common.search')"
+        />
 
         <div class="border border-default rounded-lg divide-y divide-default max-h-[60vh] overflow-y-auto">
           <div v-if="displayNodes.length === 0" class="py-6 text-center text-sm text-muted">
             {{ t('common.no_results') }}
           </div>
-          <div v-for="node in displayNodes" :key="node.id" class="flex items-center gap-2 px-3 py-1.5"
-            :style="{ paddingLeft: `${12 + node.depth * 14}px` }" :class="isAccessible(node) ? '' : 'opacity-60'">
-            <UIcon :name="isAccessible(node) ? 'i-lucide-check' : 'i-lucide-x'" class="size-3.5 shrink-0"
-              :class="isAccessible(node) ? 'text-success' : 'text-error'" />
-            <span class="text-xs font-medium truncate"
-              :class="isAccessible(node) ? 'text-highlighted' : 'text-muted line-through'">
+          <div
+            v-for="node in displayNodes"
+            :key="node.id"
+            class="flex items-center gap-2 px-3 py-1.5"
+            :style="{ paddingLeft: `${12 + node.depth * 14}px` }"
+            :class="isAccessible(node) ? '' : 'opacity-60'"
+          >
+            <UIcon
+              :name="isAccessible(node) ? 'i-lucide-check' : 'i-lucide-x'"
+              class="size-3.5 shrink-0"
+              :class="isAccessible(node) ? 'text-success' : 'text-error'"
+            />
+            <span
+              class="text-xs font-medium truncate"
+              :class="isAccessible(node) ? 'text-highlighted' : 'text-muted line-through'"
+            >
               {{ translateRouteLabel(node.label, node.name) }}
             </span>
             <code class="text-[10px] text-primary bg-primary/10 px-1 rounded shrink-0">{{ node.path }}</code>
-            <UBadge v-if="!isAccessible(node) && node.requiredPermission"
-              :label="t('admin.requiresPermission', { perm: node.requiredPermission })" color="warning" variant="subtle"
-              size="xs" class="ms-auto shrink-0" />
+            <UBadge
+              v-if="!isAccessible(node) && node.requiredPermission"
+              :label="t('admin.requiresPermission', { perm: node.requiredPermission })"
+              color="warning"
+              variant="subtle"
+              size="xs"
+              class="ms-auto shrink-0"
+            />
           </div>
         </div>
 
@@ -137,11 +173,23 @@ const displayNodes = computed(() => {
             <div class="space-y-1.5">
               <span class="text-[11px] font-medium text-muted">{{ t('admin.apiCapabilities') }}</span>
               <div class="flex flex-wrap gap-1">
-                <UBadge v-if="isFullAccess" :label="t('admin.fullAccess')" color="success" variant="subtle" size="xs"
-                  icon="i-lucide-crown" />
+                <UBadge
+                  v-if="isFullAccess"
+                  :label="t('admin.fullAccess')"
+                  color="success"
+                  variant="subtle"
+                  size="xs"
+                  icon="i-lucide-crown"
+                />
                 <template v-else-if="effectiveCaps.length">
-                  <UBadge v-for="cap in effectiveCaps" :key="cap" :label="cap" color="primary" variant="subtle"
-                    size="xs" />
+                  <UBadge
+                    v-for="cap in effectiveCaps"
+                    :key="cap"
+                    :label="cap"
+                    color="primary"
+                    variant="subtle"
+                    size="xs"
+                  />
                 </template>
                 <span v-else class="text-xs text-dimmed">{{ t('admin.noPermissionsHint') }}</span>
               </div>
@@ -149,16 +197,34 @@ const displayNodes = computed(() => {
             <div class="space-y-1.5">
               <span class="text-[11px] font-medium text-muted">{{ t('admin.navAccess') }}</span>
               <div class="flex flex-wrap gap-1">
-                <UBadge :label="summaryLabel" color="info" variant="subtle" size="xs" icon="i-lucide-route" />
-                <UBadge v-if="isFullAccess" :label="t('admin.fullAccess')" color="success" variant="subtle" size="xs" />
+                <UBadge
+                  :label="summaryLabel"
+                  color="info"
+                  variant="subtle"
+                  size="xs"
+                  icon="i-lucide-route"
+                />
+                <UBadge
+                  v-if="isFullAccess"
+                  :label="t('admin.fullAccess')"
+                  color="success"
+                  variant="subtle"
+                  size="xs"
+                />
               </div>
             </div>
           </div>
         </div>
 
         <div class="flex items-center justify-end gap-2">
-          <UButton type="button" color="neutral" variant="ghost" size="sm" :label="t('common.close')"
-            @click="open = false" />
+          <UButton
+            type="button"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :label="t('common.close')"
+            @click="open = false"
+          />
         </div>
       </div>
     </BaseResponsiveModal>

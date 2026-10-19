@@ -51,19 +51,38 @@ async function handleSend() {
 </script>
 
 <template>
-  <BaseResponsiveSlideover v-model:open="open" :title="t('notifications.sendTitle')" icon="i-lucide-send" side="right">
+  <BaseResponsiveSlideover
+    v-model:open="open"
+    :title="t('notifications.sendTitle')"
+    icon="i-lucide-send"
+    side="right"
+  >
     <template #body>
       <form class="space-y-4" @submit.prevent="handleSend">
         <UFormField :label="t('notifications.fieldTitle')" name="title" required>
-          <UInput v-model="sendForm.title" :placeholder="t('notifications.fieldTitlePlaceholder')" class="w-full"
-            size="lg" />
+          <UInput
+            v-model="sendForm.title"
+            :placeholder="t('notifications.fieldTitlePlaceholder')"
+            class="w-full"
+            size="lg"
+          />
         </UFormField>
         <UFormField :label="t('notifications.fieldBody')" name="body" required>
-          <UTextarea v-model="sendForm.body" name="body" :rows="4"
-            :placeholder="t('notifications.fieldBodyPlaceholder')" class="w-full" />
+          <UTextarea
+            v-model="sendForm.body"
+            name="body"
+            :rows="4"
+            :placeholder="t('notifications.fieldBodyPlaceholder')"
+            class="w-full"
+          />
         </UFormField>
         <UFormField :label="t('notifications.fieldUrl')">
-          <UInput v-model="sendForm.url" icon="i-lucide-link" placeholder="https://..." class="w-full" />
+          <UInput
+            v-model="sendForm.url"
+            icon="i-lucide-link"
+            placeholder="https://..."
+            class="w-full"
+          />
         </UFormField>
         <UFormField :label="t('notifications.fieldUserId')">
           <UInput v-model="sendForm.userId" :placeholder="t('notifications.fieldUserIdPlaceholder')" class="w-full" />
@@ -73,9 +92,20 @@ async function handleSend() {
 
     <template #footer>
       <div class="flex items-center justify-end gap-2 w-full">
-        <UButton color="neutral" variant="ghost" :label="t('common.cancel')" @click="open = false" />
-        <UButton icon="i-lucide-send" :label="t('notifications.send')" variant="soft" color="primary"
-          :loading="isSending" @click="handleSend" />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          :label="t('common.cancel')"
+          @click="open = false"
+        />
+        <UButton
+          icon="i-lucide-send"
+          :label="t('notifications.send')"
+          variant="soft"
+          color="primary"
+          :loading="isSending"
+          @click="handleSend"
+        />
       </div>
     </template>
   </BaseResponsiveSlideover>

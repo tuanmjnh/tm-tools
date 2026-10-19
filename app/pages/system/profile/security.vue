@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { PasskeyInfo } from '~/types/webauthn'
 import { getErrorMessage } from '~/shared/utils/errors'
+
 definePageMeta({
   alias: ['/profile/security', '/system/security', '/settings/security']
 })
@@ -226,8 +227,16 @@ useHead({ title: computed(() => t('profile.security')) })
 <template>
   <BasePage id="profile" :title="t('profile.security')" :description="t('settings.passwordDesc')">
     <template #right>
-      <UButton type="submit" form="security-form" icon="i-lucide-key-round" :label="t('profile.changePassword')"
-        color="primary" variant="soft" :ui="{ label: 'hidden md:block' }" :loading="passwordLoading" />
+      <UButton
+        type="submit"
+        form="security-form"
+        icon="i-lucide-key-round"
+        :label="t('profile.changePassword')"
+        color="primary"
+        variant="soft"
+        :ui="{ label: 'hidden md:block' }"
+        :loading="passwordLoading"
+      />
     </template>
 
     <BaseSectionNav :items="navItems">
@@ -235,10 +244,18 @@ useHead({ title: computed(() => t('profile.security')) })
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-key-round" class="size-5 text-primary" />
-            <h3 class="font-semibold">{{ t('profile.changePassword') }}</h3>
+            <h3 class="font-semibold">
+              {{ t('profile.changePassword') }}
+            </h3>
           </div>
         </template>
-        <UForm id="security-form" :schema="schema" :state="passwordForm" class="space-y-5" @submit="changePassword">
+        <UForm
+          id="security-form"
+          :schema="schema"
+          :state="passwordForm"
+          class="space-y-5"
+          @submit="changePassword"
+        >
           <UFormField name="currentPassword" :label="t('profile.currentPassword')" required>
             <BasePasswordInput v-model="passwordForm.currentPassword" size="lg" class="w-full" />
           </UFormField>
@@ -258,14 +275,25 @@ useHead({ title: computed(() => t('profile.security')) })
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-fingerprint" class="size-5 text-primary" />
-              <h3 class="font-semibold">{{ t('profile.passkeysTitle') }}</h3>
+              <h3 class="font-semibold">
+                {{ t('profile.passkeysTitle') }}
+              </h3>
             </div>
-            <UButton icon="i-lucide-plus" size="sm" color="neutral" variant="soft" :label="t('profile.passkeyAdd')"
-              :loading="passkeyAddLoading" @click="addPasskey" />
+            <UButton
+              icon="i-lucide-plus"
+              size="sm"
+              color="neutral"
+              variant="soft"
+              :label="t('profile.passkeyAdd')"
+              :loading="passkeyAddLoading"
+              @click="addPasskey"
+            />
           </div>
         </template>
 
-        <p class="text-sm text-muted mb-4">{{ t('profile.passkeysDesc') }}</p>
+        <p class="text-sm text-muted mb-4">
+          {{ t('profile.passkeysDesc') }}
+        </p>
 
         <div v-if="passkeyLoading" class="flex justify-center py-6">
           <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin text-muted" />
@@ -278,7 +306,9 @@ useHead({ title: computed(() => t('profile.security')) })
         <ul v-else class="divide-y divide-default">
           <li v-for="pk in passkeys" :key="pk.id" class="flex items-center justify-between gap-3 py-3">
             <div class="min-w-0">
-              <p class="text-sm font-medium truncate">{{ pk.deviceName || t('profile.passkeyDefaultName') }}</p>
+              <p class="text-sm font-medium truncate">
+                {{ pk.deviceName || t('profile.passkeyDefaultName') }}
+              </p>
               <p class="text-xs text-muted">
                 {{ t('profile.passkeyCreated') }}: {{ new Date(pk.createdAt).toLocaleDateString() }}
                 <template v-if="pk.lastUsedAt">
@@ -286,8 +316,14 @@ useHead({ title: computed(() => t('profile.security')) })
                 </template>
               </p>
             </div>
-            <UButton icon="i-lucide-trash-2" size="xs" color="error" variant="ghost"
-              :aria-label="t('profile.passkeyDelete')" @click="passkeyDeleteTarget = pk; passkeyDeleteOpen = true" />
+            <UButton
+              icon="i-lucide-trash-2"
+              size="xs"
+              color="error"
+              variant="ghost"
+              :aria-label="t('profile.passkeyDelete')"
+              @click="passkeyDeleteTarget = pk; passkeyDeleteOpen = true"
+            />
           </li>
         </ul>
       </UCard>
@@ -297,82 +333,169 @@ useHead({ title: computed(() => t('profile.security')) })
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-shield-check" class="size-5 text-primary" />
-              <h3 class="font-semibold">{{ t('profile.totpTitle') }}</h3>
+              <h3 class="font-semibold">
+                {{ t('profile.totpTitle') }}
+              </h3>
               <UBadge :color="totpEnabled ? 'success' : 'neutral'" variant="subtle" size="sm">
                 {{ totpEnabled ? t('profile.totpOn') : t('profile.totpOff') }}
               </UBadge>
             </div>
-            <UButton v-if="!totpEnabled" icon="i-lucide-shield" size="sm" color="primary" variant="soft"
-              :label="t('profile.totpEnable')" :loading="totpSetupLoading" @click="openTotpSetup" />
-            <UButton v-else icon="i-lucide-shield-off" size="sm" color="error" variant="soft"
-              :label="t('profile.totpDisable')" @click="totpDisableOpen = true" />
+            <UButton
+              v-if="!totpEnabled"
+              icon="i-lucide-shield"
+              size="sm"
+              color="primary"
+              variant="soft"
+              :label="t('profile.totpEnable')"
+              :loading="totpSetupLoading"
+              @click="openTotpSetup"
+            />
+            <UButton
+              v-else
+              icon="i-lucide-shield-off"
+              size="sm"
+              color="error"
+              variant="soft"
+              :label="t('profile.totpDisable')"
+              @click="totpDisableOpen = true"
+            />
           </div>
         </template>
 
-        <p class="text-sm text-muted">{{ t('profile.totpDesc') }}</p>
+        <p class="text-sm text-muted">
+          {{ t('profile.totpDesc') }}
+        </p>
       </UCard>
     </BaseSectionNav>
 
     <UModal v-model:open="passkeyDeleteOpen" :title="t('profile.passkeyDelete')" icon="i-lucide-trash-2">
       <template #body>
-        <p class="text-sm text-muted">{{ t('profile.passkeyDeleteConfirm') }}</p>
+        <p class="text-sm text-muted">
+          {{ t('profile.passkeyDeleteConfirm') }}
+        </p>
       </template>
       <template #footer>
         <div class="flex w-full justify-end gap-2">
-          <UButton color="neutral" variant="soft" :label="t('common.cancel')"
-            @click="passkeyDeleteOpen = false; passkeyDeleteTarget = null" />
+          <UButton
+            color="neutral"
+            variant="soft"
+            :label="t('common.cancel')"
+            @click="passkeyDeleteOpen = false; passkeyDeleteTarget = null"
+          />
           <UButton color="error" :label="t('profile.passkeyDelete')" @click="confirmDeletePasskey" />
         </div>
       </template>
     </UModal>
 
-    <UModal v-model:open="totpSetupOpen" :title="t('profile.totpEnable')" icon="i-lucide-shield-check"
-      @update:open="v => !v && closeTotpSetup()">
+    <UModal
+      v-model:open="totpSetupOpen"
+      :title="t('profile.totpEnable')"
+      icon="i-lucide-shield-check"
+      @update:open="v => !v && closeTotpSetup()"
+    >
       <template #body>
         <div v-if="totpSetupStep === 'scan'" class="space-y-4">
-          <p class="text-sm text-muted">{{ t('profile.totpScanDesc') }}</p>
+          <p class="text-sm text-muted">
+            {{ t('profile.totpScanDesc') }}
+          </p>
           <div class="flex justify-center">
-            <img v-if="totpSetupQr" :src="totpSetupQr" :alt="t('profile.totpQrAlt')" class="size-48 rounded-lg border border-default" />
+            <img
+              v-if="totpSetupQr"
+              :src="totpSetupQr"
+              :alt="t('profile.totpQrAlt')"
+              class="size-48 rounded-lg border border-default"
+            >
           </div>
           <UFormField :label="t('profile.totpCodeLabel')" required>
-            <UInput v-model="totpSetupCode" inputmode="numeric" maxlength="6"
-              :placeholder="t('profile.totpCodePlaceholder')" class="w-full text-center tracking-[0.4em]" size="lg" />
+            <UInput
+              v-model="totpSetupCode"
+              inputmode="numeric"
+              maxlength="6"
+              :placeholder="t('profile.totpCodePlaceholder')"
+              class="w-full text-center tracking-[0.4em]"
+              size="lg"
+            />
           </UFormField>
         </div>
         <div v-else class="space-y-4">
-          <p class="text-sm text-muted">{{ t('profile.recoveryDesc') }}</p>
+          <p class="text-sm text-muted">
+            {{ t('profile.recoveryDesc') }}
+          </p>
           <ul class="grid grid-cols-2 gap-2 rounded-lg bg-default p-3 font-mono text-sm">
-            <li v-for="code in recoveryCodes" :key="code">{{ code }}</li>
+            <li v-for="code in recoveryCodes" :key="code">
+              {{ code }}
+            </li>
           </ul>
-          <UButton icon="i-lucide-copy" color="neutral" variant="soft" size="sm" :label="t('profile.recoveryCopy')"
-            @click="copyRecoveryCodes" />
-          <p class="text-xs text-warning">{{ t('profile.recoveryWarning') }}</p>
+          <UButton
+            icon="i-lucide-copy"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :label="t('profile.recoveryCopy')"
+            @click="copyRecoveryCodes"
+          />
+          <p class="text-xs text-warning">
+            {{ t('profile.recoveryWarning') }}
+          </p>
         </div>
       </template>
       <template #footer>
         <div class="flex w-full justify-end gap-2">
-          <UButton color="neutral" variant="soft" :label="t('common.cancel')" @click="closeTotpSetup" />
-          <UButton v-if="totpSetupStep === 'scan'" color="primary" :label="t('profile.totpVerify')"
-            :loading="totpSetupLoading" :disabled="totpSetupCode.trim().length < 6" @click="verifyTotpSetup" />
-          <UButton v-else color="primary" :label="t('common.done')" @click="closeTotpSetup" />
+          <UButton
+            color="neutral"
+            variant="soft"
+            :label="t('common.cancel')"
+            @click="closeTotpSetup"
+          />
+          <UButton
+            v-if="totpSetupStep === 'scan'"
+            color="primary"
+            :label="t('profile.totpVerify')"
+            :loading="totpSetupLoading"
+            :disabled="totpSetupCode.trim().length < 6"
+            @click="verifyTotpSetup"
+          />
+          <UButton
+            v-else
+            color="primary"
+            :label="t('common.done')"
+            @click="closeTotpSetup"
+          />
         </div>
       </template>
     </UModal>
 
     <UModal v-model:open="totpDisableOpen" :title="t('profile.totpDisable')" icon="i-lucide-shield-off">
       <template #body>
-        <p class="text-sm text-muted mb-4">{{ t('profile.totpDisableDesc') }}</p>
+        <p class="text-sm text-muted mb-4">
+          {{ t('profile.totpDisableDesc') }}
+        </p>
         <UFormField :label="t('profile.totpCodeLabel')" required>
-          <UInput v-model="totpDisableCode" inputmode="numeric" maxlength="6"
-            :placeholder="t('profile.totpCodePlaceholder')" class="w-full text-center tracking-[0.4em]" size="lg" />
+          <UInput
+            v-model="totpDisableCode"
+            inputmode="numeric"
+            maxlength="6"
+            :placeholder="t('profile.totpCodePlaceholder')"
+            class="w-full text-center tracking-[0.4em]"
+            size="lg"
+          />
         </UFormField>
       </template>
       <template #footer>
         <div class="flex w-full justify-end gap-2">
-          <UButton color="neutral" variant="soft" :label="t('common.cancel')"
-            @click="totpDisableOpen = false; totpDisableCode = ''" />
-          <UButton color="error" :label="t('profile.totpDisable')" :loading="totpDisableLoading"
-            :disabled="totpDisableCode.trim().length < 6" @click="disableTotp" />
+          <UButton
+            color="neutral"
+            variant="soft"
+            :label="t('common.cancel')"
+            @click="totpDisableOpen = false; totpDisableCode = ''"
+          />
+          <UButton
+            color="error"
+            :label="t('profile.totpDisable')"
+            :loading="totpDisableLoading"
+            :disabled="totpDisableCode.trim().length < 6"
+            @click="disableTotp"
+          />
         </div>
       </template>
     </UModal>

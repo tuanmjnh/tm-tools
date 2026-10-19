@@ -88,11 +88,11 @@ const mobileBar = useMobileBar()
 mobileBar.registerActions(computed(() => [
   ...(sessionPager.hasMore.value
     ? [{
-      icon: 'i-lucide-chevron-down',
-      label: t('common.loadMore'),
-      disabled: sessionsLoading.value,
-      onSelect: () => sessionPager.loadMore()
-    }]
+        icon: 'i-lucide-chevron-down',
+        label: t('common.loadMore'),
+        disabled: sessionsLoading.value,
+        onSelect: () => sessionPager.loadMore()
+      }]
     : []),
   {
     icon: 'i-lucide-log-out',
@@ -118,18 +118,40 @@ useHead({ title: computed(() => t('profile.sessions')) })
 <template>
   <BasePage id="profile" :title="t('profile.sessions')" :description="t('profile.sessionsDesc')">
     <template #right>
-      <UButton color="error" variant="soft" size="sm" icon="i-lucide-log-out" :label="t('profile.revokeAll')"
-        :ui="{ label: 'hidden md:block' }" @click="isRevokeAllOpen = true" />
-      <UButton icon="i-lucide-refresh-cw" color="neutral" variant="soft" size="sm" square :loading="sessionsLoading"
-        :aria-label="t('common.refresh')" @click="sessionPager.refresh()" />
+      <UButton
+        color="error"
+        variant="soft"
+        size="sm"
+        icon="i-lucide-log-out"
+        :label="t('profile.revokeAll')"
+        :ui="{ label: 'hidden md:block' }"
+        @click="isRevokeAllOpen = true"
+      />
+      <UButton
+        icon="i-lucide-refresh-cw"
+        color="neutral"
+        variant="soft"
+        size="sm"
+        square
+        :loading="sessionsLoading"
+        :aria-label="t('common.refresh')"
+        @click="sessionPager.refresh()"
+      />
     </template>
 
     <template #footer>
       <SharedListFooter :count="sessions.length" :has-more="sessionPager.hasMore.value" :loading="sessionsLoading">
         <template #right>
-          <UButton v-if="sessionPager.hasMore.value" size="xs" variant="soft" color="neutral"
-            icon="i-lucide-chevron-down" :label="t('common.loadMore')" :loading="sessionsLoading"
-            @click="sessionPager.loadMore()" />
+          <UButton
+            v-if="sessionPager.hasMore.value"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            icon="i-lucide-chevron-down"
+            :label="t('common.loadMore')"
+            :loading="sessionsLoading"
+            @click="sessionPager.loadMore()"
+          />
         </template>
       </SharedListFooter>
     </template>
@@ -140,46 +162,80 @@ useHead({ title: computed(() => t('profile.sessions')) })
           <USkeleton v-for="i in 3" :key="i" class="h-14 w-full rounded-lg" />
         </div>
 
-        <UEmpty v-else-if="sessions.length === 0" icon="i-lucide-monitor-x" size="sm"
-          :title="t('profile.noSessions')" />
+        <UEmpty
+          v-else-if="sessions.length === 0"
+          icon="i-lucide-monitor-x"
+          size="sm"
+          :title="t('profile.noSessions')"
+        />
 
         <ul v-else class="divide-y divide-default">
           <li v-for="session in sessions" :key="session.id" class="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
-            <span class="inline-flex shrink-0 items-center justify-center rounded-lg p-2"
-              :class="session.isCurrent ? 'bg-primary/10 text-primary' : 'bg-elevated text-muted'">
-              <UIcon :name="session.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-monitor'"
-                class="size-5" />
+            <span
+              class="inline-flex shrink-0 items-center justify-center rounded-lg p-2"
+              :class="session.isCurrent ? 'bg-primary/10 text-primary' : 'bg-elevated text-muted'"
+            >
+              <UIcon
+                :name="session.platform === 'mobile' ? 'i-lucide-smartphone' : 'i-lucide-monitor'"
+                class="size-5"
+              />
             </span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-highlighted truncate">
                   {{ session.platform }}
                 </span>
-                <UBadge v-if="session.isCurrent" :label="t('profile.current')" color="success" variant="subtle"
-                  size="xs" />
+                <UBadge
+                  v-if="session.isCurrent"
+                  :label="t('profile.current')"
+                  color="success"
+                  variant="subtle"
+                  size="xs"
+                />
               </div>
-              <p class="text-xs text-muted truncate">{{ session.userAgent || '—' }}</p>
+              <p class="text-xs text-muted truncate">
+                {{ session.userAgent || '—' }}
+              </p>
               <p class="text-[11px] text-dimmed font-mono truncate">
                 {{ session.lastIp }} · {{ formatDate(session.createdAt) }}
               </p>
             </div>
             <UDropdownMenu :items="sessionActions(session)" :content="{ align: 'end' }">
-              <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="ghost" size="xs"
-                :aria-label="t('common.actions')" />
+              <UButton
+                icon="i-lucide-ellipsis-vertical"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="t('common.actions')"
+              />
             </UDropdownMenu>
           </li>
         </ul>
       </UCard>
     </BaseSectionNav>
 
-    <BaseConfirmModal v-model:open="isRevokeOpen" :title="t('settings.revokeSessionTitle')"
-      :description="t('settings.revokeSessionDesc')" :confirm-label="t('profile.revoke')"
-      :cancel-label="t('common.cancel')" color="error" icon="i-lucide-log-out" :loading="revokeLoading"
-      @confirm="confirmRevoke" />
+    <BaseConfirmModal
+      v-model:open="isRevokeOpen"
+      :title="t('settings.revokeSessionTitle')"
+      :description="t('settings.revokeSessionDesc')"
+      :confirm-label="t('profile.revoke')"
+      :cancel-label="t('common.cancel')"
+      color="error"
+      icon="i-lucide-log-out"
+      :loading="revokeLoading"
+      @confirm="confirmRevoke"
+    />
 
-    <BaseConfirmModal v-model:open="isRevokeAllOpen" :title="t('settings.revokeAllTitle')"
-      :description="t('settings.revokeAllDesc')" :confirm-label="t('profile.revokeAll')"
-      :cancel-label="t('common.cancel')" color="error" icon="i-lucide-alert-triangle" :loading="revokeLoading"
-      @confirm="confirmRevokeAll" />
+    <BaseConfirmModal
+      v-model:open="isRevokeAllOpen"
+      :title="t('settings.revokeAllTitle')"
+      :description="t('settings.revokeAllDesc')"
+      :confirm-label="t('profile.revokeAll')"
+      :cancel-label="t('common.cancel')"
+      color="error"
+      icon="i-lucide-alert-triangle"
+      :loading="revokeLoading"
+      @confirm="confirmRevokeAll"
+    />
   </BasePage>
 </template>

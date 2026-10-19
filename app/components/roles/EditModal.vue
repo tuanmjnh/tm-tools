@@ -92,8 +92,16 @@ async function onSubmit() {
 </script>
 
 <template>
-  <BaseFormModal v-model:open="open" :title="t('admin.editRole')" :description="role?.id" :schema="schema"
-    :state="state" :loading="loading" :submit-label="t('common.save')" @submit="onSubmit">
+  <BaseFormModal
+    v-model:open="open"
+    :title="t('admin.editRole')"
+    :description="role?.id"
+    :schema="schema"
+    :state="state"
+    :loading="loading"
+    :submit-label="t('common.save')"
+    @submit="onSubmit"
+  >
     <UFormField :label="t('common.name')" name="name" required>
       <UInput v-model="state.name" class="w-full" :disabled="role?.isSystem" />
     </UFormField>
@@ -104,12 +112,24 @@ async function onSubmit() {
     <div class="space-y-2">
       <div class="flex items-center justify-between gap-2">
         <label class="text-xs font-semibold uppercase tracking-wider text-muted">{{ t('admin.permissions.title')
-          }}</label>
+        }}</label>
         <div class="flex items-center gap-1.5">
-          <UBadge v-if="isOwnRole" :label="t('admin.ownRole')" color="info" variant="subtle" size="xs"
-            icon="i-lucide-user" />
-          <UBadge v-if="isFullAccess" :label="t('admin.fullAccess')" color="success" variant="subtle" size="xs"
-            icon="i-lucide-crown" />
+          <UBadge
+            v-if="isOwnRole"
+            :label="t('admin.ownRole')"
+            color="info"
+            variant="subtle"
+            size="xs"
+            icon="i-lucide-user"
+          />
+          <UBadge
+            v-if="isFullAccess"
+            :label="t('admin.fullAccess')"
+            color="success"
+            variant="subtle"
+            size="xs"
+            icon="i-lucide-crown"
+          />
         </div>
       </div>
       <p class="text-xs text-dimmed">
@@ -132,8 +152,16 @@ async function onSubmit() {
       {{ t('admin.cannotDeleteSystem') }}
     </div>
 
-    <BaseConfirmModal v-model:open="isConfirmOpen" :title="t('admin.selfDowngradeTitle')"
-      :description="t('admin.selfDowngradeDesc')" color="warning" icon="i-lucide-triangle-alert"
-      :confirm-label="t('common.save')" :cancel-label="t('common.cancel')" :loading="loading" @confirm="doSave" />
+    <BaseConfirmModal
+      v-model:open="isConfirmOpen"
+      :title="t('admin.selfDowngradeTitle')"
+      :description="t('admin.selfDowngradeDesc')"
+      color="warning"
+      icon="i-lucide-triangle-alert"
+      :confirm-label="t('common.save')"
+      :cancel-label="t('common.cancel')"
+      :loading="loading"
+      @confirm="doSave"
+    />
   </BaseFormModal>
 </template>

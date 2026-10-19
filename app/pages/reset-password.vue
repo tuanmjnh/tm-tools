@@ -4,7 +4,8 @@
       <template #header>
         <div class="text-center">
           <div
-            class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto">
+            class="inline-flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary mb-3 mx-auto"
+          >
             <UIcon name="i-lucide-key" class="size-6" />
           </div>
           <h1 class="text-2xl font-bold">
@@ -16,19 +17,38 @@
         </div>
       </template>
 
-      <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
+      <UForm
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="onSubmit"
+      >
         <UFormField :label="$t('auth.newPassword')" name="password">
-          <BasePasswordInput v-model="state.password" :placeholder="$t('auth.newPasswordPlaceholder')" class="w-full"
-            size="lg" />
+          <BasePasswordInput
+            v-model="state.password"
+            :placeholder="$t('auth.newPasswordPlaceholder')"
+            class="w-full"
+            size="lg"
+          />
         </UFormField>
 
         <UFormField :label="$t('auth.confirmPassword')" name="confirmPassword">
-          <BasePasswordInput v-model="state.confirmPassword" :placeholder="$t('auth.confirmPasswordPlaceholder')"
-            class="w-full" size="lg" />
+          <BasePasswordInput
+            v-model="state.confirmPassword"
+            :placeholder="$t('auth.confirmPasswordPlaceholder')"
+            class="w-full"
+            size="lg"
+          />
         </UFormField>
 
-        <UButton type="submit" variant="soft" block size="lg" :loading="auth.loading.value"
-          :disabled="auth.loading.value">
+        <UButton
+          type="submit"
+          variant="soft"
+          block
+          size="lg"
+          :loading="auth.loading.value"
+          :disabled="auth.loading.value"
+        >
           {{ $t('auth.resetPassword') }}
         </UButton>
       </UForm>

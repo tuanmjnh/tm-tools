@@ -89,7 +89,13 @@
       </div>
       <div class="flex items-center gap-3">
         <label class="w-24 text-sm text-muted">{{ t('utilities.random.length') }}</label>
-        <USlider v-model="hexKeyLength" :min="16" :max="128" :step="16" class="flex-1" />
+        <USlider
+          v-model="hexKeyLength"
+          :min="16"
+          :max="128"
+          :step="16"
+          class="flex-1"
+        />
         <span class="w-16 text-right font-mono text-sm">{{ hexKeyLength }}</span>
       </div>
       <div class="flex items-center gap-3">
