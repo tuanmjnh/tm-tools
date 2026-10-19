@@ -28,10 +28,13 @@ const { migrateKeyContent } = require('./tools/key-migrate.cjs')
 const { readConfigFile } = require('./tools/config-file.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
 
-// Secret config slots: the AI panel writes exactly KEY / KEY_<TASK>.
-// Matching the full slot shape keeps the rule closed — no arbitrary key
-// name can qualify for encryption/masking.
-const SECRET_SLOT_RE = /^AI_API_KEY(_.+)?$/
+// Secret config slots: ONE definition (secret-slots.cjs) shared by the
+// masking/decryption paths here and the at-rest migration. The AI panel
+// writes exactly KEY / KEY_<TASK>; the full-slot shape keeps the rule
+// closed so no arbitrary key name qualifies. R145 (§207): this line used
+// to be a second literal copy with a grep-pin spec; now drift is
+// structurally impossible.
+const { SECRET_SLOT_RE } = require('./tools/secret-slots.cjs')
 
 let initializePlatform
 try {

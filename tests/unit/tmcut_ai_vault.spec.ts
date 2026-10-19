@@ -65,19 +65,24 @@ describe('TMCut AI key vault — channel contract (R140)', () => {
       'button must require BOTH keychain availability and plaintext keys')
   })
 
-  it('main.cjs and key-migrate.cjs keep the SAME slot regex (two copies, one truth)', () => {
-    // main masks/decrypts with its copy; key-migrate filters with its
-    // copy. Divergence = a slot encrypted by one side and missed by the
-    // other (exactly the R139 global-key bug, probe §15 caught it live).
+  it('the slot regex has ONE definition and zero copies (R145)', () => {
+    // The R139 era kept byte-identical literals in main.cjs and
+    // key-migrate.cjs with this very spec as the drift alarm. R145 made
+    // drift STRUCTURALLY impossible: one module owns the regex, everyone
+    // else imports it. A reappearing literal outside secret-slots.cjs is
+    // the regression this test kills on sight.
     const km = read('electron/tools/key-migrate.cjs')
     const rx = /SECRET_SLOT_RE = (\/[^\n]+\/[a-z]*)/
-    const a = main.match(rx)
-    const b = km.match(rx)
-    assert.ok(a && b, 'both files must declare SECRET_SLOT_RE as a literal')
-    assert.equal(a![1], b![1], 'slot regexes must be byte-identical')
-    // And the shape the whole R139 line depends on: the GLOBAL slot
-    // (no suffix) must match. The R139 inline regex failed exactly this.
-    const re = new RegExp(a![1].slice(1, a![1].lastIndexOf('/')))
+    const shared = read('electron/tools/secret-slots.cjs')
+    const def = shared.match(rx)
+    assert.ok(def, 'secret-slots.cjs must DECLARE the regex literal')
+    assert.ok(!rx.test(main), 'main.cjs must import the regex, never redeclare it')
+    assert.ok(!rx.test(km), 'key-migrate.cjs must import the regex, never redeclare it')
+    assert.ok(/require\(['"]\.\/tools\/secret-slots\.cjs['"]\)/.test(main), 'main.cjs must require secret-slots.cjs')
+    assert.ok(/require\(['"]\.\/secret-slots\.cjs['"]\)/.test(km), 'key-migrate.cjs must require secret-slots.cjs')
+    // Behavior pins survive from the §206.2 audit — the shape the whole
+    // R139 line depends on: the GLOBAL slot (no suffix) must match.
+    const re = new RegExp(def![1].slice(1, def![1].lastIndexOf('/')))
     assert.ok(re.test('AI_API_KEY'), 'global AI_API_KEY must qualify as a secret slot')
     assert.ok(re.test('AI_API_KEY_PLAN'))
     assert.ok(!re.test('AI_BASE_URL'), 'non-key slots stay unencrypted')

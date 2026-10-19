@@ -17,10 +17,9 @@
 'use strict'
 
 const { encrypt, magicPrefix } = require('./ai-secure.cjs')
-
-// Same shape as main.cjs's SECRET_SLOT_RE — the vault spec asserts both
-// files' literals stay identical (two copies, one pinned).
-const SECRET_SLOT_RE = /^AI_API_KEY(_.+)?$/
+// R145 (§207): one definition of the slot shape for every consumer —
+// the byte-identical-copies era (and its grep-pin spec) is over.
+const { SECRET_SLOT_RE } = require('./secret-slots.cjs')
 
 /**
  * Encrypt every plaintext secret-slot line in a config.env body.
