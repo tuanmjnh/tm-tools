@@ -9327,3 +9327,68 @@ automation (and useful on their own):
   bump detectable); unit run 27/27; typecheck 0; lint 0; live UI 12/12;
   i18n 2974/2974 (en=vi, +3×2). Build + Electron probe run with the
   commit gate below.
+
+## 197. R133 — IPC trust policy: preload channel allow-lists + file-manager sender validation
+
+Closes the two documented residual risks from the MCP audit (§189.5 /
+R124.5): the generic `electronAPI.send/on` raw pass-through and the
+`tools:file-manager` surface (39 preload method names = 39 handler
+channels) that had **zero** sender validation — absolute-path
+read/write/delete/list callable by any frame that could reach IPC.
+
+### 197.1 `electron/ipcPolicy.cjs` (new, pure — unit-testable in plain Node)
+
+- `createSenderGate({ isDev, port })` — the R124.5 app-origin rule
+  extracted verbatim (dev = Vite `:3000` origin, prod = loopback Nitro
+  origin on `PORT`, empty/about:blank/devtools frames pass, a destroyed
+  frame refuses without crashing). `main.cjs` now builds its
+  `isTrustedSender` from this factory — one implementation, zero drift
+  between the root privileged handlers and the new controller guard.
+- `PUSH_CHANNELS` — every channel main actually pushes (derived by
+  grepping `webContents.send` call sites: `eventbus:event`,
+  `app-updater:status-changed`, `tmcut:renderDone`,
+  `tools:profiles:statusChanged`, the youtube/ffmpeg task-manager event
+  families). `OUTBOUND_CHANNELS` — the honest EMPTY set: grep
+  `ipcMain.on` = 0 hits, every legitimate renderer call is invoke-based.
+- The sandboxed preload (Electron ≥ 20 defaults sandbox:true) cannot
+  `require` local files, so `preload.cjs` carries INLINE copies of both
+  arrays; the `tmcut_ipc_policy` spec parses the shipped preload file and
+  pins deep-equality against the canonical arrays — silent drift between
+  the two copies is a test failure, not a runtime surprise.
+
+### 197.2 Enforcement points
+
+- `preload.cjs`: `send()` refuses non-allow-listed channels silently
+  (console warn; a bridge refusal is not an exception); `on()` refuses
+  unknown channels (noop unsubscribe returned) and now RETURNS a working
+  unsubscribe — the old pass-through leaked every listener permanently.
+- `file-manager.cjs`: `registerFileManagerController({ isTrustedSender })`
+  — all 39 `ipcMain.handle` registrations run through the injected gate;
+  a refused sender gets `null` back (typed-empty, never a stack trace to
+  fingerprint). With no gate injected (plain-Node tests) handlers stay
+  permissive, so the module remains testable without Electron frames.
+
+### 197.3 Scope honesty
+
+- Other controllers (youtube/ffmpeg/dialog/tmcut/ai-gateway/profiles)
+  keep their existing protection: they were already gated by main's
+  `isTrustedSender` (R124.5) or expose no filesystem primitive. This
+  round deliberately covers the generic bridge + the audited filesystem
+  surface only; extending the injected-gate pattern to the remaining
+  controllers is mechanical follow-up work.
+
+### 197.4 Gates
+
+- New unit spec `tmcut_ipc_policy` 8/8: gate matrix (prod loopback pass,
+  remote/file/wrong-port refuse, dev Vite-only, blank/devtools pass,
+  destroyed-frame refuse), closed-set push allow-list incl.
+  prefix-spoof refusal, empty outbound set, preload inline-copy drift
+  guard, gated file-manager refusal across read/write/delete/list/copy,
+  permissive test-mode round-trip on a temp file.
+- New Electron probe `electron_ipc_probe.cjs` 6/6 on the REAL runtime:
+  the real gate over real-frame URLs, and the real sandboxed preload —
+  allow-listed push fires once then unsub stops delivery, unknown
+  channel never fires, `send()` refuses silently.
+- Media probe 3/3; unit run 28/28; typecheck 0; lint 0; live UI 12/12;
+  build 0; i18n unchanged 2974/2974 (no new keys — this round is pure
+  plumbing).

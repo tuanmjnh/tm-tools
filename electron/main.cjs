@@ -228,22 +228,16 @@ async function createWindow() {
 
 const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 
-// IPC sender validation (audit MEDIUM): every privileged handler refuses
-// calls whose frame is not the app's own origin. Dev loads from the Vite
-// server URL, prod from the loopback nitro server; devtools frames and
-// the initial about:blank are let through because Chromium injects them
-// around trusted app navigations.
-function isTrustedSender(event) {
-  let url
-  try {
-    url = event.senderFrame ? event.senderFrame.url : ''
-  } catch {
-    return false
-  }
-  if (!url || url === 'about:blank' || url.startsWith('devtools://')) return true
-  if (isDev) return url.startsWith('http://localhost:3000') || url.startsWith('http://127.0.0.1:3000')
-  return url.startsWith(`http://127.0.0.1:${PORT}`) || url.startsWith(`http://localhost:${PORT}`)
-}
+// IPC sender validation (audit MEDIUM, R133 §197): every privileged
+// handler refuses calls whose frame is not the app's own origin. Dev
+// loads from the Vite server URL, prod from the loopback nitro server;
+// devtools frames and the initial about:blank are let through because
+// Chromium injects them around trusted app navigations. R133 extracted
+// the factory into ipcPolicy.cjs so the file-manager controller applies
+// the SAME rule (it used to have none at all).
+const { createSenderGate } = require('./ipcPolicy.cjs')
+
+const isTrustedSender = createSenderGate({ isDev, port: PORT })
 
 ipcMain.handle('get-config', (event) => {
   if (!isTrustedSender(event)) return {}
@@ -456,7 +450,9 @@ app.whenReady().then(() => {
   registerYoutubeController()
   registerFfmpegController()
   registerDialogController()
-  registerFileManagerController()
+  // R133 §197: the filesystem surface now requires the same app-origin
+  // check as the privileged root handlers (audit residual risk closed).
+  registerFileManagerController({ isTrustedSender })
   registerTmcutController()
   registerAiGateway()
   if (typeof initializePlatform === 'function') {

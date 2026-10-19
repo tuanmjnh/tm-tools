@@ -1,5 +1,27 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
+// R133 (§197) — generic send()/on() are a narrow, EXPLICIT bridge, not a
+// raw ipcRenderer pass-through. The sandboxed preload cannot require local
+// files, so these arrays are inline copies of electron/ipcPolicy.cjs; the
+// tmcut_ipc_policy unit spec pins the copies against the originals so
+// neither side can drift silently.
+const PUSH_CHANNELS = [
+  'eventbus:event',
+  'app-updater:status-changed',
+  'tmcut:renderDone',
+  'tools:profiles:statusChanged',
+  'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
+  'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
+  'tools:ffmpeg:managerInitialized', 'tools:ffmpeg:beforeRunTask', 'tools:ffmpeg:progressTask', 'tools:ffmpeg:allTasksDone',
+  'tools:ffmpeg:stoppedTask', 'tools:ffmpeg:stoppedTasks', 'tools:ffmpeg:errorTask', 'tools:ffmpeg:taskRetry', 'tools:ffmpeg:taskTimeout', 'tools:ffmpeg:updateProgress'
+]
+// Nothing legitimately uses ipcRenderer.send today (all handlers are
+// invoke-based; grep ipcMain.on = 0 hits). Adding a channel here is a
+// deliberate act, reviewed like any other IPC surface change.
+const OUTBOUND_CHANNELS = []
+const PUSH_SET = new Set(PUSH_CHANNELS)
+const OUTBOUND_SET = new Set(OUTBOUND_CHANNELS)
+
 function exposeNamespace(namespace, channels) {
   const api = {}
   for (const method of channels.invoke) {
@@ -128,9 +150,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
   openExternal: url => ipcRenderer.invoke('open-external', url),
   showItemInFolder: fullPath => ipcRenderer.invoke('show-item-in-folder', fullPath),
-  send: (channel, data) => ipcRenderer.send(channel, data),
+  // R133: allow-listed generic bridge. send() refuses unknown channels;
+  // on() refuses unknown channels and now returns an unsubscribe function
+  // (the old listener leaked permanently — no way to remove it).
+  send: (channel, data) => {
+    if (!OUTBOUND_SET.has(channel)) {
+      console.warn('[preload] refused send on non-allow-listed channel:', channel)
+      return
+    }
+    ipcRenderer.send(channel, data)
+  },
   on: (channel, callback) => {
-    ipcRenderer.on(channel, (event, ...args) => callback(...args))
+    if (!PUSH_SET.has(channel)) {
+      console.warn('[preload] refused on() for non-allow-listed channel:', channel)
+      return () => {}
+    }
+    const listener = (_event, ...args) => callback(...args)
+    ipcRenderer.on(channel, listener)
+    return () => ipcRenderer.removeListener(channel, listener)
   },
   tools: { youtube, ffmpeg, profiles, aiGateway },
   dialog,

@@ -289,11 +289,23 @@ function imageToDataUrl(imagePath) {
   }
 }
 
-function registerFileManagerController() {
-  const sync = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (_event, ...args) => fn(...args))
-  const syncObj = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (_event, args) => fn(args?.filePath, args?.encoding))
-  const syncObj2 = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (_event, args) => fn(args?.filePath, args?.data, args?.encoding))
-  const tree = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (_event, args) => fn(args?.dirPath, args?.options))
+function registerFileManagerController(options = {}) {
+  // R133 §197 — sender validation (audit residual risk: this controller
+  // exposed 44 unrestricted absolute-path FS channels with NO origin
+  // check). The gate is injected by main.cjs (the app-origin rule, same
+  // factory every privileged handler uses); refusing means the operation
+  // simply does not happen and a typed-empty answer goes back: null /
+  // false / undefined, never a stack trace an attacker can fingerprint.
+  // When no gate is injected (tests), handlers stay permissive so the
+  // module remains unit-testable without Electron frames.
+  const guard = typeof options?.isTrustedSender === 'function'
+    ? (event, handler) => (options.isTrustedSender(event) ? handler(event) : null)
+    : (event, handler) => handler(event)
+
+  const sync = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (event, ...args) => guard(event, () => fn(...args)))
+  const syncObj = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (event, args) => guard(event, () => fn(args?.filePath, args?.encoding)))
+  const syncObj2 = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (event, args) => guard(event, () => fn(args?.filePath, args?.data, args?.encoding)))
+  const tree = (key, fn) => ipcMain.handle(`${moduleName}:${key}`, (event, args) => guard(event, () => fn(args?.dirPath, args?.options)))
 
   syncObj('read', readFile)
   syncObj2('write', writeFile)
@@ -301,11 +313,11 @@ function registerFileManagerController() {
   sync('exists', exists)
   sync('delete', deleteFile)
   sync('readJSON', readJSON)
-  ipcMain.handle(`${moduleName}:writeJSON`, (_event, args) => writeJSON(args?.filePath, args?.obj, args?.space))
+  ipcMain.handle(`${moduleName}:writeJSON`, (event, args) => guard(event, () => writeJSON(args?.filePath, args?.obj, args?.space)))
   sync('createFolder', createFolder)
-  ipcMain.handle(`${moduleName}:rename`, (_event, args) => rename(args?.oldPath, args?.newPath))
-  ipcMain.handle(`${moduleName}:copyFile`, (_event, args) => copyFile(args?.src, args?.dest))
-  ipcMain.handle(`${moduleName}:copyFolder`, (_event, args) => copyFolder(args?.src, args?.dest))
+  ipcMain.handle(`${moduleName}:rename`, (event, args) => guard(event, () => rename(args?.oldPath, args?.newPath)))
+  ipcMain.handle(`${moduleName}:copyFile`, (event, args) => guard(event, () => copyFile(args?.src, args?.dest)))
+  ipcMain.handle(`${moduleName}:copyFolder`, (event, args) => guard(event, () => copyFolder(args?.src, args?.dest)))
 
   tree('getTree', getTree)
   tree('listFlat', (dir, opt) => listAll(dir, opt))
@@ -323,11 +335,11 @@ function registerFileManagerController() {
   sync('existsAsync', existsAsync)
   sync('deleteAsync', deleteFileAsync)
   sync('readJSONAsync', readJSONAsync)
-  ipcMain.handle(`${moduleName}:writeJSONAsync`, (_event, args) => writeJSONAsync(args?.filePath, args?.obj, args?.space))
+  ipcMain.handle(`${moduleName}:writeJSONAsync`, (event, args) => guard(event, () => writeJSONAsync(args?.filePath, args?.obj, args?.space)))
   sync('createFolderAsync', createFolderAsync)
-  ipcMain.handle(`${moduleName}:renameAsync`, (_event, args) => renameAsync(args?.oldPath, args?.newPath))
-  ipcMain.handle(`${moduleName}:copyFileAsync`, (_event, args) => copyFileAsync(args?.src, args?.dest))
-  ipcMain.handle(`${moduleName}:copyFolderAsync`, (_event, args) => copyFolderAsync(args?.src, args?.dest))
+  ipcMain.handle(`${moduleName}:renameAsync`, (event, args) => guard(event, () => renameAsync(args?.oldPath, args?.newPath)))
+  ipcMain.handle(`${moduleName}:copyFileAsync`, (event, args) => guard(event, () => copyFileAsync(args?.src, args?.dest)))
+  ipcMain.handle(`${moduleName}:copyFolderAsync`, (event, args) => guard(event, () => copyFolderAsync(args?.src, args?.dest)))
 
   tree('getTreeAsync', getTreeAsync)
   tree('listFlatAsync', async (dir, opt) => listAllAsync(dir, opt))
