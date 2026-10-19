@@ -46,8 +46,11 @@ export function useTmcutAi() {
    * Model discovery for multi-provider gateways (FreeLLMAPI et al.):
    * GET {base}/models through the main process, so the key never reaches
    * the renderer and the result can populate a model picker.
+   * With `task` (R139) the call resolves the SAVED per-surface slots in
+   * the main process — a "test this connection" action verifies the
+   * surface's stored key without the renderer ever holding it.
    */
-  async function listModels(args: { provider?: string, apiKey?: string, baseUrl?: string } = {}): Promise<AiModelInfo[]> {
+  async function listModels(args: { provider?: string, apiKey?: string, baseUrl?: string, task?: string } = {}): Promise<AiModelInfo[]> {
     const api = aiApi()
     if (!api) throw new Error('AI gateway requires the desktop (Electron) app')
     const res = await api.models(args)

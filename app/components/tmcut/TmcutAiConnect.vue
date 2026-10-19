@@ -244,6 +244,8 @@ async function handleSave() {
 
     const res = await window.electronAPI?.setConfig(values)
     if (!res?.success) throw new Error('set-config failed')
+    // Saved config changed → every previous test verdict is stale.
+    testResults.value = {}
     form.value.apiKey = ''
     for (const task of SURFACE_KEYS) surfaces.value[task].apiKey = ''
     await refresh()
@@ -266,11 +268,62 @@ async function handleSave() {
 
 /** Read-only rows: what each part of the app actually runs right now. */
 const surfaceRows = computed(() => {
-  const rows: Array<{ key: string, label: string, st: AiTaskStatus | null }> = [
-    { key: 'editorScript', label: t('tmcut.aiConnect.surfaceEditorScript'), st: surfaceTasks.value?.['plan'] || null },
-    { key: 'captions', label: t('tmcut.aiConnect.surfaceCaptions'), st: surfaceTasks.value?.['transcribe'] || null },
-    { key: 'autocut', label: t('tmcut.aiConnect.surfaceAutocut'), st: surfaceTasks.value?.['triage'] || null }
+  const rows: Array<{ key: string, task: TestTarget, label: string, st: AiTaskStatus | null }> = [
+    { key: 'editorScript', task: 'plan', label: t('tmcut.aiConnect.surfaceEditorScript'), st: surfaceTasks.value?.['plan'] || null },
+    { key: 'captions', task: 'transcribe', label: t('tmcut.aiConnect.surfaceCaptions'), st: surfaceTasks.value?.['transcribe'] || null },
+    { key: 'autocut', task: 'triage', label: t('tmcut.aiConnect.surfaceAutocut'), st: surfaceTasks.value?.['triage'] || null }
   ]
+  return rows
+})
+
+// ===== Test a saved connection (R139, docs §203) ======================
+// The ONLY honest test of a stored key is a request the MAIN process
+// signs with it: listModels resolves the surface's own AI_*_<TASK> slots
+// server-side, so the panel verifies what it cannot read. A 401/403 is
+// the key being wrong; a 404 on /models still proves the endpoint + key
+// handshake works (some providers just do not publish a model list).
+type TestTarget = 'global' | 'plan' | 'transcribe' | 'triage'
+interface TestResult {
+  state: 'ok' | 'warn' | 'fail'
+  detail: string
+}
+const testing = ref<Record<string, boolean>>({})
+const testResults = ref<Record<string, TestResult>>({})
+
+async function handleTest(task: TestTarget) {
+  if (testing.value[task]) return
+  testing.value = { ...testing.value, [task]: true }
+  try {
+    const list = await listModels(task === 'global' ? {} : { task })
+    testResults.value = {
+      ...testResults.value,
+      [task]: { state: 'ok', detail: t('tmcut.aiConnect.testOk', { count: list.length }) }
+    }
+  } catch (err) {
+    const message = String((err as Error)?.message || err)
+    // Provider did answer, just not with a model list → credentials fine.
+    const reachable = /no model ids|has no model/i.test(message)
+    testResults.value = {
+      ...testResults.value,
+      [task]: { state: reachable ? 'warn' : 'fail', detail: message.slice(0, 180) }
+    }
+  } finally {
+    testing.value = { ...testing.value, [task]: false }
+  }
+}
+
+const testStateColor = (r: TestResult | undefined) =>
+  r?.state === 'ok' ? 'success' : r?.state === 'warn' ? 'warning' : 'error'
+
+/** Surfaces with a verdict, pre-joined so the template never indexes a
+ *  Record with a possibly-missing key. The loop shape (not filter) is
+ *  what narrows `res` to TestResult for vue-tsc. */
+const testedRows = computed(() => {
+  const rows: Array<{ task: TestTarget, label: string, res: TestResult }> = []
+  for (const row of surfaceRows.value) {
+    const res = testResults.value[row.task]
+    if (res) rows.push({ task: row.task, label: row.label, res })
+  }
   return rows
 })
 </script>
@@ -311,11 +364,39 @@ const surfaceRows = computed(() => {
             class="flex items-center justify-between gap-2 px-2 py-1.5"
           >
             <span class="text-[11px] text-neutral-600 dark:text-neutral-300">{{ row.label }}</span>
-            <span
-              class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate max-w-[55%]"
-              :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'"
-            >
-              {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · ' + row.st.model : ''}` : '—' }}
+            <span class="flex items-center gap-1 min-w-0">
+              <span
+                class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400 truncate max-w-[55%]"
+                :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'"
+              >
+                {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · ' + row.st.model : ''}` : '—' }}
+              </span>
+              <!-- Tests the SAVED slots for this task IN THE MAIN PROCESS
+                   (the stored key never travels here), so the result is
+                   about the real config, not about unsaved form values. -->
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                icon="i-lucide-plug-zap"
+                :loading="testing[row.task]"
+                :title="t('tmcut.aiConnect.testTitle')"
+                :aria-label="t('tmcut.aiConnect.testTitle')"
+                @click="handleTest(row.task)"
+              />
+            </span>
+          </div>
+          <!-- Last test verdict per surface (kept until the next test). -->
+          <div
+            v-for="tested in testedRows"
+            :key="`res-${tested.task}`"
+            class="flex items-center gap-1.5 px-2 py-1"
+          >
+            <UBadge :color="testStateColor(tested.res)" variant="subtle" size="xs">
+              {{ tested.label }}
+            </UBadge>
+            <span class="text-[10px] text-neutral-500 dark:text-neutral-400 truncate">
+              {{ tested.res.detail }}
             </span>
           </div>
         </div>
@@ -502,18 +583,41 @@ const surfaceRows = computed(() => {
           <p class="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
             {{ t('tmcut.aiConnect.hint') }}
           </p>
-          <UButton
-            color="primary"
-            variant="soft"
-            size="xs"
-            icon="i-lucide-save"
-            :loading="saving"
-            :disabled="baseUrlMissing"
-            @click="handleSave"
-          >
-            {{ t('tmcut.aiConnect.save') }}
-          </UButton>
+          <span class="flex items-center gap-1 shrink-0">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-plug-zap"
+              :loading="testing['global']"
+              @click="handleTest('global')"
+            >
+              {{ t('tmcut.aiConnect.test') }}
+            </UButton>
+            <UButton
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-save"
+              :loading="saving"
+              :disabled="baseUrlMissing"
+              @click="handleSave"
+            >
+              {{ t('tmcut.aiConnect.save') }}
+            </UButton>
+          </span>
         </div>
+        <p
+          v-if="testResults['global']"
+          class="text-[10px] -mt-1"
+          :class="testResults['global'].state === 'ok'
+            ? 'text-emerald-600 dark:text-emerald-400'
+            : testResults['global'].state === 'warn'
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-red-600 dark:text-red-400'"
+        >
+          {{ testResults['global'].detail }}
+        </p>
       </template>
     </div>
   </div>

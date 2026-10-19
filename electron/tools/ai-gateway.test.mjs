@@ -438,4 +438,64 @@ describe('task config slots', () => {
       }
     }
   })
+
+  // R139 (§203): "test this saved surface" resolves the AI_*_<TASK> slots
+  // server-side — the renderer never holds the stored key it verifies.
+  it('listModels(task) signs with the SAVED per-surface key', async () => {
+    const saved = { ...process.env }
+    let asked = null
+    try {
+      process.env.AI_PROVIDER = 'openai'
+      process.env.AI_API_KEY = 'global-key'
+      process.env.AI_BASE_URL = 'https://global.example/v1'
+      process.env.AI_PROVIDER_TRANSCRIBE = 'groq'
+      process.env.AI_API_KEY_TRANSCRIBE = 'surface-key'
+      const out = await gw.listModels(
+        { task: 'transcribe' },
+        {
+          fetchImpl: async (url, init) => {
+            asked = { url, auth: init.headers.authorization || null }
+            return { status: 200, text: async () => JSON.stringify({ data: [{ id: 'whisper-1' }] }) }
+          }
+        }
+      )
+      // The SURFACE's endpoint + key won, not the global pair.
+      assert.ok(asked.url.startsWith('https://api.groq.com'), `got ${asked.url}`)
+      assert.equal(asked.auth, 'Bearer surface-key')
+      assert.equal(out.models[0].id, 'whisper-1')
+    } finally {
+      for (const key of ['AI_PROVIDER', 'AI_API_KEY', 'AI_BASE_URL', 'AI_PROVIDER_TRANSCRIBE', 'AI_API_KEY_TRANSCRIBE']) {
+        if (saved[key] === undefined) delete process.env[key]
+        else process.env[key] = saved[key]
+      }
+    }
+  })
+
+  it('listModels without a task still reads the global config', async () => {
+    const saved = { ...process.env }
+    let asked = null
+    try {
+      process.env.AI_PROVIDER = 'openai'
+      process.env.AI_API_KEY = 'global-key'
+      process.env.AI_BASE_URL = 'https://global.example/v1'
+      process.env.AI_PROVIDER_TRANSCRIBE = 'groq'
+      process.env.AI_API_KEY_TRANSCRIBE = 'surface-key'
+      await gw.listModels(
+        {},
+        {
+          fetchImpl: async (url, init) => {
+            asked = { url, auth: init.headers.authorization || null }
+            return { status: 200, text: async () => JSON.stringify({ data: [{ id: 'gpt-x' }] }) }
+          }
+        }
+      )
+      assert.ok(asked.url.startsWith('https://global.example/v1/models'))
+      assert.equal(asked.auth, 'Bearer global-key')
+    } finally {
+      for (const key of ['AI_PROVIDER', 'AI_API_KEY', 'AI_BASE_URL', 'AI_PROVIDER_TRANSCRIBE', 'AI_API_KEY_TRANSCRIBE']) {
+        if (saved[key] === undefined) delete process.env[key]
+        else process.env[key] = saved[key]
+      }
+    }
+  })
 })

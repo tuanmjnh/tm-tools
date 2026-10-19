@@ -1313,7 +1313,10 @@
       "surfaceCaptions": "Phụ đề · chuyển âm",
       "surfaceAutocut": "AutoCut · phân tích",
       "surfaceCustom": "Riêng",
-      "surfaceGlobal": "Kế thừa"
+      "surfaceGlobal": "Kế thừa",
+      "test": "Thử",
+      "testTitle": "Kiểm tra kết nối đã lưu (key lưu trữ không rời khỏi main process)",
+      "testOk": "Kết nối OK — truy cập được {count} model"
     }
   },
   "dashboard": {

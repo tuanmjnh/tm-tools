@@ -9620,3 +9620,58 @@ clicking its checkbox, clicking play. Step 3 now answers arrows.
   server; rerun on first failure before believing it.
 - Unit run 30/30; typecheck 0; lint 0; live UI r136 16/16, r124 12/12;
   build 0; i18n unchanged 2977/2977.
+
+## 203. R139 — At-rest encryption for API keys + test-each-surface
+
+The app's `config.env` is a plaintext file in userData. Anyone with
+read access (a crashed-dump, a disk image, a `process.env` dump from a
+misconfigured tool) gets every API key. Electron's `safeStorage` wraps
+the OS keychain (DPAPI on Windows, Keychain on macOS, freedesktop
+secret service on Linux) — the correct primitive for a local desktop
+app: the key is encrypted with the user's OS login, not a password
+nobody would type.
+
+### 203.1 Boundary rule: file=encrypted tokens, env=plaintext
+
+The gateway and its rate limiter/audit/abort behavior are battle-tested
+and R139 does not touch them. `ai-secure.cjs` is the ONLY module that
+knows about safeStorage; it exports `encrypt()/decrypt()/isEncryptionAvailable()`.
+The main process:
+- **On read** (`loadUserConfig` + `get-config`): decrypt tokens from
+  file, put plaintext into `process.env` (gateway reads env), and mask
+  secrets to `'********'` for the renderer. `decrypt()` is TOLERANT:
+  pre-R139 plaintext passes through; a corrupt token yields `null`
+  (the UI surfaces "re-enter your key" honestly instead of sending
+  garbage).
+- **On write** (`set-config`): the panel sends plaintext; main
+  encrypts secret slots (`AI_API_KEY` / `AI_API_KEY_<TASK>`) before
+  writing the file; a masked echo from get-config keeps the stored
+  token instead of clobbering it. Live env keeps plaintext — the
+  gateway stays untouched.
+- **Migration** (once per launch): keys written before encryption
+  existed are re-encrypted in-place in the file + live env; already-
+  encrypted tokens are skipped; if the OS keychain is unavailable the
+  migration no-ops (plaintext keeps working).
+
+### 203.2 Test-each-surface: honest verification without key leakage
+
+The AI panel never reads stored keys. `listModels({ task })` resolves
+the SAVED per-surface `AI_*_<TASK>` slots server-side and signs a real
+`/models` request with the stored key — the renderer tests what it
+cannot read. A 401/403 means the key is wrong; a 404 on `/models`
+still proves the endpoint+handshake works (some providers do not
+publish a model list). The test verdict per surface is shown inline;
+saving new config clears old verdicts (they are stale).
+
+### 203.3 Proof
+
+- New `ai-secure` unit 7/7 (pure Node, fake backend mirroring the
+  real Buffer contract from §203 probe lesson).
+- Gateway unit +2: `listModels(task)` signs with the SAVED surface key;
+  without a task it reads the global config. Gateway total 38/38.
+- Electron probe `electron_secure_probe` 7/7: real DPAPI backend
+  available, round-trip recovers the key, token has no plaintext,
+  encrypt idempotent, legacy plaintext passes, corrupt→null.
+- Unit run 30/30; typecheck 0; lint 0; live UI r136 16/16, r124 12/12;
+  IPC probe 8/8, media probe 3/3, secure probe 7/7; build 0; i18n
+  2980/2980 (+3×2 test/testTitle/testOk).

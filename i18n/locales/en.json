@@ -1313,7 +1313,10 @@
       "surfaceCaptions": "Captions · transcription",
       "surfaceAutocut": "AutoCut · analysis",
       "surfaceCustom": "Custom",
-      "surfaceGlobal": "Inherit"
+      "surfaceGlobal": "Inherit",
+      "test": "Test",
+      "testTitle": "Test the saved connection (the stored key never leaves the main process)",
+      "testOk": "Connection OK — {count} models reachable"
     }
   },
   "dashboard": {

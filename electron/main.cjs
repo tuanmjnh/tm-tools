@@ -11,7 +11,18 @@ const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
+// R139 (§203): API-key slots are encrypted AT REST with the OS keychain
+// (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
+// tokens, process.env holds plaintext (the gateway stays untouched — its
+// rate limiter/audit/abort behavior is battle-tested, don't touch it).
+// decrypt() passes plaintext through, so pre-encryption files keep working.
+const { encrypt, decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
+
+// Secret config slots: the AI panel writes exactly KEY / KEY_<TASK>.
+// Matching the full slot shape keeps the rule closed — no arbitrary key
+// name can qualify for encryption/masking.
+const SECRET_SLOT_RE = /^AI_API_KEY(_.+)?$/
 
 let initializePlatform
 try {
@@ -49,7 +60,13 @@ function loadUserConfig() {
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
         value = value.slice(1, -1)
       }
-      if (!process.env[key]) {
+      // R139: the file holds keychain TOKENS; env carries plaintext so the
+      // gateway and every existing consumer stay untouched. decrypt()
+      // passes plaintext through (pre-R139 files) and yields null for a
+      // corrupt token — dropped here, which the gateway reports honestly
+      // as ai.no-key (re-enter the key) instead of sending garbage.
+      if (SECRET_SLOT_RE.test(key)) value = decrypt(value)
+      if (!process.env[key] && value !== null) {
         process.env[key] = value
       }
     }
@@ -228,6 +245,44 @@ async function createWindow() {
 
 const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 
+// R139 migration: keys written before encryption existed sit plaintext in
+// config.env. Re-encrypt once on startup (file + live env) so the window
+// between "old version wrote a key" and "new version protects it" is a
+// single launch. Skips anything already encrypted; no-ops when the OS
+// keychain is unavailable (plaintext keeps working — decrypt is tolerant).
+function migrateStoredKeysToSecureStorage() {
+  if (!isEncryptionAvailable()) return
+  const configFile = userConfigPath()
+  let content
+  try {
+    content = fs.readFileSync(configFile, 'utf8')
+  } catch {
+    return
+  }
+  const magic = magicPrefix()
+  let changed = false
+  const migrated = content.replace(/^([ \t]*)(AI_API(?:_URL)?(?:_[A-Z0-9_]+)?)([ \t]*)=([ \t]*)(.+?)[ \t]*$/gm,
+    (line, sp1, key, sp2, eq, sp3, rawValue) => {
+      if (!SECRET_SLOT_RE.test(key)) return line
+      let value = rawValue
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
+        value = value.slice(1, -1)
+      }
+      if (!value || value.startsWith(magic)) return line
+      const enc = encrypt(value)
+      if (enc === value) return line // no backend mid-flight: leave as-is
+      changed = true
+      return `${key}=${enc}`
+    })
+  if (changed) {
+    try {
+      fs.writeFileSync(configFile, migrated, 'utf8')
+    } catch {
+      // unwritable file: live env still migrated, file follows next save
+    }
+  }
+}
+
 // IPC sender validation (audit MEDIUM, R133 §197): every privileged
 // handler refuses calls whose frame is not the app's own origin. Dev
 // loads from the Vite server URL, prod from the loopback nitro server;
@@ -248,12 +303,11 @@ const isTrustedSender = createSenderGate({ isDev, port: PORT })
 // FUNCTION ITSELF is gated once.
 gateIpcMainHandle(ipcMain, isTrustedSender)
 
-ipcMain.handle('get-config', (event) => {
-  if (!isTrustedSender(event)) return {}
+// Config parsing shared by get/set (was duplicated three times inline).
+function readConfigFile(file) {
   const result = {}
-  const configFile = userConfigPath()
   try {
-    const content = fs.readFileSync(configFile, 'utf8')
+    const content = fs.readFileSync(file, 'utf8')
     for (const line of content.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed || trimmed.startsWith('#')) continue
@@ -267,7 +321,27 @@ ipcMain.handle('get-config', (event) => {
       result[key] = value
     }
   } catch {
-    // ignore
+    // no config yet
+  }
+  return result
+}
+
+ipcMain.handle('get-config', (event) => {
+  if (!isTrustedSender(event)) return {}
+  const result = {}
+  for (const [key, raw] of Object.entries(readConfigFile(userConfigPath()))) {
+    // R139: the file holds keychain TOKENS for secret slots; a renderer
+    // must never see either form. The panel only needs to know whether a
+    // key EXISTS (hasKey badges come from the gateway status), so secret
+    // values are masked out entirely. A corrupt token maps to '' (also
+    // "unset") instead of leaking base64 noise into the UI.
+    if (SECRET_SLOT_RE.test(key)) {
+      const plain = decrypt(raw)
+      delete result[key]
+      result[key] = plain ? '********' : ''
+      continue
+    }
+    result[key] = raw
   }
   return result
 })
@@ -275,23 +349,24 @@ ipcMain.handle('get-config', (event) => {
 ipcMain.handle('set-config', (event, values) => {
   if (!isTrustedSender(event)) return { success: false }
   const configFile = userConfigPath()
-  const existing = {}
-  try {
-    const content = fs.readFileSync(configFile, 'utf8')
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const eqIdx = trimmed.indexOf('=')
-      if (eqIdx === -1) continue
-      existing[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim()
-    }
-  } catch {
-    // ignore
-  }
-  const merged = { ...existing, ...values }
-  const lines = Object.entries(merged).map(([k, v]) => `${k}=${v}`)
+  const existing = readConfigFile(configFile)
+  const incoming = values && typeof values === 'object' ? values : {}
+  const merged = { ...existing, ...incoming }
+  const lines = Object.entries(merged)
+    // R139: a masked value coming BACK from get-config ('********')
+    // means the UI echoed the placeholder — keep the stored token.
+    .filter(([k, v]) => !(SECRET_SLOT_RE.test(k) && String(v) === '********'))
+    .map(([k, v]) => {
+      // Secret slots go to the file as keychain tokens; every other
+      // value is written verbatim, exactly as before.
+      const stored = SECRET_SLOT_RE.test(k) ? encrypt(String(v)) : String(v)
+      return `${k}=${stored}`
+    })
   fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(incoming)) {
+    // Live env keeps PLAINTEXT (the gateway reads env, untouched by R139);
+    // a masked echo skips the env write so it never clobbers the real key.
+    if (SECRET_SLOT_RE.test(key) && String(value) === '********') continue
     process.env[key] = String(value)
   }
   return { success: true, path: configFile }
@@ -454,6 +529,12 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId(process.execPath)
   }
+  // R139: user config used to be read only by startServer() (packaged
+  // path). Load it for every session so dev and prod see the same env
+  // (set-if-unset semantics), then migrate any pre-R139 plaintext keys
+  // to keychain tokens before anything else touches the file (§203).
+  loadUserConfig()
+  migrateStoredKeysToSecureStorage()
   protocol.handle('media', createMediaHandler(appOrigins))
 
   registerYoutubeController()
