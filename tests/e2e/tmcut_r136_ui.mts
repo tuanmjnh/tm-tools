@@ -1,11 +1,14 @@
 /**
- * R135 UI check (dev-only): the AutoCut step-2 panel exposes the AI
- * triage blend-weight slider (tmcut.autocutV2.aiWeight*). Verifies on
- * the LIVE page:
+ * R135+R136 UI check (dev-only): the AutoCut step-2 panel exposes the AI
+ * triage blend-weight slider (tmcut.autocutV2.aiWeight*) AND persists the
+ * whole wizard option set across reloads (docs §200). Verifies on the
+ * LIVE page:
  *   1. slider is hidden while the AI triage switch is off;
  *   2. toggling the switch reveals the slider + % readout, default 25%;
- *   3. dragging the slider updates the % readout (real v-model, not a
- *      cosmetic number).
+ *   3. keyboard steps move the readout (real v-model, not a cosmetic
+ *      number);
+ *   4. profile / filler / triage / weight / keywords all survive a full
+ *      page reload (R136: localStorage prefs, sanitized on read).
  *
  * Needs the same preconditions as tmcut_r124_ui.mts: dev server on
  * TMCUT_DEV_URL, hub stub on TMCUT_HUB_PORT, system Edge/Chrome via
@@ -23,7 +26,7 @@ const browserExe = process.env.CHROME_EXE || ''
 let pass = 0
 let fail = 0
 function check(name: string, ok: boolean, detail = '') {
-  console.log(`R135 UI ${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`)
+  console.log(`R136 UI ${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' :: ' + detail : ''}`)
   if (ok) pass++
   else fail++
 }
@@ -78,7 +81,7 @@ async function main() {
         addedAt: new Date().toISOString()
       }]
     })
-    console.log(`R135 UI INFO url=${page.url()}`)
+    console.log(`R136 UI INFO url=${page.url()}`)
 
     // Step-1 → step-2 through the media library (no native dialog in
     // web mode; the pushed asset is the source).
@@ -96,7 +99,7 @@ async function main() {
     // Diagnostic: a stuck step 1 means the media pick found no ready
     // source (toast 'No ready video found').
     const bodyText = await page.locator('body').innerText()
-    console.log(`R135 UI INFO onStep2=${bodyText.includes('Filter filler words')}`)
+    console.log(`R136 UI INFO onStep2=${bodyText.includes('Filter filler words')}`)
 
     // Step 2 carries TWO switches (filler filter, then AI triage) — the
     // triage one is the LAST in the options column.
@@ -137,12 +140,65 @@ async function main() {
     const readoutText2 = (await readout.innerText().catch(() => '')).trim()
     check('readout follows keyboard steps (25% → 35%)', readoutText2 === '35%', `readout=${readoutText2}`)
 
+    // 4) R136: the whole option set SURVIVES A RELOAD (prefs persist).
+    //    Mutate every field, reload, re-enter step 2, expect all back.
+    //    Filler switch is the FIRST on step 2, triage the LAST.
+    const fillerSwitch = page.locator('[role="switch"]').first()
+    await fillerSwitch.click()
+    const keywordsInput = page.getByPlaceholder(/hook, tips/i).first()
+    await keywordsInput.fill('hook, summary')
+    const podcastCard = page.locator('div.border-2').filter({ has: page.getByText('Podcast Highlights') }).first()
+    await podcastCard.click()
+    await page.waitForTimeout(400)
+
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 90000 })
+    // Web runtime clears the media library on load → re-push the asset.
+    await page.waitForFunction(() => !!(window as any).tmcutQaStore?.assets, null, { timeout: 30000 })
+    await page.evaluate(() => {
+      ;(window as any).tmcutQaStore.assets.value = [{
+        id: 'qa-asset-r135',
+        name: 'r135-source.mp4',
+        kind: 'video',
+        status: 'ready',
+        path: 'D:/qa/r135-source.mp4',
+        src: 'data:video/mp4;base64,',
+        usedBy: [],
+        meta: { durationSec: 12, width: 1920, height: 1080, fps: 30, fileSize: 1000, mtimeMs: 0, probedAt: null, hasVideo: true },
+        addedAt: new Date().toISOString()
+      }]
+    })
+    let libBtnAfter = true
+    try {
+      await libBtn.waitFor({ state: 'visible', timeout: 15000 })
+    } catch {
+      libBtnAfter = false
+    }
+    if (!libBtnAfter) throw new Error('media-library button not visible after reload')
+    await libBtn.click()
+    await page.waitForTimeout(600)
+
+    // Profile card: selection paints border-primary.
+    const cardClasses = await podcastCard.evaluate(el => el.className)
+    check('profile survives reload (Podcast Highlights selected)', cardClasses.includes('border-primary'))
+    // Filler switch was turned OFF before reload.
+    const fillerChecked = await fillerSwitch.getAttribute('aria-checked')
+    check('filler filter survives reload (still off)', fillerChecked === 'false', `aria=${fillerChecked}`)
+    // Triage switch was turned ON before reload.
+    const triageSwitch = page.locator('[role="switch"]').last()
+    const triageChecked = await triageSwitch.getAttribute('aria-checked')
+    check('AI triage survives reload (still on)', triageChecked === 'true', `aria=${triageChecked}`)
+    // Weight readout restored at 35% (R135 value persisted by R136).
+    const readoutRestored = await weightBlock.locator('span.tabular-nums').innerText().catch(() => '')
+    check('aiWeight survives reload (35%)', readoutRestored.trim() === '35%', `readout=${readoutRestored}`)
+    const keywordsRestored = await keywordsInput.inputValue().catch(() => '')
+    check('keywords survive reload', keywordsRestored === 'hook, summary', `value=${keywordsRestored}`)
+
     check('no pageerror during the run', pageErrors.length === 0, pageErrors.slice(0, 1).join(' '))
   } finally {
     await browser.close()
     if (hubProc) hubProc.kill()
   }
-  console.log(`R135 UI result: ${pass} passed, ${fail} failed`)
+  console.log(`R136 UI result: ${pass} passed, ${fail} failed`)
   process.exit(fail === 0 ? 0 : 1)
 }
 

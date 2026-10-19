@@ -7,6 +7,7 @@ import type { AutocutProfile, AutocutAnalysis } from '~/composables/useTmcutAuto
 import type { TmcutAsset } from '~/types/tmcut'
 import { formatDurationSec } from '~/utils/tmcut/media'
 import { toURL } from '~/utils/ffmpegHelper'
+import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs } from '~/utils/tmcut/autocutPrefs'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -15,28 +16,49 @@ const { assets, isDesktop, importFiles, importWebFiles, findAssetBySrc, getThumb
 const { analyzing, stageKey, analysisError, analyzeSource, applyDraft } = useTmcutAutocut()
 const { available: canExtractFrames, extractFrames } = useTmcutFrames()
 
+// AutoCut v2: transcript vocabulary analysis options.
+// hydrate from sanitized localStorage prefs, persist on change. All
+// parsing/clamping lives in autocutPrefs.ts (unit-tested); the page
+// only reads and writes strings.
 const currentStep = ref(1)
-const selectedProfile = ref<AutocutProfile>('viral-shorts')
+const savedPrefs = import.meta.client
+  ? parseAutocutPrefs(localStorage.getItem(AUTOCUT_PREFS_KEY))
+  : { ...AUTOCUT_PREFS_DEFAULT }
+const selectedProfile = ref<AutocutProfile>(savedPrefs.profile)
 const sourceAsset = ref<TmcutAsset | null>(null)
 const edlResult = ref<AutocutAnalysis | null>(null)
 const included = ref<number[]>([])
 const draftProjectId = ref<string | null>(null)
 const applying = ref(false)
 
-// AutoCut v2: transcript vocabulary analysis options
-const filterFillerWords = ref(true)
-const aiAnalysis = ref(false)
+const filterFillerWords = ref(savedPrefs.filterFillerWords)
+const aiAnalysis = ref(savedPrefs.aiAnalysis)
 // R135: how far the triage opinion pulls the local score (core clamps
-// 0..0.5). 0.25 = the core default, kept in sync deliberately.
-const AI_WEIGHT_DEFAULT = 0.25
-const aiWeight = ref(AI_WEIGHT_DEFAULT)
-const highlightKeywordsText = ref('')
+// 0..0.5). The default/ceiling constants come from autocutPrefs.ts,
+// pinned to the core contract by tmcut_autocut_prefs.spec.
+const aiWeight = ref(savedPrefs.aiWeight)
+const highlightKeywordsText = ref(savedPrefs.keywordsText)
 const highlightKeywords = computed(() =>
   highlightKeywordsText.value
     .split(',')
     .map(word => word.trim())
     .filter(Boolean)
 )
+
+watch([selectedProfile, filterFillerWords, aiAnalysis, aiWeight, highlightKeywordsText], () => {
+  if (!import.meta.client) return
+  try {
+    localStorage.setItem(AUTOCUT_PREFS_KEY, serializeAutocutPrefs({
+      profile: selectedProfile.value,
+      filterFillerWords: filterFillerWords.value,
+      aiAnalysis: aiAnalysis.value,
+      aiWeight: aiWeight.value,
+      keywordsText: highlightKeywordsText.value
+    }))
+  } catch {
+    // Private-mode / quota: persistence is a convenience, never an error.
+  }
+}, { deep: false })
 
 // Mini-review player state (design #4 right panel)
 const activeSegmentIndex = ref<number | null>(null)

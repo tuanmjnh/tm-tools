@@ -9492,3 +9492,45 @@ exposed it, so users could only choose triage on/off at 25%.
 - Gates: unit 28/28, typecheck 0, lint 0, live UI 12/12 (+ R135 8/8),
   build 0, i18n 2976/2976. Electron ipc probe re-run 8/8 as the standing
   regression gate (this round touches no electron file).
+
+## 200. R136 — AutoCut wizard prefs survive a reload
+
+The R135 slider made the gap obvious: every reload silently reset the
+whole step-2 option set (profile, filler filter, triage switch, blend
+weight, keywords) to hard defaults — a user tuning the AI influence to
+40% lost it on F5.
+
+### 200.1 `app/utils/tmcut/autocutPrefs.ts` (new, pure)
+
+- `parseAutocutPrefs` / `serializeAutocutPrefs` over one key
+  (`tmcut_autocut_prefs_v1`, value pinned by spec — renaming it would
+  silently orphan existing users' prefs). No Vue, no window: unit-tested
+  in plain Node.
+- NEVER trusts what comes back out of localStorage (it is attacker-
+  writable like any other stored string): garbage JSON → defaults; each
+  field sanitized INDEPENDENTLY (one corrupt field never discards the
+  others); profile must be in the closed `AUTOCUT_PROFILES` set;
+  booleans must be actual booleans (a truthy `'off'` string does NOT
+  flip a switch); `aiWeight` clamped 0..0.5 — the SAME ceiling core
+  enforces in `scoreSegments`, pinned behaviorally by the spec.
+- Page side (autocut.vue): hydrate the five refs from
+  `parseAutocutPrefs(localStorage.getItem(...))`, one `watch([...], …)`
+  serializes on change; the write is try/catch (private-mode/quota =
+  lost convenience, never an error toast).
+
+### 200.2 Proof
+
+- New spec `tmcut_autocut_prefs` 7/7: garbage/empty/array → identical
+  defaults; full round-trip; per-field independence; negative/99 weight
+  clamp; string-number coercion ("0.1" → 0.1, "abc" → default); the
+  ceiling contract against REAL `scoreSegments` (stored 0.5 still scores
+  strictly below pure-AI); page-contract grep (profile cards, prefs
+  wiring, key value).
+- Harness renamed `tmcut_r136_ui.mts` 13/13: the 8 R135 checks + 5
+  reload checks — mutate every field (profile→Podcast, filler off,
+  triage on, weight 35%, keywords), HARD reload, re-enter step 2:
+  border-primary card, aria-checked states, 35% readout, keywords text
+  all back. (The reload also re-pushes the QA asset fixture — the web
+  runtime clears the library on load, §199.3 lesson.)
+- Unit run 29/29; typecheck 0; lint 0; live UI r124 12/12; build 0;
+  i18n unchanged 2976/2976.
