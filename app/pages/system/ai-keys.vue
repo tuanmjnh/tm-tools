@@ -113,6 +113,36 @@ async function handleTest(task: TestTarget) {
     testing.value = { ...testing.value, [task]: false }
   }
 }
+
+// R143 (§206): the amber "keychain unavailable / plaintext keys" banner
+// used to be a dead end — the startup migration runs once, so a keychain
+// that was briefly unavailable at boot left plaintext sitting until the
+// next launch. This button re-runs the SAME idempotent migration in main
+// (already-encrypted tokens skipped) and reads the counts back; it can
+// only change storage FORM, never a config value (§203).
+const migrating = ref(false)
+const justEncrypted = ref(false)
+
+const showEncryptButton = computed(() =>
+  !!vault.value && vault.value.available && vault.value.plaintext > 0
+)
+
+async function handleEncrypt() {
+  if (migrating.value) return
+  migrating.value = true
+  justEncrypted.value = false
+  try {
+    const res = await window.electronAPI?.aiMigrateKeys?.()
+    if (res?.ok && res.data) {
+      vault.value = res.data
+      justEncrypted.value = res.data.plaintext === 0
+    }
+  } catch {
+    // banner + counts stay as-is; the action is safe to retry
+  } finally {
+    migrating.value = false
+  }
+}
 </script>
 
 <template>
@@ -168,8 +198,22 @@ async function handleTest(task: TestTarget) {
                 <UIcon name="i-lucide-eye" class="w-3 h-3 mr-1" />
                 {{ t('settings.aiKeysPlaintextCount', { count: vault?.plaintext ?? 0 }) }}
               </UBadge>
+              <UButton
+                v-if="showEncryptButton"
+                color="primary"
+                variant="soft"
+                size="xs"
+                icon="i-lucide-lock-keyhole-open"
+                :loading="migrating"
+                :label="t('settings.aiKeysEncryptNow')"
+                :title="t('settings.aiKeysEncryptNowTitle')"
+                @click="handleEncrypt"
+              />
             </div>
           </div>
+          <p v-if="justEncrypted" class="text-[11px] mt-2 text-emerald-600 dark:text-emerald-400">
+            {{ t('settings.aiKeysEncryptedNow') }}
+          </p>
         </div>
 
         <!-- ============ Global connection ================================= -->

@@ -17,6 +17,11 @@ const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 // rate limiter/audit/abort behavior is battle-tested, don't touch it).
 // decrypt() passes plaintext through, so pre-encryption files keep working.
 const { encrypt, decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
+// R143 (§206): the line transform behind the startup migration AND the
+// vault page's "Encrypt now" button is pure (key-migrate.cjs) so the
+// Electron probe can prove the real behavior (real keychain, plaintext
+// -> token, idempotent second pass) instead of only pinning a contract.
+const { migrateKeyContent } = require('./tools/key-migrate.cjs')
 // R141 (§205): the config.env parser is shared by get-config, ai-key-status
 // and set-config — one implementation, so "file missing" can never be
 // read differently by two handlers. Shape: { exists, values }.
@@ -244,6 +249,8 @@ const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 // between "old version wrote a key" and "new version protects it" is a
 // single launch. Skips anything already encrypted; no-ops when the OS
 // keychain is unavailable (plaintext keeps working — decrypt is tolerant).
+// R143: the transform itself lives in key-migrate.cjs (pure, probe-tested
+// against the REAL keychain); this wrapper owns file + availability.
 function migrateStoredKeysToSecureStorage() {
   if (!isEncryptionAvailable()) return
   const configFile = userConfigPath()
@@ -253,21 +260,7 @@ function migrateStoredKeysToSecureStorage() {
   } catch {
     return
   }
-  const magic = magicPrefix()
-  let changed = false
-  const migrated = content.replace(/^([ \t]*)(AI_API(?:_URL)?(?:_[A-Z0-9_]+)?)([ \t]*)=([ \t]*)(.+?)[ \t]*$/gm,
-    (line, sp1, key, sp2, eq, sp3, rawValue) => {
-      if (!SECRET_SLOT_RE.test(key)) return line
-      let value = rawValue
-      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
-        value = value.slice(1, -1)
-      }
-      if (!value || value.startsWith(magic)) return line
-      const enc = encrypt(value)
-      if (enc === value) return line // no backend mid-flight: leave as-is
-      changed = true
-      return `${key}=${enc}`
-    })
+  const { content: migrated, changed } = migrateKeyContent(content)
   if (changed) {
     try {
       fs.writeFileSync(configFile, migrated, 'utf8')
@@ -325,15 +318,12 @@ ipcMain.handle('get-config', (event) => {
   return result
 })
 
-ipcMain.handle('ai-key-status', (event) => {
-  if (!isTrustedSender(event)) return { ok: false }
-  // R140 + R141: the vault dashboard asks "how many keys are protected?" —
-  // counts only, never tokens or values (the renderer never sees them).
-  // `exists` distinguishes a fresh install (no config file yet) from a
-  // parsed file with zero secret slots — without it both look like
-  // "0 encrypted / 0 plaintext" and the banner lies about the keychain.
-  // The loop stays CLOSED to the secret slots: a stray non-secret value
-  // with the magic prefix must never be counted as an encrypted key.
+// Shared vault-status read for ai-key-status AND ai-migrate-keys. One
+// counting rule, so the "Encrypt now" button's answer and the banner's
+// question can never disagree (§205: closed to SECRET_SLOT_RE — counts,
+// never values; a stray non-secret value with the magic prefix must
+// never be counted as an encrypted key).
+function keyVaultStatus() {
   const parsed = readConfigFile(userConfigPath())
   let encrypted = 0
   let plaintext = 0
@@ -342,15 +332,32 @@ ipcMain.handle('ai-key-status', (event) => {
     if (raw.startsWith(magicPrefix())) encrypted++
     else plaintext++
   }
-  return {
-    ok: true,
-    data: {
-      available: isEncryptionAvailable(),
-      exists: parsed.exists,
-      encrypted,
-      plaintext
-    }
-  }
+  return { available: isEncryptionAvailable(), exists: parsed.exists, encrypted, plaintext }
+}
+
+ipcMain.handle('ai-key-status', (event) => {
+  if (!isTrustedSender(event)) return { ok: false }
+  // R140 + R141: the vault dashboard asks "how many keys are protected?" —
+  // counts only, never tokens or values (the renderer never sees them).
+  // `exists` distinguishes a fresh install (no config file yet) from a
+  // parsed file with zero secret slots — without it both look like
+  // "0 encrypted / 0 plaintext" and the banner lies about the keychain.
+  return { ok: true, data: keyVaultStatus() }
+})
+
+ipcMain.handle('ai-migrate-keys', (event) => {
+  if (!isTrustedSender(event)) return { ok: false }
+  // R143 (§206): "Encrypt now" on the vault page. The startup migration
+  // runs ONCE; if the keychain was flaky at boot (or the file momentarily
+  // unwritable) plaintext keys would sit until the NEXT launch with no way
+  // to act on the amber banner. This re-runs the SAME idempotent
+  // migration and returns fresh counts — already-encrypted tokens are
+  // skipped, double-clicking changes nothing, and the write is atomic
+  // with the file's own line format. Storage FORM only: no config value
+  // changes, live env keeps plaintext (§203 boundary untouched).
+  if (!isEncryptionAvailable()) return { ok: false, data: keyVaultStatus() }
+  migrateStoredKeysToSecureStorage()
+  return { ok: true, data: keyVaultStatus() }
 })
 
 ipcMain.handle('set-config', (event, values) => {

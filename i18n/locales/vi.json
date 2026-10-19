@@ -2234,7 +2234,10 @@
     "aiKeysWhere3": "Key được mã hóa bằng tài khoản OS của bạn. Chép file config sang máy hoặc tài khoản khác sẽ khiến key không đọc được — hãy nhập lại ở đó.",
     "aiKeysVaultEmpty": "Chưa có AI key nào",
     "aiKeysVaultEmptyDesc": "Chưa có gì được lưu vào config.env — bảng AI connection chưa từng chạy. Save một key ở đó để thấy nó được bảo vệ ở đây.",
-    "aiKeysVaultOffDesc": "Keychain OS không thể truy cập trong phiên này, nên key lưu dạng plaintext. Save key trên máy có keychain để mã hóa."
+    "aiKeysVaultOffDesc": "Keychain OS không thể truy cập trong phiên này, nên key lưu dạng plaintext. Save key trên máy có keychain để mã hóa.",
+    "aiKeysEncryptNow": "Mã hóa ngay",
+    "aiKeysEncryptNowTitle": "Mã hóa lại các key đã lưu bằng keychain OS (chạy đúng phép migration app thử lúc khởi động)",
+    "aiKeysEncryptedNow": "Mọi key đã lưu giờ được mã hóa tại chỗ."
   },
   "seed": {
     "desc": "Seed các vai trò và tài khoản mặc định. Seed idempotent chỉ thêm phần còn thiếu, còn Reset sẽ xóa toàn bộ dữ liệu trước khi seed lại.",

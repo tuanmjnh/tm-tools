@@ -25,21 +25,62 @@ describe('TMCut AI key vault — channel contract (R140)', () => {
   })
 
   it('the handler counts secret slots through the SAME closed regex (no ad-hoc key lists)', () => {
-    const handler = main.slice(main.indexOf('ipcMain.handle(\'ai-key-status\''))
-    const body = handler.slice(0, handler.indexOf('ipcMain.handle(', 10))
+    // R143: counting moved into keyVaultStatus() shared by status +
+    // migrate — the contract is the SHARED function, not one handler body.
+    const shared = main.slice(main.indexOf('function keyVaultStatus'))
+    const body = shared.slice(0, shared.indexOf('\n}') + 2)
     assert.ok(body.includes('SECRET_SLOT_RE'), 'counts must flow through SECRET_SLOT_RE')
     assert.ok(body.includes('isEncryptionAvailable()'), 'availability must be reported')
     // R141: a fresh install (no config.env) must be distinguishable from
     // a parsed file with zero secret slots, or the banner lies.
-    assert.ok(body.includes('exists: parsed.exists'), 'handler must report whether config.env exists')
-    // Counts only: the handler must not stringify or return stored values.
-    assert.ok(!/--return\s*cfg|return cfg\b|JSON\.stringify\(cfg\)/.test(body), 'handler must never return config values')
+    assert.ok(body.includes('parsed.exists'), 'shared counter must report whether the file exists')
+    // Counts only: neither the counter nor its handlers return values.
+    assert.ok(!/return\s+(parsed|cfg)\b|JSON\.stringify\((parsed|cfg)\)/.test(main.slice(main.indexOf('function keyVaultStatus'), main.indexOf('ipcMain.handle(\'set-config\''))),
+      'the vault layer must never return config values')
   })
 
   it('the trusted-sender gate covers the handler (it is registered like every privileged one)', () => {
     const handler = main.slice(main.indexOf('ipcMain.handle(\'ai-key-status\''))
     const body = handler.slice(0, 400)
     assert.ok(body.includes('isTrustedSender(event)'), 'ai-key-status must check the sender')
+  })
+
+  it('the migrate channel exists at every layer and reuses the startup migration (R143)', () => {
+    // The button must not invent a second encryption path: it calls the
+    // SAME migrateStoredKeysToSecureStorage the app runs at boot.
+    assert.ok(main.includes('ipcMain.handle(\'ai-migrate-keys\''), 'main must register ai-migrate-keys')
+    const handler = main.slice(main.indexOf('ipcMain.handle(\'ai-migrate-keys\''))
+    const body = handler.slice(0, handler.indexOf('})', handler.indexOf('{')))
+    assert.ok(body.includes('isTrustedSender(event)'), 'ai-migrate-keys must check the sender')
+    assert.ok(body.includes('isEncryptionAvailable()'), 'refuses to pretend when no keychain exists')
+    assert.ok(body.includes('migrateStoredKeysToSecureStorage()'), 'must reuse the startup migration, not re-implement it')
+    assert.ok(preload.includes('aiMigrateKeys: () => ipcRenderer.invoke(\'ai-migrate-keys\')'), 'preload must expose aiMigrateKeys()')
+  })
+
+  it('the Encrypt-now button is scoped to its one honest trigger', () => {
+    // available + plaintext>0. Never offered when the keychain is absent
+    // (nothing to do) or when everything is already encrypted (no-op UI).
+    const page = read('app/pages/system/ai-keys.vue')
+    assert.ok(/showEncryptButton = computed\(\(\) =>[\s\S]*?available && vault\.value\.plaintext > 0/.test(page),
+      'button must require BOTH keychain availability and plaintext keys')
+  })
+
+  it('main.cjs and key-migrate.cjs keep the SAME slot regex (two copies, one truth)', () => {
+    // main masks/decrypts with its copy; key-migrate filters with its
+    // copy. Divergence = a slot encrypted by one side and missed by the
+    // other (exactly the R139 global-key bug, probe §15 caught it live).
+    const km = read('electron/tools/key-migrate.cjs')
+    const rx = /SECRET_SLOT_RE = (\/[^\n]+\/[a-z]*)/
+    const a = main.match(rx)
+    const b = km.match(rx)
+    assert.ok(a && b, 'both files must declare SECRET_SLOT_RE as a literal')
+    assert.equal(a![1], b![1], 'slot regexes must be byte-identical')
+    // And the shape the whole R139 line depends on: the GLOBAL slot
+    // (no suffix) must match. The R139 inline regex failed exactly this.
+    const re = new RegExp(a![1].slice(1, a![1].lastIndexOf('/')))
+    assert.ok(re.test('AI_API_KEY'), 'global AI_API_KEY must qualify as a secret slot')
+    assert.ok(re.test('AI_API_KEY_PLAN'))
+    assert.ok(!re.test('AI_BASE_URL'), 'non-key slots stay unencrypted')
   })
 })
 

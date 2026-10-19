@@ -148,6 +148,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setConfig: values => ipcRenderer.invoke('set-config', values),
   // R140: at-rest key vault status (counts only — never tokens/values).
   aiKeyStatus: () => ipcRenderer.invoke('ai-key-status'),
+  // R143: re-run the idempotent at-rest migration ("Encrypt now").
+  aiMigrateKeys: () => ipcRenderer.invoke('ai-migrate-keys'),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
   openExternal: url => ipcRenderer.invoke('open-external', url),

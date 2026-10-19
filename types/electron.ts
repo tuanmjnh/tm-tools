@@ -852,6 +852,8 @@ export interface ElectronAPI {
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
   /** R140 (§204): at-rest key vault status — counts only, never tokens. */
   aiKeyStatus(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
+  /** R143 (§206): re-run the idempotent at-rest migration; fresh counts. */
+  aiMigrateKeys(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
   verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
   openExternal(url: string): Promise<boolean>

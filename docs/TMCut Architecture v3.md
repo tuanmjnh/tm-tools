@@ -9787,3 +9787,46 @@ a synthetic flag key as a fake config row).
   guard against the page touching IPC before checking `electronAPI`.
 - Final: unit 32/32, vault 8/8, typecheck 0, lint 0, i18n 2998/2998,
   build 0.
+
+## 206. R143 — "Encrypt now": the amber banner gets an action
+
+The vault banner could honestly say "keys sit in plaintext" — but it
+could not offer anything to do about it. The startup migration runs
+exactly once; if the OS keychain was briefly unavailable at boot, or
+the file was momentarily unwritable, plaintext keys waited until the
+NEXT launch. A diagnosis without a remedy is just anxiety.
+
+### 206.1 The button calls the startup migration, not a second path
+
+`ai-migrate-keys` (IPC) refuses without a keychain, otherwise runs the
+SAME `migrateStoredKeysToSecureStorage()` startup runs and returns the
+shared `keyVaultStatus()` counts — idempotent, so double-clicking
+changes nothing. Boundary intact (§203): only the storage FORM of the
+file changes; values, env, and gateway stay untouched. The button
+appears exactly when it can help: keychain available AND plaintext > 0
+— never a dead control.
+
+### 206.2 The transform became pure — and that is how it got audited
+
+`electron/tools/key-migrate.cjs` now owns the line transform; main.cjs
+wraps it with file + availability. Cut-and-paste was rejected: the R139
+inline capture `AI_API(?:_URL)?(?:_[A-Z0-9_]+)?` matched its slots
+correctly (node-verified — no key was ever lost) but also matched
+`AI_API`/`AI_API_URL_PLAN`, trusting the downstream SECRET_SLOT_RE
+filter. Correct today, fragile tomorrow. The rewrite splits lines and
+applies the closed regex alone; non-matching lines return byte-for-byte
+(indentation, comments). Two SECRET_SLOT_RE copies remain (main masks,
+migrate filters) and the vault spec now pins the two literals
+byte-identical plus the behavior that matters: plain `AI_API_KEY`
+qualifies, `AI_BASE_URL` does not.
+
+### 206.3 Proof
+
+- Secure probe 7 → 15 checks: the REAL keychain now proves the whole
+  migration contract (global + surface lines → tokens, no plaintext in
+  tokens, round-trip recovery, non-secret lines untouched, second pass
+  no-op, closed regex shape).
+- Vault spec 8 → 11 checks: migrate channel at every layer reusing the
+  startup function, button scoping rule, regex-drift pin.
+- Unit 32/32; vault 11/11; AI suite 45/45; typecheck 0; lint 0; probe
+  ALL PASS; live UI r136 16/16 + r140 4/4; i18n 3001/3001 (+3×2).
