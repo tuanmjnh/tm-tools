@@ -1878,7 +1878,9 @@
     "deleteRoleConfirmDesc": "Are you sure you want to delete role \"{name}\"? This action cannot be undone.",
     "rolesPermissions": "Roles & Permissions",
     "system": "System",
-    "permissions": "Permissions",
+    "permissions": {
+      "title": "Permissions"
+    },
     "actionsHelp": "Fine-grained actions per module (used for API access control)",
     "name": "Name",
     "read": "read",
@@ -2073,6 +2075,14 @@
     "accessibleRoutesHint": "Calculated from this role’s permissions — routes are not saved on the role."
   },
   "settings": {
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "systemTheme": "System",
+    "light": "Light",
+    "dark": "Dark",
+    "colors": "Accent Colors",
+    "primaryColor": "Primary color",
+    "neutralColor": "Neutral color",
     "title": "Settings",
     "description": "Manage your profile, system settings, runtimes, and preferences.",
     "profile": "Profile",
@@ -2996,6 +3006,7 @@
     "asJson": "JSON",
     "asText": "Text",
     "duplicateKey": "This key already exists",
+    "showSecret": "Show Secret",
     "secretHint": "Hidden value - enter a new value to replace it",
     "type": "Data Type",
     "typeText": "Single-line Text",
@@ -3263,5 +3274,58 @@
     "tabImport": "Import queue",
     "tabMail": "Mail queue",
     "title": "Background Queues"
+  },
+  "docs": {
+    "description": "API reference and architecture of the TM Hub control plane.",
+    "searchPlaceholder": "Search endpoints, modules, descriptions…",
+    "allModules": "All modules",
+    "endpointsCount": "{filtered} of {total} endpoints",
+    "architecture": {
+      "iamTitle": "Identity & Access",
+      "iamDesc": "Central IAM: JWT sessions, 2FA, passkeys, roles and per-app route permissions.",
+      "remoteConfigsTitle": "Remote Configs",
+      "remoteConfigsDesc": "Centralized app settings, typed and encrypted, synced to every satellite.",
+      "mediaGatewayTitle": "Media Gateway",
+      "mediaGatewayDesc": "Signed uploads, folder tree and resource management over Cloudinary.",
+      "notificationsTitle": "Notifications",
+      "notificationsDesc": "Push (FCM + VAPID), in-app inbox and webhooks with audit trail."
+    },
+    "sdk": {
+      "title": "Client SDK",
+      "description": "Use the tm-hub-client SDK from {app} — it attaches your app identity and tokens automatically."
+    },
+    "api": {
+      "title": "REST API",
+      "prefix": "/api/v1",
+      "module": "Module",
+      "method": "Method",
+      "endpoint": "Endpoint",
+      "description": "Description",
+      "login": "Authenticate and start a session",
+      "refresh": "Rotate the access token",
+      "me": "Current user profile and roles",
+      "routes": "Route tree for the current app",
+      "getConfigs": "Read app config values",
+      "updateConfigs": "Update app config values",
+      "getPublicConfigs": "Read public (non-secret) configs",
+      "getMediaFolders": "List media folders",
+      "getMediaResources": "List media resources",
+      "getMediaSignature": "Request an upload signature",
+      "deleteMediaResource": "Delete a media resource",
+      "subscribeNotification": "Register a push subscription",
+      "getNotifications": "List user notifications",
+      "sendNotification": "Send an in-app notification"
+    }
+  },
+  "notifications": {
+    "pushTitle": "Push Notifications",
+    "pushDesc": "Receive app alerts on this device via Firebase Cloud Messaging or VAPID web push.",
+    "pushUnsupported": "This browser does not support web push notifications.",
+    "enablePushTitle": "Enable push notifications?",
+    "enablePushDesc": "You will receive alerts about new devices, security events and account activity.",
+    "enablePush": "Enable",
+    "disablePushTitle": "Disable push notifications?",
+    "disablePushDesc": "You will stop receiving alerts on this device. Your in-app inbox is unaffected.",
+    "disablePush": "Disable"
   }
 }

@@ -1878,7 +1878,9 @@
     "deleteRoleConfirmDesc": "Bạn có chắc muốn xóa vai trò \"{name}\"? Hành động này không thể hoàn tác.",
     "rolesPermissions": "Vai trò và phân quyền",
     "system": "Hệ thống",
-    "permissions": "Phân quyền",
+    "permissions": {
+      "title": "Phân quyền"
+    },
     "actionsHelp": "Quyền chi tiết theo module (dùng để kiểm soát truy cập API)",
     "name": "Tên",
     "read": "đọc",
@@ -2073,6 +2075,14 @@
     "accessibleRoutesHint": "Được tính toán dựa trên phân quyền của vai trò — không lưu trực tiếp routes trên vai trò."
   },
   "settings": {
+    "appearance": "Hiển thị",
+    "theme": "Giao diện",
+    "systemTheme": "Theo hệ thống",
+    "light": "Sáng",
+    "dark": "Tối",
+    "colors": "Màu nhấn",
+    "primaryColor": "Màu chính",
+    "neutralColor": "Màu trung tính",
     "title": "Cài đặt",
     "description": "Quản lý hồ sơ, cấu hình hệ thống, môi trường chạy và tùy chọn.",
     "profile": "Hồ sơ",
@@ -2996,6 +3006,7 @@
     "asJson": "JSON",
     "asText": "Văn bản",
     "duplicateKey": "Khóa này đã tồn tại",
+    "showSecret": "Hiển thị bí mật",
     "secretHint": "Giá trị đang bị ẩn - nhập giá trị mới để thay thế",
     "type": "Loại dữ liệu",
     "typeText": "Văn bản 1 dòng",
@@ -3263,5 +3274,58 @@
     "tabImport": "Hàng đợi nhập",
     "tabMail": "Hàng đợi mail",
     "title": "Hàng đợi nền"
+  },
+  "docs": {
+    "description": "Tham chiếu API và kiến trúc của TM Hub control plane.",
+    "searchPlaceholder": "Tìm endpoint, module, mô tả…",
+    "allModules": "Tất cả module",
+    "endpointsCount": "{filtered} / {total} endpoint",
+    "architecture": {
+      "iamTitle": "Định danh & Truy cập",
+      "iamDesc": "IAM tập trung: phiên JWT, 2FA, passkey, vai trò và quyền route theo app.",
+      "remoteConfigsTitle": "Cấu hình tập trung",
+      "remoteConfigsDesc": "Cấu hình app kiểu hóa, mã hóa bí mật, đồng bộ xuống mọi vệ tinh.",
+      "mediaGatewayTitle": "Cổng Media",
+      "mediaGatewayDesc": "Upload có chữ ký, cây thư mục và quản lý tài nguyên qua Cloudinary.",
+      "notificationsTitle": "Thông báo",
+      "notificationsDesc": "Push (FCM + VAPID), inbox trong ứng dụng và webhook kèm nhật ký kiểm toán."
+    },
+    "sdk": {
+      "title": "SDK client",
+      "description": "Dùng SDK tm-hub-client trong {app} — nó tự gắn định danh app và token."
+    },
+    "api": {
+      "title": "REST API",
+      "prefix": "/api/v1",
+      "module": "Module",
+      "method": "Phương thức",
+      "endpoint": "Endpoint",
+      "description": "Mô tả",
+      "login": "Xác thực và khởi tạo phiên",
+      "refresh": "Đổi token truy cập mới",
+      "me": "Hồ sơ và vai trò của người dùng hiện tại",
+      "routes": "Cây route của app hiện tại",
+      "getConfigs": "Đọc giá trị cấu hình app",
+      "updateConfigs": "Cập nhật giá trị cấu hình app",
+      "getPublicConfigs": "Đọc cấu hình công khai (không bí mật)",
+      "getMediaFolders": "Liệt kê thư mục media",
+      "getMediaResources": "Liệt kê tài nguyên media",
+      "getMediaSignature": "Yêu cầu chữ ký tải lên",
+      "deleteMediaResource": "Xóa tài nguyên media",
+      "subscribeNotification": "Đăng ký push subscription",
+      "getNotifications": "Liệt kê thông báo của người dùng",
+      "sendNotification": "Gửi thông báo trong ứng dụng"
+    }
+  },
+  "notifications": {
+    "pushTitle": "Thông báo Push",
+    "pushDesc": "Nhận cảnh báo ứng dụng trên thiết bị này qua Firebase Cloud Messaging hoặc VAPID web push.",
+    "pushUnsupported": "Trình duyệt này không hỗ trợ web push notification.",
+    "enablePushTitle": "Bật thông báo push?",
+    "enablePushDesc": "Bạn sẽ nhận cảnh báo về thiết bị mới, sự kiện bảo mật và hoạt động tài khoản.",
+    "enablePush": "Bật",
+    "disablePushTitle": "Tắt thông báo push?",
+    "disablePushDesc": "Bạn sẽ ngừng nhận cảnh báo trên thiết bị này. Inbox trong ứng dụng không bị ảnh hưởng.",
+    "disablePush": "Tắt"
   }
 }
