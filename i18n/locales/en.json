@@ -1274,7 +1274,8 @@
       "aiAnalysisDesc": "An optional second pass: the AI rates transcript spans and its opinion nudges segment scores (max 25%). Runs on the AI configured for AutoCut; skipped automatically when unavailable.",
       "aiBadge": "AI triage · {count} spans",
       "aiWeightLabel": "AI influence on scoring",
-      "aiWeightDesc": "How far the AI opinion pulls each segment score. Capped at 50%: local transcript evidence stays the baseline."
+      "aiWeightDesc": "How far the AI opinion pulls each segment score. Capped at 50%: local transcript evidence stays the baseline.",
+      "removeKeywordAria": "Remove keyword {word}"
     },
     "aiConnect": {
       "title": "AI connection",

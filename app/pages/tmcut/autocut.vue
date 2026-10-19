@@ -7,7 +7,7 @@ import type { AutocutProfile, AutocutAnalysis } from '~/composables/useTmcutAuto
 import type { TmcutAsset } from '~/types/tmcut'
 import { formatDurationSec } from '~/utils/tmcut/media'
 import { toURL } from '~/utils/ffmpegHelper'
-import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs } from '~/utils/tmcut/autocutPrefs'
+import { AUTOCUT_PREFS_KEY, AUTOCUT_PREFS_DEFAULT, parseAutocutPrefs, serializeAutocutPrefs, splitKeywords, joinKeywords } from '~/utils/tmcut/autocutPrefs'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -38,12 +38,33 @@ const aiAnalysis = ref(savedPrefs.aiAnalysis)
 // pinned to the core contract by tmcut_autocut_prefs.spec.
 const aiWeight = ref(savedPrefs.aiWeight)
 const highlightKeywordsText = ref(savedPrefs.keywordsText)
-const highlightKeywords = computed(() =>
-  highlightKeywordsText.value
-    .split(',')
-    .map(word => word.trim())
-    .filter(Boolean)
-)
+// R137: chip editor over the persisted comma-separated string (the
+// storage shape is unchanged — chips are a view, tokens split/deduped
+// by the unit-tested helpers). Case-insensitive dedup keeps the first
+// spelling the user typed.
+const keywordChips = computed(() => splitKeywords(highlightKeywordsText.value))
+const keywordDraft = ref('')
+function commitKeywordDraft() {
+  const words = keywordDraft.value
+  if (!words.trim()) return
+  keywordDraft.value = ''
+  highlightKeywordsText.value = joinKeywords([...keywordChips.value, ...words.split(',')])
+}
+function removeKeywordChip(word: string) {
+  keywordDraft.value = ''
+  highlightKeywordsText.value = joinKeywords(keywordChips.value.filter(chip => chip !== word))
+}
+function onKeywordDraftKeydown(event: KeyboardEvent) {
+  // Enter or a typed comma commits the draft (the comma is consumed —
+  // it would otherwise land in the draft text as a separator).
+  if (event.key === 'Enter' || event.key === ',') {
+    event.preventDefault()
+    commitKeywordDraft()
+  } else if (event.key === 'Backspace' && !keywordDraft.value && keywordChips.value.length > 0) {
+    removeKeywordChip(keywordChips.value[keywordChips.value.length - 1]!)
+  }
+}
+const highlightKeywords = keywordChips
 
 watch([selectedProfile, filterFillerWords, aiAnalysis, aiWeight, highlightKeywordsText], () => {
   if (!import.meta.client) return
@@ -649,11 +670,39 @@ async function handleAccept() {
                   {{ t('tmcut.autocutV2.keywordsOptional') }}
                 </span>
               </div>
-              <UInput
-                v-model="highlightKeywordsText"
-                size="sm"
-                :placeholder="t('tmcut.autocutV2.keywordsPlaceholder')"
-              />
+              <!-- R137: chips + inline draft input replace the raw comma
+                   box. Enter / comma commits (paste of "a,b,c" splits via
+                   the same joinKeywords pipeline), Backspace on an empty
+                   draft drops the last chip, X removes any chip. The
+                   persisted shape stays the comma string (watch below). -->
+              <div
+                class="flex flex-wrap items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+              >
+                <span
+                  v-for="chip in keywordChips"
+                  :key="chip"
+                  class="inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 text-[11px] font-medium"
+                >
+                  {{ chip }}
+                  <button
+                    type="button"
+                    class="hover:text-purple-800 dark:hover:text-purple-200"
+                    :aria-label="t('tmcut.autocutV2.removeKeywordAria', { word: chip })"
+                    @click="removeKeywordChip(chip)"
+                  >
+                    <UIcon name="i-lucide-x" class="w-3 h-3" />
+                  </button>
+                </span>
+                <input
+                  v-model="keywordDraft"
+                  type="text"
+                  class="flex-1 min-w-24 bg-transparent text-xs text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none"
+                  :placeholder="keywordChips.length ? '' : t('tmcut.autocutV2.keywordsPlaceholder')"
+                  :aria-label="t('tmcut.autocutV2.keywordsLabel')"
+                  @keydown="onKeywordDraftKeydown"
+                  @blur="commitKeywordDraft"
+                >
+              </div>
               <p class="text-[10px] text-neutral-400">
                 {{ t('tmcut.autocutV2.keywordsHelp') }}
               </p>

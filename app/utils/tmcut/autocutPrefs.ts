@@ -76,3 +76,28 @@ export function parseAutocutPrefs(raw: string | null | undefined): AutocutPrefs 
 export function serializeAutocutPrefs(prefs: AutocutPrefs): string {
   return JSON.stringify(sanitizePrefs(prefs))
 }
+
+/**
+ * Split the persisted comma-separated keyword string into display/edit
+ * tokens (docs §201, R137): trimmed, empties dropped, case-insensitive
+ * dedup keeping the FIRST spelling (the user typed it first; rewriting
+ * their capitalization would be the UI showing off).
+ */
+export function splitKeywords(text: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of String(text ?? '').split(',')) {
+    const word = part.trim()
+    if (!word) continue
+    const key = word.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(word)
+  }
+  return out
+}
+
+/** Inverse of splitKeywords — the canonical persisted shape. */
+export function joinKeywords(words: readonly string[]): string {
+  return splitKeywords(words.join(',')).join(', ')
+}

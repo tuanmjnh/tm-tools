@@ -9534,3 +9534,43 @@ weight, keywords) to hard defaults — a user tuning the AI influence to
   runtime clears the library on load, §199.3 lesson.)
 - Unit run 29/29; typecheck 0; lint 0; live UI r124 12/12; build 0;
   i18n unchanged 2976/2976.
+
+## 201. R137 — Keywords become chips (the comma string stays the truth)
+
+R136's persisted keyword field was a raw comma box — easy to author one
+bad space, impossible to scan at a glance. The chip editor now sits on
+TOP of the same stored string: chips are a VIEW, never a second source
+of truth, so nothing saved by R136 invalidates.
+
+### 201.1 Token helpers (autocutPrefs.ts, still pure)
+
+- `splitKeywords(text)`: trim, drop empties, case-insensitive dedup
+  keeping the FIRST spelling (rewriting the user's capitalization would
+  be the UI showing off).
+- `joinKeywords(words)`: the canonical persisted shape (`', '`
+  separator, same dedup) — every write goes through it, so the stored
+  string is always in `splitKeywords`-stable form.
+- `highlightKeywords` (what `analyzeSource` receives) is now literally
+  `keywordChips` — the SAME list the chips render, so the badge count,
+  the chips, and the scorer can never disagree.
+
+### 201.2 Editor (autocut.vue)
+
+- Chips row + inline draft input replace the UInput. Enter or a typed
+  comma commits (paste of "a,b,c" splits through the same pipeline);
+  Backspace on an EMPTY draft drops the last chip (tag-input muscle
+  memory); each chip's X removes it. Blur commits stray draft text —
+  nothing typed is ever silently swallowed.
+- The draft ref is ephemeral (never persisted); the five-field prefs
+  watcher is untouched — it still writes `keywordsText`, and the R136
+  reload checks now assert CHIPS re-rendered, not raw input text.
+- i18n +1 (`removeKeywordAria`, en+vi) → 2977/2977.
+
+### 201.3 Proof
+
+- `tmcut_autocut_prefs` 7→10: split trim/empty matrix, first-spelling
+  dedup, join-canonical + round-trip stability.
+- Harness 13→16: chips render after Enter commits → chips survive the
+  HARD reload → X removes → Backspace-on-empty removes the last chip.
+- Unit run 29/29; typecheck 0; lint 0; live UI r124 12/12; build 0;
+  i18n 2977/2977.

@@ -18,7 +18,9 @@ import {
   AUTOCUT_AI_WEIGHT_MAX,
   AUTOCUT_PROFILES,
   parseAutocutPrefs,
-  serializeAutocutPrefs
+  serializeAutocutPrefs,
+  splitKeywords,
+  joinKeywords
 } from '../../app/utils/tmcut/autocutPrefs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
@@ -115,5 +117,25 @@ describe('TMCut AutoCut prefs — cross-file contracts (R136)', () => {
     // The stored key is a contract with the browser profile: pin the
     // exact value (renaming it silently orphans existing users' prefs).
     assert.equal(AUTOCUT_PREFS_KEY, 'tmcut_autocut_prefs_v1')
+  })
+})
+
+describe('TMCut AutoCut keyword chips — token helpers (R137)', () => {
+  it('splits, trims and drops empty tokens', () => {
+    assert.deepEqual(splitKeywords(' hook , summary ,, conclusion '), ['hook', 'summary', 'conclusion'])
+    assert.deepEqual(splitKeywords(''), [])
+    assert.deepEqual(splitKeywords(' , , '), [])
+  })
+
+  it('dedups case-insensitively, keeping the FIRST spelling', () => {
+    assert.deepEqual(splitKeywords('Hook, hook, hooks'), ['Hook', 'hooks'])
+  })
+
+  it('join is the canonical inverse (single separator, deduped)', () => {
+    assert.equal(joinKeywords(['hook', 'summary']), 'hook, summary')
+    assert.equal(joinKeywords(['a', 'A', 'a']), 'a')
+    // Round-trip through the persisted comma string is stable.
+    const once = joinKeywords(['a', 'b', 'b'])
+    assert.deepEqual(splitKeywords(once), ['a', 'b'])
   })
 })

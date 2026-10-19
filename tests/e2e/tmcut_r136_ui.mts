@@ -145,8 +145,22 @@ async function main() {
     //    Filler switch is the FIRST on step 2, triage the LAST.
     const fillerSwitch = page.locator('[role="switch"]').first()
     await fillerSwitch.click()
-    const keywordsInput = page.getByPlaceholder(/hook, tips/i).first()
-    await keywordsInput.fill('hook, summary')
+    // R137: chips editor. Typing + Enter commits a chip (the draft is
+    // ephemeral — persistence rides on the comma string underneath).
+    // aria-label keeps the locator stable even once chips hide the
+    // placeholder text.
+    const keywordsInput = page.getByLabel('Priority highlight keywords').last()
+    await keywordsInput.fill('hook')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(150)
+    await keywordsInput.fill('summary')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(200)
+    // The chip's remove button sits INSIDE the chip span — filter on
+    // the button + text so only real chips match.
+    const hookChip = page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'hook' })
+    const summaryChip = page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'summary' })
+    check('chips render after Enter commits', (await hookChip.count()) === 1 && (await summaryChip.count()) === 1)
     const podcastCard = page.locator('div.border-2').filter({ has: page.getByText('Podcast Highlights') }).first()
     await podcastCard.click()
     await page.waitForTimeout(400)
@@ -190,8 +204,22 @@ async function main() {
     // Weight readout restored at 35% (R135 value persisted by R136).
     const readoutRestored = await weightBlock.locator('span.tabular-nums').innerText().catch(() => '')
     check('aiWeight survives reload (35%)', readoutRestored.trim() === '35%', `readout=${readoutRestored}`)
-    const keywordsRestored = await keywordsInput.inputValue().catch(() => '')
-    check('keywords survive reload', keywordsRestored === 'hook, summary', `value=${keywordsRestored}`)
+    const hookChip2 = page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'hook' })
+    const summaryChip2 = page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'summary' })
+    const chipsBack = (await hookChip2.count()) === 1 && (await summaryChip2.count()) === 1
+    check('keyword CHIPS survive reload', chipsBack)
+    // R137: the X button really removes a chip (and it stays removed —
+    // the comma string underneath is the single source of truth).
+    await summaryChip2.locator('button').click()
+    await page.waitForTimeout(250)
+    check('X removes a chip', (await page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'summary' }).count()) === 0)
+    // Backspace on the EMPTY draft drops the LAST chip (classic tag-input
+    // muscle memory). Clear the leftover draft text first — fill() does
+    // not blur, so focus stays on the field.
+    await keywordsInput.fill('')
+    await page.keyboard.press('Backspace')
+    await page.waitForTimeout(250)
+    check('Backspace on empty draft drops the last chip', (await page.locator('span.rounded-full').filter({ has: page.getByRole('button') }).filter({ hasText: 'hook' }).count()) === 0)
 
     check('no pageerror during the run', pageErrors.length === 0, pageErrors.slice(0, 1).join(' '))
   } finally {
