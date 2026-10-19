@@ -629,6 +629,19 @@ export interface AiTaskStatus {
   configured: boolean
 }
 
+/**
+ * R140: at-rest key vault status (main:ai-key-status). COUNTS ONLY —
+ * tokens and plaintext values never leave the main process.
+ */
+export interface AiKeyVaultStatus {
+  /** OS keychain (safeStorage) usable this session. */
+  available: boolean
+  /** Secret slots stored encrypted at rest. */
+  encrypted: number
+  /** Secret slots still in plaintext (pre-R139 or keychain unavailable). */
+  plaintext: number
+}
+
 export interface AiGatewayNamespace {
   complete(args: AiCompleteInput): Promise<{ ok: boolean, data?: AiCompleteResult, code?: string, error?: string }>
   transcribe(args: { filePath: string, provider?: string, apiKey?: string, baseUrl?: string, model?: string, language?: string, format?: 'text' | 'verbose_json' }): Promise<{ ok: boolean, data?: { text: string, segments?: Array<{ start: number, end: number, text: string }> }, code?: string, error?: string }>
@@ -831,6 +844,8 @@ export interface ElectronAPI {
   getPathForFile(file: File): string
   getConfig(): Promise<Record<string, string>>
   setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
+  /** R140 (§204): at-rest key vault status — counts only, never tokens. */
+  aiKeyStatus(): Promise<{ ok: boolean, data?: AiKeyVaultStatus }>
   verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
   openExternal(url: string): Promise<boolean>

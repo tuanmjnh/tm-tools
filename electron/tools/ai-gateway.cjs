@@ -498,12 +498,16 @@ async function transcribe(args, opts) {
  * Tolerates the three response shapes seen in the wild:
  *   { data: [{ id }] } | { models: [{ id | name }] } | [{ id }]
  * `args` accepts the same per-call overrides as complete(): { provider?,
- * apiKey?, baseUrl? }. `opts`: { fetchImpl? } for tests.
+ * apiKey?, baseUrl?, task? }. With a `task` (R139) the SAME per-surface
+ * AI_*_<TASK> slots complete() uses resolve the endpoint + stored key, so
+ * a "test this surface" action can verify a saved surface without the
+ * renderer ever holding its key. Without a task this is the global config.
+ * `opts`: { fetchImpl? } for tests.
  */
 async function listModels(args, opts) {
   const input = args || {}
   const options = opts || {}
-  const envCfg = aiConfig()
+  const envCfg = taskConfig(input.task)
   const cfg = {
     ...envCfg,
     provider: String(input.provider || envCfg.provider).toLowerCase(),

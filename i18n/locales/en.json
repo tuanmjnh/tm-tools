@@ -198,7 +198,8 @@
     "vc": "TMCut",
     "vc_editor": "Editor",
     "vc_templates": "Templates",
-    "vc_autocut": "AutoCut"
+    "vc_autocut": "AutoCut",
+    "ai_keys": "AI Key Vault"
   },
   "tmcut": {
     "title": "TMCut Video Studio",
@@ -2216,7 +2217,21 @@
     "ffmpegPath": "FFmpeg Executable Path",
     "ffprobePath": "FFprobe Executable Path",
     "ffplayPath": "FFplay Executable Path",
-    "verified": "Verified"
+    "verified": "Verified",
+    "aiKeysTitle": "AI Key Vault",
+    "aiKeysDesc": "Where every API key lives, whether it is protected at rest, and a connection test for each AI surface.",
+    "aiKeysVaultOn": "Keys are encrypted at rest",
+    "aiKeysVaultOff": "Keychain unavailable — keys stored as plaintext",
+    "aiKeysVaultDesc": "Protected with your OS login (safeStorage). Keys are never sent to the interface.",
+    "aiKeysEncryptedCount": "{count} encrypted",
+    "aiKeysPlaintextCount": "{count} plaintext",
+    "aiKeysStored": "Stored · protected",
+    "aiKeysMissing": "No key",
+    "aiKeysKeyless": "No key needed",
+    "aiKeysWhereTitle": "Where keys are managed",
+    "aiKeysWhere1": "Edit keys in the AI connection panel — AutoCut step 2, the editor sidebar, or Settings → Connections.",
+    "aiKeysWhere2": "Every test on this page signs the request with the SAVED key inside the main process; the key itself never appears here.",
+    "aiKeysWhere3": "Keys are encrypted with your OS account. Copying the config file to another machine or user account makes them unreadable — re-enter them there."
   },
   "seed": {
     "desc": "Seed roles and default accounts. Idempotent seed only adds what is missing, while Reset wipes all data first.",

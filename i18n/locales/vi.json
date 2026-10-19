@@ -198,7 +198,8 @@
     "vc": "TMCut",
     "vc_editor": "Trình chỉnh sửa",
     "vc_templates": "Mẫu & Preset",
-    "vc_autocut": "AutoCut AI"
+    "vc_autocut": "AutoCut AI",
+    "ai_keys": "Két khóa AI"
   },
   "tmcut": {
     "title": "Trình tạo video TMCut",
@@ -2216,7 +2217,21 @@
     "ffmpegPath": "Đường dẫn FFmpeg",
     "ffprobePath": "Đường dẫn FFprobe",
     "ffplayPath": "Đường dẫn FFplay",
-    "verified": "Đã xác thực"
+    "verified": "Đã xác thực",
+    "aiKeysTitle": "Két khóa AI",
+    "aiKeysDesc": "Nơi mọi API key nằm, có được mã hóa tại chỗ hay không, và kiểm tra kết nối cho từng bề mặt AI.",
+    "aiKeysVaultOn": "Key được mã hóa tại chỗ",
+    "aiKeysVaultOff": "Keychain không khả dụng — key lưu dạng plaintext",
+    "aiKeysVaultDesc": "Bảo vệ bằng tài khoản OS của bạn (safeStorage). Key không bao giờ được gửi lên giao diện.",
+    "aiKeysEncryptedCount": "{count} đã mã hóa",
+    "aiKeysPlaintextCount": "{count} plaintext",
+    "aiKeysStored": "Đã lưu · được bảo vệ",
+    "aiKeysMissing": "Chưa có key",
+    "aiKeysKeyless": "Không cần key",
+    "aiKeysWhereTitle": "Quản lý key ở đâu",
+    "aiKeysWhere1": "Sửa key trong bảng AI connection — AutoCut bước 2, sidebar editor, hoặc Settings → Connections.",
+    "aiKeysWhere2": "Mỗi phép thử ở trang này ký request bằng key ĐÃ LƯU bên trong main process; bản thân key không xuất hiện ở đây.",
+    "aiKeysWhere3": "Key được mã hóa bằng tài khoản OS của bạn. Chép file config sang máy hoặc tài khoản khác sẽ khiến key không đọc được — hãy nhập lại ở đó."
   },
   "seed": {
     "desc": "Seed các vai trò và tài khoản mặc định. Seed idempotent chỉ thêm phần còn thiếu, còn Reset sẽ xóa toàn bộ dữ liệu trước khi seed lại.",

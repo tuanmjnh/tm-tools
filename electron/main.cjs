@@ -346,6 +346,21 @@ ipcMain.handle('get-config', (event) => {
   return result
 })
 
+ipcMain.handle('ai-key-status', (event) => {
+  if (!isTrustedSender(event)) return { ok: false }
+  // R140: the vault dashboard asks "how many keys are protected?" —
+  // counts only, never tokens or values (the renderer never sees them).
+  const cfg = readConfigFile(userConfigPath())
+  let encrypted = 0
+  let plaintext = 0
+  for (const [key, raw] of Object.entries(cfg)) {
+    if (!SECRET_SLOT_RE.test(key) || !raw) continue
+    if (raw.startsWith(magicPrefix())) encrypted++
+    else plaintext++
+  }
+  return { ok: true, data: { available: isEncryptionAvailable(), encrypted, plaintext } }
+})
+
 ipcMain.handle('set-config', (event, values) => {
   if (!isTrustedSender(event)) return { success: false }
   const configFile = userConfigPath()

@@ -9675,3 +9675,52 @@ saving new config clears old verdicts (they are stale).
 - Unit run 30/30; typecheck 0; lint 0; live UI r136 16/16, r124 12/12;
   IPC probe 8/8, media probe 3/3, secure probe 7/7; build 0; i18n
   2980/2980 (+3×2 test/testTitle/testOk).
+
+## 204. R140 — AI key vault dashboard (read-only, counts only)
+
+R139 made keys safe at rest but left the question "where does each
+surface run, and is my key actually protected?" unanswerable from the
+UI. The answer is a new read-only page — `/system/ai-keys` — that
+**observes and verifies**; the single writer stays the AI connection
+panel on the surfaces themselves (§203.2).
+
+### 204.1 The page holds nothing sensitive
+
+The page never reads, writes, or transmits any key. It asks the main
+process three questions:
+
+1. `ai-key-status` → counts of encrypted vs plaintext secret slots +
+   whether the OS keychain is available this session. **Counts only** —
+   the handler iterates the file with `SECRET_SLOT_RE` and never
+   serializes a value. The renderer sees `available`/`encrypted`/`plaintext`
+   and nothing else.
+2. `tools:ai-gateway:status` → where the global gateway resolves to
+   (provider label, model, base URL, hasKey) — the same read path the
+   dashboard already used, no new surface.
+3. `tools:ai-gateway:tasks` → per-surface resolved config (plan /
+   transcribe / triage), including `overridden` so the page can show
+   "this surface is using a different provider than the global one".
+
+The per-surface **test** reuses `listModels({ task })` (§203.2): it
+signs a real `/models` request with the SAVED slot inside the main
+process. The page verifies what it cannot read. A 401/403 means the
+key is wrong; a 404 on `/models` still proves the endpoint+handshake
+works (some providers publish no model list) → `warn`, not `fail`.
+
+### 204.2 Route + i18n
+
+- Hub seed: `system_ai_keys` → `/system/ai-keys`, `nav.ai_keys`,
+  `i-lucide-key`, sort 76 under `group_system`.
+- i18n: +15 flat keys in `settings.*` (vault banner, counts, where-to
+  note) + `nav.ai_keys` — en/vi in lockstep, flat parity verified
+  (2995/2995, diff none).
+- Settings slideover gains an "AI Key Vault" quick link.
+
+### 204.3 Proof
+
+- New `ai-key-status` IPC handler + preload `aiKeyStatus()` + type
+  `AiKeyVaultStatus` (counts only).
+- New page `app/pages/system/ai-keys.vue` — read-only; zero `setConfig`
+  / `AI_API_KEY` / `apiKey` references (contract spec 7/7).
+- Unit run 31/31; typecheck 0; lint 0; secure probe 7/7; live UI r136
+  16/16; i18n 2995/2995.

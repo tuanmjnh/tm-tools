@@ -146,6 +146,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPathForFile: file => webUtils.getPathForFile(file),
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: values => ipcRenderer.invoke('set-config', values),
+  // R140: at-rest key vault status (counts only — never tokens/values).
+  aiKeyStatus: () => ipcRenderer.invoke('ai-key-status'),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
   openExternal: url => ipcRenderer.invoke('open-external', url),
