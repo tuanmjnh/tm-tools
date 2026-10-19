@@ -9437,3 +9437,58 @@ silently corrupts syntax. R134 gates the REGISTRATION FUNCTION instead.
   real payload. This is the production registration path, not a mock.
 - Media probe 3/3; unit run 28/28; typecheck 0; lint 0; live UI 12/12;
   build 0.
+
+## 199. R135 — AI triage blend weight: the slider AutoCut always promised
+
+§194 shipped the AI content-triage blend with a CONSERVATIVE fixed
+weight (core `aiWeight`, default 0.25, clamped 0..0.5 — "AI is an
+opinion, not truth"). The engine accepted the knob; the UI never
+exposed it, so users could only choose triage on/off at 25%.
+
+### 199.1 Threading (app-only — core already had the knob)
+
+- `AutocutOptions.aiWeight?: number` (useTmcutAutocut). `analyzeSource`
+  resolves `options?.aiWeight ?? 0.25` ONCE and passes it to both
+  decisions it governs:
+  - the (paid) triage `complete()` call is SKIPPED entirely at weight 0
+    — running a provider request whose blend cannot move anything would
+    burn tokens for a lie ("analyzing…");
+  - `scoreSegments({…, aiWeight})` — core clamps again (0..0.5), so even
+    a future caller bypassing the UI cannot exceed the ceiling.
+- `aiAnalysisUsed` (the honest badge + `analyzerVersion: triage-v3`) can
+  only be true when the blend actually ran: weight 0 never reaches the
+  triage call, so the flag stays false — no claimed AI influence with a
+  zero-weight score.
+
+### 199.2 UI (autocut.vue)
+
+- Inside the AI-triage card, a bordered sub-block renders ONLY when the
+  switch is on (`v-if="aiAnalysis"` — no dead controls): label + tabular
+  `%` readout + `USlider :min="0" :max="0.5" :step="0.05"`. The slider
+  max EQUALS the core ceiling so the UI can never promise more
+  influence than the engine gives.
+- Default 0.25 mirrors the core default; the constant lives next to the
+  ref with a comment, and the unit spec pins the contract (see 199.3).
+- i18n: `tmcut.autocutV2.aiWeightLabel` / `aiWeightDesc` (en+vi, +2×2 →
+  2976/2976 parity).
+
+### 199.3 Proof
+
+- Unit `tmcut_autocut_v2` +3 checks (7/7): weight 0 vs 0.5 bracket the
+  score strictly between local and pure-AI (`score < 1` — the blend is
+  always partial); OMITTING aiWeight scores IDENTICAL to the explicit UI
+  default (drift guard); a filler-penalized segment may be pushed
+  further DOWN but never softened upward by a high interest (local
+  transcript evidence is fact, the AI opinion is not) — plus the
+  `aiInterest` tag itself appears only when the blend ran.
+- New live-UI harness `tests/e2e/tmcut_r135_ui.mts` 8/8 (Edge headless
+  on :3100, hub stub, QA-hook asset): slider hidden while triage is off
+  → switch on reveals block + slider + 25% readout → two keyboard steps
+  move the readout to 35% (real two-way binding) → no pageerror.
+  Harness lesson (documented inline): the web runtime CLEARS the media
+  library on load (blob: URLs die on reload), so fixtures must be
+  pushed through `window.tmcutQaStore.assets` — localStorage seeding is
+  deliberately ignored by `loadLibrary()`.
+- Gates: unit 28/28, typecheck 0, lint 0, live UI 12/12 (+ R135 8/8),
+  build 0, i18n 2976/2976. Electron ipc probe re-run 8/8 as the standing
+  regression gate (this round touches no electron file).

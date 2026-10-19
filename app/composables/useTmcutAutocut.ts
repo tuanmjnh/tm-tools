@@ -31,6 +31,13 @@ export interface AutocutOptions {
    * fake data) when unavailable or the answer is unusable.
    */
   aiAnalysis?: boolean
+  /**
+   * Blend weight for the triage opinions (docs §199, R135): how far the
+   * AI opinion pulls the local score. Core clamps 0..0.5 (AI is an
+   * opinion, not truth); 0 means the triage pass runs but changes
+   * nothing (analyzerVersion stays honest at transcript-v2).
+   */
+  aiWeight?: number
 }
 
 export interface AutocutAnalysis {
@@ -127,7 +134,11 @@ export function useTmcutAutocut() {
       // always the baseline the AI only nudges (core caps the pull).
       let aiItems: AiTriageItem[] = []
       let aiAnalysisUsed = false
-      if (options?.aiAnalysis && transcriptText.length > 0) {
+      // R135: a 0-weight slider means "triage must not move anything" —
+      // running the (paid) triage call then would waste a provider
+      // request for a no-op blend, so the pass is skipped entirely.
+      const aiWeight = options?.aiWeight ?? 0.25
+      if (options?.aiAnalysis && aiWeight > 0 && transcriptText.length > 0) {
         stageKey.value = 'tmcut.steps.stageAiAnalysis'
         try {
           const spans = buildTriageSpans(transcriptText)
@@ -158,7 +169,8 @@ export function useTmcutAutocut() {
         filterFillerWords: options?.filterFillerWords,
         keywords: options?.highlightKeywords,
         customFillerWords: options?.customFillerWords,
-        aiScores: aiItems
+        aiScores: aiItems,
+        aiWeight
       })
       const problems = validateEdl(edl)
       if (problems.length > 0) throw new Error(problems[0])

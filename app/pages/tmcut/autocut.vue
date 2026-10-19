@@ -26,6 +26,10 @@ const applying = ref(false)
 // AutoCut v2: transcript vocabulary analysis options
 const filterFillerWords = ref(true)
 const aiAnalysis = ref(false)
+// R135: how far the triage opinion pulls the local score (core clamps
+// 0..0.5). 0.25 = the core default, kept in sync deliberately.
+const AI_WEIGHT_DEFAULT = 0.25
+const aiWeight = ref(AI_WEIGHT_DEFAULT)
 const highlightKeywordsText = ref('')
 const highlightKeywords = computed(() =>
   highlightKeywordsText.value
@@ -241,7 +245,8 @@ async function startAnalysis() {
   const result = await analyzeSource(sourceAsset.value, selectedProfile.value, {
     filterFillerWords: filterFillerWords.value,
     highlightKeywords: highlightKeywords.value,
-    aiAnalysis: aiAnalysis.value
+    aiAnalysis: aiAnalysis.value,
+    aiWeight: aiWeight.value
   })
   if (!result) return
   edlResult.value = result
@@ -578,6 +583,33 @@ async function handleAccept() {
                 </p>
               </div>
               <USwitch v-model="aiAnalysis" />
+            </div>
+
+            <!-- R135: triage blend weight. Core clamps the pull to 0..0.5
+                 ("AI is an opinion, not truth") — the slider max matches,
+                 so the UI cannot promise more influence than the engine
+                 allows. 0 skips the triage call entirely (see composable). -->
+            <div
+              v-if="aiAnalysis"
+              class="space-y-2 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-neutral-900 dark:text-neutral-100">
+                  {{ t('tmcut.autocutV2.aiWeightLabel') }}
+                </span>
+                <span class="text-[11px] tabular-nums text-neutral-500">
+                  {{ Math.round(aiWeight * 100) }}%
+                </span>
+              </div>
+              <USlider
+                v-model="aiWeight"
+                :min="0"
+                :max="0.5"
+                :step="0.05"
+              />
+              <p class="text-[10px] text-neutral-400">
+                {{ t('tmcut.autocutV2.aiWeightDesc') }}
+              </p>
             </div>
 
             <!-- Priority Keywords Input -->

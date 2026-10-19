@@ -113,3 +113,61 @@ describe('TMCut AutoCut v2 — Transcript & Vocabulary Analysis', () => {
     assert.equal(edl.segments[0].hasFillerWords, undefined)
   })
 })
+
+// R135: the AutoCut panel exposes the blend weight as a slider. These
+// constants are the CONTRACT between that UI and the core clamp — if
+// core ever moves its default or ceiling, this fails first instead of
+// the slider silently promising influence the engine will not give.
+const AI_WEIGHT_UI_DEFAULT = 0.25
+const AI_WEIGHT_UI_MAX = 0.5
+
+function baseInput(overrides: Record<string, unknown>) {
+  return {
+    assetId: 'asset_ai_weight',
+    profile: 'viral-shorts',
+    scenes: [{ start: 0, end: 8 }],
+    silences: [],
+    transcript: [{ start: 0, end: 8, text: 'Đăng ký kênh để nhận thông báo mới' }],
+    aiScores: [{ start: 0, end: 8, interest: 1 }],
+    ...overrides
+  } as never
+}
+
+describe('TMCut AutoCut v2 — AI triage blend weight (R135)', () => {
+  it('weights 0 and max bracket the score between local and AI opinion', () => {
+    const off = scoreSegments(baseInput({ aiWeight: 0 }))
+    const max = scoreSegments(baseInput({ aiWeight: AI_WEIGHT_UI_MAX }))
+    // interest 1 can only ever pull the score UP, so a higher weight
+    // must not produce a lower score, and the ceiling keeps the blend
+    // strictly below the pure-AI value of 1.
+    assert.ok(max.segments[0].score > off.segments[0].score)
+    assert.ok(max.segments[0].score < 1)
+    // The triage fields themselves are only claimed when the blend ran:
+    // weight 0 must NOT tag the segment with an AI interest.
+    assert.equal(off.segments[0].aiInterest, undefined)
+    assert.equal(typeof max.segments[0].aiInterest, 'number')
+  })
+
+  it('omitting aiWeight uses the UI default (no drift)', () => {
+    const implicit = scoreSegments(baseInput({}))
+    const explicit = scoreSegments(baseInput({ aiWeight: AI_WEIGHT_UI_DEFAULT }))
+    assert.equal(implicit.segments[0].score, explicit.segments[0].score)
+  })
+
+  it('a filler-penalized segment is never softened upward by a high weight', () => {
+    const input = {
+      assetId: 'asset_ai_weight_filler',
+      profile: 'viral-shorts',
+      scenes: [{ start: 0, end: 6 }],
+      silences: [],
+      transcript: [{ start: 0, end: 6, text: 'ừm ờ kiểu như là...' }],
+      aiScores: [{ start: 0, end: 6, interest: 1 }]
+    }
+    const low = scoreSegments({ ...input, aiWeight: 0 } as never)
+    const high = scoreSegments({ ...input, aiWeight: AI_WEIGHT_UI_MAX } as never)
+    assert.equal(high.segments[0].reason, 'filler-word')
+    // Local transcript evidence is fact: the AI opinion may push it
+    // further down, never back up.
+    assert.ok(high.segments[0].score <= low.segments[0].score)
+  })
+})

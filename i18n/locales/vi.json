@@ -1272,7 +1272,9 @@
       "highlightTag": "Điểm nhấn",
       "aiAnalysisLabel": "AI phân tích nội dung (beta)",
       "aiAnalysisDesc": "Lần chạy thứ hai tùy chọn: AI chấm điểm từng đoạn lời thoại và ý kiến của nó chỉ điều chỉnh điểm tối đa 25%. Chạy bằng AI đã cấu hình riêng cho AutoCut; tự bỏ qua khi không khả dụng.",
-      "aiBadge": "AI phân tích · {count} đoạn"
+      "aiBadge": "AI phân tích · {count} đoạn",
+      "aiWeightLabel": "Ảnh hưởng AI lên chấm điểm",
+      "aiWeightDesc": "Mức ý kiến AI kéo điểm từng phân đoạn. Trần 50%: bằng chứng transcript cục bộ vẫn là nền tảng."
     },
     "aiConnect": {
       "title": "Kết nối AI",
