@@ -9830,3 +9830,24 @@ qualifies, `AI_BASE_URL` does not.
   startup function, button scoping rule, regex-drift pin.
 - Unit 32/32; vault 11/11; AI suite 45/45; typecheck 0; lint 0; probe
   ALL PASS; live UI r136 16/16 + r140 4/4; i18n 3001/3001 (+3×2).
+
+### 206.4 R144 — the vault becomes findable
+
+A page only reachable by typing its URL does not exist. The sidebar
+menu is hub-driven (the seed row went live via `pnpm seed tools`;
+installed apps pick it up from their hub), but the Settings slideover —
+the app's own shortcut sheet — gained the "AI Key Vault" link next to
+browsers/tools. It renders ONLY when `window.electronAPI.isElectron`
+(set in `onMounted`, so server and desktop render identically until
+the flip): web users never see a door to a page that can only show
+"desktop only" inside. The vault spec pins all three facts — link
+exists, link is gated, flag is hydrate-safe.
+
+### 206.5 R142–R144 proof (deltas on §206.3)
+
+- Vault spec 11 → 12 checks; harness `tmcut_r140_ui` 4/4 re-run clean
+  after the slideover change (shared layout surface).
+- SettingsSlideover.vue style debt cleared (24 pre-existing eslint
+  errors at HEAD → 0; doctrine: every touched file ends clean).
+- i18n 3003/3003; unit 32/32; typecheck 0; hub seed synced —
+  `Updated System Route 'system_ai_keys'` observed in seed output.
