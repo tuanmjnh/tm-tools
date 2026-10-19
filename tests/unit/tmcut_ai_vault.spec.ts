@@ -60,6 +60,21 @@ describe('TMCut AI key vault — page contract (R140)', () => {
     assert.ok(!/apiKey\s*[:=]/.test(page), 'the page holds no field that could carry a key')
   })
 
+  it('the note names only places the AI panel ACTUALLY renders (no invented routes)', () => {
+    // Honesty rule (§203 lineage): help text must match the shipped UI.
+    // The panel is mounted in exactly two components — grep-verified
+    // below — so the note may mention AutoCut step 2 and the editor's
+    // AI script dialog, and must NOT promise a settings-page panel.
+    const autocut = read('app/pages/tmcut/autocut.vue')
+    const scriptModal = read('app/components/tmcut/TmcutAiScriptModal.vue')
+    assert.ok(autocut.includes('<TmcutAiConnect'), 'panel must stay mounted on AutoCut')
+    assert.ok(scriptModal.includes('<TmcutAiConnect'), 'panel must stay mounted on the AI script dialog')
+    const en = JSON.parse(read('i18n/locales/en.json'))
+    const where = en.settings.aiKeysWhere1 as string
+    assert.ok(/AutoCut step 2/.test(where), 'note must name the AutoCut surface')
+    assert.ok(!/Settings\s*→\s*Connections/.test(where), 'no AI panel exists on any settings page')
+  })
+
   it('the nav route exists for every system-group sibling pattern (hub seed)', () => {
     // Cross-repo check: the sibling checkout exists on dev machines;
     // on an isolated tm-tools clone the seed lives in tm-hub and this

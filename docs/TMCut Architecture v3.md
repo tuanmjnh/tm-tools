@@ -9773,3 +9773,17 @@ a synthetic flag key as a fake config row).
 - Vault spec +1: the handler must report `exists: parsed.exists`.
 - Unit run 32/32; AI suite 45/45; typecheck 0; lint 0; secure probe
   ALL PASS; live UI r136 16/16; i18n 2998/2998 (+3×2 vault states).
+
+### 205.4 Follow-ups landed the same day (R142)
+
+- The vault's own help text broke the honesty rule it documents: the
+  first note line said "or Settings → Connections" — a page that has no
+  AI panel (verified: the panel mounts in exactly two components). Corrected to
+  name only the real surfaces, and vault spec +1 pins the note against
+  the actual mount points (drift = red test).
+- New live-UI harness `tmcut_r140_ui.mts` 4/4 on the WEB runtime: the
+  vault is Electron-gated by design, so the honest web behavior is
+  title + desktop-only note + zero page errors. This is the cheapest
+  guard against the page touching IPC before checking `electronAPI`.
+- Final: unit 32/32, vault 8/8, typecheck 0, lint 0, i18n 2998/2998,
+  build 0.

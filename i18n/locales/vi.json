@@ -2229,7 +2229,7 @@
     "aiKeysMissing": "Chưa có key",
     "aiKeysKeyless": "Không cần key",
     "aiKeysWhereTitle": "Quản lý key ở đâu",
-    "aiKeysWhere1": "Sửa key trong bảng AI connection — AutoCut bước 2, sidebar editor, hoặc Settings → Connections.",
+    "aiKeysWhere1": "Sửa key trong bảng AI connection — AutoCut bước 2, hoặc hộp thoại AI script trong editor (Alt + A).",
     "aiKeysWhere2": "Mỗi phép thử ở trang này ký request bằng key ĐÃ LƯU bên trong main process; bản thân key không xuất hiện ở đây.",
     "aiKeysWhere3": "Key được mã hóa bằng tài khoản OS của bạn. Chép file config sang máy hoặc tài khoản khác sẽ khiến key không đọc được — hãy nhập lại ở đó.",
     "aiKeysVaultEmpty": "Chưa có AI key nào",

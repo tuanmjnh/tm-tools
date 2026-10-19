@@ -2229,7 +2229,7 @@
     "aiKeysMissing": "No key",
     "aiKeysKeyless": "No key needed",
     "aiKeysWhereTitle": "Where keys are managed",
-    "aiKeysWhere1": "Edit keys in the AI connection panel — AutoCut step 2, the editor sidebar, or Settings → Connections.",
+    "aiKeysWhere1": "Edit keys in the AI connection panel — AutoCut step 2, or the editor's AI script dialog (Alt + A).",
     "aiKeysWhere2": "Every test on this page signs the request with the SAVED key inside the main process; the key itself never appears here.",
     "aiKeysWhere3": "Keys are encrypted with your OS account. Copying the config file to another machine or user account makes them unreadable — re-enter them there.",
     "aiKeysVaultEmpty": "No AI keys yet",
