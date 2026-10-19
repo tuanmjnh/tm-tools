@@ -9392,3 +9392,48 @@ read/write/delete/list callable by any frame that could reach IPC.
 - Media probe 3/3; unit run 28/28; typecheck 0; lint 0; live UI 12/12;
   build 0; i18n unchanged 2974/2974 (no new keys — this round is pure
   plumbing).
+
+## 198. R134 — Choke point: EVERY ipcMain.handle is gated at registration
+
+§197.3 left the remaining ~150 handler registrations (youtube/ffmpeg/
+dialog/app-updater/profiles/tmcut/ai-gateway controllers + the platform
+layer's ipcHelper) on their old per-controller footing: only five root
+handlers and file-manager checked the sender. A first attempt to inject
+per-site guards textually showed why that pattern does not scale — 150
+hand-written checks is 150 ways to forget one, and a regex rewrite of
+five different registration shapes is exactly the kind of change that
+silently corrupts syntax. R134 gates the REGISTRATION FUNCTION instead.
+
+### 198.1 `gateIpcMainHandle(ipcMain, isTrustedSender)` (ipcPolicy.cjs)
+
+- Called ONCE in main.cjs module scope — before createWindow, before
+  every `register*Controller()` call, before `initializePlatform()` —
+  so every `ipcMain.handle(...)` the app ever performs goes through a
+  wrapper: refused sender → resolve `undefined` (typed-empty, no stack
+  trace); trusted sender → the original handler runs untouched (sync or
+  async — the wrapper just adds a branch before `fn(event, ...args)`).
+- Idempotent with the older per-site checks (root handlers still
+  early-return their own typed defaults first); the file-manager
+  injected gate stays — belt AND braces, and its unit tests still pass.
+- `ipcMain.on` remains untouched (grep = 0 listeners; if a fire-and-
+  forget listener ever appears, it needs its own check — the OUTBOUND
+  preload allow-list is the first wall).
+- What this does NOT do, stated honestly: it does not authenticate the
+  renderer's CONTENT (a compromised app-origin script is still trusted
+  — that is Electron's process model, not a regression); it does not
+  cover `webContents.send` pushes (those ride the R133 preload
+  allow-list); about:blank/devtools frames still pass by design.
+
+### 198.2 Proof
+
+- Unit: `tmcut_ipc_policy` +1 check (9/9) — fake ipcMain swapped, then
+  two later registrations (sync + async) refuse the evil frame WITHOUT
+  running the handler body, and the trusted frame gets the exact return
+  values (`{ok:true}` / `'async-value'`, handler ran exactly twice).
+- Electron probe 8/8: registers a controller-style channel AFTER the
+  swap with NO per-site guard, drives it over REAL ipcRenderer.invoke
+  through the real sandboxed preload — foreign data:-origin window gets
+  `undefined`, the same raw invoke from the loopback app origin gets the
+  real payload. This is the production registration path, not a mock.
+- Media probe 3/3; unit run 28/28; typecheck 0; lint 0; live UI 12/12;
+  build 0.

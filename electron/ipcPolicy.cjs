@@ -80,11 +80,47 @@ function createSenderGate({ isDev, port }) {
   }
 }
 
+/**
+ * R134 — ONE choke-point for every privileged invoke channel in the
+ * app. Replaces ipcMain.handle with a gated version at startup, so ALL
+ * controllers (youtube/ffmpeg/dialog/file-manager/app-updater/profiles/
+ * tmcut/ai-gateway), the platform layer's ipcHelper registrations, and
+ * any handler added in the future are gated by default — instead of
+ * relying on each of ~150 registration sites remembering to check.
+ *
+ * Semantics:
+ *  - a refused sender resolves to undefined (typed-empty, matching what
+ *    the R133 file-manager guard returns; no stack trace to fingerprint);
+ *  - a handler may STILL do its own early-return (main.cjs root
+ *    handlers do) — the checks are idempotent;
+ *  - a handler that legitimately takes no event still passes through
+ *    the wrapper (the wrapper always receives the event itself).
+ *
+ * Returns { origHandle, gateCount } — the probe reads gateCount to
+ * prove the number of refused calls it provoked.
+ */
+function gateIpcMainHandle(ipcMain, isTrustedSender) {
+  const origHandle = ipcMain.handle.bind(ipcMain)
+  const stats = { refused: 0, wrapped: 0 }
+  ipcMain.handle = function gatedHandle(channel, fn) {
+    stats.wrapped += 1
+    return origHandle(channel, (event, ...args) => {
+      if (!isTrustedSender(event)) {
+        stats.refused += 1
+        return undefined
+      }
+      return fn(event, ...args)
+    })
+  }
+  return { origHandle, stats }
+}
+
 module.exports = {
   PUSH_CHANNELS,
   OUTBOUND_CHANNELS,
   TASK_EVENT_NAMES,
   isAllowedPushChannel,
   isAllowedOutboundChannel,
-  createSenderGate
+  createSenderGate,
+  gateIpcMainHandle
 }

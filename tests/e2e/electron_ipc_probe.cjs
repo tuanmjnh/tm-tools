@@ -1,4 +1,4 @@
-// R133 probe (docs §197): prove the REAL Electron runtime enforces the
+// R133 probe (docs §197/§198): prove the REAL Electron runtime enforces the
 // IPC trust policy that unit specs can only model:
 //  1) the real preload's electronAPI.on fires ONLY for allow-listed
 //     channels, unsub works, and unknown channels receive nothing;
@@ -6,16 +6,20 @@
 //     silently — a bridge refusal is not an exception);
 //  3) the REAL createSenderGate passes the trusted loopback origin and
 //     refuses a file:// frame (the same factory the file-manager and all
-//     privileged main handlers now use).
+//     privileged main handlers now use);
+//  4) R134: the gateIpcMainHandle choke point installed on ipcMain makes
+//     EVERY subsequently-registered ipcMain.handle channel (controller
+//     style, no per-site guard) resolve to undefined for a foreign frame
+//     while the trusted origin gets real data.
 //
 //   node_modules\electron\dist\electron.exe tests/e2e/electron_ipc_probe.cjs
 //
 // Prints PROBE lines to stdout; exits 0 on all pass, 1 on any failure.
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
 const http = require('http')
 const path = require('path')
 
-const { createSenderGate } = require('../../electron/ipcPolicy.cjs')
+const { createSenderGate, gateIpcMainHandle } = require('../../electron/ipcPolicy.cjs')
 
 const PAGE = '<!doctype html><html><body>probe</body></html>'
 
@@ -85,6 +89,47 @@ app.whenReady().then(async () => {
     results.push([out.got === 1, `allow-listed on() fires once then unsub works (got=${out.got})`])
     results.push([out.unsubIsFn && !out.unknownFired, 'unknown-channel on() refused (noop unsub, no delivery)'])
     results.push([out.sendThrew === false, `send() refuses silently on empty allow-list${out.sendErr ? ' :: ' + out.sendErr : ''}`])
+
+    // 3) R134 choke point (§198): install the SAME function main.cjs
+    // installs, then register a controller-style channel WITHOUT any
+    // per-site guard — exactly how the ~150 real handlers register.
+    // Drive it from a foreign-frame window (data: origin, raw invoke
+    // via the probe preload) and from the trusted window.
+    gateIpcMainHandle(ipcMain, gate)
+    ipcMain.handle('probe:ctrl-data', () => ({ rows: ['real-data'] }))
+
+    const foreign = new BrowserWindow({
+      width: 400,
+      height: 300,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'probe_preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    await foreign.loadURL('data:text/html,<body>foreign</body>')
+    const foreignData = await foreign.webContents.executeJavaScript('window.probeAPI.invoke("probe:ctrl-data")')
+    results.push([foreignData === undefined, `choke point: foreign frame gets undefined via real ipc (got=${JSON.stringify(foreignData)})`])
+    foreign.close()
+
+    const trustedProbe = new BrowserWindow({
+      width: 400,
+      height: 300,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'probe_preload.cjs'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true
+      }
+    })
+    await trustedProbe.loadURL(`http://127.0.0.1:${port}/`)
+    const trustedData = await trustedProbe.webContents.executeJavaScript('window.probeAPI.invoke("probe:ctrl-data")')
+    trustedProbe.close()
+    results.push([!!trustedData && Array.isArray(trustedData.rows) && trustedData.rows[0] === 'real-data',
+      `choke point: trusted origin gets real data via the same raw invoke (got=${JSON.stringify(trustedData)})`])
   } catch (err) {
     results.push([false, `probe crashed: ${err && err.message ? err.message : String(err)}`])
   } finally {

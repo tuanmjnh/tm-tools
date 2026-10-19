@@ -235,9 +235,18 @@ const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 // Chromium injects them around trusted app navigations. R133 extracted
 // the factory into ipcPolicy.cjs so the file-manager controller applies
 // the SAME rule (it used to have none at all).
-const { createSenderGate } = require('./ipcPolicy.cjs')
+const { createSenderGate, gateIpcMainHandle } = require('./ipcPolicy.cjs')
 
 const isTrustedSender = createSenderGate({ isDev, port: PORT })
+
+// R134 (§198): install the choke-point BEFORE any controller registers.
+// Every ipcMain.handle call from now on — all six controllers, the
+// platform layer's ipcHelper, and any future handler — is automatically
+// wrapped so a non-app-origin frame's invoke resolves to undefined.
+// This is what the R133 audit follow-up promised as "mechanical":
+// instead of gating ~150 registration sites one by one, the registration
+// FUNCTION ITSELF is gated once.
+gateIpcMainHandle(ipcMain, isTrustedSender)
 
 ipcMain.handle('get-config', (event) => {
   if (!isTrustedSender(event)) return {}

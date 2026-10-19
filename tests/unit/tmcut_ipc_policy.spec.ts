@@ -29,7 +29,8 @@ import {
   OUTBOUND_CHANNELS,
   isAllowedPushChannel,
   isAllowedOutboundChannel,
-  createSenderGate
+  createSenderGate,
+  gateIpcMainHandle
 } from '../../electron/ipcPolicy.cjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -112,6 +113,30 @@ await check('preload inline copies equal the canonical policy arrays', () => {
   }
   assert.deepEqual(grab('PUSH_CHANNELS').slice().sort(), PUSH_CHANNELS.slice().sort())
   assert.deepEqual(grab('OUTBOUND_CHANNELS'), OUTBOUND_CHANNELS)
+})
+
+await check('choke point gates every later registration (R134)', async () => {
+  // The R134 mechanism: swap ipcMain.handle once at startup, every
+  // controller registration afterwards is wrapped. Model the swap with
+  // a fake ipcMain and prove (a) untrusted resolves undefined without
+  // running the handler, (b) trusted runs it, (c) async handlers keep
+  // their resolution value.
+  const registry = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+  const fakeIpc = { handle: (ch: string, fn: (event: unknown, ...args: unknown[]) => unknown) => registry.set(ch, fn) }
+  const gate = createSenderGate({ isDev: false, port: 3456 })
+  gateIpcMainHandle(fakeIpc as never, gate)
+  let ran = 0
+  fakeIpc.handle('probe:sync', () => { ran++; return { ok: true } })
+  fakeIpc.handle('probe:async', async () => { ran++; await new Promise(r => setTimeout(r, 5)); return 'async-value' })
+  const evil = { senderFrame: { url: 'https://evil.example/' } }
+  const good = { senderFrame: { url: 'http://127.0.0.1:3456/x' } }
+  assert.equal(await registry.get('probe:sync')!(evil), undefined)
+  assert.equal(ran, 0, 'handler body must not run for untrusted senders')
+  const okVal = registry.get('probe:sync')!(good)
+  assert.deepEqual(okVal, { ok: true })
+  assert.equal(await registry.get('probe:async')!(evil), undefined)
+  assert.equal(await registry.get('probe:async')!(good), 'async-value')
+  assert.equal(ran, 2, 'trusted calls run each handler exactly once')
 })
 
 await check('file-manager handlers refuse untrusted senders when gated', async () => {
