@@ -2238,7 +2238,8 @@
     "aiKeysEncryptNow": "Mã hóa ngay",
     "aiKeysEncryptNowTitle": "Mã hóa lại các key đã lưu bằng keychain OS (chạy đúng phép migration app thử lúc khởi động)",
     "aiKeysEncryptedNow": "Mọi key đã lưu giờ được mã hóa tại chỗ.",
-    "aiKeysRefresh": "Làm mới trạng thái vault"
+    "aiKeysRefresh": "Làm mới trạng thái vault",
+    "openAiKeyVault": "Két khóa AI (API key & mã hóa)"
   },
   "seed": {
     "desc": "Seed các vai trò và tài khoản mặc định. Seed idempotent chỉ thêm phần còn thiếu, còn Reset sẽ xóa toàn bộ dữ liệu trước khi seed lại.",

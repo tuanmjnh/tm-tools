@@ -116,6 +116,16 @@ describe('TMCut AI key vault — page contract (R140)', () => {
     assert.ok(!/Settings\s*→\s*Connections/.test(where), 'no AI panel exists on any settings page')
   })
 
+  it('the settings slideover links the vault ONLY where it works (Electron)', () => {
+    // Honesty rule: never promise a desktop-only page to web users.
+    const slideover = read('app/components/dashboard/SettingsSlideover.vue')
+    assert.ok(/navigateAndClose\('\/system\/ai-keys'\)/.test(slideover), 'slideover must link the vault')
+    assert.ok(/v-if=.isElectron.[\s\S]{0,400}navigateAndClose\(.\/system\/ai-keys.\)/.test(slideover), 'the vault link itself must be Electron-gated')
+    // Hydration-safe: flag flips after mount, never during SSR render.
+    assert.ok(/isElectron = ref\(false\)/.test(slideover), 'flag must start false (SSR-safe)')
+    assert.ok(/onMounted\(\(\) => \{[\s\S]{0,80}isElectron\.value = !!window\.electronAPI\?\.isElectron/.test(slideover), 'flag set after mount only')
+  })
+
   it('the nav route exists for every system-group sibling pattern (hub seed)', () => {
     // Cross-repo check: the sibling checkout exists on dev machines;
     // on an isolated tm-tools clone the seed lives in tm-hub and this

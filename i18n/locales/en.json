@@ -2238,7 +2238,8 @@
     "aiKeysEncryptNow": "Encrypt now",
     "aiKeysEncryptNowTitle": "Re-encrypt the stored keys with the OS keychain (runs the same migration the app tries at startup)",
     "aiKeysEncryptedNow": "All stored keys are now encrypted at rest.",
-    "aiKeysRefresh": "Refresh vault status"
+    "aiKeysRefresh": "Refresh vault status",
+    "openAiKeyVault": "AI Key Vault (API keys & encryption)"
   },
   "seed": {
     "desc": "Seed roles and default accounts. Idempotent seed only adds what is missing, while Reset wipes all data first.",
