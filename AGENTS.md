@@ -30,7 +30,7 @@ Guidance for AI coding agents working in this repository.
 
 ```bash
 pnpm install        # Install dependencies (pnpm is the package manager)
-pnpm dev            # Nuxt dev server on http://localhost:4002
+pnpm dev            # Nuxt dev server on http://localhost:4002 (--port 4002)
 pnpm dev:electron   # Nuxt dev + Electron together
 pnpm typecheck      # Run typecheck (vue-tsc) — always run after type changes
 pnpm lint           # ESLint check on modified files
