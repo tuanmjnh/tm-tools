@@ -33,7 +33,7 @@ writeFileSync(binPath, BIN)
 const jsonPath = join(dir, 'wave.json')
 writeFileSync(jsonPath, '{"buckets":[1,2,3]}')
 
-const APP_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+const APP_ORIGINS = ['http://localhost:4002', 'http://127.0.0.1:4002']
 const handler = createMediaHandler(() => APP_ORIGINS)
 
 function mediaRequest(file: string, opts: { origin?: string, range?: string, method?: string } = {}) {
@@ -81,16 +81,16 @@ async function main() {
   })
 
   await check('app origin gets CORS (fetch waveform), remote origin does NOT', async () => {
-    const app = await handler(mediaRequest(jsonPath, { origin: 'http://localhost:3000' }))
-    if (app.headers.get('access-control-allow-origin') !== 'http://localhost:3000') throw new Error('app ACAO missing')
+    const app = await handler(mediaRequest(jsonPath, { origin: 'http://localhost:4002' }))
+    if (app.headers.get('access-control-allow-origin') !== 'http://localhost:4002') throw new Error('app ACAO missing')
     const remote = await handler(mediaRequest(binPath, { origin: 'https://evil.example' }))
     if (remote.headers.get('access-control-allow-origin') !== null) throw new Error('remote origin must not get ACAO')
   })
 
   await check('OPTIONS preflight allows the Range header for app origins', async () => {
-    const res = await handler(mediaRequest(binPath, { origin: 'http://127.0.0.1:3000', method: 'OPTIONS' }))
+    const res = await handler(mediaRequest(binPath, { origin: 'http://127.0.0.1:4002', method: 'OPTIONS' }))
     if (res.status !== 204) throw new Error(`status ${res.status}`)
-    if (res.headers.get('access-control-allow-origin') !== 'http://127.0.0.1:3000') throw new Error('preflight ACAO')
+    if (res.headers.get('access-control-allow-origin') !== 'http://127.0.0.1:4002') throw new Error('preflight ACAO')
     if (!String(res.headers.get('access-control-allow-headers')).toLowerCase().includes('range')) throw new Error('Range not preflighted')
   })
 

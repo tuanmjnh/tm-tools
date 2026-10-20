@@ -63,10 +63,12 @@ function isAllowedOutboundChannel(channel) {
  *    must not lock the app out of its own IPC);
  *  - dev accepts the Vite server origin only;
  *  - prod accepts the loopback Nitro server origin only.
- * `port` is the prod server port (string or number).
+ * `port` is the prod server port (string or number); `devPort` is the
+ * `pnpm dev` renderer port (default 4002, matches PORT in .env).
  */
-function createSenderGate({ isDev, port }) {
+function createSenderGate({ isDev, port, devPort = 4002 }) {
   const p = String(port)
+  const dp = String(devPort)
   return function isTrustedSender(event) {
     let url
     try {
@@ -75,7 +77,7 @@ function createSenderGate({ isDev, port }) {
       return false
     }
     if (!url || url === 'about:blank' || url.startsWith('devtools://')) return true
-    if (isDev) return url.startsWith('http://localhost:3000') || url.startsWith('http://127.0.0.1:3000')
+    if (isDev) return url.startsWith(`http://localhost:${dp}`) || url.startsWith(`http://127.0.0.1:${dp}`)
     return url.startsWith(`http://127.0.0.1:${p}`) || url.startsWith(`http://localhost:${p}`)
   }
 }

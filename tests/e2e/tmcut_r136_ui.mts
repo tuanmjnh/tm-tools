@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
-const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:3000'
+const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:4002'
 const HUB_PORT = process.env.TMCUT_HUB_PORT || '4000'
 const browserExe = process.env.CHROME_EXE || ''
 

@@ -33,7 +33,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..')
-const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:3000'
+const DEV_URL = process.env.TMCUT_DEV_URL || 'http://localhost:4002'
 const HUB_PORT = process.env.TMCUT_HUB_PORT || '4000'
 const PROJECT_ID = 'qa-r124'
 const VIDEO_ASSET_ID = 'qa-asset-video'

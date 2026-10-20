@@ -6,7 +6,7 @@ Guidance for AI coding agents working in this repository.
 
 **TM Tools** is an Electron + Nuxt 4 desktop automation, media production, and multi-profile workspace application powered by Nuxt UI v4 (Tailwind CSS v4).
 
-- **Technology Stack**: Electron + Nuxt 4 running on Port 3000 (`TOOLS_PORT`).
+- **Technology Stack**: Electron + Nuxt 4 running on Port 4002 (`TOOLS_PORT`).
 - **UI Framework**: Nuxt UI v4 (Tailwind CSS v4).
 - **Control Plane Integration**:
   - Connects to **TM Hub** (`http://localhost:4000`) as a satellite app via `useHub()` with `X-App-Id: tm-tools_4e2ygb`.
@@ -30,7 +30,7 @@ Guidance for AI coding agents working in this repository.
 
 ```bash
 pnpm install        # Install dependencies (pnpm is the package manager)
-pnpm dev            # Nuxt dev server on http://localhost:3000
+pnpm dev            # Nuxt dev server on http://localhost:4002
 pnpm dev:electron   # Nuxt dev + Electron together
 pnpm typecheck      # Run typecheck (vue-tsc) — always run after type changes
 pnpm lint           # ESLint check on modified files
@@ -75,8 +75,8 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
 - **Button Variants**:
   - Primary actions use `color="primary" variant="soft"`.
 - **GridList & Batch Operations**:
-  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.
-  - DELETE endpoints must support batch deletion via comma-separated query IDs.
+  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.- **Tailwind CSS Conventions**:
+  - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (	ailwindcss/enforces-shorthand) and canonical class warnings are disabled.
 
 ### i18n & Language Conventions
 - All user-facing text MUST reside in `i18n/locales/en.json` and `i18n/locales/vi.json` and be accessed via `t()`.

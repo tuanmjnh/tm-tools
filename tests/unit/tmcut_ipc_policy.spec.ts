@@ -54,14 +54,15 @@ await check('prod gate: loopback origins pass, everything else refuses', () => {
   assert.ok(!gate(frame('http://127.0.0.1:9999/')))
   assert.ok(!gate(frame('https://127.0.0.1:3456/')))
   assert.ok(!gate(frame('file:///C:/x/y.html')))
-  assert.ok(!gate(frame('http://localhost:3000/')))
+  assert.ok(!gate(frame('http://localhost:4002/')))
 })
 
 await check('dev gate: Vite origin only; blank/devtools frames always pass', () => {
-  const gate = createSenderGate({ isDev: true, port: 3456 })
-  assert.ok(gate(frame('http://localhost:3000/tmcut')))
-  assert.ok(gate(frame('http://127.0.0.1:3000/')))
+  const gate = createSenderGate({ isDev: true, port: 3456, devPort: 4002 })
+  assert.ok(gate(frame('http://localhost:4002/tmcut')))
+  assert.ok(gate(frame('http://127.0.0.1:4002/')))
   assert.ok(!gate(frame('http://localhost:3100/')))
+  assert.ok(!gate(frame('http://localhost:3000/')))
   assert.ok(gate(frame('about:blank')))
   assert.ok(gate(frame(null)))
   assert.ok(gate(frame('devtools://devtools/bundled/inspector.html')))
@@ -126,8 +127,15 @@ await check('choke point gates every later registration (R134)', async () => {
   const gate = createSenderGate({ isDev: false, port: 3456 })
   gateIpcMainHandle(fakeIpc as never, gate)
   let ran = 0
-  fakeIpc.handle('probe:sync', () => { ran++; return { ok: true } })
-  fakeIpc.handle('probe:async', async () => { ran++; await new Promise(r => setTimeout(r, 5)); return 'async-value' })
+  fakeIpc.handle('probe:sync', () => {
+    ran++
+    return { ok: true }
+  })
+  fakeIpc.handle('probe:async', async () => {
+    ran++
+    await new Promise(r => setTimeout(r, 5))
+    return 'async-value'
+  })
   const evil = { senderFrame: { url: 'https://evil.example/' } }
   const good = { senderFrame: { url: 'http://127.0.0.1:3456/x' } }
   assert.equal(await registry.get('probe:sync')!(evil), undefined)

@@ -48,11 +48,15 @@ protocol.registerSchemesAsPrivileged([mediaSchemePrivileges()])
 
 const isDev = !app.isPackaged
 const PORT = process.env.APP_PORT || 3456
+// Dev renderer is served by `pnpm dev` (nuxt dev) on the repo's dev port
+// (PORT in .env — 4002 since the fleet port reallocation). Keep in sync
+// with the wait-on URL in the `dev:electron` script.
+const DEV_PORT = Number(process.env.PORT || 4002)
 
 // Origins the renderer legitimately runs from; media-protocol uses this
 // to decide whether a fetch() gets CORS headers (webSecurity:true, R126).
 function appOrigins() {
-  if (isDev) return ['http://localhost:3000', 'http://127.0.0.1:3000']
+  if (isDev) return [`http://localhost:${DEV_PORT}`, `http://127.0.0.1:${DEV_PORT}`]
   return [`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]
 }
 
@@ -149,7 +153,7 @@ async function createWindow() {
   })
 
   if (isDev) {
-    win.loadURL('http://localhost:3000')
+    win.loadURL(`http://localhost:${DEV_PORT}`)
     win.webContents.openDevTools()
   } else {
     try {
@@ -167,7 +171,7 @@ async function createWindow() {
   // frame must never navigate to a foreign origin. Programmatic loads
   // (loadURL/back) do not fire this event; only user/link-driven
   // navigations do. window.open stays with the OAuth-aware handler below.
-  const appOrigin = isDev ? 'http://localhost:3000' : `http://127.0.0.1:${PORT}`
+  const appOrigin = isDev ? `http://localhost:${DEV_PORT}` : `http://127.0.0.1:${PORT}`
   win.webContents.on('will-navigate', (event, url) => {
     if (!url.startsWith(appOrigin) && !url.startsWith('devtools://')) {
       event.preventDefault()
@@ -282,7 +286,7 @@ function migrateStoredKeysToSecureStorage() {
 // the SAME rule (it used to have none at all).
 const { createSenderGate, gateIpcMainHandle } = require('./ipcPolicy.cjs')
 
-const isTrustedSender = createSenderGate({ isDev, port: PORT })
+const isTrustedSender = createSenderGate({ isDev, port: PORT, devPort: DEV_PORT })
 
 // R134 (§198): install the choke-point BEFORE any controller registers.
 // Every ipcMain.handle call from now on — all six controllers, the

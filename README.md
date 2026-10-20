@@ -88,13 +88,13 @@ Demo users:
 
 ## Development
 
-Start the Nuxt dev server at `http://localhost:3000`:
+Start the Nuxt dev server at `http://localhost:4002`:
 
 ```bash
 pnpm dev
 ```
 
-Run the app inside Electron (starts Nuxt dev server, waits for port 3000, then launches Electron):
+Run the app inside Electron (starts Nuxt dev server, waits for port 4002, then launches Electron):
 
 ```bash
 pnpm dev:electron
