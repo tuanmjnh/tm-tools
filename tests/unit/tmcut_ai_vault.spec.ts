@@ -101,7 +101,11 @@ describe('TMCut AI key vault — page contract (R140)', () => {
   })
 
   it('tests go through the task-aware listModels (saved-key path), never a typed key', () => {
-    assert.ok(page.includes('listModels(task === \'global\' ? {} : { task })'), 'tests must use saved-slot resolution')
+    // R147 renamed the local to gatewayListModels (useHubAi also exports
+    // listModels for the hub catalogue). The pinned CONTRACT is unchanged:
+    // per-surface tests must flow through the gateway's saved-slot
+    // resolution, whatever the local alias is called.
+    assert.ok(page.includes('gatewayListModels(task === \'global\' ? {} : { task })'), 'tests must use saved-slot resolution')
     assert.ok(!page.includes('AI_API_KEY'), 'the page must not touch raw key slots')
     assert.ok(!/apiKey\s*[:=]/.test(page), 'the page holds no field that could carry a key')
   })

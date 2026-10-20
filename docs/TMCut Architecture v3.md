@@ -9874,3 +9874,65 @@ never does.
 Proof: node --check on all three modules, secure probe ALL PASS
 (real-keychain migration now runs through the shared import chain),
 AI suite 45/45, vault 12/12, run-all 32/32, lint 0.
+
+## 208. R147 — provider accounts move to the hub, the gateway boundary stays
+
+The hub-side R147 domain (`provider_definitions`, multi-credential
+connections keyed `(app_id, provider, name)`, AES-GCM secrets, AI
+endpoints under `/api/v1/apps/:id/ai/*`) landed first; this section
+covers the tm-tools consumption. Three integration rules matter:
+
+1. **One canonical inventory.** The hub's `GET /connections` merges
+   code-registry providers AND DB-backed AI providers (`ai: true`,
+   `category: 'ai_llm'`, per-credential `connections[]`) in one
+   payload. The connections page casts that payload — it does NOT
+   maintain a second provider list, and it never calls
+   `/ai/connections/*` to render cards. Writing goes through
+   `/ai/connections/manual` ONLY for `ai: true` providers, so a
+   credential created on either screen is the same row
+   (roadmap §2 "no duplicate records").
+2. **tm-hub-client stays untouched.** v1.0.4 has no `ai` namespace and
+   its package is owned outside this repo. The sanctioned extension
+   point is `app/composables/useHubAi.ts` — a thin composable over
+   `useHub().hubFetch` (which already attaches the bearer token and
+   X-App-Id). It deliberately does NOT use `client.request`: the
+   public type restricts `body` to `BodyInit` and every AI endpoint
+   needs an object body. If the client ever ships `ai.*`, useHubAi
+   retires; pages keep calling it either way.
+3. **§203 boundary is unchanged.** The Electron gateway still reads
+   env (plaintext at rest in the gateway, secrets never crossing IPC).
+   R147 moves the MANAGEMENT plane (credentials, health, model
+   catalogue, enable/share governance) to the hub; per-surface
+   resolution preferring hub config (editorScript→plan,
+   captions→transcribe, autocut→triage) is a separate step and is NOT
+   implied by the two pages rendering hub data. Until that step lands,
+   hub credentials and env keys coexist honestly: the ai-keys page
+   shows both planes side by side (vault banner = desktop env truth,
+   provider accordion = hub truth).
+
+Wizard shape (roadmap §2): category → provider → credential form. AI
+providers get credential NAME (multi-key: primary/fallback on one
+provider) and a share switch; untouched password fields on re-save are
+skipped so stored AES-GCM secrets survive edits. Test/disconnect on AI
+cards route to the AI keys screen (per-credential governance needs the
+connection id; the generic `/connections/test` path is legacy-only).
+
+Why runtime resolution was NOT moved to the hub (D35): an earlier
+Phase-5 draft sketched the gateway resolving per-surface keys from hub
+connections at request time. Roadmap revision D35 (2026-10-20) closes
+that door — the hub "is not a required credential broker or inference
+proxy", and the mechanics agree: the AES-GCM key lives server-side, so
+the Electron main process physically cannot decrypt `connections.secrets`;
+the only route would be a hub endpoint handing plaintext over the wire
+on every request. Runtime truth therefore stays in config.env / keychain
+(written ONLY by the AI connect panel — single-writer rule from §204
+survives R147 untouched), and the hub plane owns management: inventory,
+multi-credential storage, health, governance, model catalogue. A hub
+credential becomes runtime truth when the user pastes/rotates it into
+the AI panel, exactly as before.
+
+Proof: `pnpm typecheck` 0, eslint 0 on all touched files, JSON.parse +
+key-parity check on en/vi (every `t()` key used by both pages resolves
+in BOTH locales; flat parity 3117/3117), i18n `aiProviders.*` at top
+level matching the `useI18n` call sites, vault spec 12/12 after the
+`gatewayListModels` rename pin, unit suite 32/32.
