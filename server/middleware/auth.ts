@@ -35,8 +35,8 @@ export default defineEventHandler(async (event) => {
   }
 
   // Security constraint: Token must match tm-tools appId
-  const currentAppId = process.env.NUXT_PUBLIC_HUB_APP_ID || process.env.NUXT_PUBLIC_APP_ID || 'tm-tools'
-  if ((payload as any).appId && (payload as any).appId !== currentAppId) {
+  const currentAppId = process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
+  if (payload.appId && payload.appId !== currentAppId) {
     throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: 'Token not issued for this application' })
   }
 

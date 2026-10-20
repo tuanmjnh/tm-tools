@@ -11,8 +11,6 @@ export default defineNuxtConfig({
     '@pinia/nuxt'
   ],
   ssr: false,
-  spaLoadingTemplate: 'spa-loading-template.html',
-
   imports: {
     dirs: [
       'shared/utils'
@@ -22,8 +20,6 @@ export default defineNuxtConfig({
   devtools: {
     enabled: false
   },
-
-  css: ['~/assets/css/main.css'],
 
   app: {
     head: {
@@ -38,6 +34,9 @@ export default defineNuxtConfig({
     }
   },
 
+  css: ['~/assets/css/main.css'],
+  spaLoadingTemplate: 'spa-loading-template.html',
+
   // PWA: tm-tools has custom service worker (push-sw.js, registered by
   // app/plugins/sw.client.ts - web push/Firebase) -> DO NOT add
   // @vite-pwa/nuxt (generates sw.js at scope '/', conflicting with push-sw.js).
@@ -46,8 +45,8 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || process.env.NUXT_PUBLIC_HUB_API_URL || 'http://localhost:4000',
-      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || process.env.NUXT_PUBLIC_APP_ID || 'tm-tools'
+      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
+      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
     }
   },
 

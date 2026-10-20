@@ -111,6 +111,7 @@ export interface TokenPayload {
   role: string
   permissions: string[]
   allowedRoutes?: string[]
+  appId?: string
 }
 
 export interface AuthConfig {
