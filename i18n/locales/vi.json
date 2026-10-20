@@ -3055,7 +3055,29 @@
     "no_providers_in_category": "Chưa có nhà cung cấp nào trong danh mục này.",
     "manage_ai": "Quản lý",
     "credential_name": "Tên thông tin",
-    "credential_name_hint": "Phân biệt nhiều tài khoản trên cùng nhà cung cấp (mặc định: 'mặc định')."
+    "credential_name_hint": "Phân biệt nhiều tài khoản trên cùng nhà cung cấp (mặc định: 'mặc định').",
+    "wizard": {
+      "ai_llm_label": "AI / LLM",
+      "ai_llm_desc": "OpenAI, Anthropic, Google AI, OpenRouter, Ollama",
+      "coding_gateway_label": "Coding gateway",
+      "coding_gateway_desc": "OpenCode, freeLLAMAPI và các gateway tương thích",
+      "media_generation_label": "Tạo media",
+      "media_generation_desc": "API tạo ảnh, âm thanh và video",
+      "exchange_label": "Sàn giao dịch",
+      "exchange_desc": "Binance, Bybit, OKX (chỉ đọc trước)",
+      "market_data_label": "Dữ liệu thị trường",
+      "market_data_desc": "Nến, sổ lệnh, luồng tin tức",
+      "news_label": "Tin tức & lịch",
+      "news_desc": "Nhà cung cấp tin tức và lịch kinh tế",
+      "media_storage_label": "Media / lưu trữ / CDN",
+      "media_storage_desc": "Cloudinary, lưu trữ tương thích S3",
+      "notifications_label": "Thông báo",
+      "notifications_desc": "Firebase, Web Push",
+      "mcp_label": "MCP & tự động hóa",
+      "mcp_desc": "MCP server và tự động hóa có phân quyền",
+      "custom_label": "Tùy chỉnh / OpenAI-compatible",
+      "custom_desc": "Kết nối thủ công hoặc endpoint tương thích"
+    }
   },
   "configs": {
     "title": "Cấu hình",

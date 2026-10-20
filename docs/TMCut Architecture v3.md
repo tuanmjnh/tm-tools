@@ -9910,7 +9910,13 @@ covers the tm-tools consumption. Three integration rules matter:
    shows both planes side by side (vault banner = desktop env truth,
    provider accordion = hub truth).
 
-Wizard shape (roadmap §2): category → provider → credential form. AI
+Wizard shape (roadmap §2): category → provider → credential form. The
+category grid carries the FULL §2 list (AI/LLM, coding gateway, media
+generation, exchange, market data, news, media/storage/CDN,
+notifications, MCP, custom) with labels in i18n — categories without a
+registered provider yet show an honest empty state instead of being
+hidden, so the inventory answers "where do I add ANY integration"
+before Phase 4 registers them incrementally. AI
 providers get credential NAME (multi-key: primary/fallback on one
 provider) and a share switch; untouched password fields on re-save are
 skipped so stored AES-GCM secrets survive edits. Test/disconnect on AI
@@ -9933,6 +9939,6 @@ the AI panel, exactly as before.
 
 Proof: `pnpm typecheck` 0, eslint 0 on all touched files, JSON.parse +
 key-parity check on en/vi (every `t()` key used by both pages resolves
-in BOTH locales; flat parity 3117/3117), i18n `aiProviders.*` at top
+in BOTH locales; flat parity 3137/3137), i18n `aiProviders.*` at top
 level matching the `useI18n` call sites, vault spec 12/12 after the
 `gatewayListModels` rename pin, unit suite 32/32.

@@ -261,15 +261,26 @@ async function doDisconnect() {
 }
 
 // ============ ADD CONNECTION WIZARD ============
+// Category list mirrors roadmap §2 (provider-connections-upgrade-roadmap).
+// Labels/descriptions live in i18n (`connections.wizard.<key>_label/_desc`);
+// categories with no registered provider yet show an honest empty state —
+// Phase 4 registers non-AI categories incrementally.
 const CATEGORIES = [
-  { key: 'ai_llm', label: 'AI / LLM', icon: 'i-lucide-brain', desc: 'OpenAI, Anthropic, Google AI, Groq, etc.' },
-  { key: 'media_storage', label: 'Media Storage', icon: 'i-lucide-image', desc: 'Cloudinary, S3-compatible' },
-  { key: 'notifications', label: 'Notifications', icon: 'i-lucide-bell', desc: 'Firebase, Web Push' },
-  { key: 'exchange', label: 'Exchange / Trading', icon: 'i-lucide-coin', desc: 'Binance, Bybit, etc.' },
-  { key: 'market_data', label: 'Market Data', icon: 'i-lucide-chart-line', desc: 'CoinGecko, Twelve Data' },
-  { key: 'news', label: 'News / Social', icon: 'i-lucide-newspaper', desc: 'Twitter, Reddit, RSS' },
-  { key: 'custom', label: 'Custom / Other', icon: 'i-lucide-plus-circle', desc: 'Any manual connection' }
+  { key: 'ai_llm', icon: 'i-lucide-brain' },
+  { key: 'coding_gateway', icon: 'i-lucide-terminal' },
+  { key: 'media_generation', icon: 'i-lucide-sparkles' },
+  { key: 'exchange', icon: 'i-lucide-coin' },
+  { key: 'market_data', icon: 'i-lucide-chart-line' },
+  { key: 'news', icon: 'i-lucide-newspaper' },
+  { key: 'media_storage', icon: 'i-lucide-hard-drive' },
+  { key: 'notifications', icon: 'i-lucide-bell' },
+  { key: 'mcp', icon: 'i-lucide-plug-zap' },
+  { key: 'custom', icon: 'i-lucide-plus-circle' }
 ] as const
+
+function categoryLabel(key: string): string {
+  return key ? t(`connections.wizard.${key}_label`) : ''
+}
 
 function openAddWizard() {
   addStep.value = 'category'
@@ -625,10 +636,10 @@ useHead({ title: t('connections.title') })
                 <UIcon :name="cat.icon" class="size-6 text-primary" />
               </div>
               <p class="font-medium text-highlighted text-center">
-                {{ cat.label }}
+                {{ categoryLabel(cat.key) }}
               </p>
               <p class="text-xs text-muted text-center mt-1">
-                {{ cat.desc }}
+                {{ t(`connections.wizard.${cat.key}_desc`) }}
               </p>
             </div>
           </div>
@@ -643,7 +654,7 @@ useHead({ title: t('connections.title') })
               icon="i-lucide-chevron-left"
               @click="backToCategory"
             />
-            <span class="font-medium text-highlighted">{{ CATEGORIES.find(c => c.key === addCategory)?.label }}</span>
+            <span class="font-medium text-highlighted">{{ categoryLabel(addCategory) }}</span>
           </div>
           <p class="text-sm text-muted">
             {{ t('connections.add_provider_hint') }}

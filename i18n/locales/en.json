@@ -3055,7 +3055,29 @@
     "no_providers_in_category": "No providers in this category yet.",
     "manage_ai": "Manage",
     "credential_name": "Credential name",
-    "credential_name_hint": "Distinguishes multiple accounts on the same provider (default: 'default')."
+    "credential_name_hint": "Distinguishes multiple accounts on the same provider (default: 'default').",
+    "wizard": {
+      "ai_llm_label": "AI / LLM",
+      "ai_llm_desc": "OpenAI, Anthropic, Google AI, OpenRouter, Ollama",
+      "coding_gateway_label": "Coding gateway",
+      "coding_gateway_desc": "OpenCode, freeLLAMAPI and compatible gateways",
+      "media_generation_label": "Media generation",
+      "media_generation_desc": "Image, audio and video generation APIs",
+      "exchange_label": "Trading exchange",
+      "exchange_desc": "Binance, Bybit, OKX (read-only first)",
+      "market_data_label": "Market data",
+      "market_data_desc": "Candles, order books, news feeds",
+      "news_label": "News & calendar",
+      "news_desc": "News and economic calendar providers",
+      "media_storage_label": "Media / storage / CDN",
+      "media_storage_desc": "Cloudinary, S3-compatible storage",
+      "notifications_label": "Notifications",
+      "notifications_desc": "Firebase, Web Push",
+      "mcp_label": "MCP & automation",
+      "mcp_desc": "MCP servers and permissioned automation",
+      "custom_label": "Custom / OpenAI-compatible",
+      "custom_desc": "Any manual connection or compatible endpoint"
+    }
   },
   "configs": {
     "title": "Configs",
