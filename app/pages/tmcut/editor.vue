@@ -41,6 +41,7 @@ const {
   setCanvasBackground,
   duplicateAsProject,
   addClipToTrack,
+  pushHistory,
   revisionAtLoad,
   currentRevision
 } = useTmcutProject()
@@ -998,6 +999,9 @@ async function handleImportTemplateIntoProject() {
     const tpl = res.template
     const instantiated = instantiateTemplate(tpl)
     const live = currentProject.value
+    // Roadmap v3 §6.4 step 9: a whole-timeline replacement must undo as one
+    // step — capture the pre-import state (same contract as any mutation).
+    pushHistory()
     live.canvas = normalizeCanvas({
       width: instantiated.canvas.width,
       height: instantiated.canvas.height,

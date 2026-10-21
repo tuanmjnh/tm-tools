@@ -10,6 +10,8 @@ import {
   filterTemplates,
   createTemplateFromTimeline,
   validateTemplate,
+  migrateTemplate,
+  checkRequiredAssets,
   secToTicks,
   TICKS_PER_SECOND
 } from '@tmcut-core'
@@ -63,7 +65,12 @@ export function useTmcutTemplates() {
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
+          // Roadmap v3 §6.4: stamp the schema version onto templates saved
+          // before versioning existed (their shape IS v1). Invalid records
+          // are dropped rather than shown half-usable.
           userTemplates.value = parsed
+            .map((t: unknown) => migrateTemplate(t).migrated as TmcutTemplate | null)
+            .filter((t): t is TmcutTemplate => !!t)
         }
       } else {
         // One-time migration from the seconds-era (v1) key.
@@ -124,6 +131,21 @@ export function useTmcutTemplates() {
     }
     return counts
   })
+
+  /**
+   * Roadmap v3 §6.4 step 2 — BEFORE building anything, classify the
+   * template's required assets against what the Asset Center has verified
+   * installed. 'missingAssets' need an install (the UI offers it);
+   * 'localNeeds' are files the template author had — the user must supply
+   * them (never silently substituted).
+   */
+  function templateAssetReadiness(template: TmcutTemplate) {
+    const assetCenter = useTmcutAssetCenter()
+    const installedIds = assetCenter.installed.value
+      .filter(r => r.state === 'installed')
+      .map(r => `asset:${r.entryId}`)
+    return checkRequiredAssets(template, { installedIds })
+  }
 
   /**
    * Instantiates a template into a brand new project and saves it.
@@ -350,6 +372,7 @@ export function useTmcutTemplates() {
     createProjectFromTemplate,
     saveCurrentProjectAsTemplate,
     deleteUserTemplate,
+    templateAssetReadiness,
     exportTemplate,
     importTemplates,
     getTemplateById,

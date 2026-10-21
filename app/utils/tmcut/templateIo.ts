@@ -10,7 +10,7 @@
  *
  * Pure module: no Vue, no window, no Electron — the composable owns IO.
  */
-import { validateTemplate } from '@tmcut-core'
+import { migrateTemplate, validateTemplate } from '@tmcut-core'
 import type { TmcutTemplate } from '~/types/tmcut'
 
 export const TEMPLATE_FILE_KIND = 'tmcut-template'
@@ -95,9 +95,13 @@ export function sanitizeImportedTemplate(raw: unknown): TmcutTemplate | null {
   if (typeof tpl.createdAt !== 'number' || !Number.isFinite(tpl.createdAt)) {
     tpl.createdAt = Date.now()
   }
-  const validation = validateTemplate(tpl)
-  if (!validation.valid) return null
-  return tpl
+  // Roadmap v3 §6.4 step 1: migrate + validate BEFORE anything else. A
+  // template written by a newer schema is refused with a clear message
+  // (core migrateTemplate), never half-read; a clean import is stamped
+  // with the current schema version.
+  const migration = migrateTemplate(tpl)
+  if (!migration.migrated) return null
+  return migration.migrated as unknown as TmcutTemplate
 }
 
 /** Parse an imported file body. Never throws. */

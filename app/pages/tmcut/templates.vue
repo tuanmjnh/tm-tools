@@ -16,8 +16,24 @@ const {
   deleteUserTemplate,
   exportTemplate,
   importTemplates,
+  templateAssetReadiness,
   ticksToSeconds
 } = useTmcutTemplates()
+const assetCenter = useTmcutAssetCenter()
+
+// Roadmap v3 §6.4 step 2: the customize modal reports the template's
+// required-asset state BEFORE any project is built — catalog assets the
+// template needs but that are not installed offer a one-click install
+// (rights-gated by the Asset Center), and the author's local files are
+// listed so the user knows to replace them after creation.
+onMounted(() => {
+  assetCenter.load()
+})
+
+const activeReadiness = computed(() => {
+  if (!activeTemplate.value) return null
+  return templateAssetReadiness(activeTemplate.value)
+})
 
 // Modal customization state
 const customizeModalOpen = ref(false)
@@ -90,6 +106,33 @@ function openCustomizeModal(tpl: TmcutTemplate) {
     }
   }
   customizeModalOpen.value = true
+}
+
+// Catalog id ('asset:<entryId>') <-> Asset Center entry id.
+function assetEntryId(assetId: string): string {
+  return assetId.startsWith('asset:') ? assetId.slice('asset:'.length) : assetId
+}
+
+function assetInstallState(assetId: string): string {
+  const entryId = assetEntryId(assetId)
+  const record = assetCenter.installed.value.find(r => r.entryId === entryId)
+  const job = assetCenter.jobs.value.find(j => j.entryId === entryId && ['queued', 'active', 'retrying'].includes(j.state))
+  return job?.state || record?.state || 'catalog'
+}
+
+function assetTitle(assetId: string): string {
+  const entry = assetCenter.findEntry(assetEntryId(assetId))
+  return entry?.title || assetEntryId(assetId)
+}
+
+async function handleInstallRequiredAsset(assetId: string) {
+  const res = await assetCenter.install(assetEntryId(assetId))
+  if (!res.ok) {
+    toast.add({
+      title: t(`tmcut.assetCenter.blocked.${res.reason || 'review'}`, t('tmcut.assetCenter.installBlocked')),
+      color: 'warning'
+    })
+  }
 }
 
 async function handleConfirmCustomize() {
@@ -549,6 +592,56 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
                   {{ t('tmcut.templateLibrary.mediaSlotHint') }}
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Required assets (roadmap v3 §6.4): rights/install state is
+               shown BEFORE the project is built; installs are gated by the
+               Asset Center license rules. -->
+          <div v-if="activeReadiness && (activeReadiness.missingAssets.length > 0 || activeReadiness.localNeeds.length > 0)" class="space-y-2">
+            <h4 class="text-xs font-semibold text-neutral-900 dark:text-neutral-100 uppercase tracking-wider">
+              {{ t('tmcut.templateLibrary.requiredAssetsTitle') }}
+            </h4>
+            <div
+              v-for="req in activeReadiness.missingAssets"
+              :key="req.assetId"
+              class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/5"
+            >
+              <span class="text-[11px] text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 min-w-0 truncate">
+                <UIcon name="i-lucide-package-x" class="size-3.5 shrink-0 text-amber-500" />
+                {{ assetTitle(req.assetId) }}
+              </span>
+              <UButton
+                v-if="assetInstallState(req.assetId) === 'catalog'"
+                icon="i-lucide-download"
+                size="xs"
+                variant="soft"
+                color="primary"
+                @click="handleInstallRequiredAsset(req.assetId)"
+              >
+                {{ t('tmcut.assetCenter.install') }}
+              </UButton>
+              <UButton
+                v-else-if="['error'].includes(assetInstallState(req.assetId))"
+                icon="i-lucide-rotate-ccw"
+                size="xs"
+                variant="soft"
+                color="warning"
+                @click="handleInstallRequiredAsset(req.assetId)"
+              >
+                {{ t('tmcut.assetCenter.retry') }}
+              </UButton>
+              <span v-else class="text-[10px] text-neutral-500 shrink-0">
+                {{ assetInstallState(req.assetId) === 'installed' ? t('tmcut.templateLibrary.assetReady') : t('tmcut.assetCenter.downloading') }}
+              </span>
+            </div>
+            <div
+              v-for="need in activeReadiness.localNeeds"
+              :key="need.assetId"
+              class="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 text-[11px] text-neutral-500"
+            >
+              <UIcon name="i-lucide-file-question" class="size-3.5 shrink-0" />
+              {{ t('tmcut.templateLibrary.localAssetNote', { file: need.sourceHint || need.assetId }) }}
             </div>
           </div>
 
