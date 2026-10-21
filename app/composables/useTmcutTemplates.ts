@@ -196,6 +196,19 @@ export function useTmcutTemplates() {
   }
 
   /**
+   * §6.5 — persist a template that the AI pipeline built (already validated
+   * by the core Template Plan builder). Kept separate from the manual
+   * save-as path so provenance is explicit at the call site.
+   */
+  function saveAiTemplate(template: TmcutTemplate): TmcutTemplate | null {
+    const check = validateTemplate(template)
+    if (!check.valid) return null
+    userTemplates.value = [template, ...userTemplates.value]
+    persistUserTemplates()
+    return template
+  }
+
+  /**
    * Saves current timeline as a user-defined template.
    */
   function saveCurrentProjectAsTemplate(meta: {
@@ -371,6 +384,7 @@ export function useTmcutTemplates() {
     searchQuery,
     createProjectFromTemplate,
     saveCurrentProjectAsTemplate,
+    saveAiTemplate,
     deleteUserTemplate,
     templateAssetReadiness,
     exportTemplate,

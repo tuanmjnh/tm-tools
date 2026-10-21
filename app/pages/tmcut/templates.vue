@@ -21,6 +21,9 @@ const {
 } = useTmcutTemplates()
 const assetCenter = useTmcutAssetCenter()
 
+// §6.5 — AI template builder modal (brief -> validated Template Plan -> save).
+const aiTemplateModalOpen = ref(false)
+
 // Roadmap v3 §6.4 step 2: the customize modal reports the template's
 // required-asset state BEFORE any project is built — catalog assets the
 // template needs but that are not installed offer a one-click install
@@ -300,6 +303,16 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
         >
           {{ t('tmcut.templateLibrary.createBlank') }}
         </UButton>
+        <UButton
+          icon="i-lucide-wand-sparkles"
+          color="secondary"
+          variant="soft"
+          size="sm"
+          :title="t('tmcut.aiTemplates.buttonTooltip')"
+          @click="aiTemplateModalOpen = true"
+        >
+          <span class="hidden sm:inline">{{ t('tmcut.aiTemplates.buttonLabel') }}</span>
+        </UButton>
       </div>
     </template>
 
@@ -399,7 +412,15 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
               </span>
             </div>
 
-            <div class="absolute top-2.5 right-2.5">
+            <div class="absolute top-2.5 right-2.5 flex items-center gap-1">
+              <span
+                v-if="tpl.generatedBy"
+                class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-violet-500/20 text-violet-400 border border-violet-500/30 flex items-center gap-1 backdrop-blur-xs"
+                :title="t('tmcut.aiTemplates.aiLabel')"
+              >
+                <UIcon name="i-lucide-sparkles" class="w-3 h-3" />
+                AI
+              </span>
               <span
                 v-if="tpl.isBuiltin"
                 class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-primary/20 text-primary border border-primary/30 flex items-center gap-1 backdrop-blur-xs"
@@ -701,5 +722,8 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
         </div>
       </template>
     </UModal>
+
+    <!-- §6.5 — AI template builder -->
+    <TmcutAiTemplates v-model:open="aiTemplateModalOpen" />
   </BasePage>
 </template>
