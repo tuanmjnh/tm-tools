@@ -1375,6 +1375,25 @@
       "saveFailedDesc": "The core template validator rejected the draft.",
       "aiLabel": "AI-generated"
     },
+    "audioOrchestration": {
+      "buttonLabel": "Audio Orchestration",
+      "buttonTooltip": "Rights-aware music bed and SFX cue planner",
+      "title": "Audio Orchestration",
+      "subtitle": "Rights-aware music bed and SFX cues — applied through the shared Edit Plan",
+      "webOnly": "Audio orchestration requires the desktop app.",
+      "musicBed": "Add music bed",
+      "sfxCues": "Add SFX cues",
+      "hasDialogue": "Dialogue is present (duck bed)",
+      "bedVolume": "Bed volume",
+      "candidatesTitle": "Rights-cleared candidates",
+      "noCandidates": "No rights-cleared audio assets in your library or Asset Center.",
+      "applyButton": "Apply",
+      "errorTitle": "Orchestration failed",
+      "noCandidateTitle": "No audio candidates",
+      "noCandidateDesc": "Add approved music/SFX to the library or install from the Asset Center.",
+      "successTitle": "Audio applied",
+      "appliedDesc": "{n} operation(s) applied, {skipped} skipped"
+    },
     "autocutV2": {
       "title": "Transcript Vocabulary Analysis",
       "badge": "AutoCut v2",

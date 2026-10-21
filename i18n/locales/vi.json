@@ -1375,6 +1375,25 @@
       "saveFailedDesc": "Trình kiểm tra template lõi đã từ chối bản phác thảo.",
       "aiLabel": "AI tạo"
     },
+    "audioOrchestration": {
+      "buttonLabel": "Âm thanh tự động",
+      "buttonTooltip": "Planner nhạc nền và hiệu ứng âm thanh có bản quyền",
+      "title": "Âm thanh tự động",
+      "subtitle": "Nhạc nền và SFX có bản quyền — áp dụng qua Edit Plan chung",
+      "webOnly": "Âm thanh tự động yêu cầu ứng dụng desktop.",
+      "musicBed": "Thêm nhạc nền",
+      "sfxCues": "Thêm SFX",
+      "hasDialogue": "Có lời thoại (giảm nhạc)",
+      "bedVolume": "Âm lượng nền",
+      "candidatesTitle": "Tài nguyên âm thanh hợp lệ",
+      "noCandidates": "Chưa có tài nguyên âm thanh hợp lệ trong thư viện hoặc Asset Center.",
+      "applyButton": "Áp dụng",
+      "errorTitle": "Tự động âm thanh thất bại",
+      "noCandidateTitle": "Không có ứng viên âm thanh",
+      "noCandidateDesc": "Thêm nhạc/SFX đã được duyệt vào thư viện hoặc cài từ Asset Center.",
+      "successTitle": "Đã áp dụng âm thanh",
+      "appliedDesc": "Đã áp dụng {n} thao tác, bỏ qua {skipped}"
+    },
     "autocutV2": {
       "title": "Phân Tích Từ Vựng Transcript",
       "badge": "AutoCut v2",

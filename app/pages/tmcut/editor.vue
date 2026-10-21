@@ -1028,6 +1028,7 @@ async function handleImportTemplateIntoProject() {
 const aiScriptModalOpen = ref(false)
 // AI Editor (roadmap v3 PART C): prompt -> validated Edit Plan -> review -> apply.
 const aiEditorModalOpen = ref(false)
+const audioOrchestrationOpen = ref(false)
 
 function handleEditorKeydown(e: KeyboardEvent) {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -1186,6 +1187,18 @@ function handleEditorKeydown(e: KeyboardEvent) {
         @click="aiEditorModalOpen = true"
       >
         <span class="hidden xl:inline">{{ t('tmcut.aiEditor.buttonLabel') }}</span>
+      </UButton>
+
+      <!-- Audio orchestration (Phase 8 §24): music bed and SFX cue planner -->
+      <UButton
+        icon="i-lucide-music-2"
+        size="sm"
+        variant="soft"
+        color="secondary"
+        :title="t('tmcut.audioOrchestration.buttonTooltip')"
+        @click="audioOrchestrationOpen = true"
+      >
+        <span class="hidden xl:inline">{{ t('tmcut.audioOrchestration.buttonLabel') }}</span>
       </UButton>
 
       <UButton
@@ -2214,6 +2227,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
       <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
       <TmcutAiScriptModal v-model:open="aiScriptModalOpen" />
       <TmcutAiEditor v-model:open="aiEditorModalOpen" />
+
+      <!-- Audio orchestration (Phase 8 §24) -->
+      <TmcutAudioOrchestrationModal v-model:open="audioOrchestrationOpen" />
     </div>
   </BasePage>
 </template>
