@@ -1026,12 +1026,18 @@ async function handleImportTemplateIntoProject() {
 }
 
 const aiScriptModalOpen = ref(false)
+// AI Editor (roadmap v3 PART C): prompt -> validated Edit Plan -> review -> apply.
+const aiEditorModalOpen = ref(false)
 
 function handleEditorKeydown(e: KeyboardEvent) {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
   if (e.altKey && (e.key === 'a' || e.key === 'A')) {
     e.preventDefault()
     aiScriptModalOpen.value = true
+  }
+  if (e.altKey && (e.key === 'e' || e.key === 'E')) {
+    e.preventDefault()
+    aiEditorModalOpen.value = true
   }
 }
 </script>
@@ -1168,6 +1174,18 @@ function handleEditorKeydown(e: KeyboardEvent) {
         @click="aiScriptModalOpen = true"
       >
         <span class="hidden xl:inline">{{ t('tmcut.aiScript.buttonLabel') }}</span>
+      </UButton>
+
+      <!-- AI Edit Plan modal trigger (Alt+E) — proposes, core validates, user applies -->
+      <UButton
+        icon="i-lucide-wand-sparkles"
+        size="sm"
+        variant="soft"
+        color="secondary"
+        :title="t('tmcut.aiEditor.buttonTooltip')"
+        @click="aiEditorModalOpen = true"
+      >
+        <span class="hidden xl:inline">{{ t('tmcut.aiEditor.buttonLabel') }}</span>
       </UButton>
 
       <UButton
@@ -2195,6 +2213,7 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
       <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
       <TmcutAiScriptModal v-model:open="aiScriptModalOpen" />
+      <TmcutAiEditor v-model:open="aiEditorModalOpen" />
     </div>
   </BasePage>
 </template>
