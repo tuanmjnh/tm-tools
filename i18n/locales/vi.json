@@ -371,6 +371,7 @@
       "downloadFailed": "Tải thất bại",
       "installBlocked": "Chưa thể cài đặt tài nguyên này",
       "by": "bởi",
+      "owned": "Đã sở hữu",
       "webOnly": "Kho tài nguyên cần ứng dụng desktop (gói cục bộ đã xác minh).",
       "selectClipFirst": "Hãy chọn một clip trên timeline trước",
       "addedToLibrary": "Đã thêm tài nguyên vào thư viện media",
@@ -396,7 +397,8 @@
         "license-expired": "Giấy phép của tài nguyên này đã hết hạn.",
         "license-missing": "Tài nguyên này không có hồ sơ giấy phép.",
         "unknown-entry": "Tài nguyên không xác định.",
-        "takedown": "Tài nguyên này đã bị yêu cầu gỡ bỏ (khiếu nại quyền sở hữu hoặc thu hồi) — bị chặn cài đặt."
+        "takedown": "Tài nguyên này đã bị yêu cầu gỡ bỏ (khiếu nại quyền sở hữu hoặc thu hồi) — bị chặn cài đặt.",
+        "entitlement-missing": "Đây là tài nguyên trả phí và không tìm thấy quyền mua cho nó."
       },
       "failReason": {
         "network": "Lỗi mạng — kiểm tra kết nối và thử lại.",

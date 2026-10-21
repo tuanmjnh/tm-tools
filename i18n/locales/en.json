@@ -371,6 +371,7 @@
       "downloadFailed": "Download failed",
       "installBlocked": "This asset cannot be installed yet",
       "by": "by",
+      "owned": "Owned",
       "webOnly": "The Asset Center needs the desktop app (verified local packages).",
       "selectClipFirst": "Select a clip on the timeline first",
       "addedToLibrary": "Asset added to the media library",
@@ -396,7 +397,8 @@
         "license-expired": "The license for this asset has expired.",
         "license-missing": "This asset has no license record.",
         "unknown-entry": "Unknown asset.",
-        "takedown": "This asset was taken down (rights claim or recall) — install is blocked."
+        "takedown": "This asset was taken down (rights claim or recall) — install is blocked.",
+        "entitlement-missing": "This is a paid asset and no purchase entitlement was found for it."
       },
       "failReason": {
         "network": "Network error — check your connection and retry.",

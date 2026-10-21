@@ -37,7 +37,8 @@ const {
   installedPayload,
   canInstallEntry,
   takedownFor,
-  takedownAffected
+  takedownAffected,
+  hasEntitlement
 } = useTmcutAssetCenter()
 
 const { isDesktop, importFiles } = useTmcutMedia()
@@ -371,6 +372,15 @@ function handleApply(entryId: string, assetKind: string) {
           <div class="flex items-center gap-2 text-[9px] text-neutral-500 min-w-0">
             <span class="truncate">{{ categoryLabel(entry.category) }}</span>
             <span v-if="entry.sizeBytes" class="font-mono shrink-0">{{ formatBytes(entry.sizeBytes) }}</span>
+            <span
+              v-if="entry.priceUsd > 0"
+              class="shrink-0 font-semibold"
+              :class="hasEntitlement(entry.id, entry.version) ? 'text-emerald-500' : 'text-amber-500'"
+            >
+              {{ hasEntitlement(entry.id, entry.version)
+                ? t('tmcut.assetCenter.owned')
+                : `$${entry.priceUsd.toFixed(2)}` }}
+            </span>
             <span v-if="entry.license.attribution" class="truncate" :title="entry.license.attribution">
               {{ t('tmcut.assetCenter.by') }} {{ entry.license.attribution }}
             </span>

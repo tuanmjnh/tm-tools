@@ -21,6 +21,7 @@ import {
   createDownloadQueue,
   createInstalledAsset,
   mergeTakedownRegistry,
+  parseEntitlements,
   parseTakedownRegistry,
   recoverInstallStates,
   storageReport,
@@ -108,8 +109,53 @@ function takedownFor(entryId: string): TakedownNotice | null {
 const takedownAffected = computed(() =>
   takedownAudit(installed.value as Array<{ entryId?: string, state?: string }>, takedownRegistry.value))
 
-// One queue for the whole session (bounded retries, concurrency 2).
-const queue = createDownloadQueue({ concurrency: 2, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000 })
+// Entitlements for paid assets (roadmap §26): grants ship with the catalog
+// payload and persist locally so offline installs of already-purchased
+// assets keep working. Users only store/check grants — never mint them.
+const ENTITLEMENT_LOCAL_KEY = 'tmcut.asset.entitlements.v1'
+const entitlements = ref(parseEntitlements(null))
+
+function readEntitlementsLocal() {
+  try {
+    const raw = localStorage.getItem(ENTITLEMENT_LOCAL_KEY)
+    return raw ? parseEntitlements(JSON.parse(raw)) : []
+  } catch {
+    return []
+  }
+}
+
+function persistEntitlementsLocal() {
+  try {
+    localStorage.setItem(ENTITLEMENT_LOCAL_KEY, JSON.stringify(entitlements.value))
+  } catch {
+    // best-effort mirror
+  }
+}
+
+/** Does this catalog entry currently have a live entitlement grant? */
+function hasEntitlement(entryId: string, version = ''): boolean {
+  const now = Date.now()
+  const grants = entitlements.value
+  return grants.some((g) => {
+    if (g.entryId !== entryId) return false
+    if (g.version && version && g.version !== version) return false
+    if (g.expiresAt) {
+      const exp = Date.parse(g.expiresAt)
+      if (Number.isFinite(exp) && exp <= now) return false
+    }
+    return true
+  })
+}
+
+// One queue for the whole session (bounded retries, concurrency 2). Paid
+// entries re-check entitlements at enqueue time via the getter.
+const queue = createDownloadQueue({
+  concurrency: 2,
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 30000,
+  entitlements: () => entitlements.value
+})
 // jobId -> timestamp when the backoff was armed (retry re-claim timing).
 const retryArmedAt = new Map<string, number>()
 let pumpTimer: ReturnType<typeof setInterval> | null = null
@@ -306,6 +352,21 @@ async function load() {
   }
   catalogEntries.value = merged
 
+  // Entitlement grants ride the catalog payload too (paid assets). Merge
+  // the local mirror + both catalog sources, keeping the latest grant per
+  // (entryId, version). Users never mint grants; only the publisher does.
+  const localGrants = readEntitlementsLocal()
+  const grants = [...localGrants]
+  for (const raw of [starter, cached]) {
+    const fromCatalog = parseEntitlements((raw as { entitlements?: unknown })?.entitlements)
+    for (const g of fromCatalog) {
+      if (grants.some(x => x.entryId === g.entryId && x.version === g.version)) continue
+      grants.push(g)
+    }
+  }
+  entitlements.value = grants
+  persistEntitlementsLocal()
+
   const registry = await ipc.readRegistry().catch(() => [])
   // On-disk JSON is untrusted input: coerce every record's fields, and any
   // state outside the lifecycle set back to 'catalog' before recovery.
@@ -345,7 +406,7 @@ async function install(entryId: string): Promise<{ ok: boolean, reason?: string 
   // license still reads 'approved' (roadmap §26 takedown gate).
   const takedown = canServeAfterTakedown(takedownRegistry.value, entryId)
   if (!takedown.allowed) return { ok: false, reason: 'takedown' }
-  const gate = canInstall(entry, { now: Date.now() })
+  const gate = canInstall(entry, { now: Date.now(), entitlements: entitlements.value })
   if (!gate.allowed) return { ok: false, reason: gate.reason || 'blocked' }
   if (findRecord(entryId)?.state === 'installed') return { ok: true }
 
@@ -481,12 +542,14 @@ export function useTmcutAssetCenter() {
     takedownRegistry,
     takedownAffected,
     takedownFor,
+    entitlements,
+    hasEntitlement,
     canInstallEntry: (entryId: string) => {
       const entry = findEntry(entryId)
       if (!entry) return { allowed: false, reason: 'unknown-entry' }
       const takedownNotice = canServeAfterTakedown(takedownRegistry.value, entryId)
       if (!takedownNotice.allowed) return { allowed: false, reason: 'takedown' }
-      return canInstall(entry, { now: Date.now() })
+      return canInstall(entry, { now: Date.now(), entitlements: entitlements.value })
     }
   }
 }
