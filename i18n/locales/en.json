@@ -361,6 +361,11 @@
       "retry": "Retry",
       "uninstall": "Uninstall",
       "uninstalled": "Asset removed from local storage",
+      "takedownNotice": "Removed from the catalog",
+      "takedownBlocked": "This asset was taken down (rights claim or recall) — install is blocked.",
+      "takedownAffected": "This installed asset has a takedown notice. It keeps working offline; uninstall to remove it from local storage.",
+      "takedownAffectedCount": "{count} installed asset(s) have takedown notices.",
+      "takedownReview": "Review",
       "downloading": "Downloading…",
       "retrying": "Retrying…",
       "downloadFailed": "Download failed",
@@ -390,7 +395,8 @@
         "license-review": "Rights are still under review — download is blocked until approval.",
         "license-expired": "The license for this asset has expired.",
         "license-missing": "This asset has no license record.",
-        "unknown-entry": "Unknown asset."
+        "unknown-entry": "Unknown asset.",
+        "takedown": "This asset was taken down (rights claim or recall) — install is blocked."
       },
       "failReason": {
         "network": "Network error — check your connection and retry.",

@@ -16,14 +16,18 @@
 import { computed, ref } from 'vue'
 import {
   canInstall,
+  canServeAfterTakedown,
   createCatalogEntry,
   createDownloadQueue,
   createInstalledAsset,
+  mergeTakedownRegistry,
+  parseTakedownRegistry,
   recoverInstallStates,
   storageReport,
+  takedownAudit,
   transitionInstall
 } from '@tmcut-core'
-import type { AssetCenterCatalogEntry, AssetCenterInstallState } from '@tmcut-core'
+import type { AssetCenterCatalogEntry, AssetCenterInstallState, TakedownNotice, TakedownRegistry } from '@tmcut-core'
 
 type IpcAssetCenter = NonNullable<NonNullable<typeof window.electronAPI>['tmcut']>['assetCenter']
 
@@ -69,6 +73,40 @@ const installed = ref<InstalledRecord[]>([])
 const catalogLoaded = ref(false)
 const storageQuotaBytes = ref(0)
 const progressTick = ref(0)
+
+// Takedown & license audit (roadmap §26, local scope): notices arrive with
+// the catalog payload and persist locally so offline runs keep enforcing
+// them. A notice beats an approved license — installs are blocked and
+// already-installed copies are surfaced for warn + optional uninstall.
+// The user's own files are NEVER deleted silently.
+const TAKEDOWN_LOCAL_KEY = 'tmcut.asset.takedown.v1'
+const takedownRegistry = ref<TakedownRegistry>({ schemaVersion: 1, notices: [] })
+
+function readTakedownLocal(): unknown {
+  try {
+    const raw = localStorage.getItem(TAKEDOWN_LOCAL_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function persistTakedownLocal() {
+  try {
+    localStorage.setItem(TAKEDOWN_LOCAL_KEY, JSON.stringify(takedownRegistry.value))
+  } catch {
+    // registry mirror is best-effort; core parse tolerates an empty store
+  }
+}
+
+/** Active takedown notice for an entry right now, or null. */
+function takedownFor(entryId: string): TakedownNotice | null {
+  return canServeAfterTakedown(takedownRegistry.value, entryId).notice
+}
+
+/** Installed copies hit by an active notice — drives the warn banner. */
+const takedownAffected = computed(() =>
+  takedownAudit(installed.value as Array<{ entryId?: string, state?: string }>, takedownRegistry.value))
 
 // One queue for the whole session (bounded retries, concurrency 2).
 const queue = createDownloadQueue({ concurrency: 2, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000 })
@@ -242,6 +280,18 @@ async function load() {
 
   const starter = await ipc.readStarterCatalog().catch(() => null)
   const cached = await ipc.readCatalogCache().catch(() => null)
+  // Takedown notices ride the catalog payload (starter + cache) and the
+  // local mirror; merge keeps the latest notice per entryId. Malformed
+  // payloads parse to an empty registry (core guarantee) — never throws.
+  let takedownState = parseTakedownRegistry(readTakedownLocal())
+  for (const raw of [starter, cached]) {
+    const notices = (raw as { takedowns?: unknown })?.takedowns
+    if (Array.isArray(notices) && notices.length > 0) {
+      takedownState = mergeTakedownRegistry(takedownState, { schemaVersion: 1, notices })
+    }
+  }
+  takedownRegistry.value = takedownState
+  persistTakedownLocal()
   const entriesOf = (raw: unknown): unknown[] => {
     const entries = (raw as { entries?: unknown })?.entries
     return Array.isArray(entries) ? entries : []
@@ -291,6 +341,10 @@ function dispose() {
 async function install(entryId: string): Promise<{ ok: boolean, reason?: string }> {
   const entry = findEntry(entryId)
   if (!entry) return { ok: false, reason: 'unknown-entry' }
+  // Notice beats license: a live takedown blocks install even when the
+  // license still reads 'approved' (roadmap §26 takedown gate).
+  const takedown = canServeAfterTakedown(takedownRegistry.value, entryId)
+  if (!takedown.allowed) return { ok: false, reason: 'takedown' }
   const gate = canInstall(entry, { now: Date.now() })
   if (!gate.allowed) return { ok: false, reason: gate.reason || 'blocked' }
   if (findRecord(entryId)?.state === 'installed') return { ok: true }
@@ -424,9 +478,15 @@ export function useTmcutAssetCenter() {
     installedPayload,
     findEntry,
     findRecord: (entryId: string) => findRecord(entryId),
+    takedownRegistry,
+    takedownAffected,
+    takedownFor,
     canInstallEntry: (entryId: string) => {
       const entry = findEntry(entryId)
-      return entry ? canInstall(entry, { now: Date.now() }) : { allowed: false, reason: 'unknown-entry' }
+      if (!entry) return { allowed: false, reason: 'unknown-entry' }
+      const takedownNotice = canServeAfterTakedown(takedownRegistry.value, entryId)
+      if (!takedownNotice.allowed) return { allowed: false, reason: 'takedown' }
+      return canInstall(entry, { now: Date.now() })
     }
   }
 }

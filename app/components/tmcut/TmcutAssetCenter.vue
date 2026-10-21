@@ -35,7 +35,9 @@ const {
   verifyAll,
   installedFilePath,
   installedPayload,
-  canInstallEntry
+  canInstallEntry,
+  takedownFor,
+  takedownAffected
 } = useTmcutAssetCenter()
 
 const { isDesktop, importFiles } = useTmcutMedia()
@@ -247,6 +249,15 @@ function handleApply(entryId: string, assetKind: string) {
       </div>
     </div>
 
+    <!-- Audit banner (roadmap §26): installed copies hit by live notices -->
+    <div
+      v-if="takedownAffected.length > 0"
+      class="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
+    >
+      <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
+      {{ t('tmcut.assetCenter.takedownAffectedCount', { count: takedownAffected.length }) }}
+    </div>
+
     <!-- Catalog list (the parent media-scroll container owns the scroll) -->
     <div class="space-y-1.5">
       <div
@@ -285,9 +296,38 @@ function handleApply(entryId: string, assetKind: string) {
           </UBadge>
         </div>
 
-        <!-- License gate notice (review/unknown/unknown never render as usable) -->
+        <!-- Takedown notice (roadmap §26: notice beats license). Installed
+             copies keep working offline but show a warning + uninstall
+             option; not-installed copies are hard-blocked. Never delete
+             silently. -->
         <div
-          v-if="!canInstallEntry(entry.id).allowed && entryState(entry.id) === 'catalog'"
+          v-if="takedownFor(entry.id) && entryState(entry.id) !== 'installed'"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 border border-red-500/30 text-[10px] text-red-200"
+        >
+          <UIcon name="i-lucide-shield-off" class="size-3 shrink-0" />
+          {{ t('tmcut.assetCenter.takedownBlocked') }}
+        </div>
+
+        <div
+          v-else-if="takedownFor(entry.id)"
+          class="flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
+        >
+          <span class="flex items-center gap-1.5 min-w-0">
+            <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
+            <span class="truncate">{{ t('tmcut.assetCenter.takedownAffected') }}</span>
+          </span>
+          <UButton
+            size="xs"
+            variant="soft"
+            color="error"
+            :label="t('tmcut.assetCenter.uninstall')"
+            @click="handleUninstall(entry.id)"
+          />
+        </div>
+
+        <!-- License gate notice (review/unknown never render as usable) -->
+        <div
+          v-else-if="!canInstallEntry(entry.id).allowed && entryState(entry.id) === 'catalog'"
           class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-200"
         >
           <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
@@ -364,7 +404,10 @@ function handleApply(entryId: string, assetKind: string) {
             </template>
 
             <template v-else-if="entryState(entry.id) === 'installed'">
+              <!-- Serving is blocked once a notice is live (notice beats
+                   license); the warn banner above offers uninstall. -->
               <UButton
+                v-if="!takedownFor(entry.id)"
                 icon="i-lucide-play"
                 size="xs"
                 variant="solid"

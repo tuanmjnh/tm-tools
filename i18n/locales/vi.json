@@ -361,6 +361,11 @@
       "retry": "Thử lại",
       "uninstall": "Gỡ cài đặt",
       "uninstalled": "Đã gỡ tài nguyên khỏi lưu trữ cục bộ",
+      "takedownNotice": "Đã gỡ khỏi danh mục",
+      "takedownBlocked": "Tài nguyên này đã bị yêu cầu gỡ bỏ (khiếu nại quyền sở hữu hoặc thu hồi) — bị chặn cài đặt.",
+      "takedownAffected": "Tài nguyên đã cài đặt này có thông báo gỡ bỏ. Nó vẫn dùng được offline; gỡ cài đặt để xóa khỏi lưu trữ cục bộ.",
+      "takedownAffectedCount": "{count} tài nguyên đã cài đặt có thông báo gỡ bỏ.",
+      "takedownReview": "Xem xét",
       "downloading": "Đang tải…",
       "retrying": "Đang thử lại…",
       "downloadFailed": "Tải thất bại",
@@ -390,7 +395,8 @@
         "license-review": "Quyền đang chờ xét duyệt — chặn tải cho tới khi được duyệt.",
         "license-expired": "Giấy phép của tài nguyên này đã hết hạn.",
         "license-missing": "Tài nguyên này không có hồ sơ giấy phép.",
-        "unknown-entry": "Tài nguyên không xác định."
+        "unknown-entry": "Tài nguyên không xác định.",
+        "takedown": "Tài nguyên này đã bị yêu cầu gỡ bỏ (khiếu nại quyền sở hữu hoặc thu hồi) — bị chặn cài đặt."
       },
       "failReason": {
         "network": "Lỗi mạng — kiểm tra kết nối và thử lại.",
