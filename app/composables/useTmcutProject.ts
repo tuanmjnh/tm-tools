@@ -3,6 +3,7 @@ import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } f
 import { clipDurationSec, clipStartSec, clipEndSec, clipStartTicks, clipEndTicks } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
 import {
+  checkpointRecovery,
   addTrack,
   removeTrack,
   copyClips,
@@ -573,6 +574,27 @@ function saveProject(options?: { revision?: number }) {
     localStorage.setItem(`tmcut_project_${currentProject.value.id}`, JSON.stringify(currentProject.value))
   } catch (e) {
     console.error('Failed to save project:', e)
+  }
+
+  // Phase 10 crash recovery: refresh the checkpoint AFTER a successful
+  // persist. The recovery UI only offers "recover" when the checkpoint
+  // says unsavedChanges, so a clean save must clear that flag.
+  try {
+    checkpointRecovery({
+      projectId: currentProject.value.id,
+      projectName: currentProject.value.name,
+      canvas: {
+        width: currentProject.value.canvas?.width || 0,
+        height: currentProject.value.canvas?.height || 0,
+        fps: canvasFpsValue(currentProject.value.canvas)
+      },
+      timelineDurationMs: currentProject.value.durationMs || 0,
+      trackCount: currentProject.value.timeline?.tracks?.length || 0,
+      clipCount: currentProject.value.timeline?.tracks?.reduce((n: number, tr: { items?: unknown[] }) => n + (tr.items?.length || 0), 0) || 0,
+      unsavedChanges: false
+    })
+  } catch {
+    // diagnostics must never break a save
   }
 
   scheduleDiskSave()

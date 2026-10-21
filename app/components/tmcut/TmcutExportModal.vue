@@ -9,6 +9,8 @@ import { compileTimelineToFfmpeg } from '~/utils/tmcut/compiler'
 import type { TmcutCompileMode } from '~/utils/tmcut/compiler'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
+import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
+import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
 import type { ToolTask } from '~/types'
 
 const open = defineModel<boolean>('open', { default: false })
@@ -21,6 +23,22 @@ const { pickFile, pickFolder } = useFileSystem()
 const taskManager = useToolTaskManager('ffmpeg')
 const { enqueueJob, activeJobsCount, queueModalOpen, activeJobId, cancelJob } = useTmcutExportQueue()
 const toast = useToast()
+const telemetry = useTmcutTelemetry()
+const usage = useTmcutUsageTracker()
+
+// Phase 10: record one export event + usage counter when a render completes.
+// Opt-in only — telemetry.record is a no-op when the user has not enabled it.
+function recordExportCompleted() {
+  const durationSec = Math.round(totalDuration.value || 0)
+  telemetry.trackExport('render-complete', {
+    exportFormat: videoFormat.value,
+    exportDurationSec: durationSec,
+    canvasWidth: canvasW.value,
+    canvasHeight: canvasH.value,
+    fps: effectiveFps.value
+  })
+  usage.trackExport({ durationSec })
+}
 
 // ---- Output configuration (design #3) ----
 const outputPath = ref('')
@@ -220,6 +238,7 @@ function startWatching(filePath: string) {
     if (!exportDone.value) {
       isExporting.value = false
       exportDone.value = true
+      recordExportCompleted()
       toast.add({ title: t('tmcut.export.success'), color: 'success' })
       if (autoPreview.value) {
         previewModalOpen.value = true
@@ -478,6 +497,7 @@ watch(
       if (status === 'done') {
         isExporting.value = false
         exportDone.value = true
+        recordExportCompleted()
         toast.add({ title: t('tmcut.export.success'), color: 'success' })
         if (autoPreview.value) {
           previewModalOpen.value = true
