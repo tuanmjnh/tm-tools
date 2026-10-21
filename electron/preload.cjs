@@ -9,6 +9,7 @@ const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
   'tmcut:renderDone',
+  'tmcut:assetCenter:progress',
   'tools:profiles:statusChanged',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
@@ -105,6 +106,18 @@ const tmcut = exposeNamespace('tmcut', {
   on: ['renderDone']
 })
 
+// Roadmap v3 PART A: on-demand Asset Center I/O (registry + verified
+// downloads). The queue/state machine lives renderer-side in @tmcut/core;
+// these channels are thin path-pinned primitives (see asset-center.controller).
+const tmcutAssetCenter = exposeNamespace('tmcut:assetCenter', {
+  invoke: [
+    'getDirs', 'readRegistry', 'writeRegistry',
+    'readCatalogCache', 'writeCatalogCache', 'readStarterCatalog', 'getSamplePath',
+    'downloadPackage', 'cancelDownload', 'installLocal', 'removePackageDir', 'verifyFile'
+  ],
+  on: ['progress']
+})
+
 const fileManager = exposeNamespace('tools:file-manager', {
   invoke: [
     'read', 'write', 'append', 'exists', 'delete', 'readJSON', 'writeJSON',
@@ -176,7 +189,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tools: { youtube, ffmpeg, profiles, aiGateway },
   dialog,
   fileManager,
-  tmcut,
+  tmcut: { ...tmcut, assetCenter: tmcutAssetCenter },
   appUpdater,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),

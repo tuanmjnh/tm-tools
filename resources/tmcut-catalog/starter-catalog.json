@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-21T00:00:00.000Z",
+  "note": "Starter catalog shipped with the installer (roadmap v3 section 5: the installer carries only a small starter set; the full catalog is fetched on demand). Entries with source.type 'embedded' carry their payload inline; 'sample' entries install from files bundled beside this JSON; 'remote' entries download over HTTPS when the user requests them. License review follows section 5: status 'review'/'unknown' must never render as approved and blocks download.",
+  "entries": [
+    {
+      "id": "starter-lut-teal-orange",
+      "title": "Teal & Orange Grade",
+      "description": "Cinematic teal-orange color grade as a ready-to-apply LUT 3D preset.",
+      "category": "filters",
+      "assetKind": "effect-preset",
+      "tags": ["cinematic", "color", "grade"],
+      "version": "1.0.0",
+      "sizeBytes": 0,
+      "sha256": "",
+      "source": {
+        "type": "embedded",
+        "payload": {
+          "effectType": "lut3d",
+          "params": { "lut": "teal-orange" }
+        }
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-title-neon-pop",
+      "title": "Neon Pop Title",
+      "description": "High-energy neon title preset for hook lines and section cards.",
+      "category": "titles",
+      "assetKind": "title-preset",
+      "tags": ["title", "neon", "hook"],
+      "version": "1.0.0",
+      "sizeBytes": 0,
+      "sha256": "",
+      "source": {
+        "type": "embedded",
+        "payload": {
+          "text": "YOUR HOOK",
+          "color": "#22d3ee",
+          "fontSize": 64
+        }
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-sfx-sweep",
+      "title": "Whoosh Sweep SFX",
+      "description": "Descending sine sweep for transitions. Bundled sample: installed on demand with checksum verification, works fully offline.",
+      "category": "sound-effects",
+      "assetKind": "media",
+      "tags": ["sfx", "transition", "whoosh"],
+      "version": "1.0.0",
+      "sizeBytes": 132344,
+      "sha256": "68475cf7481cdd6ff136cf32d4a25a50039b07b0b8ab72c260840895dd2e20a9",
+      "source": {
+        "type": "sample",
+        "sampleId": "sample-sfx-sweep"
+      },
+      "creator": "TMCut",
+      "license": {
+        "status": "approved",
+        "name": "TMCut Built-in",
+        "url": "",
+        "attribution": "",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "starter-lut-pack-cinematic",
+      "title": "Cinematic LUT Pack (preview)",
+      "description": "Twelve film-emulation LUTs. Rights are still under review — download stays blocked until the license is approved.",
+      "category": "filters",
+      "assetKind": "effect-preset",
+      "tags": ["lut", "film", "pack"],
+      "version": "0.9.0",
+      "sizeBytes": 4194304,
+      "sha256": "",
+      "source": {
+        "type": "remote",
+        "url": "https://assets.example.org/tmcut/lut-pack-cinematic-0.9.0.json"
+      },
+      "creator": "Example Labs",
+      "license": {
+        "status": "review",
+        "name": "Proprietary (under review)",
+        "url": "https://example.org/license",
+        "attribution": "Example Labs",
+        "commercialUse": false,
+        "redistrbutable": false
+      }
+    },
+    {
+      "id": "starter-music-ambient-loop",
+      "title": "Ambient Loop 90s",
+      "description": "Licensed ambient background loop, fetched from the remote CDN on first use.",
+      "category": "music",
+      "assetKind": "media",
+      "tags": ["music", "ambient", "loop"],
+      "version": "1.0.0",
+      "sizeBytes": 8388608,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": {
+        "type": "remote",
+        "url": "https://assets.example.org/tmcut/ambient-loop-90s-1.0.0.wav"
+      },
+      "creator": "Field Tone",
+      "license": {
+        "status": "approved",
+        "name": "CC-BY-4.0",
+        "url": "https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "Field Tone",
+        "commercialUse": true,
+        "redistrbutable": false,
+        "reviewer": "tmcut-team",
+        "reviewedAt": "2026-10-20T00:00:00.000Z"
+      }
+    }
+  ]
+}

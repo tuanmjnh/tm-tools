@@ -23,6 +23,9 @@ extraResources:
       - "**/*.exe"
       - "**/*.json"
       - "**/*.node"
+      # Asset Center starter catalog sample media (roadmap v3 PART A):
+      # bundled starter files install offline with checksum verification.
+      - "tmcut-catalog/**"
 win:
   icon: public/icon.ico
   executableName: TM Tools

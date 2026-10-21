@@ -10,6 +10,7 @@ const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
+const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 // R139 (§203): API-key slots are encrypted AT REST with the OS keychain
 // (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
@@ -565,6 +566,11 @@ app.whenReady().then(() => {
   // check as the privileged root handlers (audit residual risk closed).
   registerFileManagerController({ isTrustedSender })
   registerTmcutController()
+  // Roadmap v3 PART A: on-demand Asset Center. The queue lives renderer-side
+  // (core state machine); this controller is the thin download/registry I/O
+  // adapter. getWindow() is a getter because `win` is recreated on macOS
+  // activate — registering here (not in createWindow) avoids double-handlers.
+  registerAssetCenterController(() => win)
   registerAiGateway()
   if (typeof initializePlatform === 'function') {
     initializePlatform()

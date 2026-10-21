@@ -86,6 +86,8 @@ await check('push allow-list covers every real webContents.send call site', () =
   assert.ok(isAllowedPushChannel('eventbus:event'))
   assert.ok(isAllowedPushChannel('app-updater:status-changed'))
   assert.ok(isAllowedPushChannel('tmcut:renderDone'))
+  // Roadmap v3 PART A: Asset Center download progress.
+  assert.ok(isAllowedPushChannel('tmcut:assetCenter:progress'))
   assert.ok(isAllowedPushChannel('tools:profiles:statusChanged'))
   assert.ok(isAllowedPushChannel('tools:ffmpeg:progressTask'))
   assert.ok(isAllowedPushChannel('tools:youtube:allTasksDone'))

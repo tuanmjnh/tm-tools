@@ -695,6 +695,48 @@ export interface TmcutNamespace {
   watchOutput(args: { filePath: string }): Promise<boolean>
   unwatchOutput(args: { filePath: string }): Promise<boolean>
   onRenderDone(callback: (payload: { filePath: string, size: number }) => void): () => void
+  /** On-demand Asset Center (roadmap v3 PART A): registry + verified installs. */
+  assetCenter: TmcutAssetCenterNamespace
+}
+
+/**
+ * Roadmap v3 PART A — the Asset Center I/O surface. The download-queue
+ * state machine lives renderer-side in @tmcut/core; these channels are
+ * thin path-pinned primitives (the controller sanitizes entryId/version/
+ * filename and refuses anything resolving outside the asset-center base).
+ */
+export interface TmcutAssetCenterNamespace {
+  getDirs(): Promise<{ base: string, packages: string }>
+  readRegistry(): Promise<unknown[]>
+  writeRegistry(list: unknown[]): Promise<boolean>
+  readCatalogCache(): Promise<unknown>
+  writeCatalogCache(catalog: unknown): Promise<boolean>
+  /** Starter catalog shipped inside the installer (small starter set). */
+  readStarterCatalog(): Promise<unknown>
+  /** Absolute path of a bundled sample file, or null for unknown ids. */
+  getSamplePath(sampleId: string): Promise<string | null>
+  downloadPackage(args: {
+    jobId: string
+    url: string
+    entryId: string
+    version: string
+    filename?: string
+    expectSha256?: string
+    expectBytes?: number
+  }): Promise<{ ok: boolean, path?: string, sha256?: string, size?: number, reason?: string }>
+  /** Install from a local file (bundled sample): copy + checksum gate + atomic commit. */
+  installLocal(args: {
+    jobId: string
+    sourcePath: string
+    entryId: string
+    version: string
+    filename?: string
+    expectSha256?: string
+  }): Promise<{ ok: boolean, path?: string, sha256?: string, size?: number, reason?: string }>
+  cancelDownload(jobId: string): Promise<boolean>
+  removePackageDir(args: { entryId: string, version: string }): Promise<{ ok: boolean, reason?: string }>
+  verifyFile(args: { entryId: string, version: string, filename?: string, expectSha256?: string }): Promise<{ ok: boolean, sha256?: string, size?: number, reason?: string }>
+  onProgress(callback: (payload: { jobId: string, entryId: string, loaded: number, total: number }) => void): () => void
 }
 
 export interface ProfileGroup {

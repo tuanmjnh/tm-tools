@@ -126,7 +126,7 @@ const previewFileTitle = ref('')
 
 // ===== Media Library Tabs (CapCut-style top category bar) =====
 
-type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'effects' | 'transitions' | 'filters'
+type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'effects' | 'transitions' | 'filters' | 'assets'
 
 const mediaTab = ref<MediaTabId>('media')
 
@@ -141,7 +141,9 @@ const mediaTabs = computed(() => [
   { id: 'text', label: t('tmcut.tabs.text'), icon: 'i-lucide-type' },
   { id: 'effects', label: t('tmcut.tabs.effects'), icon: 'i-lucide-sparkles' },
   { id: 'transitions', label: t('tmcut.tabs.transitions'), icon: 'i-lucide-shapes' },
-  { id: 'filters', label: t('tmcut.tabs.filters'), icon: 'i-lucide-palette' }
+  { id: 'filters', label: t('tmcut.tabs.filters'), icon: 'i-lucide-palette' },
+  // Roadmap v3 PART A: on-demand Asset Center (download when needed).
+  { id: 'assets', label: t('tmcut.tabs.assets'), icon: 'i-lucide-store' }
 ] as Array<{ id: MediaTabId, label: string, icon: string }>)
 
 const isAssetTab = computed(() => ['media', 'video', 'audio', 'image'].includes(mediaTab.value))
@@ -1784,6 +1786,10 @@ function handleEditorKeydown(e: KeyboardEvent) {
               v-else-if="mediaTab === 'effects' || mediaTab === 'transitions' || mediaTab === 'filters'"
               :tab="fxTabProp"
             />
+
+            <!-- On-demand Asset Center (roadmap v3 PART A): catalog, license
+                 gate, verified installs, apply into the project. -->
+            <TmcutAssetCenter v-else-if="mediaTab === 'assets'" />
 
             <!-- Video Clips in Project -->
             <div v-if="currentProject?.timeline?.tracks" class="space-y-1.5 pt-2">
