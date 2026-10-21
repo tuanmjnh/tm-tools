@@ -1109,6 +1109,7 @@
       "draftNotice": "Project nháp được dựng từ các phân đoạn đã chọn — file nguồn và timeline khác không bị sửa đổi.",
       "selectedSummary": "{selected}/{total} phân đoạn được chọn",
       "publishDuration": "Thời lượng xuất bản:",
+      "autoCaptions": "Thêm phụ đề tự động từ băng lời",
       "rerun": "Chạy lại phân tích"
     },
     "recovery": {

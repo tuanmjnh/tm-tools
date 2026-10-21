@@ -31,6 +31,10 @@ const edlResult = ref<AutocutAnalysis | null>(null)
 const included = ref<number[]>([])
 const draftProjectId = ref<string | null>(null)
 const applying = ref(false)
+// Phase 7: opt-in auto-captions (transcript lines of kept segments become
+// text clips inside the same validated Edit Plan). Off by default: a
+// caption is a visible creative change, the user asks for it.
+const autoCaptions = ref(false)
 
 const filterFillerWords = ref(savedPrefs.filterFillerWords)
 const aiAnalysis = ref(savedPrefs.aiAnalysis)
@@ -461,7 +465,12 @@ async function handleAccept() {
   try {
     const profile = aiProfiles.value.find(item => item.id === selectedProfile.value)
     const name = `${sourceAsset.value.name} (${profile?.name || selectedProfile.value})`
-    const id = await applyDraft(sourceAsset.value, edlResult.value.edl, included.value, name)
+    // Phase 7: captions ride the same validated plan (transcript lines of
+    // KEPT spans only — the core bridge drops the rest).
+    const id = await applyDraft(sourceAsset.value, edlResult.value.edl, included.value, name, {
+      captions: autoCaptions.value,
+      transcript: edlResult.value.transcript
+    })
     if (!id) {
       toast.add({ title: t('tmcut.steps.noSegments'), color: 'warning' })
       return
@@ -1279,6 +1288,16 @@ async function handleAccept() {
               <span class="text-neutral-300 dark:text-neutral-700">•</span>
               <span class="text-neutral-500">{{ t('tmcut.wizard.publishDuration') }}</span>
               <span class="font-mono font-bold text-primary">{{ formatDurationSec(keptDuration) }}</span>
+              <!-- Phase 7: optional auto-captions from the real transcript -->
+              <UCheckbox
+                v-if="edlResult?.transcriptUsed"
+                v-model="autoCaptions"
+                size="sm"
+              >
+                <template #label>
+                  <span class="text-xs text-neutral-500">{{ t('tmcut.wizard.autoCaptions') }}</span>
+                </template>
+              </UCheckbox>
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <UButton

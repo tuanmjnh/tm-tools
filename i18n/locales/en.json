@@ -1109,6 +1109,7 @@
       "draftNotice": "The draft project is built from the selected segments only — source files and other timelines are never modified.",
       "selectedSummary": "{selected}/{total} segments selected",
       "publishDuration": "Output duration:",
+      "autoCaptions": "Add auto-captions from transcript",
       "rerun": "Re-run analysis"
     },
     "recovery": {

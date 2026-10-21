@@ -4,8 +4,9 @@ import {
   parseSceneOutput,
   parseSilenceOutput,
   scoreSegments,
-  segmentsToClips,
-  validateEdl
+  validateEdl,
+  editPlanFromEdl,
+  validateEditPlan
 } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
@@ -213,24 +214,39 @@ export function useTmcutAutocut() {
 
   /**
    * Apply accepted EDL segments as a NEW draft project (source untouched,
-   * docs section 41). Returns the draft project id, or null when nothing
-   * applies (empty selection or an invalid EDL).
+   * docs section 41). Roadmap v3 Phase 7: the EDL is first converted to a
+   * standard Edit Plan (core `editPlanFromEdl`), the plan passes the SAME
+   * `validateEditPlan` gate the AI Editor uses, and only then do its ops
+   * build the project through store commands. Optional auto-captions come
+   * from the transcript the analysis already produced (lines inside dropped
+   * spans never make it into the plan — see the core bridge tests).
+   * Returns the draft project id, or null when nothing applies.
    */
   async function applyDraft(
     asset: TmcutAsset,
     edl: TmcutEdl,
     included: number[],
-    projectName: string
+    projectName: string,
+    options?: { captions?: boolean, transcript?: Array<{ start: number, end: number, text?: string }> }
   ): Promise<string | null> {
+    if (validateEdl(edl).length > 0) return null
     const segments: TmcutEdlSegment[] = []
     for (const index of included) {
       const segment = edl.segments[index]
       if (segment) segments.push(segment)
     }
-    // Core (C10) validates the EDL, drops broken spans, sorts by start and
-    // lays the kept segments out contiguously — v3 ticks in, v3 ticks out.
-    const clips = segmentsToClips(edl, segments)
-    if (clips.length === 0) return null
+    if (segments.length === 0) return null
+    // The media ref is host-internal: this call resolves it to the source
+    // asset itself. The plan stays path-free like every other plan.
+    const { plan } = editPlanFromEdl(edl, segments, {
+      mediaRef: 'source-',
+      name: asset.name,
+      captions: options?.captions ? (options.transcript ?? []) : undefined
+    })
+    if (plan.operations.length === 0) return null
+    const check = validateEditPlan(plan, { mediaRefs: ['source-'] })
+    if (!check.valid) return null
+
     const proj = createProject(projectName)
     if (edl.profile === 'viral-shorts') {
       switchCanvas(1080, 1920)
@@ -238,16 +254,29 @@ export function useTmcutAutocut() {
       switchCanvas(asset.meta.width, asset.meta.height)
     }
     linkAssetToProject(asset.id, proj.id)
-    // C16-R3: the store keeps TICKS natively — the core clip fields
-    // (segmentsToClips output, ticks) pass straight through.
-    for (const clip of clips) {
-      addClipToTrack('video', {
-        name: asset.name,
-        src: asset.path,
-        in: Math.round(clip.in),
-        out: Math.round(clip.out),
-        offset: Math.round(clip.offset)
-      })
+    // C16-R3: the store keeps TICKS natively — plan fields are core ticks
+    // and pass straight through to the same commands the manual editor uses.
+    for (const op of plan.operations) {
+      if (op.type !== 'add-clip') continue
+      if (op.trackType === 'text') {
+        addClipToTrack('text', {
+          name: String(op.name || 'Caption'),
+          text: String(op.text || ''),
+          in: 0,
+          out: Math.round(Number(op.out) || 0),
+          offset: Math.round(Number(op.offset) || 0),
+          fontSize: Number(op.fontSize) || 32,
+          color: String(op.color || '#ffffff')
+        })
+      } else {
+        addClipToTrack('video', {
+          name: asset.name,
+          src: asset.path,
+          in: Math.round(Number(op.in) || 0),
+          out: Math.round(Number(op.out) || 0),
+          offset: Math.round(Number(op.offset) || 0)
+        })
+      }
     }
     return proj.id
   }
