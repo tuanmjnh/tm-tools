@@ -546,6 +546,20 @@
       "valley": "Thung lũng",
       "hint": "Đã áp dụng đường cong — thời lượng không đổi, âm thanh theo tốc độ cơ sở."
     },
+    "stickers": {
+      "searchPlaceholder": "Tìm sticker",
+      "groupAll": "Tất cả",
+      "empty": "Không có sticker phù hợp.",
+      "added": "Đã thêm sticker vào timeline",
+      "groups": {
+        "faces": "Mặt cười",
+        "gestures": "Cử chỉ",
+        "hearts": "Trái tim",
+        "animals": "Động vật",
+        "objects": "Vật phẩm",
+        "symbols": "Biểu tượng"
+      }
+    },
     "details": {
       "name": "Tên",
       "resolution": "Độ phân giải",

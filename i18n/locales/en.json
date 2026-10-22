@@ -546,6 +546,20 @@
       "valley": "Valley",
       "hint": "Curve applied — timeline length unchanged, audio follows the base speed."
     },
+    "stickers": {
+      "searchPlaceholder": "Search stickers",
+      "groupAll": "All",
+      "empty": "No sticker matches your search.",
+      "added": "Sticker added to the timeline",
+      "groups": {
+        "faces": "Faces",
+        "gestures": "Gestures",
+        "hearts": "Hearts",
+        "animals": "Animals",
+        "objects": "Objects",
+        "symbols": "Symbols"
+      }
+    },
     "details": {
       "name": "Name",
       "resolution": "Resolution",

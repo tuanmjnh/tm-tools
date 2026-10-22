@@ -127,7 +127,7 @@ const previewFileTitle = ref('')
 
 // ===== Media Library Tabs (CapCut-style top category bar) =====
 
-type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'effects' | 'transitions' | 'filters' | 'assets'
+type MediaTabId = 'media' | 'video' | 'audio' | 'image' | 'text' | 'stickers' | 'effects' | 'transitions' | 'filters' | 'assets'
 
 const mediaTab = ref<MediaTabId>('media')
 
@@ -140,6 +140,8 @@ const mediaTabs = computed(() => [
   { id: 'audio', label: t('tmcut.tabs.audio'), icon: 'i-lucide-music' },
   { id: 'image', label: t('tmcut.tabs.image'), icon: 'i-lucide-image' },
   { id: 'text', label: t('tmcut.tabs.text'), icon: 'i-lucide-type' },
+  // R124 A6 (CapCut §3.4): emoji sticker layers.
+  { id: 'stickers', label: t('tmcut.tabs.stickers'), icon: 'i-lucide-sticker' },
   { id: 'effects', label: t('tmcut.tabs.effects'), icon: 'i-lucide-sparkles' },
   { id: 'transitions', label: t('tmcut.tabs.transitions'), icon: 'i-lucide-shapes' },
   { id: 'filters', label: t('tmcut.tabs.filters'), icon: 'i-lucide-palette' },
@@ -1814,6 +1816,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 {{ t('tmcut.tabs.textHint') }}
               </p>
             </div>
+
+            <!-- Sticker library (R124 A6, CapCut §3.4) -->
+            <TmcutStickerLibrary v-else-if="mediaTab === 'stickers'" />
 
             <!-- Effects / Transitions / Filters library (roadmap R112,
                  split into the mock's three tabs in R120) -->
