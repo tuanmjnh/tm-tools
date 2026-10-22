@@ -141,8 +141,16 @@ export function compileVideoPipeline(
     vStreams.push(vOut)
 
     if (ctx.hasAudio) {
+      // R124 A1: track-level audio mirrors the background-audio path.
+      // A muted track silences its EMBEDDED audio with volume=0 rather
+      // than skipping the stream: the concat below expects one audio
+      // stream per video clip, so dropping one would break the graph.
+      // The track dimmer multiplies the clip volume (0..100 each).
+      const trackVol = clip.trackMuted ? 0 : clip.trackVolume
       const kfVol = keyframeExpr(clip.raw, 'volume', 't')
-      const volFilter = kfVol ? `volume='(${kfVol})/100':eval=frame` : `volume=${(clip.volumePct) / 100}`
+      const volFilter = kfVol
+        ? `volume='(${kfVol})*${trackVol}/100':eval=frame`
+        : `volume=${Number(((clip.volumePct * trackVol) / 10000).toFixed(4))}`
       const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
       const aReverse = clip.raw.reverse ? 'areverse,' : ''
       const aTrimmed = `[a_trim_${currentInputIdx}]`

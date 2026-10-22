@@ -46,14 +46,25 @@ export interface RenderClip {
   transitionIn: { type: string, duration: number } | null
   /** Source item for core expression builders (keyframeExpr). */
   raw: TmcutTimelineItem
+  /** Track-level audio (R124 A1): the track this clip lives on. `muted`
+   *  silences the whole track at mix time; `pan` (-100..100) shifts the
+   *  stereo field. Both are 0/false when absent — a plain clip keeps the
+   *  old byte-identical export. */
+  trackMuted: boolean
+  trackPan: number
+  trackVolume: number
 }
 
 /**
  * Adapts an app timeline item (any track) to the render canonical view.
  * This is the ONLY place the render layer maps app-model fields — C16-R3
  * moved the time fields from seconds to ticks, decoded here once.
+ *
+ * `track` carries the track-level audio flags (mute/pan/volume) so the
+ * render layer can express them at mix time without re-scanning the
+ * timeline (R124 A1).
  */
-export function toRenderClip(item: TmcutTimelineItem): RenderClip {
+export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null): RenderClip {
   const src = item.src ?? null
   return {
     id: item.id,
@@ -74,7 +85,10 @@ export function toRenderClip(item: TmcutTimelineItem): RenderClip {
     focusX: item.focusX ?? 0.5,
     focusY: item.focusY ?? 0.5,
     transitionIn: item.transitionIn ?? null,
-    raw: item
+    raw: item,
+    trackMuted: !!track?.muted,
+    trackPan: Number(track?.pan ?? 0),
+    trackVolume: Number(track?.volume ?? 100)
   }
 }
 
@@ -83,17 +97,30 @@ export function renderVideoClips(track: TmcutTrack | undefined): RenderClip[] {
   return (track?.items || [])
     .filter(c => !!c.src)
     .sort((a, b) => (a.offset || 0) - (b.offset || 0))
-    .map(toRenderClip)
+    .map(c => toRenderClip(c, track))
 }
 
-/** Audio-track items that carry media input, in track order. */
-export function renderAudioClips(track: TmcutTrack | undefined): RenderClip[] {
-  return (track?.items || []).filter(c => !!c.src).map(toRenderClip)
+/**
+ * Audio-track items that carry media input, in track order. R124 A1:
+ * accepts EVERY audio track (not just the first one) — a CapCut-style
+ * project can layer background music, voiceover, and SFX on separate
+ * rows, and they all mix into the output bus.
+ */
+export function renderAudioClips(tracks: TmcutTrack[] | undefined): RenderClip[] {
+  const out: RenderClip[] = []
+  for (const track of tracks || []) {
+    if (track.type !== 'audio') continue
+    for (const item of track.items || []) {
+      if (!item.src) continue
+      out.push(toRenderClip(item, track))
+    }
+  }
+  return out
 }
 
 /** Text-track items that carry a text body, in track order. */
 export function renderTextClips(track: TmcutTrack | undefined): RenderClip[] {
-  return (track?.items || []).filter(c => !!c.text).map(toRenderClip)
+  return (track?.items || []).filter(c => !!c.text).map(c => toRenderClip(c, track))
 }
 
 /** Timeline span of one clip, seconds (decoded from the exact tick span). */

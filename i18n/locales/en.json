@@ -497,6 +497,8 @@
       "addTextTrack": "Add Text track",
       "addAudioTrack": "Add Audio track",
       "removeTrack": "Remove track (with its clips)",
+      "volume": "Track volume (0-100)",
+      "pan": "Track balance (-100 Left to +100 Right)",
       "order": "Stacking order",
       "moveUp": "Move up (render above)",
       "moveDown": "Move down (render below)"

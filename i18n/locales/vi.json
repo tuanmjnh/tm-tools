@@ -497,6 +497,8 @@
       "addTextTrack": "Thêm track Text",
       "addAudioTrack": "Thêm track Audio",
       "removeTrack": "Xóa track (kèm clip)",
+      "volume": "Âm lượng track (0-100)",
+      "pan": "Cân bằng âm (-100 Trái đến +100 Phải)",
       "order": "Thứ tự chồng lớp",
       "moveUp": "Đưa lên trên (hiển thị đè)",
       "moveDown": "Đưa xuống dưới"

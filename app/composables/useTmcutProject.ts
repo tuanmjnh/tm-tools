@@ -110,6 +110,11 @@ export interface TmcutTrack {
   muted?: boolean
   locked?: boolean
   hidden?: boolean
+  /** R124 A1: track-level audio (CapCut §5.3). `volume` 0..100 is a global
+   *  gain on the row (100 = no change); `pan` -100..100 shifts the stereo
+   *  field (0 = dead centre). Both default to neutral when absent. */
+  volume?: number
+  pan?: number
   items: TmcutTimelineItem[]
 }
 
@@ -1566,6 +1571,23 @@ function toggleTrackHidden(trackId: string) {
   updateTrack(trackId, { hidden: !track.hidden })
 }
 
+// R124 A1: track-level audio (CapCut §5.3). Volume 0..100 (100 = no
+// change) and pan -100..100 (0 = centre). Both default to neutral when
+// absent — a plain track keeps the old byte-identical export.
+function updateTrackVolume(trackId: string, volume: number) {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  if (!track) return
+  const v = Math.max(0, Math.min(100, Number(volume) || 0))
+  updateTrack(trackId, { volume: v === 100 ? undefined : v })
+}
+
+function updateTrackPan(trackId: string, pan: number) {
+  const track = currentProject.value?.timeline?.tracks.find(t => t.id === trackId)
+  if (!track) return
+  const p = Math.max(-100, Math.min(100, Number(pan) || 0))
+  updateTrack(trackId, { pan: p === 0 ? undefined : p })
+}
+
 // Track z-order (layering groundwork, R122): the store array IS the
 // stacking order — index 0 is the top row AND the topmost rendered layer
 // (the preview takes the first matching video track, text overlays draw
@@ -1768,6 +1790,8 @@ export function useTmcutProject() {
     toggleTrackMute,
     toggleTrackLock,
     toggleTrackHidden,
+    updateTrackVolume,
+    updateTrackPan,
     addTrackToProject,
     moveTrackInProject,
     removeTrackFromProject,

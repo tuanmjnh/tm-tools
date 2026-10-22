@@ -28,6 +28,8 @@ const {
   toggleTrackMute,
   toggleTrackLock,
   toggleTrackHidden,
+  updateTrackVolume,
+  updateTrackPan,
   addTrackToProject,
   moveTrackInProject,
   removeTrackFromProject,
@@ -1287,6 +1289,34 @@ onUnmounted(() => {
                 :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
                 @click="toggleTrackMute(track.id)"
               />
+              <!-- R124 A1: track-level volume/pan for audio tracks (CapCut §5.3).
+                   Shown inline in the track header so a mix-level dim/pan is
+                   always one click away. Volume 0..100 (100 = no change),
+                   pan -100..100 (0 = centre). -->
+              <div v-if="track.type === 'audio'" class="flex items-center gap-1 px-1">
+                <label class="text-[9px] text-neutral-500 dark:text-neutral-400" :title="t('tmcut.tracks.volume')">Vol</label>
+                <UInput
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  size="xs"
+                  class="w-14"
+                  :model-value="track.volume ?? 100"
+                  @update:model-value="updateTrackVolume(track.id, Number($event))"
+                />
+                <label class="text-[9px] text-neutral-500 dark:text-neutral-400" :title="t('tmcut.tracks.pan')">Pan</label>
+                <UInput
+                  type="number"
+                  min="-100"
+                  max="100"
+                  step="5"
+                  size="xs"
+                  class="w-16"
+                  :model-value="track.pan ?? 0"
+                  @update:model-value="updateTrackPan(track.id, Number($event))"
+                />
+              </div>
               <UButton
                 icon="i-lucide-trash-2"
                 size="xs"

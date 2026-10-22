@@ -40,12 +40,15 @@ export function compileTimelineToFfmpeg(
 
   const videoTrack = project.timeline.tracks.find(t => t.type === 'video')
   const textTrack = project.timeline.tracks.find(t => t.type === 'text')
-  const audioTrack = project.timeline.tracks.find(t => t.type === 'audio')
+  // R124 A1: EVERY audio track (not just the first one) — a CapCut-style
+  // project layers music, voiceover and SFX on separate rows and they all
+  // mix into the output bus. `renderAudioClips` now takes the whole array.
+  const audioTracks = project.timeline.tracks.filter(t => t.type === 'audio')
 
   // C16-R2: single mapping boundary app-model → render canonical view (@see clip.ts).
   const videoClips = renderVideoClips(videoTrack)
   const textClips = renderTextClips(textTrack)
-  const audioClips = renderAudioClips(audioTrack)
+  const audioClips = renderAudioClips(audioTracks)
 
   // Calculate total duration in seconds
   let totalDuration = 0

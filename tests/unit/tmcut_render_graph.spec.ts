@@ -342,6 +342,113 @@ function main() {
     assert.equal(bareRelabel, false)
   })
 
+  check('multi-track audio export mixes every audio track (R124 A1)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Multi Audio',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'a1',
+            type: 'audio',
+            name: 'Music',
+            items: [{ id: 'a1c1', trackId: 'a1', src: 'music.mp3', offset: 0, in: 0, out: tk(5), volume: 100 }]
+          },
+          {
+            id: 'a2',
+            type: 'audio',
+            name: 'Voice',
+            items: [{ id: 'a2c1', trackId: 'a2', src: 'voice.wav', offset: tk(1), in: 0, out: tk(3), volume: 100 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4', { mode: 'audio' })
+    // Both audio inputs registered (old code took only the FIRST audio track).
+    assert.equal(result.args.filter(a => a === '-i').length, 2)
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('music.mp3') || result.args.includes('music.mp3'))
+    assert.ok(result.args.includes('voice.wav'))
+    // Both buses feed the mix.
+    assert.match(fc, /amix=inputs=2/)
+  })
+
+  check('muted audio track contributes nothing to the mix (R124 A1)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Muted Track',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'a1',
+            type: 'audio',
+            name: 'Music',
+            items: [{ id: 'a1c1', trackId: 'a1', src: 'music.mp3', offset: 0, in: 0, out: tk(5), volume: 100 }]
+          },
+          {
+            id: 'a2',
+            type: 'audio',
+            name: 'Muted SFX',
+            muted: true,
+            items: [{ id: 'a2c1', trackId: 'a2', src: 'sfx.wav', offset: 0, in: 0, out: tk(5), volume: 100 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4', { mode: 'audio' })
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // Only the unmuted bus remains — no amix (single stream), no sfx chain.
+    assert.ok(!fc.includes('amix'))
+    assert.ok(!/sfx\.wav/.test(result.args.join(' ')) || !fc.includes('sfx'))
+  })
+
+  check('track volume multiplies clip volume in the export chain (R124 A1)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Track Volume',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'a1',
+            type: 'audio',
+            name: 'Dimmed',
+            volume: 50,
+            items: [{ id: 'a1c1', trackId: 'a1', src: 'music.mp3', offset: 0, in: 0, out: tk(5), volume: 80 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4', { mode: 'audio' })
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // 80 * 50 / 10000 = 0.4 → single volume filter with the combined gain.
+    assert.ok(fc.includes('volume=0.4'), `expected combined gain 0.4 in: ${fc}`)
+  })
+
+  check('track pan emits a stereotools filter (R124 A1)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Panned Track',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'a1',
+            type: 'audio',
+            name: 'Left',
+            pan: -60,
+            items: [{ id: 'a1c1', trackId: 'a1', src: 'music.mp3', offset: 0, in: 0, out: tk(5), volume: 100 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4', { mode: 'audio' })
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('stereotools='), `expected stereotools Panas in: ${fc}`)
+  })
+
   console.log(`\n=== All ${passed} tests passed successfully! ===`)
 }
 

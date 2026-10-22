@@ -375,8 +375,11 @@ function localTicks(clip: { offset?: number }): number {
 const isVideoMuted = computed(() => !!activeVideoTrack.value?.muted)
 const videoVolume = computed(() => {
   const clip = activeVideoClip.value?.clip
+  const track = activeVideoTrack.value
   if (!clip) return 1
   const v = evalKeyframe(clip, 'volume', localTicks(clip)) ?? clip.volume
+  // R124 A1: track-level volume (0..100) multiplies the clip volume.
+  const trackVol = Number(track?.volume ?? 100)
   // Fade envelope (roadmap C12 / core audio.mjs): gainAt multiplies the
   // (keyframed) volume by the fade ramp, each edge clamped to half the
   // clip. C16-R3: core's legacy flat branch reads in/out as SECONDS, so
@@ -385,7 +388,7 @@ const videoVolume = computed(() => {
   // family as the volume slider itself.
   const shaped = {
     fade: clip.fade,
-    volume: typeof v === 'number' ? v : clip.volume,
+    volume: (typeof v === 'number' ? v : clip.volume ?? 100) * (trackVol / 100),
     timeline: { duration: clipDurationTicks(clip) }
   }
   return gainAt(shaped, localTicks(clip))
@@ -459,18 +462,26 @@ const activeAudioClips = computed(() => {
   return out
 })
 
-const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track }) => ({
-  id: clip.id,
-  src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
-  mediaTime: clipMediaTimeSec(clip, playhead.value),
-  muted: !!track.muted || !!previewMuted.value,
-  // Store volume is PERCENT 0..100 (v1 heritage, core audio.mjs) while
-  // HTMLMediaElement.volume speaks 0..1 — normalize + clamp before the
-  // DOM binding. The old `clip.volume ?? 1` wrote e.g. HTTP 100 straight
-  // into el.volume ("Failed setting prop volume: value 100 is invalid").
-  volume: Math.min(1, Math.max(0, ((clip.volume ?? 100) / 100) * previewVolume.value)),
-  rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
-})))
+const activeAudioSrcs = computed(() => activeAudioClips.value.map(({ clip, track }) => {
+  // R124 A1: track-level volume (0..100) multiplies the clip volume, so a
+  // track dimmer is a global gain on that row. Track pan (-100..100) is a
+  // documented preview gap (mirrors video reverse): HTMLMediaElement has no
+  // stereo field control without a WebAudio graph, so the pan is honored
+  // at EXPORT only (core panFilter) and the preview stays centred.
+  const trackVol = Number(track?.volume ?? 100)
+  return {
+    id: clip.id,
+    src: clip.src ? previewEngine.resolveSrc(clip.src) : '',
+    mediaTime: clipMediaTimeSec(clip, playhead.value),
+    muted: !!track.muted || !!previewMuted.value,
+    // Store volume is PERCENT 0..100 (v1 heritage, core audio.mjs) while
+    // HTMLMediaElement.volume speaks 0..1 — normalize + clamp before the
+    // DOM binding. The old `clip.volume ?? 1` wrote e.g. HTTP 100 straight
+    // into el.volume ("Failed setting prop volume: value 100 is invalid").
+    volume: Math.min(1, Math.max(0, ((clip.volume ?? 100) * trackVol / 10000) * previewVolume.value)),
+    rate: clip.speed && clip.speed >= 0.25 && clip.speed <= 4 ? clip.speed : 1
+  }
+}))
 
 function seekAudioElement(el: HTMLAudioElement, time: number) {
   try {
