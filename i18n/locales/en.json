@@ -503,6 +503,23 @@
       "moveUp": "Move up (render above)",
       "moveDown": "Move down (render below)"
     },
+    "keyframeLane": {
+      "title": "Keyframes",
+      "selectClipHint": "Select a clip to edit its keyframe curve",
+      "noKeyframes": "Click the lane to move the playhead, then add a keyframe",
+      "addAtPlayhead": "Keyframe",
+      "removeAtPlayhead": "Remove keyframe",
+      "prop_opacity": "Opacity",
+      "prop_scale": "Scale",
+      "prop_x": "Position X",
+      "prop_y": "Position Y",
+      "prop_volume": "Volume",
+      "easing_linear": "Linear",
+      "easing_ease-in": "Ease in",
+      "easing_ease-out": "Ease out",
+      "easing_ease-in-out": "Ease in-out",
+      "easing_step": "Hold (step)"
+    },
     "details": {
       "name": "Name",
       "resolution": "Resolution",

@@ -503,6 +503,23 @@
       "moveUp": "Đưa lên trên (hiển thị đè)",
       "moveDown": "Đưa xuống dưới"
     },
+    "keyframeLane": {
+      "title": "Keyframe",
+      "selectClipHint": "Chọn một clip để sửa đường cong keyframe",
+      "noKeyframes": "Nhấp vào lane để di chuyển playhead, sau đó thêm keyframe",
+      "addAtPlayhead": "Keyframe",
+      "removeAtPlayhead": "Xóa keyframe",
+      "prop_opacity": "Độ mờ",
+      "prop_scale": "Tỷ lệ",
+      "prop_x": "Vị trí X",
+      "prop_y": "Vị trí Y",
+      "prop_volume": "Âm lượng",
+      "easing_linear": "Tuyến tính",
+      "easing_ease-in": "Chậm dần đầu",
+      "easing_ease-out": "Chậm dần cuối",
+      "easing_ease-in-out": "Chậm hai đầu",
+      "easing_step": "Giữ nguyên"
+    },
     "details": {
       "name": "Tên",
       "resolution": "Độ phân giải",

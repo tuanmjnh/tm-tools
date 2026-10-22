@@ -1198,6 +1198,13 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- R124 A2: keyframe animation lane for the selected clip (CapCut
+         §5.5). A separate full-width band between the toolbar and the
+         track rows — expanding a track row would desync the header/canvas
+         scroll pairing (R124 alignment), so the curve gets its own strip.
+         Renders even with no selection (empty-state hint). -->
+    <TmcutKeyframeLane />
+
     <!-- Timeline Workspace -->
     <div class="flex-1 flex overflow-hidden relative">
       <!-- Fixed Left Track Headers (w-44) -->
