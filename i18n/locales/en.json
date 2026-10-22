@@ -520,6 +520,23 @@
       "easing_ease-in-out": "Ease in-out",
       "easing_step": "Hold (step)"
     },
+    "mask": {
+      "title": "Mask",
+      "shape_none": "None",
+      "shape_rectangle": "Rectangle",
+      "shape_circle": "Circle",
+      "shape_linear": "Linear",
+      "x": "X",
+      "y": "Y",
+      "w": "Width",
+      "h": "Height",
+      "feather": "Feather",
+      "rotation": "Rotation",
+      "invert": "Invert",
+      "axis": "Axis",
+      "axis_x": "X",
+      "axis_y": "Y"
+    },
     "details": {
       "name": "Name",
       "resolution": "Resolution",

@@ -2,7 +2,7 @@ import type { TextOverlayClip } from './types'
 import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
 import { textStrokeWidth, textShadowOffset } from '../textStyle'
-import { keyframeExpr } from '@tmcut-core'
+import { keyframeExpr, maskAlphaExpr } from '@tmcut-core'
 import type { RenderClip } from './clip'
 
 /**
@@ -93,6 +93,10 @@ export function textOverlayFilter(clip: TextOverlayClip): string {
   const opacityPct = clip.opacity ?? 100
   let alphaSuffix = ''
   let alphaArg = ''
+  // NOTE (R124 A3): the per-pixel clip mask is NOT applied here — drawtext's
+  // `:alpha` is a frame-level expression (it cannot reference X/W, Y/H pixel
+  // coordinates). textOverlayChains routes masked text through a transparent
+  // layer + a separate geq so the mask geometry works exactly like video.
   if (kfOpacity && animAlphaExpr) {
     alphaArg = `:alpha='((${kfOpacity})/100)*(${animAlphaExpr})'`
   } else if (kfOpacity) {
@@ -126,15 +130,33 @@ export function textOverlayChains(
 ): { chains: string[], out: string } {
   const out = `[v_txt_${index}]`
   const rotation = clip.rotation || 0
-  if (!rotation) return { chains: [`${bus}${textOverlayFilter(clip)}${out}`], out }
+  // R124 A3: masked text routes through a transparent plate + a geq alpha
+  // pass. drawtext's :alpha is frame-level (no X/W, Y/H pixel access), so
+  // the per-pixel mask geometry from core has to run as its own filter.
+  // The mask box is canvas-relative (the plate IS the canvas), matching
+  // video clips where the fitted frame fills the canvas.
+  const maskExpr = maskAlphaExpr(clip.mask)
+  const tStart = clip.offset || 0
+  const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
+  if (!rotation) {
+    if (!maskExpr) return { chains: [`${bus}${textOverlayFilter(clip)}${out}`], out }
+    const layer = `[v_txtl_${index}]`
+    const masked = `[v_txtm_${index}]`
+    return {
+      chains: [
+        `color=c=black@0.0:s=${ctx.canvasW}x${ctx.canvasH}:r=${ctx.fps}:d=${(tEnd + 1).toFixed(3)},format=rgba,${textOverlayFilter(clip)}${layer}`,
+        `${layer}geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='(${maskExpr})'${masked}`,
+        `${bus}${masked}overlay=shortest=1${out}`
+      ],
+      out
+    }
+  }
 
   if ((clip.align || 'center') !== 'center') {
     throw new Error('Rotated text export needs center alignment — set the clip align to center, or clear its rotation')
   }
   const xOffset = clip.x || 0
   const yOffset = clip.y || 0
-  const tStart = clip.offset || 0
-  const tEnd = tStart + (clip.out - clip.in) / (clip.speed || 1)
   const rad = rotation * Math.PI / 180
   const cos = Math.cos(rad)
   const sin = Math.sin(rad)
@@ -144,10 +166,15 @@ export function textOverlayChains(
   const ovY = Number((yOffset - ry).toFixed(3))
   const layer = `[v_txtl_${index}]`
   const rotated = `[v_txtr_${index}]`
+  // Mask BEFORE rotate: the mask box lives in the plate's (pre-rotation)
+  // canvas space, so it travels with the text exactly like the glyphs.
+  const masked = maskExpr
+    ? `${layer}geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='(${maskExpr})'[v_txtm_${index}];[v_txtm_${index}]rotate=a=${rad.toFixed(6)}:fillcolor=none${rotated}`
+    : `${layer}rotate=a=${rad.toFixed(6)}:fillcolor=none${rotated}`
   return {
     chains: [
       `color=c=black@0.0:s=${ctx.canvasW}x${ctx.canvasH}:r=${ctx.fps}:d=${(tEnd + 1).toFixed(3)},format=rgba,${textOverlayFilter(clip)}${layer}`,
-      `${layer}rotate=a=${rad.toFixed(6)}:fillcolor=none${rotated}`,
+      masked,
       `${bus}${rotated}overlay=x=${ovX}:y=${ovY}${out}`
     ],
     out

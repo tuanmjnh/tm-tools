@@ -68,6 +68,7 @@ export type TextOverlayClip = Pick<
   | 'stroke'
   | 'opacity'
   | 'rotation'
+  | 'mask'
   | 'keyframes'
   | 'animIn'
   | 'animInDuration'

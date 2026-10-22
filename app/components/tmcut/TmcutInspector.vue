@@ -104,6 +104,36 @@ function handleTimeUpdate(field: 'in' | 'out' | 'offset', valueSec: number) {
   handleUpdate(field, ticks)
 }
 
+// R124 A3 — Mask (CapCut §5.7): shape picker + normalized box + feather/
+// rotation/invert. Geometry semantics live in core mask.mjs (shared by
+// preview SVG and export geq); this panel only stores parameters. Enabling
+// a shape writes a centered default box; picking "none" clears the mask.
+const MASK_SHAPE_ITEMS = computed(() => [
+  { label: t('tmcut.mask.shape_none'), value: '' },
+  { label: t('tmcut.mask.shape_rectangle'), value: 'rectangle' },
+  { label: t('tmcut.mask.shape_circle'), value: 'circle' },
+  { label: t('tmcut.mask.shape_linear'), value: 'linear' }
+])
+
+function maskPatch(patch: Record<string, unknown>) {
+  if (!selectedClipId.value) return
+  const base = clip.value?.mask ?? {
+    shape: 'rectangle' as const, x: 0.25, y: 0.25, w: 0.5, h: 0.5,
+    feather: 0, rotation: 0, invert: false, axis: 'x' as const
+  }
+  handleUpdate('mask', { ...base, ...patch } as never)
+}
+
+function handleMaskShapeChange(shape: string) {
+  if (!shape) {
+    handleUpdate('mask', null as never)
+    return
+  }
+  // Keep the current box when switching shapes; shape-only switches are
+  // the norm (the box is shape-agnostic normalized geometry).
+  maskPatch({ shape })
+}
+
 // Font family (roadmap C-1): family (CSS preview) and file (drawtext
 // fontfile= export) always travel together, so ONE coalesced history
 // entry covers the pair — preview and export can never drift onto
@@ -1161,6 +1191,127 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Mask (R124 A3, CapCut §5.7): geometric shapes with feather,
+         rotation and invert. Parameters only — the geometry math is shared in
+         core mask.mjs (SVG mask in preview, geq chain on export), so the
+         two paths can never disagree on the shape. -->
+    <div v-if="currentTab === 'visual' && (trackType === 'video' || trackType === 'text')" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <UIcon name="i-lucide-shape" class="size-3.5 text-primary" />
+          <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+            {{ t('tmcut.mask.title') }}
+          </span>
+        </div>
+        <USelect
+          :items="MASK_SHAPE_ITEMS"
+          :model-value="clip.mask?.shape ?? ''"
+          size="xs"
+          class="w-32"
+          @update:model-value="handleMaskShapeChange(String($event))"
+        />
+      </div>
+
+      <template v-if="clip.mask">
+        <div class="grid grid-cols-4 gap-2">
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.x') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0"
+              :max="1"
+              size="xs"
+              :model-value="clip.mask.x"
+              @update:model-value="maskPatch({ x: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.y') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0"
+              :max="1"
+              size="xs"
+              :model-value="clip.mask.y"
+              @update:model-value="maskPatch({ y: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.w') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0.05"
+              :max="1"
+              size="xs"
+              :model-value="clip.mask.w"
+              @update:model-value="maskPatch({ w: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.h') }}</label>
+            <UInput
+              type="number"
+              step="0.05"
+              :min="0.05"
+              :max="1"
+              size="xs"
+              :model-value="clip.mask.h"
+              @update:model-value="maskPatch({ h: Number($event) })"
+            />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.feather') }}</label>
+            <USlider
+              :model-value="clip.mask.feather"
+              :min="0"
+              :max="100"
+              :step="1"
+              @update:model-value="maskPatch({ feather: Number($event) })"
+            />
+          </div>
+          <div>
+            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.rotation') }}</label>
+            <USlider
+              :model-value="clip.mask.rotation"
+              :min="-180"
+              :max="180"
+              :step="1"
+              @update:model-value="maskPatch({ rotation: Number($event) })"
+            />
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-1.5 text-[10px] text-neutral-500 cursor-pointer">
+            <USwitch
+              :model-value="clip.mask.invert"
+              size="sm"
+              @update:model-value="maskPatch({ invert: Boolean($event) })"
+            />
+            {{ t('tmcut.mask.invert') }}
+          </label>
+          <!-- Linear wipe direction — only meaningful for the linear shape -->
+          <div v-if="clip.mask.shape === 'linear'" class="flex items-center gap-1.5">
+            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.axis') }}</span>
+            <USelect
+              :items="[
+                { label: t('tmcut.mask.axis_x'), value: 'x' },
+                { label: t('tmcut.mask.axis_y'), value: 'y' }
+              ]"
+              :model-value="clip.mask.axis || 'x'"
+              size="xs"
+              class="w-16"
+              @update:model-value="maskPatch({ axis: String($event) })"
+            />
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Video Stabilizer (Roadmap E-5, desktop only) -->

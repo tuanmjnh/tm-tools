@@ -449,6 +449,66 @@ function main() {
     assert.ok(fc.includes('stereotools='), `expected stereotools Panas in: ${fc}`)
   })
 
+  check('video mask emits a geq alpha chain (R124 A3)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Masked Clip',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              {
+                id: 'c1',
+                trackId: 'v1',
+                src: 'clip1.mp4',
+                offset: 0,
+                in: 0,
+                out: tk(4),
+                scale: 100,
+                speed: 1,
+                mask: { shape: 'circle', x: 0.2, y: 0.2, w: 0.6, h: 0.6, feather: 20, rotation: 30, invert: false, axis: 'x' }
+              }
+            ]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // The mask alpha must ride on a single-quoted geq alpha with the
+    // circle distance core (hypot) — the shape signature.
+    assert.ok(fc.includes("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='"), 'expected geq rgba chain')
+    assert.ok(fc.includes('hypot(abs('), 'expected circle signed distance')
+    assert.ok(!fc.includes('colorchannelmixer'), 'mask path must not emit a static aa= filter')
+  })
+
+  check('no mask emits no geq (R124 A3 regression)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Plain Clip',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [{ id: 'c1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), scale: 100, speed: 1 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // geq only ever appears for opacity keyframes or masks — plain clips
+    // keep the byte-identical old chain.
+    assert.ok(!fc.includes('geq='))
+  })
+
   console.log(`\n=== All ${passed} tests passed successfully! ===`)
 }
 

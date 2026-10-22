@@ -5,7 +5,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
+import { keyframeExpr, maskAlphaExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -78,8 +78,22 @@ export function compileVideoPipeline(
     const kfOpacity = keyframeExpr(clip.raw, 'opacity', 'T')
     const opacityPct = clip.opacityPct
     const faded = opacityPct < 100
+    // R124 A3: clip mask (CapCut §5.7). The core builder returns the
+    // FFmpeg/CSS alpha geometry; '' means no mask (byte-identical export).
+    const maskExpr = maskAlphaExpr(clip.raw.mask)
     let alphaArg = ''
-    if (kfOpacity) {
+    if (maskExpr) {
+      // Mask drives the alpha; opacity rides on top of it (a static aa=
+      // would fight the geq, so an opacity factor multiplies inside it).
+      // kfOpacity (animated) multiplies too — one geq for both, always in
+      // the mask-first order: alpha = mask × opacity.
+      const opMul = kfOpacity
+        ? `*((${kfOpacity})/100)`
+        : faded
+          ? `*${opacityAlpha(opacityPct)}`
+          : ''
+      alphaArg = `,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='(${maskExpr})${opMul}'`
+    } else if (kfOpacity) {
       alphaArg = `,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='255*((${kfOpacity})/100)'`
     } else if (faded) {
       alphaArg = `,format=rgba,colorchannelmixer=aa=${opacityAlpha(opacityPct)}`
@@ -124,7 +138,7 @@ export function compileVideoPipeline(
       const combiner = blendCombiner || transform.overlay
       graph.addFilterChain(`${clipChain},${transform.tail}${alphaArg}${vFg}`)
       graph.addFilterChain(`${vBg}${vFg}${combiner}${sizeLock}${vOut}`)
-    } else if (faded || kfOpacity || blendMode !== 'normal') {
+    } else if (faded || kfOpacity || maskExpr || blendMode !== 'normal') {
       const vBg = `[v_obg_${currentInputIdx}]`
       const vFg = `[v_ofg_${currentInputIdx}]`
       const bgSrc = ctx.bgBase

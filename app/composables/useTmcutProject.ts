@@ -98,6 +98,21 @@ export interface TmcutTimelineItem {
       builders feed keyframeExpr() into scale/x/y/opacity/volume
       (video.ts, text.ts, audio.ts) on the desktop FFmpeg path. */
   keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
+  /** Clip mask (R124 A3, CapCut §5.7): shape + normalized box + feather/
+   *  rotation/invert. Geometry math (and the FFmpeg/CSS builders) live in
+   *  @tmcut-core mask.mjs — this only stores the parameters. Absent = no
+   *  mask, byte-identical export and preview. */
+  mask?: {
+    shape: 'rectangle' | 'circle' | 'linear'
+    x: number
+    y: number
+    w: number
+    h: number
+    feather: number
+    rotation: number
+    invert: boolean
+    axis: 'x' | 'y'
+  } | null
   transitionIn?: { type: string, duration: number }
   /** Fade in/out audio envelope (t in TICKS; core C12). */
   fade?: { in: number, out: number }

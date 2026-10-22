@@ -520,6 +520,23 @@
       "easing_ease-in-out": "Chậm hai đầu",
       "easing_step": "Giữ nguyên"
     },
+    "mask": {
+      "title": "Mask",
+      "shape_none": "Không",
+      "shape_rectangle": "Chữ nhật",
+      "shape_circle": "Tròn",
+      "shape_linear": "Tuyến tính",
+      "x": "X",
+      "y": "Y",
+      "w": "Rộng",
+      "h": "Cao",
+      "feather": "Làm mềm biên",
+      "rotation": "Xoay",
+      "invert": "Đảo ngược",
+      "axis": "Trục",
+      "axis_x": "X",
+      "axis_y": "Y"
+    },
     "details": {
       "name": "Tên",
       "resolution": "Độ phân giải",

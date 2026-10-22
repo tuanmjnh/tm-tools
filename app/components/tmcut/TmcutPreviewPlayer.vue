@@ -6,7 +6,7 @@ import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProjec
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
-import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec } from '@tmcut-core'
+import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec, maskCssMaskImage } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
@@ -680,6 +680,23 @@ function computeEffectsCssFilter(effects: Array<{ type: string, params: Record<s
   return parts.join(' ')
 }
 
+// R124 A3: preview CSS twin of the export mask (core mask.mjs renders the
+// SAME normalized geometry as an SVG alpha mask). Applied to the media
+// element itself; mask-size 100% stretches the canvas-aspect SVG onto the
+// element, so the box lands where the export's canvas-box lands.
+function maskPreviewStyle(mask: unknown): Record<string, string> {
+  const css = maskCssMaskImage(mask as never, currentProject.value?.canvas?.width || 100, currentProject.value?.canvas?.height || 100)
+  if (!css) return {}
+  return {
+    maskImage: css,
+    webkitMaskImage: css,
+    maskSize: '100% 100%',
+    webkitMaskSize: '100% 100%',
+    maskRepeat: 'no-repeat',
+    webkitMaskRepeat: 'no-repeat'
+  }
+}
+
 const activeVignetteStyle = computed(() => {
   const clip = activeVideoClip.value?.clip
   if (!clip?.effects) return null
@@ -703,7 +720,7 @@ const videoTransformStyle = computed(() => {
   // Keyframes (roadmap B1) evaluate at the playhead; the static clip
   // fields are the fallback for props without keyframes.
   const base = clipVisual(clip)
-  const style: { transform: string, opacity: number, clipPath?: string, filter?: string, mixBlendMode?: string } = { ...base }
+  const style: { transform: string, opacity: number, clipPath?: string, filter?: string, mixBlendMode?: string, maskImage?: string, webkitMaskImage?: string, maskSize?: string, webkitMaskSize?: string, maskRepeat?: string, webkitMaskRepeat?: string } = { ...base, ...maskPreviewStyle(clip.mask) }
   const effectFilter = computeEffectsCssFilter(clip.effects || [])
   if (effectFilter) {
     style.filter = effectFilter
@@ -777,6 +794,7 @@ function textOverlayStyle(textClip: {
   rotation?: number
   opacity?: number
   text?: string
+  mask?: unknown
   keyframes?: Array<{ t: number, prop: string, value: number, easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'step' }>
 }) {
   const scale = textScale.value
@@ -855,7 +873,12 @@ function textOverlayStyle(textClip: {
     left: align === 'left' ? '0' : align === 'right' ? '100%' : '50%',
     top: '50%',
     transform: `translate(${(tx + animDeltaX) * scale}px, ${(ty + animDeltaY) * scale}px) translate(${anchorX}, -50%) scale(${(ts / 100) * animScaleMultiplier}) rotate(${textClip.rotation || 0}deg)`,
-    opacity: (to / 100) * animAlpha
+    opacity: (to / 100) * animAlpha,
+    // R124 A3: masked text fades through the same SVG mask as video. The
+    // overlay is text-sized, not canvas-sized, so mask units are the
+    // box itself here — a small, documented WYSIWYG gap vs the canvas-frame
+    // export box (export masks the full-frame text layer).
+    ...maskPreviewStyle(textClip.mask)
   }
 }
 
