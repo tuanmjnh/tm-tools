@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
@@ -524,7 +524,55 @@ function handleSpeedUpdate(value: number) {
   if (!c || !selectedClipId.value) return
   const next = withSpeed(c, Number(value))
   pushHistory() // discrete preset change → its own undo entry (B8)
-  updateClip(selectedClipId.value, { speed: next.speed, out: next.out })
+  // R124 A4: an active curve is anchored to the OLD base speed — rebuild
+  // it at the new base over the new duration so mean-anchoring holds.
+  const kind = isRamped(c) ? activeRampKind.value : 'none'
+  if (kind !== 'none') {
+    updateClip(selectedClipId.value, {
+      speed: next.speed,
+      out: next.out,
+      speedPoints: buildRampPreset(kind, clipDurationTicks(next), next.speed)
+    })
+  } else {
+    updateClip(selectedClipId.value, { speed: next.speed, out: next.out })
+  }
+}
+
+// Speed curve (R124 A4, CapCut §5.4): preset menu writing core
+// buildRampPreset points. Presets are mean-anchored, so the timeline
+// length survives picking a curve; the export runs the closed-form
+// non-linear setpts, the preview rides instantaneous playbackRate.
+const RAMP_KINDS = ['none', ...SPEED_RAMP_PRESETS]
+
+const rampItems = computed(() => RAMP_KINDS.map(kind => ({
+  label: t(kind === 'none' ? 'tmcut.ramp.none' : `tmcut.ramp.${kind}`),
+  value: kind
+})))
+
+const activeRampKind = computed(() => {
+  const c = clip.value
+  if (!c || !isRamped(c)) return 'none'
+  const pts = c.speedPoints!
+  const dur = clipDurationTicks(c)
+  for (const kind of SPEED_RAMP_PRESETS) {
+    const ref = buildRampPreset(kind, dur, c.speed || 1)
+    if (ref.length === pts.length
+      && ref.every((p, i) => Math.abs(p.t - pts[i]!.t) <= 2 && Math.abs(p.speed - pts[i]!.speed) <= 0.011)) {
+      return kind
+    }
+  }
+  return 'none'
+})
+
+function handleRampChange(kind: string) {
+  const c = clip.value
+  if (!c || !selectedClipId.value) return
+  pushHistory()
+  if (kind === 'none') {
+    updateClip(selectedClipId.value, { speedPoints: null })
+    return
+  }
+  updateClip(selectedClipId.value, { speedPoints: buildRampPreset(kind, clipDurationTicks(c), c.speed || 1) })
 }
 
 function handleFitUpdate(value: string) {
@@ -1075,6 +1123,32 @@ const saveStateLabel = computed(() => {
       <div v-if="trackType !== 'text'" class="flex items-center justify-between">
         <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</label>
         <USwitch :model-value="!!clip.reverse" @update:model-value="handleUpdate('reverse', !!$event)" />
+      </div>
+
+      <!-- Speed curve (R124 A4, CapCut §5.4): preset curves replace the
+           constant speed with a piecewise-linear ramp. Core owns the math;
+           every preset is mean-anchored so the timeline length survives.
+           Video only — audio follows the base speed (documented v1 gap),
+           text has no playback rate. -->
+      <div v-if="trackType === 'video'" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <UIcon name="i-lucide-trending-up" class="size-3.5 text-primary" />
+            <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+              {{ t('tmcut.ramp.title') }}
+            </span>
+          </div>
+          <USelect
+            :items="rampItems"
+            :model-value="activeRampKind"
+            size="xs"
+            class="w-36"
+            @update:model-value="handleRampChange(String($event))"
+          />
+        </div>
+        <p v-if="clip.speedPoints?.length" class="text-[10px] text-neutral-500">
+          {{ t('tmcut.ramp.hint') }}
+        </p>
       </div>
     </div>
 

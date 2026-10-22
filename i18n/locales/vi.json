@@ -537,6 +537,15 @@
       "axis_x": "X",
       "axis_y": "Y"
     },
+    "ramp": {
+      "title": "Đường cong tốc độ",
+      "none": "Không",
+      "ease-in": "Tăng dần (chậm → nhanh)",
+      "ease-out": "Giảm dần (nhanh → chậm)",
+      "mountain": "Đỉnh núi",
+      "valley": "Thung lũng",
+      "hint": "Đã áp dụng đường cong — thời lượng không đổi, âm thanh theo tốc độ cơ sở."
+    },
     "details": {
       "name": "Tên",
       "resolution": "Độ phân giải",

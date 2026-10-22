@@ -481,7 +481,7 @@ function main() {
     const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
     // The mask alpha must ride on a single-quoted geq alpha with the
     // circle distance core (hypot) — the shape signature.
-    assert.ok(fc.includes("geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='"), 'expected geq rgba chain')
+    assert.ok(fc.includes('geq=r=\'r(X,Y)\':g=\'g(X,Y)\':b=\'b(X,Y)\':a=\''), 'expected geq rgba chain')
     assert.ok(fc.includes('hypot(abs('), 'expected circle signed distance')
     assert.ok(!fc.includes('colorchannelmixer'), 'mask path must not emit a static aa= filter')
   })
@@ -507,6 +507,68 @@ function main() {
     // geq only ever appears for opacity keyframes or masks — plain clips
     // keep the byte-identical old chain.
     assert.ok(!fc.includes('geq='))
+  })
+
+  check('speed ramp emits the quoted non-linear setpts expr (R124 A4)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Ramped Clip',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              {
+                id: 'c1',
+                trackId: 'v1',
+                src: 'clip1.mp4',
+                offset: 0,
+                in: 0,
+                out: tk(4),
+                scale: 100,
+                speed: 1,
+                speedPoints: [
+                  { t: 0, speed: 0.5 },
+                  { t: tk(4), speed: 1.5 }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    // Commas inside the expr force the single-quoted form; the closed-form
+    // inverse of a varying-speed integral must carry sqrt.
+    assert.ok(/setpts='if\(lt\(/.test(fc), 'expected quoted ramp setpts expr')
+    assert.ok(fc.includes('sqrt('), 'expected closed-form sqrt branch')
+    assert.ok(fc.includes(':eval=frame'))
+  })
+
+  check('constant speed keeps the classic setpts path (R124 A4 regression)', () => {
+    const project: TmcutProject = {
+      version: 1,
+      name: 'Fast Clip',
+      canvas: { width: 1920, height: 1080, fps: 30 },
+      timeline: {
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [{ id: 'c1', trackId: 'v1', src: 'clip1.mp4', offset: 0, in: 0, out: tk(4), scale: 100, speed: 2 }]
+          }
+        ]
+      }
+    }
+    const result = compileTimelineToFfmpeg(project, 'out.mp4')
+    const fc = result.args[result.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('setpts=(PTS-STARTPTS)/2'))
+    assert.ok(!fc.includes('sqrt('))
   })
 
   console.log(`\n=== All ${passed} tests passed successfully! ===`)

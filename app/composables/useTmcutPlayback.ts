@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND, isRamped, speedAt } from '@tmcut-core'
 import { useTmcutProject } from './useTmcutProject'
 import type { TmcutTimelineItem } from './useTmcutProject'
 import { clipEndSec, clipMediaTimeSec, clipStartSec } from '~/utils/tmcut/clipTime'
@@ -295,6 +295,19 @@ export function useTmcutPlayback() {
             }
           }
         } else {
+          // Speed ramp (R124 A4): ride the instantaneous curve speed so
+          // the element advances at the same rate the export's setpts
+          // expression produces; the drift-correcting seek below stays the
+          // anchor either way. Embedded audio warps with the rate here —
+          // the export keeps it at the base speed (documented v1 gap).
+          const ramped = isRamped(activeVideoClip.value.clip)
+          if (ramped && !videoRef.value.paused) {
+            const at = Math.round((playhead.value - clipStartSec(activeVideoClip.value.clip)) * TICKS_PER_SECOND)
+            const want = Math.min(16, Math.max(0.25, Math.abs(shuttleRate.value) * speedAt(activeVideoClip.value.clip, at)))
+            if (Math.abs(videoRef.value.playbackRate - want) > 0.02) {
+              videoRef.value.playbackRate = want
+            }
+          }
           if (Math.abs(videoRef.value.currentTime - targetTime) > 0.3) {
             try {
               videoRef.value.currentTime = targetTime

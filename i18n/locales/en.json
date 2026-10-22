@@ -537,6 +537,15 @@
       "axis_x": "X",
       "axis_y": "Y"
     },
+    "ramp": {
+      "title": "Speed curve",
+      "none": "None",
+      "ease-in": "Ease in (slow → fast)",
+      "ease-out": "Ease out (fast → slow)",
+      "mountain": "Mountain",
+      "valley": "Valley",
+      "hint": "Curve applied — timeline length unchanged, audio follows the base speed."
+    },
     "details": {
       "name": "Name",
       "resolution": "Resolution",

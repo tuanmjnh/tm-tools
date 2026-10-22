@@ -5,7 +5,7 @@ import { opacityAlpha } from './graph'
 import { fadeFilter } from './audio'
 import { buildFfmpegFitFilters, buildFfmpegTransform } from '../canvas'
 import { xfadeNameFor } from '../fxCatalog'
-import { keyframeExpr, maskAlphaExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
+import { keyframeExpr, maskAlphaExpr, rampSetptsExpr, buildFfmpegEffectFilters, ticksToSec } from '@tmcut-core'
 
 /**
  * Maps a TMCut transition type into an FFmpeg xfade transition name
@@ -45,7 +45,17 @@ export function compileVideoPipeline(
     const currentInputIdx = graph.addInput(clip.footagePath!)
 
     const speed = clip.speed
-    const setpts = speed !== 1 ? `setpts=(PTS-STARTPTS)/${speed}` : 'setpts=PTS-STARTPTS'
+    // Speed ramping (R124 A4): a curve replaces the constant setpts with
+    // the core's closed-form inverse of the speed integral (nested
+    // if/sqrt branches). Commas inside the expression are protected by
+    // single quotes; `fps=` after the fit resamples the variable-rate
+    // stream back onto the constant fps grid (dup/drop frames).
+    const rampExpr = rampSetptsExpr(clip.raw)
+    const setpts = rampExpr
+      ? `setpts='${rampExpr}':eval=frame`
+      : speed !== 1
+        ? `setpts=(PTS-STARTPTS)/${speed}`
+        : 'setpts=PTS-STARTPTS'
     const reverseStep = clip.raw.reverse ? ',reverse' : ''
 
     const fitFilters = buildFfmpegFitFilters(clip.fit, ctx.canvasW, ctx.canvasH, {

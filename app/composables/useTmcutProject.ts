@@ -75,6 +75,11 @@ export interface TmcutTimelineItem {
   offset: number
   speed: number
   reverse?: boolean
+  /** Speed ramp (R124 A4, CapCut §5.4): piecewise-linear speed curve —
+   *  { t: clip-local TICKS, speed: multiplier }. Core retime.mjs owns the
+   *  math (integral + setpts expr); presets keep the curve's MEAN equal to
+   *  `speed` so the timeline length survives. Absent/<2 points = constant. */
+  speedPoints?: Array<{ t: number, speed: number }> | null
   /** Group editing: clips sharing a groupId move/select together (core Phase 2). */
   groupId?: string | null
   /** Linked pair (e.g. video + its audio): select/move together. */
