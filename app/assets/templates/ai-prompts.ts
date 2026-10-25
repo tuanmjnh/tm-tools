@@ -1,7 +1,14 @@
 // AI Template Prompt Examples for TMCut
 // Use these prompts with the Template Designer (useTmcutAiTemplates)
 
-export const AI_TEMPLATE_PROMPTS = [
+export interface AiTemplatePrompt {
+  category: 'intro' | 'promo' | 'outro' | 'minimal'
+  name: string
+  description: string
+  prompt: string
+}
+
+export const AI_TEMPLATE_PROMPTS: AiTemplatePrompt[] = [
   {
     category: 'intro',
     name: 'Cinematic Logo Reveal',

@@ -5,6 +5,7 @@ import { TICKS_PER_SECOND } from '@tmcut-core'
 import { useTmcutAiTemplates } from '~/composables/useTmcutAiTemplates'
 import { useTmcutAiScript } from '~/composables/useTmcutAiScript'
 import { useTmcutTemplates } from '~/composables/useTmcutTemplates'
+import { AI_TEMPLATE_PROMPTS, type AiTemplatePrompt } from '~/assets/templates/ai-prompts'
 
 // §6.5 — AI template builder: brief -> Template Plan (add-clip only) ->
 // core-built template object -> review -> save into the template library.
@@ -37,6 +38,35 @@ const durationSec = computed(() => {
   const tpl = draft.value?.template
   return tpl ? (tpl.durationTicks / TICKS_PER_SECOND).toFixed(0) : null
 })
+
+// Group prompts by category for the suggestion UI
+const promptsByCategory = computed((): Record<CategoryKey, AiTemplatePrompt[]> => {
+  const groups: Record<CategoryKey, AiTemplatePrompt[]> = {
+    intro: [],
+    promo: [],
+    outro: [],
+    minimal: []
+  }
+  for (const p of AI_TEMPLATE_PROMPTS) {
+    groups[p.category].push(p)
+  }
+  return groups
+})
+
+const categoryOrder = ['intro', 'promo', 'outro', 'minimal'] as const
+type CategoryKey = typeof categoryOrder[number]
+
+const categoryLabels: Record<CategoryKey, string> = {
+  intro: t('tmcut.aiTemplates.promptCategoryIntro'),
+  promo: t('tmcut.aiTemplates.promptCategoryPromo'),
+  outro: t('tmcut.aiTemplates.promptCategoryOutro'),
+  minimal: t('tmcut.aiTemplates.promptCategoryMinimal')
+}
+
+// Pre-computed array of categories that have prompts, for template typing
+const categoriesWithPrompts = computed(() =>
+  categoryOrder.filter(cat => promptsByCategory.value[cat].length > 0) as CategoryKey[]
+)
 
 onMounted(() => {
   checkGatewayStatus()
@@ -92,6 +122,10 @@ function closeModal() {
   clearDraft()
   open.value = false
 }
+
+function usePrompt(prompt: string) {
+  brief.value = prompt
+}
 </script>
 
 <template>
@@ -145,6 +179,33 @@ function closeModal() {
               :rows="6"
               class="w-full text-sm"
             />
+          </div>
+
+          <!-- Prompt Suggestions -->
+          <div class="space-y-3 border-t border-neutral-200 dark:border-neutral-800 pt-3">
+            <p class="text-[11px] text-neutral-500 dark:text-neutral-400">
+              {{ t('tmcut.aiTemplates.promptSuggestionsDesc') }}
+            </p>
+            <div class="space-y-2">
+              <div v-for="category in categoriesWithPrompts" :key="category">
+                <p class="text-[11px] font-medium text-neutral-600 dark:text-neutral-300 uppercase tracking-wider mb-1">
+                  {{ categoryLabels[category] }}
+                </p>
+                <div class="flex flex-wrap gap-1.5">
+                  <UButton
+                    v-for="prompt in promptsByCategory[category]"
+                    :key="prompt.name"
+                    size="xs"
+                    variant="outline"
+                    color="neutral"
+                    class="whitespace-nowrap text-[11px] h-6"
+                    @click="usePrompt(prompt.prompt)"
+                  >
+                    {{ prompt.name }}
+                  </UButton>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="flex flex-col gap-2 pt-1">

@@ -1656,7 +1656,13 @@
       "savedTitle": "Đã lưu template",
       "saveFailedTitle": "Lưu thất bại",
       "saveFailedDesc": "Trình kiểm tra template lõi đã từ chối bản phác thảo.",
-      "aiLabel": "AI tạo"
+      "aiLabel": "AI tạo",
+      "promptSuggestionsTitle": "Mẫu nhanh",
+      "promptSuggestionsDesc": "Nhấn một mẫu để điền vào mô tả",
+      "promptCategoryIntro": "Mở đầu",
+      "promptCategoryPromo": "Quảng bá",
+      "promptCategoryOutro": "Kết thúc",
+      "promptCategoryMinimal": "Tối giản"
     },
     "audioOrchestration": {
       "buttonLabel": "Âm thanh tự động",

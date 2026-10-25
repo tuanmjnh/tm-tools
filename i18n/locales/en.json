@@ -1656,7 +1656,13 @@
       "savedTitle": "Template saved",
       "saveFailedTitle": "Save failed",
       "saveFailedDesc": "The core template validator rejected the draft.",
-      "aiLabel": "AI-generated"
+      "aiLabel": "AI-generated",
+      "promptSuggestionsTitle": "Quick prompts",
+      "promptSuggestionsDesc": "Click a suggestion to fill the brief",
+      "promptCategoryIntro": "Intro",
+      "promptCategoryPromo": "Promo",
+      "promptCategoryOutro": "Outro",
+      "promptCategoryMinimal": "Minimal"
     },
     "audioOrchestration": {
       "buttonLabel": "Audio Orchestration",
