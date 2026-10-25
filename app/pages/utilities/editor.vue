@@ -7,22 +7,11 @@
 
       <!-- Editor Type Switcher -->
       <div class="flex items-center gap-2">
-        <UButton
-          v-if="editorType === 'tiptap'"
-          variant="solid"
-          color="primary"
-          size="sm"
-          @click="setEditorType('tinymce')"
-        >
-          <UIcon name="i-lucide-square" class="mr-1" /> TinyMCE
+        <UButton v-if="editorType === 'tiptap'" variant="soft" color="primary" size="sm"
+          @click="setEditorType('tinymce')">
+          <UIcon name="i-lucide-square-pen" class="mr-1" /> TinyMCE
         </UButton>
-        <UButton
-          v-else
-          variant="soft"
-          color="primary"
-          size="sm"
-          @click="setEditorType('tiptap')"
-        >
+        <UButton v-else variant="soft" color="primary" size="sm" @click="setEditorType('tiptap')">
           <UIcon name="i-lucide-text" class="mr-1" /> Tiptap
         </UButton>
       </div>
@@ -31,44 +20,20 @@
     <div class="space-y-4">
       <!-- Tiptap Editor -->
       <template v-if="editorType === 'tiptap'">
-        <EditorTiptap
-          v-model="content"
-          :placeholder="t('utilities.editor.placeholder')"
-          :is-bubble="false"
-        />
+        <EditorTiptap v-model="content" :placeholder="t('utilities.editor.placeholder')" :is-bubble="false" />
       </template>
 
       <!-- TinyMCE Editor -->
       <template v-else>
-        <EditorTinymce
-          v-model="content"
-          :placeholder="t('utilities.editor.placeholder')"
-        />
+        <EditorTinymce v-model="content" :placeholder="t('utilities.editor.placeholder')" />
       </template>
 
       <!-- Controls -->
       <div class="flex gap-2">
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="soft"
-          :label="t('utilities.editor.copy')"
-          @click="copyContent"
-        />
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="soft"
-          :label="t('utilities.editor.download')"
-          @click="downloadContent"
-        />
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="soft"
-          :label="t('utilities.editor.clear')"
-          @click="clearContent"
-        />
+        <UButton size="sm" color="neutral" variant="soft" :label="t('utilities.editor.copy')" @click="copyContent" />
+        <UButton size="sm" color="neutral" variant="soft" :label="t('utilities.editor.download')"
+          @click="downloadContent" />
+        <UButton size="sm" color="neutral" variant="soft" :label="t('utilities.editor.clear')" @click="clearContent" />
       </div>
     </div>
   </div>

@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { FfmpegConfig, FfmpegLabel } from '~/types'
-import type { AspectRatio } from '~/utils/ffmpegHelper'
+import type { FfmpegConfig, FfmpegLabel } from '#shared/types/electron'
+import type { RenderAspectRatio } from '~/utils/ffmpegHelper'
 
 defineOptions({ name: 'ToolsVideoEffectsForm' })
 
 const config = defineModel<Partial<FfmpegConfig>>({ required: true })
 
 const props = withDefaults(defineProps<{
-  aspectRatios?: AspectRatio[]
+  aspectRatios?: RenderAspectRatio[]
 }>(), {
-  aspectRatios: () => [] as AspectRatio[]
+  aspectRatios: () => [] as RenderAspectRatio[]
 })
 
 const { t } = useI18n()

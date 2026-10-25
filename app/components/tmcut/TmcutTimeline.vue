@@ -75,9 +75,25 @@ const toast = useToast()
 const tracksContainerRef = ref<HTMLDivElement | null>(null)
 const rulerRef = ref<HTMLDivElement | null>(null)
 
-// Total width of the timeline in pixels
+// Visible width of the tracks viewport (no scrollbar). The canvas floor is
+// THIS number, not a fixed constant: a hard 1200px floor made a narrow
+// (web) panel grow a horizontal scrollbar that scrolled into empty space
+// beyond the content — the "kéo scroll ngang không thấy gì" report.
+const tracksViewportWidth = ref(0)
+let viewportWidthObserver: ResizeObserver | null = null
+
+function syncTracksViewportWidth() {
+  const el = tracksContainerRef.value
+  if (el) tracksViewportWidth.value = el.clientWidth
+}
+
+// Total width of the timeline in pixels: the content (duration + 10s of
+// working room) at the current zoom, but never narrower than the panel —
+// so the canvas fills the visible area and the horizontal scrollbar only
+// ever appears when there is real content (or zoom) to reach.
 const timelineWidth = computed(() => {
-  return Math.max(1200, (totalDuration.value + 10) * zoom.value)
+  const content = (totalDuration.value + 10) * zoom.value
+  return Math.max(content, tracksViewportWidth.value || 0)
 })
 
 // Fit the whole timeline (content + right padding) into the visible
@@ -972,12 +988,25 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('resize', syncMinimapState)
+  syncTracksViewportWidth()
   syncMinimapState()
+  // The panel width changes without a window resize (sidebar collapse,
+  // docked layouts, window maximize) — track the viewport so the canvas
+  // floor follows and the scrollbar can never span dead space.
+  if (tracksContainerRef.value) {
+    viewportWidthObserver = new ResizeObserver(() => {
+      syncTracksViewportWidth()
+      syncMinimapState()
+    })
+    viewportWidthObserver.observe(tracksContainerRef.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('resize', syncMinimapState)
+  viewportWidthObserver?.disconnect()
+  viewportWidthObserver = null
   // A marker editor left open would otherwise keep its outside-click
   // listener alive after the timeline unmounts.
   window.removeEventListener('mousedown', onMarkerEditorOutside)
@@ -1231,110 +1260,132 @@ onUnmounted(() => {
              overflow-y-hidden: kept visually clipped; every row is
              synced with the canvas wheel-scroll handler instead (R124),
              because overflow-y:auto here showed its own scrollbar that
-             did not move the canvas rows. -->
-        <div ref="trackHeadersRef" data-tmcut-track-headers class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-y-hidden">
-          <!-- Spacer matching the sticky ruler (24px of scroll content in
-               the canvas column) so header rows stay pixel-aligned with
-               track rows at every scrollTop (R124). Opaque + sticky like
-               the ruler, so rows scroll under the same visual band. -->
-          <div class="h-6 shrink-0 sticky top-0 z-10 bg-neutral-100/80 dark:bg-neutral-950/80" />
+             did not move the canvas rows.
+             overflow-x-hidden too: overflow-y:hidden alone makes the
+             browser COMPUTE overflow-x as auto, so the audio row (Vol/Pan)
+             used to raise a horizontal scrollbar on the header column —
+             dragging it scrolled the labels into blank space ("kéo không
+             hiển thị được gì"). The row layout now fits 176px, and the
+             axis stays closed as a guarantee. -->
+        <div ref="trackHeadersRef" data-tmcut-track-headers class="flex-1 flex flex-col divide-y divide-neutral-200/60 dark:divide-neutral-800/60 overflow-y-hidden overflow-x-hidden">
+          <!-- No 24px spacer here (was the R124 misalignment bug): the
+               TRACKS corner above this box is the cover band and already
+               sits flush with the canvas ruler (both 763..787), so the
+               header rows must start at the same y as the canvas track
+               rows (both 787). An extra in-box spacer pushed every header
+               row 24px below its clip. Rows scroll up out of this
+               overflow-hidden box under the opaque TRACKS corner, exactly
+               as canvas rows scroll under the sticky ruler. -->
           <div
             v-for="track in currentProject?.timeline?.tracks || []"
             :key="track.id"
-            class="h-14 shrink-0 px-2 flex items-center justify-between gap-1 text-xs font-medium text-neutral-600 dark:text-neutral-300"
+            class="h-14 shrink-0 px-2 flex flex-col justify-center gap-0.5 text-xs font-medium text-neutral-600 dark:text-neutral-300"
           >
-            <div class="flex items-center gap-1.5 truncate min-w-0">
-              <UIcon
-                :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
-                class="size-4 shrink-0"
-                :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
-              />
-              <span class="truncate">{{ track.name || track.type }}</span>
-            </div>
-            <div class="flex items-center shrink-0">
-              <!-- Stacking order (layer groundwork, R122): the preview
-                   takes the TOPMOST video track, so "up" = render above.
-                   A dropdown instead of two buttons keeps the 176px
-                   header row from overflowing. -->
-              <UDropdownMenu
-                :items="[[
-                  { label: t('tmcut.tracks.moveUp'), icon: 'i-lucide-arrow-up-to-line', onSelect: () => moveTrackInProject(track.id, 'up') },
-                  { label: t('tmcut.tracks.moveDown'), icon: 'i-lucide-arrow-down-to-line', onSelect: () => moveTrackInProject(track.id, 'down') }
-                ]]"
-                :content="{ align: 'end' }"
-              >
+            <div class="flex items-center justify-between gap-1 min-w-0">
+              <div class="flex items-center gap-1.5 truncate min-w-0">
+                <UIcon
+                  :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
+                  class="size-4 shrink-0"
+                  :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
+                />
+                <span class="truncate">{{ track.name || track.type }}</span>
+              </div>
+              <div class="flex items-center shrink-0">
+                <!-- Stacking order (layer groundwork, R122): the preview
+                     takes the TOPMOST video track, so "up" = render above.
+                     A dropdown instead of two buttons keeps the 176px
+                     header row from overflowing. -->
+                <UDropdownMenu
+                  :items="[[
+                    { label: t('tmcut.tracks.moveUp'), icon: 'i-lucide-arrow-up-to-line', onSelect: () => moveTrackInProject(track.id, 'up') },
+                    { label: t('tmcut.tracks.moveDown'), icon: 'i-lucide-arrow-down-to-line', onSelect: () => moveTrackInProject(track.id, 'down') }
+                  ]]"
+                  :content="{ align: 'end' }"
+                >
+                  <UButton
+                    icon="i-lucide-layers"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    :title="t('tmcut.tracks.order')"
+                  />
+                </UDropdownMenu>
                 <UButton
-                  icon="i-lucide-layers"
+                  :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  size="xs"
+                  variant="ghost"
+                  :color="track.hidden ? 'warning' : 'neutral'"
+                  :title="track.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide')"
+                  @click="toggleTrackHidden(track.id)"
+                />
+                <UButton
+                  :icon="track.locked ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+                  size="xs"
+                  variant="ghost"
+                  :color="track.locked ? 'warning' : 'neutral'"
+                  :title="track.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock')"
+                  @click="toggleTrackLock(track.id)"
+                />
+                <UButton
+                  v-if="track.type !== 'text'"
+                  :icon="track.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+                  size="xs"
+                  variant="ghost"
+                  :color="track.muted ? 'warning' : 'neutral'"
+                  :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
+                  @click="toggleTrackMute(track.id)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
                   size="xs"
                   variant="ghost"
                   color="neutral"
-                  :title="t('tmcut.tracks.order')"
-                />
-              </UDropdownMenu>
-              <UButton
-                :icon="track.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-                size="xs"
-                variant="ghost"
-                :color="track.hidden ? 'warning' : 'neutral'"
-                :title="track.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide')"
-                @click="toggleTrackHidden(track.id)"
-              />
-              <UButton
-                :icon="track.locked ? 'i-lucide-lock' : 'i-lucide-lock-open'"
-                size="xs"
-                variant="ghost"
-                :color="track.locked ? 'warning' : 'neutral'"
-                :title="track.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock')"
-                @click="toggleTrackLock(track.id)"
-              />
-              <UButton
-                v-if="track.type !== 'text'"
-                :icon="track.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
-                size="xs"
-                variant="ghost"
-                :color="track.muted ? 'warning' : 'neutral'"
-                :title="track.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute')"
-                @click="toggleTrackMute(track.id)"
-              />
-              <!-- R124 A1: track-level volume/pan for audio tracks (CapCut §5.3).
-                   Shown inline in the track header so a mix-level dim/pan is
-                   always one click away. Volume 0..100 (100 = no change),
-                   pan -100..100 (0 = centre). -->
-              <div v-if="track.type === 'audio'" class="flex items-center gap-1 px-1">
-                <label class="text-[9px] text-neutral-500 dark:text-neutral-400" :title="t('tmcut.tracks.volume')">Vol</label>
-                <UInput
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="5"
-                  size="xs"
-                  class="w-14"
-                  :model-value="track.volume ?? 100"
-                  @update:model-value="updateTrackVolume(track.id, Number($event))"
-                />
-                <label class="text-[9px] text-neutral-500 dark:text-neutral-400" :title="t('tmcut.tracks.pan')">Pan</label>
-                <UInput
-                  type="number"
-                  min="-100"
-                  max="100"
-                  step="5"
-                  size="xs"
-                  class="w-16"
-                  :model-value="track.pan ?? 0"
-                  @update:model-value="updateTrackPan(track.id, Number($event))"
+                  :disabled="track.locked"
+                  :title="t('tmcut.tracks.removeTrack')"
+                  @click="removeTrackFromProject(track.id)"
                 />
               </div>
-              <UButton
-                icon="i-lucide-trash-2"
+            </div>
+            <!-- R124 A1 → refit: track-level volume/pan for audio tracks
+                 (CapCut §5.3) moved to its own compact second line. It sat
+                 INLINE before, overflowing the 176px header column and
+                 raising the phantom horizontal scrollbar (Vol+Pan+inputs
+                 ≈ 300px in 176px). Now: labels + two grow-to-fit number
+                 inputs, always inside the row width. -->
+            <div v-if="track.type === 'audio'" class="flex items-center gap-1.5 min-w-0">
+              <label class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0" :title="t('tmcut.tracks.volume')">Vol</label>
+              <UInput
+                type="number"
+                min="0"
+                max="100"
+                step="5"
                 size="xs"
-                variant="ghost"
-                color="neutral"
-                :disabled="track.locked"
-                :title="t('tmcut.tracks.removeTrack')"
-                @click="removeTrackFromProject(track.id)"
+                class="flex-1 min-w-0"
+                :model-value="track.volume ?? 100"
+                @update:model-value="updateTrackVolume(track.id, Number($event))"
+              />
+              <label class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0" :title="t('tmcut.tracks.pan')">Pan</label>
+              <UInput
+                type="number"
+                min="-100"
+                max="100"
+                step="5"
+                size="xs"
+                class="flex-1 min-w-0"
+                :model-value="track.pan ?? 0"
+                @update:model-value="updateTrackPan(track.id, Number($event))"
               />
             </div>
           </div>
+
+          <!-- Trailing 24px spacer (NOT a leading one): the canvas column
+               carries an extra 24px ruler above its rows, so its vertical
+               scroll range is 24px taller than a rows-only header column.
+               Mirroring container.scrollTop onto this box then clamps
+               24px early and the last rows drift. This tail keeps the two
+               scroll ranges equal (rows + 24 ≥ ruler + rows) and renders
+               as the same blank strip the canvas shows below its last row. -->
+          <div class="h-6 shrink-0" aria-hidden="true" />
         </div>
       </div>
 

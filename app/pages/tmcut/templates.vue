@@ -24,6 +24,11 @@ const assetCenter = useTmcutAssetCenter()
 // §6.5 — AI template builder modal (brief -> validated Template Plan -> save).
 const aiTemplateModalOpen = ref(false)
 
+// Template Studio (roadmap v1 §5, P3): generation templates live beside the
+// timeline library, sharing the page but not the filters.
+// Marketplace (roadmap v1 §7, P7): licensed music/SFX/fonts catalog.
+const libraryTab = ref<'timeline' | 'studio' | 'factory' | 'marketplace'>('timeline')
+
 // Roadmap v3 §6.4 step 2: the customize modal reports the template's
 // required-asset state BEFORE any project is built — catalog assets the
 // template needs but that are not installed offer a one-click install
@@ -274,7 +279,7 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
     :description="t('tmcut.templateLibrary.subtitle')"
   >
     <template #right>
-      <div class="flex items-center gap-2">
+      <div v-if="libraryTab === 'timeline'" class="flex items-center gap-2">
         <UButton
           to="/tmcut"
           icon="i-lucide-arrow-left"
@@ -316,7 +321,65 @@ function getTextSlotsCount(tpl: TmcutTemplate): number {
       </div>
     </template>
 
-    <div class="space-y-6">
+    <!-- Library switch: timeline templates vs Video Factory template studio -->
+    <div class="flex items-center gap-2 mb-4">
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+        :class="libraryTab === 'timeline'
+          ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold'
+          : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'"
+        @click="libraryTab = 'timeline'"
+      >
+        <UIcon name="i-lucide-layout-template" class="w-3.5 h-3.5" />
+        <span>{{ t('tmcut.videoTemplates.tabTimeline') }}</span>
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+        :class="libraryTab === 'studio'
+          ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold'
+          : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'"
+        @click="libraryTab = 'studio'"
+      >
+        <UIcon name="i-lucide-wand" class="w-3.5 h-3.5" />
+        <span>{{ t('tmcut.videoTemplates.tabStudio') }}</span>
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+        :class="libraryTab === 'factory'
+          ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold'
+          : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'"
+        @click="libraryTab = 'factory'"
+      >
+        <UIcon name="i-lucide-factory" class="w-3.5 h-3.5" />
+        <span>{{ t('tmcut.videoTemplates.tabFactory') }}</span>
+      </button>
+      <button
+        type="button"
+        class="px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+        :class="libraryTab === 'marketplace'
+          ? 'bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold'
+          : 'bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300 dark:hover:border-neutral-700'"
+        @click="libraryTab = 'marketplace'"
+      >
+        <UIcon name="i-lucide-store" class="w-3.5 h-3.5" />
+        <span>{{ t('tmcut.videoTemplates.tabMarketplace') }}</span>
+      </button>
+    </div>
+
+    <!-- Video Factory Template Studio (roadmap v1 §5) -->
+    <TmcutVideoTemplateStudio v-if="libraryTab === 'studio'" class="mb-4" />
+
+    <!-- Video Factory batch console (roadmap v1 §6 / §8) -->
+    <TmcutVideoFactory v-if="libraryTab === 'factory'" class="mb-4" />
+
+    <!-- Asset Marketplace (roadmap v1 §7, P7) -->
+    <TmcutMarketplace v-if="libraryTab === 'marketplace'" class="mb-4" />
+
+    <!-- Timeline template library — kept mounted so filter state survives -->
+    <div v-show="libraryTab === 'timeline'" class="space-y-6">
       <!-- Search & Filters Toolbar -->
       <div class="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-neutral-900 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800">
         <!-- Search bar -->

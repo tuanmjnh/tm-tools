@@ -108,8 +108,10 @@ function handleTimeUpdate(field: 'in' | 'out' | 'offset', valueSec: number) {
 // rotation/invert. Geometry semantics live in core mask.mjs (shared by
 // preview SVG and export geq); this panel only stores parameters. Enabling
 // a shape writes a centered default box; picking "none" clears the mask.
+// reka-ui rejects empty-string SelectItem values (crashes the whole
+// select), so "no mask" travels as a sentinel and maps backstage.
 const MASK_SHAPE_ITEMS = computed(() => [
-  { label: t('tmcut.mask.shape_none'), value: '' },
+  { label: t('tmcut.mask.shape_none'), value: 'none' },
   { label: t('tmcut.mask.shape_rectangle'), value: 'rectangle' },
   { label: t('tmcut.mask.shape_circle'), value: 'circle' },
   { label: t('tmcut.mask.shape_linear'), value: 'linear' }
@@ -125,7 +127,7 @@ function maskPatch(patch: Record<string, unknown>) {
 }
 
 function handleMaskShapeChange(shape: string) {
-  if (!shape) {
+  if (!shape || shape === 'none') {
     handleUpdate('mask', null as never)
     return
   }
@@ -1274,14 +1276,14 @@ const saveStateLabel = computed(() => {
     <div v-if="currentTab === 'visual' && (trackType === 'video' || trackType === 'text')" class="space-y-2 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-1.5">
-          <UIcon name="i-lucide-shape" class="size-3.5 text-primary" />
+          <UIcon name="i-lucide-shapes" class="size-3.5 text-primary" />
           <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
             {{ t('tmcut.mask.title') }}
           </span>
         </div>
         <USelect
           :items="MASK_SHAPE_ITEMS"
-          :model-value="clip.mask?.shape ?? ''"
+          :model-value="clip.mask?.shape ?? 'none'"
           size="xs"
           class="w-32"
           @update:model-value="handleMaskShapeChange(String($event))"

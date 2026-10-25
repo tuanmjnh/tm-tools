@@ -6,6 +6,7 @@ import { useTmcutMedia } from '~/composables/useTmcutMedia'
 import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
+import { useAgentProposalCount } from '~/composables/useTmcutAgentTools'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutTemplates } from '~/composables/useTmcutTemplates'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
@@ -87,7 +88,7 @@ const { shortcutsOpen } = useTmcutUiPrefs()
 const hasWebGPU = ref(false)
 const hardwareLabel = computed(() => {
   const gpu = hasWebGPU.value ? 'WebGPU' : 'WebGL'
-  return `${gpu} · ${isDesktop.value ? 'FFmpeg' : t('tmcut.status.previewOnly')}`
+  return `${gpu} · ${isDesktop.value ? 'FFmpeg' : t('tmcut.workspace.previewOnly')}`
 })
 
 // Status footer data: total timeline clip count
@@ -1031,6 +1032,9 @@ const aiScriptModalOpen = ref(false)
 // AI Editor (roadmap v3 PART C): prompt -> validated Edit Plan -> review -> apply.
 const aiEditorModalOpen = ref(false)
 const audioOrchestrationOpen = ref(false)
+// Agent panel (roadmap v1 §4): text/voice command -> draft -> review -> apply as ONE undo group.
+const agentPanelOpen = ref(false)
+const pendingAgentOps = useAgentProposalCount()
 
 function handleEditorKeydown(e: KeyboardEvent) {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
@@ -1046,70 +1050,45 @@ function handleEditorKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <BasePage
-    id="tmcut-editor"
-    :title="currentProject?.name || t('tmcut.editor')"
+  <BasePage id="tmcut-editor" :title="currentProject?.name || t('tmcut.editor')"
     :description="currentProject?.canvas ? `${currentProject.canvas.width}x${currentProject.canvas.height} (${canvasFpsValue(currentProject.canvas)}fps)` : undefined"
-    flush
-  >
+    flush>
     <template #leading>
       <div class="flex items-center gap-1">
         <UDashboardSidebarCollapse />
-        <UButton
-          to="/tmcut"
-          icon="i-lucide-arrow-left"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          :title="t('tmcut.back')"
-        />
+        <UButton to="/tmcut" icon="i-lucide-arrow-left" size="sm" variant="soft" color="neutral"
+          :title="t('tmcut.back')" />
       </div>
     </template>
 
     <template #left>
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-clapperboard" class="size-5 text-primary shrink-0" />
-        <input
-          v-if="currentProject"
-          v-model="currentProject.name"
+        <input v-if="currentProject" v-model="currentProject.name"
           class="bg-transparent border-none font-semibold text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-1 focus:ring-primary rounded px-1.5 py-0.5 max-w-50 truncate"
-          @blur="saveProject()"
-        >
+          @blur="saveProject()">
       </div>
     </template>
 
     <template #right>
       <!-- Shortcuts help (shared overlay with the timeline Ctrl+K / ?) -->
-      <UButton
-        icon="i-lucide-keyboard"
-        size="sm"
-        variant="soft"
-        color="neutral"
-        :title="t('tmcut.workspace.shortcutsBtn')"
-        @click="shortcutsOpen = true"
-      >
+      <UButton icon="i-lucide-keyboard" size="sm" variant="soft" color="neutral"
+        :title="t('tmcut.workspace.shortcutsBtn')" @click="shortcutsOpen = true">
         <span class="hidden lg:inline">{{ t('tmcut.workspace.shortcutsBtn') }}</span>
       </UButton>
 
       <!-- Honest hardware status chip (WebGPU detection + export engine) -->
-      <span
+      <!-- <span
         class="hidden xl:inline-flex items-center gap-1 px-2 py-1 rounded-md bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-[11px] font-mono text-neutral-500 dark:text-neutral-400"
-        :title="t('tmcut.workspace.hardwareStatus')"
-      >
+        :title="t('tmcut.workspace.hardwareStatus')">
         <UIcon name="i-lucide-cpu" class="size-3 text-primary" />
         {{ hardwareLabel }}
-      </span>
+      </span> -->
 
       <!-- Aspect Ratio & Resolution Preset Dropdown -->
       <UDropdownMenu :items="canvasMenuItems" :content="{ side: 'bottom', align: 'end' }">
-        <UButton
-          v-if="currentProject?.canvas"
-          icon="i-lucide-proportions"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          :title="t('tmcut.canvasRatio')"
-        >
+        <UButton v-if="currentProject?.canvas" icon="i-lucide-proportions" size="sm" variant="soft" color="neutral"
+          :title="t('tmcut.canvasRatio')">
           <span class="font-mono text-xs">
             {{ currentRatioLabel }} ({{ canvasFpsValue(currentProject.canvas) }}fps)
           </span>
@@ -1117,137 +1096,77 @@ function handleEditorKeydown(e: KeyboardEvent) {
         </UButton>
       </UDropdownMenu>
 
-      <span
-        v-if="saveLabel"
-        class="hidden lg:inline text-[11px] font-mono text-neutral-500 dark:text-neutral-400"
+      <span v-if="saveLabel" class="hidden lg:inline text-[11px] font-mono text-neutral-500 dark:text-neutral-400"
         :class="saveStatus === 'error' ? 'text-red-400' : ''"
-        :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''"
-      >
+        :title="lastSavedAt ? new Date(lastSavedAt).toLocaleString() : ''">
         {{ saveLabel }}
       </span>
       <!-- R132: the project revision is the single honest answer to
            "was this file written outside this session while I held it
            open". It is advisory, not a lock — the app is still the
            single writer. -->
-      <UButton
-        v-if="revisionAtLoad !== null && currentRevision() > revisionAtLoad"
-        icon="i-lucide-file-pen"
-        size="xs"
-        color="warning"
-        variant="soft"
-        :title="t('tmcut.save.staleRevision')"
-      >
+      <UButton v-if="revisionAtLoad !== null && currentRevision() > revisionAtLoad" icon="i-lucide-file-pen" size="xs"
+        color="warning" variant="soft" :title="t('tmcut.save.staleRevision')">
         <span class="hidden md:inline">{{ t('tmcut.save.staleRevision') }}</span>
       </UButton>
-      <UButton
-        icon="i-lucide-save"
-        size="sm"
-        color="primary"
-        variant="soft"
-        @click="saveProject()"
-      >
+      <UButton icon="i-lucide-save" size="sm" color="primary" variant="soft" @click="saveProject()">
         <span class="hidden md:inline">{{ t('global.save') }}</span>
       </UButton>
-      <UButton
-        icon="i-lucide-list-checks"
-        size="sm"
-        variant="soft"
-        :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
-        :title="t('tmcut.queue.title')"
-        @click="queueModalOpen = true"
-      >
+      <UButton icon="i-lucide-list-checks" size="sm" variant="soft" :color="activeJobsCount > 0 ? 'primary' : 'neutral'"
+        :title="t('tmcut.queue.title')" @click="queueModalOpen = true">
         <span class="hidden xl:inline">{{ t('tmcut.queue.title') }}</span>
-        <UBadge
-          v-if="activeJobsCount > 0"
-          color="primary"
-          variant="solid"
-          size="xs"
-          class="ml-0.5"
-        >
+        <UBadge v-if="activeJobsCount > 0" color="primary" variant="solid" size="xs" class="ml-0.5">
           {{ activeJobsCount }}
         </UBadge>
       </UButton>
       <!-- AI Scriptwriter & Storyboard modal trigger (Alt+A) -->
-      <UButton
-        icon="i-lucide-sparkles"
-        size="sm"
-        variant="soft"
-        color="primary"
-        :title="t('tmcut.aiScript.buttonTooltip')"
-        @click="aiScriptModalOpen = true"
-      >
+      <UButton icon="i-lucide-sparkles" size="sm" variant="soft" color="primary"
+        :title="t('tmcut.aiScript.buttonTooltip')" @click="aiScriptModalOpen = true">
         <span class="hidden xl:inline">{{ t('tmcut.aiScript.buttonLabel') }}</span>
       </UButton>
 
       <!-- AI Edit Plan modal trigger (Alt+E) — proposes, core validates, user applies -->
-      <UButton
-        icon="i-lucide-wand-sparkles"
-        size="sm"
-        variant="soft"
-        color="secondary"
-        :title="t('tmcut.aiEditor.buttonTooltip')"
-        @click="aiEditorModalOpen = true"
-      >
+      <UButton icon="i-lucide-wand-sparkles" size="sm" variant="soft" color="secondary"
+        :title="t('tmcut.aiEditor.buttonTooltip')" @click="aiEditorModalOpen = true">
         <span class="hidden xl:inline">{{ t('tmcut.aiEditor.buttonLabel') }}</span>
       </UButton>
 
+      <!-- Agent & voice commands (roadmap v1 §4): draft → review → apply as one undo group -->
+      <UButton icon="i-lucide-terminal" size="sm" variant="soft" color="secondary"
+        :title="t('tmcut.agent.buttonTooltip')" @click="agentPanelOpen = true">
+        <span class="hidden xl:inline">{{ t('tmcut.agent.buttonLabel') }}</span>
+        <UBadge v-if="pendingAgentOps > 0" color="primary" variant="solid" size="xs" class="ml-0.5">
+          {{ pendingAgentOps }}
+        </UBadge>
+      </UButton>
+
       <!-- Audio orchestration (Phase 8 §24): music bed and SFX cue planner -->
-      <UButton
-        icon="i-lucide-music-2"
-        size="sm"
-        variant="soft"
-        color="secondary"
-        :title="t('tmcut.audioOrchestration.buttonTooltip')"
-        @click="audioOrchestrationOpen = true"
-      >
+      <UButton icon="i-lucide-music-2" size="sm" variant="soft" color="secondary"
+        :title="t('tmcut.audioOrchestration.buttonTooltip')" @click="audioOrchestrationOpen = true">
         <span class="hidden xl:inline">{{ t('tmcut.audioOrchestration.buttonLabel') }}</span>
       </UButton>
 
-      <UButton
-        icon="i-lucide-download"
-        size="sm"
-        color="secondary"
-        variant="soft"
-        @click="showExportModal = true"
-      >
+      <UButton icon="i-lucide-download" size="sm" color="secondary" variant="soft" @click="showExportModal = true">
         <span class="hidden md:inline">{{ t('tmcut.exportVideo') }}</span>
       </UButton>
       <UDropdownMenu :items="editorExtraActions" :content="{ side: 'bottom', align: 'end' }">
-        <UButton
-          icon="i-lucide-ellipsis-vertical"
-          color="neutral"
-          variant="soft"
-          size="sm"
-          :aria-label="t('common.more')"
-        />
+        <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="soft" size="sm"
+          :aria-label="t('common.more')" />
       </UDropdownMenu>
     </template>
 
     <!-- Full viewport Workspace (flush p-0) -->
     <div
-      class="flex-1 flex flex-col min-h-0 bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-white overflow-hidden select-none"
-    >
+      class="flex-1 flex flex-col min-h-0 bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-white overflow-hidden select-none">
       <!-- Recovery banner -->
-      <div
-        v-if="pendingRecovery"
-        class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs"
-      >
+      <div v-if="pendingRecovery"
+        class="flex items-center justify-between gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs">
         <span class="truncate">{{ t('tmcut.recovery.banner') }}</span>
         <div class="flex items-center gap-2 shrink-0">
-          <UButton
-            size="xs"
-            variant="solid"
-            color="warning"
-            @click="handleRestoreRecovery"
-          >
+          <UButton size="xs" variant="solid" color="warning" @click="handleRestoreRecovery">
             {{ t('tmcut.recovery.restore') }}
           </UButton>
-          <UButton
-            size="xs"
-            variant="soft"
-            color="neutral"
-            @click="handleDismissRecovery"
-          >
+          <UButton size="xs" variant="soft" color="neutral" @click="handleDismissRecovery">
             {{ t('tmcut.recovery.discard') }}
           </UButton>
         </div>
@@ -1259,72 +1178,36 @@ function handleEditorKeydown(e: KeyboardEvent) {
              Whole panel is the external-drop target (roadmap G-2). -->
         <aside
           class="@container w-[38%] min-w-90 max-w-140 border-r border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col shrink-0"
-          :class="dropActive ? 'ring-2 ring-primary/60' : ''"
-          @dragenter="onMediaPanelDragEnter"
-          @dragover="onMediaPanelDragOver"
-          @dragleave="onMediaPanelDragLeave"
-          @drop="onMediaPanelDrop"
-        >
+          :class="dropActive ? 'ring-2 ring-primary/60' : ''" @dragenter="onMediaPanelDragEnter"
+          @dragover="onMediaPanelDragOver" @dragleave="onMediaPanelDragLeave" @drop="onMediaPanelDrop">
           <div class="p-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between gap-1">
             <span
-              class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider truncate"
-            >
+              class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider truncate">
               {{ t('tmcut.media.library') }}
             </span>
             <div class="flex items-center gap-1 shrink-0">
               <!-- Batch proxy button when video assets need proxies (roadmap F-4) -->
-              <UButton
-                v-if="isDesktop && unproxiedVideos.length > 0"
-                icon="i-lucide-zap"
-                size="xs"
-                variant="soft"
-                color="warning"
-                :loading="batchProxyBusy"
-                :disabled="batchProxyBusy"
-                :title="t('tmcut.proxy.generateAll')"
-                @click="handleGenerateAllProxies"
-              />
-              <UButton
-                icon="i-lucide-plus"
-                size="xs"
-                variant="soft"
-                color="primary"
-                :disabled="importing"
-                @click="handleImportMedia"
-              >
+              <UButton v-if="isDesktop && unproxiedVideos.length > 0" icon="i-lucide-zap" size="xs" variant="soft"
+                color="warning" :loading="batchProxyBusy" :disabled="batchProxyBusy"
+                :title="t('tmcut.proxy.generateAll')" @click="handleGenerateAllProxies" />
+              <UButton icon="i-lucide-plus" size="xs" variant="soft" color="primary" :disabled="importing"
+                @click="handleImportMedia">
                 {{ t('tmcut.media.import') }}
               </UButton>
               <!-- Voiceover (roadmap D-4): mic toggles record; while
                    recording the button becomes a red stop with the live
                    elapsed time. -->
-              <UButton
-                v-if="!recordingVoiceover"
-                icon="i-lucide-mic"
-                size="xs"
-                variant="soft"
-                color="neutral"
-                :disabled="savingVoiceover"
-                :title="t('tmcut.media.voiceoverStart')"
-                @click="handleVoiceoverToggle"
-              />
-              <UButton
-                v-else
-                icon="i-lucide-square-stop"
-                size="xs"
-                variant="soft"
-                color="error"
-                :title="t('tmcut.media.voiceoverStop')"
-                @click="handleVoiceoverToggle"
-              >
+              <UButton v-if="!recordingVoiceover" icon="i-lucide-mic" size="xs" variant="soft" color="neutral"
+                :disabled="savingVoiceover" :title="t('tmcut.media.voiceoverStart')" @click="handleVoiceoverToggle" />
+              <UButton v-else icon="i-lucide-square-stop" size="xs" variant="soft" color="error"
+                :title="t('tmcut.media.voiceoverStop')" @click="handleVoiceoverToggle">
                 {{ formatVoiceoverTime(voiceoverElapsed) }}
               </UButton>
             </div>
           </div>
 
-          <div
-            v-if="!isDesktop"
-            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200"
-          >
+          <div v-if="!isDesktop"
+            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-600">
             {{ t('tmcut.media.webSession') }}
           </div>
 
@@ -1332,49 +1215,27 @@ function handleEditorKeydown(e: KeyboardEvent) {
                to a second row instead of scrolling — the 8 categories fit
                4+4 at the new panel width). -->
           <div class="flex flex-wrap items-center gap-1 px-2 py-2 border-b border-neutral-300 dark:border-neutral-800">
-            <UButton
-              v-for="tab in mediaTabs"
-              :key="tab.id"
-              :icon="tab.icon"
-              size="xs"
-              :label="tab.label"
-              :variant="mediaTab === tab.id ? 'solid' : 'ghost'"
-              :color="mediaTab === tab.id ? 'primary' : 'neutral'"
-              :title="tab.label"
-              @click="mediaTab = tab.id"
-            />
+            <UButton v-for="tab in mediaTabs" :key="tab.id" :icon="tab.icon" size="xs" :label="tab.label"
+              :variant="mediaTab === tab.id ? 'solid' : 'ghost'" :color="mediaTab === tab.id ? 'primary' : 'neutral'"
+              :title="tab.label" @click="mediaTab = tab.id" />
           </div>
 
           <!-- Library search (design #2) -->
           <div v-if="isAssetTab" class="px-2 pt-2">
-            <UInput
-              v-model="assetSearch"
-              icon="i-lucide-search"
-              size="xs"
-              color="neutral"
-              class="w-full"
-              :placeholder="t('tmcut.media.search')"
-            />
+            <UInput v-model="assetSearch" icon="i-lucide-search" size="xs" color="neutral" class="w-full"
+              :placeholder="t('tmcut.media.search')" />
           </div>
 
           <!-- Folder / Album management bar (roadmap G-3) -->
-          <div
-            v-if="isAssetTab"
-            class="px-2 pt-2 pb-1.5 space-y-1.5 border-b border-neutral-300/80 dark:border-neutral-800/80"
-          >
+          <div v-if="isAssetTab"
+            class="px-2 pt-2 pb-1.5 space-y-1.5 border-b border-neutral-300/80 dark:border-neutral-800/80">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                 <UIcon name="i-lucide-folder" class="size-3.5 text-primary" />
                 <span>{{ t('tmcut.folders.title') }}</span>
               </div>
-              <UButton
-                icon="i-lucide-folder-plus"
-                size="xs"
-                variant="ghost"
-                color="primary"
-                :title="t('tmcut.folders.create')"
-                @click="openCreateFolderModal"
-              >
+              <UButton icon="i-lucide-folder-plus" size="xs" variant="ghost" color="primary"
+                :title="t('tmcut.folders.create')" @click="openCreateFolderModal">
                 {{ t('tmcut.folders.create') }}
               </UButton>
             </div>
@@ -1382,51 +1243,39 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <!-- Folder pills (horizontal scrollable) -->
             <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               <!-- All -->
-              <button
-                type="button"
+              <button type="button"
                 class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
                 :class="selectedFolderId === null ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-600 dark:text-neutral-300'"
-                @click="selectedFolderId = null"
-              >
+                @click="selectedFolderId = null">
                 <UIcon name="i-lucide-layers" class="size-3" />
                 <span>{{ t('tmcut.folders.all') }}</span>
                 <span class="text-[10px] opacity-75 font-mono">({{ folderCounts.total }})</span>
               </button>
 
               <!-- Specific Folders -->
-              <div
-                v-for="folder in projectFolders"
-                :key="folder.id"
+              <div v-for="folder in projectFolders" :key="folder.id"
                 class="group/fchip relative rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors pl-2 pr-1 py-1 cursor-pointer border"
                 :class="selectedFolderId === folder.id ? 'bg-primary/20 border-primary text-primary font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-600 dark:text-neutral-300'"
-                @click="selectedFolderId = folder.id"
-                @dragover.prevent="onFolderDragOver($event)"
-                @drop.prevent="onFolderDrop($event, folder.id)"
-              >
+                @click="selectedFolderId = folder.id" @dragover.prevent="onFolderDragOver($event)"
+                @drop.prevent="onFolderDrop($event, folder.id)">
                 <span class="size-2 rounded-full shrink-0" :style="{ backgroundColor: folder.color || '#3b82f6' }" />
                 <span class="truncate max-w-22.5" :title="folder.name">{{ folder.name }}</span>
                 <span class="text-[10px] opacity-75 font-mono">({{ folderCounts[folder.id] || 0 }})</span>
                 <UDropdownMenu :items="folderActionItems(folder)" :content="{ side: 'bottom', align: 'start' }">
-                  <button
-                    type="button"
+                  <button type="button"
                     class="p-0.5 rounded hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-                    @click.stop
-                  >
+                    @click.stop>
                     <UIcon name="i-lucide-more-vertical" class="size-3" />
                   </button>
                 </UDropdownMenu>
               </div>
 
               <!-- Unassigned (if any exist) -->
-              <button
-                v-if="(folderCounts.unassigned ?? 0) > 0"
-                type="button"
+              <button v-if="(folderCounts.unassigned ?? 0) > 0" type="button"
                 class="px-2.5 py-1 rounded-md text-[11px] font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer border"
                 :class="selectedFolderId === '__unassigned__' ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold' : 'bg-neutral-200/60 dark:bg-neutral-800/60 border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 text-neutral-500 dark:text-neutral-400'"
-                @click="selectedFolderId = '__unassigned__'"
-                @dragover.prevent="onFolderDragOver($event)"
-                @drop.prevent="onFolderDrop($event, null)"
-              >
+                @click="selectedFolderId = '__unassigned__'" @dragover.prevent="onFolderDragOver($event)"
+                @drop.prevent="onFolderDrop($event, null)">
                 <UIcon name="i-lucide-folder-archive" class="size-3 text-neutral-500 dark:text-neutral-400" />
                 <span>{{ t('tmcut.folders.unassigned') }}</span>
                 <span class="text-[10px] opacity-75 font-mono">({{ folderCounts.unassigned ?? 0 }})</span>
@@ -1434,10 +1283,8 @@ function handleEditorKeydown(e: KeyboardEvent) {
             </div>
           </div>
 
-          <div
-            v-if="missingAssets.length > 0"
-            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200"
-          >
+          <div v-if="missingAssets.length > 0"
+            class="mx-3 mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200">
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0" />
               <span class="truncate">{{ t('tmcut.media.missingBanner', { count: missingAssets.length }) }}</span>
@@ -1452,49 +1299,32 @@ function handleEditorKeydown(e: KeyboardEvent) {
               {{ t('tmcut.media.assets') }} · {{ filteredAssets.length }}
             </div>
             <div class="flex items-center gap-0.5 rounded-md border border-neutral-300 dark:border-neutral-800 p-0.5">
-              <UButton
-                icon="i-lucide-list"
-                size="xs"
-                variant="ghost"
-                :color="mediaView === 'list' ? 'primary' : 'neutral'"
-                :title="t('tmcut.media.viewList')"
-                @click="mediaView = 'list'"
-              />
-              <UButton
-                icon="i-lucide-grid-2x2"
-                size="xs"
-                variant="ghost"
-                :color="mediaView === 'grid' ? 'primary' : 'neutral'"
-                :title="t('tmcut.media.viewGrid')"
-                @click="mediaView = 'grid'"
-              />
+              <UButton icon="i-lucide-list" size="xs" variant="ghost"
+                :color="mediaView === 'list' ? 'primary' : 'neutral'" :title="t('tmcut.media.viewList')"
+                @click="mediaView = 'list'" />
+              <UButton icon="i-lucide-grid-2x2" size="xs" variant="ghost"
+                :color="mediaView === 'grid' ? 'primary' : 'neutral'" :title="t('tmcut.media.viewGrid')"
+                @click="mediaView = 'grid'" />
             </div>
           </div>
 
           <div ref="mediaScrollRef" class="flex-1 overflow-y-auto p-3 space-y-2" @scroll="onMediaBinScroll">
             <!-- Loading indicator -->
-            <div
-              v-if="importing || analyzingCount > 0"
-              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-500 dark:text-neutral-400"
-            >
+            <div v-if="importing || analyzingCount > 0"
+              class="flex items-center gap-2 px-2 py-3 text-xs text-neutral-500 dark:text-neutral-400">
               <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
               {{ t('tmcut.media.importing') }}
             </div>
 
             <!-- CapCut-style thumbnail grid (Media / Video / Audio / Image tabs) -->
             <div v-else-if="isAssetTab">
-              <div
-                v-if="filteredAssets.length === 0"
+              <div v-if="filteredAssets.length === 0"
                 class="border border-dashed border-neutral-300 dark:border-neutral-800 hover:border-primary/50 cursor-pointer rounded-lg p-4 text-center transition-colors group"
-                @click="handleImportMedia"
-              >
-                <UIcon
-                  name="i-lucide-upload-cloud"
-                  class="size-7 mx-auto text-neutral-500 group-hover:text-primary mb-1.5 transition-colors"
-                />
+                @click="handleImportMedia">
+                <UIcon name="i-lucide-upload-cloud"
+                  class="size-7 mx-auto text-neutral-500 group-hover:text-primary mb-1.5 transition-colors" />
                 <p
-                  class="text-xs text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 font-medium"
-                >
+                  class="text-xs text-neutral-500 dark:text-neutral-400 group-hover:text-neutral-700 dark:group-hover:text-neutral-200 font-medium">
                   {{ t('tmcut.media.empty') }}
                 </p>
                 <p class="text-[10px] text-neutral-500 dark:text-neutral-600 mt-1">
@@ -1507,82 +1337,54 @@ function handleEditorKeydown(e: KeyboardEvent) {
                    the right. Hover only changes the border color and the
                    action column's opacity — the geometry is hover-invariant. -->
               <div v-if="mediaView === 'list'" class="flex flex-col gap-2">
-                <div
-                  v-for="asset in visibleAssets"
-                  :key="asset.id"
+                <div v-for="asset in visibleAssets" :key="asset.id"
                   class="group/thumb relative flex gap-2 p-1.5 min-w-0 rounded-md bg-neutral-200/60 dark:bg-neutral-800/60 cursor-pointer border transition-colors"
                   :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
-                  :title="asset.name"
-                  :draggable="asset.status !== 'missing'"
+                  :title="asset.name" :draggable="asset.status !== 'missing'"
                   @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
-                  @dragstart="handleAssetDragStart($event, asset)"
-                >
+                  @dragstart="handleAssetDragStart($event, asset)">
                   <div class="relative w-24 h-14 rounded overflow-hidden shrink-0 bg-neutral-300 dark:bg-neutral-900">
-                    <img
-                      v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
-                      :src="getThumbUrl(asset)"
-                      draggable="false"
-                      class="absolute inset-0 w-full h-full object-cover"
-                      loading="lazy"
-                      @error="thumbErrors[asset.id] = true"
-                    >
-                    <div
-                      v-else-if="assetKind(asset) === 'audio' && waveformMap[asset.id]"
-                      class="absolute inset-0 flex items-center justify-center p-1"
-                    >
+                    <img v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
+                      :src="getThumbUrl(asset)" draggable="false" class="absolute inset-0 w-full h-full object-cover"
+                      loading="lazy" @error="thumbErrors[asset.id] = true">
+                    <div v-else-if="assetKind(asset) === 'audio' && waveformMap[asset.id]"
+                      class="absolute inset-0 flex items-center justify-center p-1">
                       <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="90" :height="44" />
                     </div>
-                    <UIcon
-                      v-else
-                      :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-6 text-neutral-500 dark:text-neutral-600"
-                    />
+                    <UIcon v-else :name="assetKindIcon(asset)"
+                      class="absolute inset-0 m-auto size-6 text-neutral-500 dark:text-neutral-600" />
 
-                    <div
-                      v-if="asset.status === 'analyzing'"
-                      class="absolute inset-0 bg-black/50 flex items-center justify-center"
-                    >
-                      <UIcon
-                        name="i-lucide-loader-circle"
-                        class="size-4 animate-spin text-neutral-600 dark:text-neutral-300"
-                      />
+                    <div v-if="asset.status === 'analyzing'"
+                      class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <UIcon name="i-lucide-loader-circle"
+                        class="size-4 animate-spin text-neutral-600 dark:text-neutral-300" />
                     </div>
-                    <div
-                      v-if="asset.status === 'missing'"
-                      class="absolute inset-0 bg-amber-950/60 flex items-center justify-center"
-                    >
+                    <div v-if="asset.status === 'missing'"
+                      class="absolute inset-0 bg-amber-950/60 flex items-center justify-center">
                       <UIcon name="i-lucide-alert-triangle" class="size-4 text-amber-400" />
                     </div>
 
                     <!-- Duration badge (bottom-right) -->
-                    <span
-                      v-if="assetDurationLabel(asset)"
-                      class="absolute bottom-0.5 right-0.5 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
-                    >
+                    <span v-if="assetDurationLabel(asset)"
+                      class="absolute bottom-0.5 right-0.5 px-1 rounded bg-black/70 text-[9px] font-mono text-white">
                       {{ assetDurationLabel(asset) }}
                     </span>
                     <!-- Added badge (top-left, CapCut-style) -->
-                    <span
-                      v-if="isAssetOnTimeline(asset)"
-                      class="absolute top-0.5 left-0.5 px-1 rounded bg-primary text-[9px] font-medium text-white"
-                    >
+                    <span v-if="isAssetOnTimeline(asset)"
+                      class="absolute top-0.5 left-0.5 px-1 rounded bg-primary text-[9px] font-medium text-white">
                       {{ t('tmcut.media.addedBadge') }}
                     </span>
                     <!-- Proxy badge (roadmap F-4) -->
-                    <span
-                      v-if="asset.proxyStatus === 'ready'"
+                    <span v-if="asset.proxyStatus === 'ready'"
                       class="absolute px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black flex items-center gap-0.5"
                       :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
-                      :title="t('tmcut.proxy.readyDesc')"
-                    >
+                      :title="t('tmcut.proxy.readyDesc')">
                       <UIcon name="i-lucide-zap" class="size-2.5 text-black" />
                       <span>PXY</span>
                     </span>
-                    <span
-                      v-else-if="asset.proxyStatus === 'generating'"
+                    <span v-else-if="asset.proxyStatus === 'generating'"
                       class="absolute px-1 rounded bg-amber-500/30 border border-amber-500/50 text-[9px] font-medium text-amber-200 flex items-center gap-0.5"
-                      :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'"
-                    >
+                      :class="isAssetOnTimeline(asset) ? 'top-4 left-0.5' : 'top-0.5 left-0.5'">
                       <UIcon name="i-lucide-loader-circle" class="size-2.5 animate-spin" />
                       <span>PXY</span>
                     </span>
@@ -1591,20 +1393,16 @@ function handleEditorKeydown(e: KeyboardEvent) {
                   <!-- Middle column: name + metadata rows (the only
                        growing column). -->
                   <div class="flex flex-col justify-center gap-0.5 min-w-0 flex-1">
-                    <p
-                      class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
-                      :title="asset.name"
-                    >
+                    <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
+                      :title="asset.name">
                       {{ asset.name }}
                     </p>
                     <p class="text-[9px] font-mono text-neutral-500 dark:text-neutral-500 truncate">
                       {{ assetMetaLabel(asset) }}
                       <template v-if="!selectedFolderId && getFolderBadge(asset)">
                         •
-                        <span
-                          class="inline-block size-1.5 rounded-full align-middle"
-                          :style="{ backgroundColor: getFolderBadge(asset)?.color || '#3b82f6' }"
-                        />
+                        <span class="inline-block size-1.5 rounded-full align-middle"
+                          :style="{ backgroundColor: getFolderBadge(asset)?.color || '#3b82f6' }" />
                         {{ getFolderBadge(asset)?.name }}
                       </template>
                     </p>
@@ -1622,58 +1420,33 @@ function handleEditorKeydown(e: KeyboardEvent) {
                        so an invisible button can never be clicked. -->
                   <div
                     class="flex items-center justify-end gap-0.5 shrink-0 w-24 opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                    @click.stop
-                  >
+                    @click.stop>
                     <!-- Relink is an icon (not a button): the missing row
                          would otherwise show one fat ghost next to the
                          compact icon column. UIcon has no color prop —
                          text-warning + pointer affordance keep it honest. -->
-                    <UIcon
-                      v-if="asset.status === 'missing'"
-                      name="i-lucide-folder-search"
+                    <UIcon v-if="asset.status === 'missing'" name="i-lucide-folder-search"
                       :title="t('tmcut.media.relink')"
                       class="size-4 text-warning cursor-pointer hover:opacity-75 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto"
-                      @click.stop="handleRelink(asset)"
-                    />
-                    <UButton
-                      v-else-if="asset.status !== 'analyzing'"
-                      icon="i-lucide-plus"
-                      size="xs"
-                      variant="ghost"
-                      color="primary"
-                      :title="t('tmcut.media.addToTimeline')"
+                      @click.stop="handleRelink(asset)" />
+                    <UButton v-else-if="asset.status !== 'analyzing'" icon="i-lucide-plus" size="xs" variant="ghost"
+                      color="primary" :title="t('tmcut.media.addToTimeline')"
                       class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                      @click.stop="handleAddToTimeline(asset)"
-                    />
-                    <UButton
-                      v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
-                      :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                      size="xs"
-                      variant="ghost"
-                      :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
+                      @click.stop="handleAddToTimeline(asset)" />
+                    <UButton v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
+                      :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'" size="xs"
+                      variant="ghost" :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
                       :loading="asset.proxyStatus === 'generating'"
                       :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
                       class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                      @click.stop="handleProxyAction(asset)"
-                    />
-                    <UButton
-                      icon="i-lucide-folder-input"
-                      size="xs"
-                      variant="ghost"
-                      color="neutral"
+                      @click.stop="handleProxyAction(asset)" />
+                    <UButton icon="i-lucide-folder-input" size="xs" variant="ghost" color="neutral"
                       :title="t('tmcut.folders.moveToFolder')"
                       class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                      @click.stop="openMoveAssetModal(asset)"
-                    />
-                    <UButton
-                      icon="i-lucide-trash"
-                      size="xs"
-                      variant="ghost"
-                      color="error"
-                      :title="t('tmcut.media.remove')"
-                      class="pointer-events-none group-hover/thumb:pointer-events-auto"
-                      @click.stop="handleRemoveAsset(asset)"
-                    />
+                      @click.stop="openMoveAssetModal(asset)" />
+                    <UButton icon="i-lucide-trash" size="xs" variant="ghost" color="error"
+                      :title="t('tmcut.media.remove')" class="pointer-events-none group-hover/thumb:pointer-events-auto"
+                      @click.stop="handleRemoveAsset(asset)" />
                   </div>
                 </div>
               </div>
@@ -1685,105 +1458,57 @@ function handleEditorKeydown(e: KeyboardEvent) {
                    wider actions disappear at the 5-column tier where
                    there is no room for them. Actions stay a hover strip
                    (opacity only) over the thumbnail. -->
-              <div
-                v-if="mediaView === 'grid'"
-                class="grid grid-cols-2 gap-1.5 @[420px]:grid-cols-3 @[480px]:grid-cols-4 @[530px]:grid-cols-5"
-              >
-                <div
-                  v-for="asset in visibleAssets"
-                  :key="asset.id"
+              <div v-if="mediaView === 'grid'"
+                class="grid grid-cols-2 gap-1.5 @[420px]:grid-cols-3 @[480px]:grid-cols-4 @[530px]:grid-cols-5">
+                <div v-for="asset in visibleAssets" :key="asset.id"
                   class="group/thumb relative rounded-md bg-neutral-200/60 dark:bg-neutral-800/60 cursor-pointer border transition-colors overflow-hidden"
                   :class="asset.status === 'missing' ? 'border-amber-500/60' : 'border-transparent hover:border-primary/60'"
-                  :title="asset.name"
-                  :draggable="asset.status !== 'missing'"
+                  :title="asset.name" :draggable="asset.status !== 'missing'"
                   @click="asset.status !== 'missing' && handleAddToTimeline(asset)"
-                  @dragstart="handleAssetDragStart($event, asset)"
-                >
+                  @dragstart="handleAssetDragStart($event, asset)">
                   <div class="relative aspect-video bg-neutral-300 dark:bg-neutral-900">
-                    <img
-                      v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
-                      :src="getThumbUrl(asset)"
-                      draggable="false"
-                      class="absolute inset-0 w-full h-full object-cover"
-                      loading="lazy"
-                      @error="thumbErrors[asset.id] = true"
-                    >
-                    <div
-                      v-else-if="assetKind(asset) === 'audio' && waveformMap[asset.id]"
-                      class="absolute inset-0 flex items-center justify-center p-2"
-                    >
+                    <img v-if="assetKind(asset) !== 'audio' && asset.thumbPath && !thumbErrors[asset.id]"
+                      :src="getThumbUrl(asset)" draggable="false" class="absolute inset-0 w-full h-full object-cover"
+                      loading="lazy" @error="thumbErrors[asset.id] = true">
+                    <div v-else-if="assetKind(asset) === 'audio' && waveformMap[asset.id]"
+                      class="absolute inset-0 flex items-center justify-center p-2">
                       <TmcutWaveform :points="waveformMap[asset.id] ?? []" :width="96" :height="40" />
                     </div>
-                    <UIcon
-                      v-else
-                      :name="assetKindIcon(asset)"
-                      class="absolute inset-0 m-auto size-7 @[530px]:size-5 text-neutral-500 dark:text-neutral-600"
-                    />
-                    <span
-                      v-if="assetDurationLabel(asset)"
-                      class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white"
-                    >{{
-                      assetDurationLabel(asset) }}</span>
-                    <span
-                      v-if="isAssetOnTimeline(asset)"
-                      class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white"
-                    >{{
-                      t('tmcut.media.addedBadge') }}</span>
-                    <span
-                      v-if="asset.proxyStatus === 'ready'"
-                      class="absolute top-1 right-1 px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black"
-                    >PXY</span>
+                    <UIcon v-else :name="assetKindIcon(asset)"
+                      class="absolute inset-0 m-auto size-7 @[530px]:size-5 text-neutral-500 dark:text-neutral-600" />
+                    <span v-if="assetDurationLabel(asset)"
+                      class="absolute bottom-1 right-1 px-1 rounded bg-black/70 text-[9px] font-mono text-white">{{
+                        assetDurationLabel(asset) }}</span>
+                    <span v-if="isAssetOnTimeline(asset)"
+                      class="absolute top-1 left-1 px-1 rounded bg-primary text-[9px] font-medium text-white">{{
+                        t('tmcut.media.addedBadge') }}</span>
+                    <span v-if="asset.proxyStatus === 'ready'"
+                      class="absolute top-1 right-1 px-1 rounded bg-amber-500/90 text-[9px] font-bold text-black">PXY</span>
 
                     <!-- Hover actions: bottom-anchored strip on the
                          thumbnail (opacity-only reveal). -->
                     <div
-                      class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 px-1 py-0.5 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto"
-                    >
-                      <UButton
-                        icon="i-lucide-plus"
-                        size="xs"
-                        variant="solid"
-                        color="primary"
-                        :title="t('tmcut.media.addToTimeline')"
-                        class="pointer-events-auto"
-                        @click.stop="handleAddToTimeline(asset)"
-                      />
-                      <UButton
-                        icon="i-lucide-folder-input"
-                        size="xs"
-                        variant="solid"
-                        color="neutral"
-                        :title="t('tmcut.folders.moveToFolder')"
-                        class="pointer-events-auto hidden @[530px]:flex"
-                        @click.stop="openMoveAssetModal(asset)"
-                      />
-                      <UButton
-                        v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
-                        :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'"
-                        size="xs"
-                        variant="solid"
-                        :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
+                      class="absolute inset-x-0 bottom-0 flex items-center justify-center gap-0.5 px-1 py-0.5 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity pointer-events-none group-hover/thumb:pointer-events-auto">
+                      <UButton icon="i-lucide-plus" size="xs" variant="solid" color="primary"
+                        :title="t('tmcut.media.addToTimeline')" class="pointer-events-auto"
+                        @click.stop="handleAddToTimeline(asset)" />
+                      <UButton icon="i-lucide-folder-input" size="xs" variant="solid" color="neutral"
+                        :title="t('tmcut.folders.moveToFolder')" class="pointer-events-auto hidden @[530px]:flex"
+                        @click.stop="openMoveAssetModal(asset)" />
+                      <UButton v-if="isDesktop && assetKind(asset) === 'video' && asset.status !== 'missing'"
+                        :icon="asset.proxyStatus === 'generating' ? 'i-lucide-loader-circle' : 'i-lucide-zap'" size="xs"
+                        variant="solid" :color="asset.proxyStatus === 'ready' ? 'warning' : 'neutral'"
                         :loading="asset.proxyStatus === 'generating'"
                         :title="asset.proxyStatus === 'ready' ? t('tmcut.proxy.ready') : t('tmcut.proxy.generate')"
-                        class="pointer-events-auto"
-                        @click.stop="handleProxyAction(asset)"
-                      />
-                      <UButton
-                        icon="i-lucide-trash"
-                        size="xs"
-                        variant="solid"
-                        color="error"
-                        :title="t('tmcut.media.remove')"
-                        class="pointer-events-auto"
-                        @click.stop="handleRemoveAsset(asset)"
-                      />
+                        class="pointer-events-auto" @click.stop="handleProxyAction(asset)" />
+                      <UButton icon="i-lucide-trash" size="xs" variant="solid" color="error"
+                        :title="t('tmcut.media.remove')" class="pointer-events-auto"
+                        @click.stop="handleRemoveAsset(asset)" />
                     </div>
                   </div>
                   <div class="p-1 @[530px]:px-0.5 @[530px]:py-0.5">
-                    <p
-                      class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
-                      :title="asset.name"
-                    >
+                    <p class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate"
+                      :title="asset.name">
                       {{ asset.name }}
                     </p>
                     <p class="text-[9px] font-mono text-neutral-500 truncate hidden @[530px]:block">
@@ -1796,16 +1521,11 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
             <!-- Text style presets -->
             <div v-else-if="mediaTab === 'text'" class="space-y-2">
-              <div
-                v-for="preset in textPresets"
-                :key="preset.id"
+              <div v-for="preset in textPresets" :key="preset.id"
                 class="border border-neutral-300 dark:border-neutral-800 hover:border-primary/60 cursor-pointer rounded-lg p-3 bg-neutral-100/60 dark:bg-neutral-950/60 transition-colors"
-                @click="handleAddTextPreset(preset)"
-              >
-                <p
-                  class="font-bold text-center leading-tight truncate"
-                  :style="{ color: preset.color, fontSize: `${Math.min(preset.fontSize, 28)}px` }"
-                >
+                @click="handleAddTextPreset(preset)">
+                <p class="font-bold text-center leading-tight truncate"
+                  :style="{ color: preset.color, fontSize: `${Math.min(preset.fontSize, 28)}px` }">
                   {{ preset.text }}
                 </p>
                 <p class="text-[10px] text-neutral-500 text-center mt-1.5">
@@ -1822,10 +1542,8 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
             <!-- Effects / Transitions / Filters library (roadmap R112,
                  split into the mock's three tabs in R120) -->
-            <TmcutFxLibrary
-              v-else-if="mediaTab === 'effects' || mediaTab === 'transitions' || mediaTab === 'filters'"
-              :tab="fxTabProp"
-            />
+            <TmcutFxLibrary v-else-if="mediaTab === 'effects' || mediaTab === 'transitions' || mediaTab === 'filters'"
+              :tab="fxTabProp" />
 
             <!-- On-demand Asset Center (roadmap v3 PART A): catalog, license
                  gate, verified installs, apply into the project. -->
@@ -1837,21 +1555,15 @@ function handleEditorKeydown(e: KeyboardEvent) {
                 {{ t('tmcut.media.clips') }}
               </span>
               <div v-for="track in currentProject.timeline.tracks" :key="track.id">
-                <div
-                  v-for="item in track.items"
-                  :key="item.id"
-                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-100/80 dark:bg-neutral-900/80 border border-neutral-300/80 dark:border-neutral-800/80 text-xs hover:border-neutral-400 dark:hover:border-neutral-700 transition-colors"
-                >
+                <div v-for="item in track.items" :key="item.id"
+                  class="group/clip flex items-center justify-between gap-1.5 p-2 rounded bg-neutral-100/80 dark:bg-neutral-900/80 border border-neutral-300/80 dark:border-neutral-800/80 text-xs hover:border-neutral-400 dark:hover:border-neutral-700 transition-colors">
                   <div class="flex items-center gap-2 min-w-0">
                     <UIcon
                       :name="track.type === 'video' ? 'i-lucide-film' : track.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
                       class="size-3.5 shrink-0"
-                      :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'"
-                    />
-                    <span
-                      class="truncate font-medium text-neutral-600 dark:text-neutral-300 text-[11px]"
-                      :title="item.name || item.text"
-                    >
+                      :class="track.type === 'video' ? 'text-blue-400' : track.type === 'text' ? 'text-amber-400' : 'text-emerald-400'" />
+                    <span class="truncate font-medium text-neutral-600 dark:text-neutral-300 text-[11px]"
+                      :title="item.name || item.text">
                       {{ item.name || item.text || t('tmcut.project') }}
                     </span>
                   </div>
@@ -1866,26 +1578,11 @@ function handleEditorKeydown(e: KeyboardEvent) {
                         {{ clipDurationSec(item).toFixed(1) }}s
                       </span>
                       <div
-                        class="absolute right-0 inset-y-0 flex items-center gap-1 opacity-0 group-hover/clip:opacity-100 transition-opacity bg-neutral-100/80 dark:bg-neutral-900/80"
-                      >
-                        <UButton
-                          v-if="item.src"
-                          icon="i-lucide-eye"
-                          size="xs"
-                          variant="ghost"
-                          color="neutral"
-                          :title="t('tmcut.previewFile')"
-                          @click.stop="openFilePreview(item.src, item.name)"
-                        />
-                        <UButton
-                          v-if="item.src"
-                          icon="i-lucide-folder"
-                          size="xs"
-                          variant="ghost"
-                          color="neutral"
-                          :title="t('tmcut.openInFolder')"
-                          @click.stop="showInFolder(item.src)"
-                        />
+                        class="absolute right-0 inset-y-0 flex items-center gap-1 opacity-0 group-hover/clip:opacity-100 transition-opacity bg-neutral-100/80 dark:bg-neutral-900/80">
+                        <UButton v-if="item.src" icon="i-lucide-eye" size="xs" variant="ghost" color="neutral"
+                          :title="t('tmcut.previewFile')" @click.stop="openFilePreview(item.src, item.name)" />
+                        <UButton v-if="item.src" icon="i-lucide-folder" size="xs" variant="ghost" color="neutral"
+                          :title="t('tmcut.openInFolder')" @click.stop="showInFolder(item.src)" />
                       </div>
                     </div>
                   </div>
@@ -1900,17 +1597,15 @@ function handleEditorKeydown(e: KeyboardEvent) {
              wrapper only caps the HUD/transport width — no narrow xl cap
              (the panel gained the width the left library took). -->
         <main
-          class="flex-1 flex flex-col items-center justify-center p-4 bg-neutral-100 dark:bg-neutral-950 relative overflow-hidden min-w-0"
-        >
-          <div class="w-full max-w-3xl">
+          class="flex-1 flex flex-col items-center justify-center bg-neutral-100 dark:bg-neutral-950 relative overflow-hidden min-w-0 min-h-0">
+          <div class="w-full max-w-3xl h-full min-h-0 flex flex-col">
             <TmcutPreviewPlayer />
           </div>
         </main>
 
         <!-- Right Inspector Panel -->
         <aside
-          class="w-72 border-l border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col overflow-y-auto p-4 shrink-0"
-        >
+          class="w-72 border-l border-neutral-300 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 flex flex-col overflow-y-auto p-4 shrink-0">
           <div class="pb-2 border-b border-neutral-300 dark:border-neutral-800 mb-3">
             <span class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
               {{ t('tmcut.inspector') }}
@@ -1923,15 +1618,13 @@ function handleEditorKeydown(e: KeyboardEvent) {
 
       <!-- Bottom Timeline (h-72) -->
       <div
-        class="h-72 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 flex flex-col shrink-0 z-10"
-      >
+        class="h-72 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 flex flex-col shrink-0 z-10">
         <TmcutTimeline @open-export="showExportModal = true" />
       </div>
 
       <!-- Status footer (design #2): honest project/engine info -->
       <div
-        class="h-7 shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/70 dark:bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500"
-      >
+        class="h-7 shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/70 dark:bg-neutral-900/70 px-4 flex items-center justify-between text-[11px] text-neutral-500">
         <div class="flex items-center gap-3 min-w-0">
           <span class="text-neutral-600 dark:text-neutral-300 font-medium truncate">{{ currentProject?.name }}</span>
           <span v-if="currentProject?.canvas" class="font-mono shrink-0">
@@ -1963,23 +1656,11 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="text-xs text-neutral-500">{{ t('tmcut.canvas.width') }}</label>
-                <UInput
-                  v-model="customCanvas.width"
-                  type="number"
-                  :min="64"
-                  :max="7680"
-                  class="w-full mt-1"
-                />
+                <UInput v-model="customCanvas.width" type="number" :min="64" :max="7680" class="w-full mt-1" />
               </div>
               <div>
                 <label class="text-xs text-neutral-500">{{ t('tmcut.canvas.height') }}</label>
-                <UInput
-                  v-model="customCanvas.height"
-                  type="number"
-                  :min="64"
-                  :max="4320"
-                  class="w-full mt-1"
-                />
+                <UInput v-model="customCanvas.height" type="number" :min="64" :max="4320" class="w-full mt-1" />
               </div>
             </div>
             <div>
@@ -2008,21 +1689,13 @@ function handleEditorKeydown(e: KeyboardEvent) {
         <template #body>
           <div class="space-y-3">
             <div class="flex justify-end">
-              <UButton
-                icon="i-lucide-camera"
-                size="xs"
-                variant="soft"
-                color="primary"
-                @click="handleSaveSnapshot"
-              >
+              <UButton icon="i-lucide-camera" size="xs" variant="soft" color="primary" @click="handleSaveSnapshot">
                 {{ t('tmcut.snapshot.save') }}
               </UButton>
             </div>
 
-            <div
-              v-if="snapshots.length === 0"
-              class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-6 text-center"
-            >
+            <div v-if="snapshots.length === 0"
+              class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-6 text-center">
               <UIcon name="i-lucide-history" class="w-8 h-8 text-neutral-500 dark:text-neutral-400 mx-auto mb-2" />
               <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                 {{ t('tmcut.snapshot.empty') }}
@@ -2033,11 +1706,8 @@ function handleEditorKeydown(e: KeyboardEvent) {
             </div>
 
             <div v-else class="space-y-2 max-h-80 overflow-y-auto">
-              <div
-                v-for="snapshot in snapshots"
-                :key="snapshot.ts"
-                class="flex items-center justify-between gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3"
-              >
+              <div v-for="snapshot in snapshots" :key="snapshot.ts"
+                class="flex items-center justify-between gap-2 border border-neutral-200 dark:border-neutral-800 rounded-lg p-3">
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                     {{ snapshot.name }}
@@ -2050,13 +1720,8 @@ function handleEditorKeydown(e: KeyboardEvent) {
                   <UButton size="xs" variant="soft" @click="handleRestoreSnapshot(snapshot.ts)">
                     {{ t('tmcut.snapshot.restore') }}
                   </UButton>
-                  <UButton
-                    size="xs"
-                    variant="soft"
-                    color="error"
-                    icon="i-lucide-trash"
-                    @click="handleDeleteSnapshot(snapshot.ts)"
-                  />
+                  <UButton size="xs" variant="soft" color="error" icon="i-lucide-trash"
+                    @click="handleDeleteSnapshot(snapshot.ts)" />
                 </div>
               </div>
             </div>
@@ -2074,48 +1739,28 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.nameLabel')
               }}</label>
-              <UInput
-                v-model="newFolderName"
-                :placeholder="t('tmcut.folders.namePlaceholder')"
-                class="w-full"
-                autofocus
-                @keydown.enter="handleCreateFolder"
-              />
+              <UInput v-model="newFolderName" :placeholder="t('tmcut.folders.namePlaceholder')" class="w-full" autofocus
+                @keydown.enter="handleCreateFolder" />
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.colorLabel')
               }}</label>
               <div class="flex items-center gap-2">
-                <button
-                  v-for="c in folderTagColors"
-                  :key="c"
-                  type="button"
+                <button v-for="c in folderTagColors" :key="c" type="button"
                   class="size-6 rounded-full transition-transform cursor-pointer border-2"
                   :class="newFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:border-white/60'"
-                  :style="{ backgroundColor: c }"
-                  @click="newFolderColor = c"
-                />
+                  :style="{ backgroundColor: c }" @click="newFolderColor = c" />
               </div>
             </div>
           </div>
         </template>
         <template #footer>
           <div class="flex items-center justify-end gap-2 w-full">
-            <UButton
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              @click="createFolderModalOpen = false"
-            >
+            <UButton size="xs" variant="ghost" color="neutral" @click="createFolderModalOpen = false">
               {{ t('global.cancel') }}
             </UButton>
-            <UButton
-              size="xs"
-              variant="solid"
-              color="primary"
-              :disabled="!newFolderName.trim()"
-              @click="handleCreateFolder"
-            >
+            <UButton size="xs" variant="solid" color="primary" :disabled="!newFolderName.trim()"
+              @click="handleCreateFolder">
               {{ t('tmcut.folders.create') }}
             </UButton>
           </div>
@@ -2129,48 +1774,28 @@ function handleEditorKeydown(e: KeyboardEvent) {
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.nameLabel')
               }}</label>
-              <UInput
-                v-model="editingFolderName"
-                :placeholder="t('tmcut.folders.namePlaceholder')"
-                class="w-full"
-                autofocus
-                @keydown.enter="handleEditFolder"
-              />
+              <UInput v-model="editingFolderName" :placeholder="t('tmcut.folders.namePlaceholder')" class="w-full"
+                autofocus @keydown.enter="handleEditFolder" />
             </div>
             <div class="space-y-1.5">
               <label class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{ t('tmcut.folders.colorLabel')
               }}</label>
               <div class="flex items-center gap-2">
-                <button
-                  v-for="c in folderTagColors"
-                  :key="c"
-                  type="button"
+                <button v-for="c in folderTagColors" :key="c" type="button"
                   class="size-6 rounded-full transition-transform cursor-pointer border-2"
                   :class="editingFolderColor === c ? 'scale-115 border-white ring-2 ring-primary/50' : 'border-transparent hover:border-white/60'"
-                  :style="{ backgroundColor: c }"
-                  @click="editingFolderColor = c"
-                />
+                  :style="{ backgroundColor: c }" @click="editingFolderColor = c" />
               </div>
             </div>
           </div>
         </template>
         <template #footer>
           <div class="flex items-center justify-end gap-2 w-full">
-            <UButton
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              @click="editFolderModalOpen = false"
-            >
+            <UButton size="xs" variant="ghost" color="neutral" @click="editFolderModalOpen = false">
               {{ t('global.cancel') }}
             </UButton>
-            <UButton
-              size="xs"
-              variant="solid"
-              color="primary"
-              :disabled="!editingFolderName.trim()"
-              @click="handleEditFolder"
-            >
+            <UButton size="xs" variant="solid" color="primary" :disabled="!editingFolderName.trim()"
+              @click="handleEditFolder">
               {{ t('global.save') }}
             </UButton>
           </div>
@@ -2185,45 +1810,33 @@ function handleEditorKeydown(e: KeyboardEvent) {
               {{ targetMoveAsset.name }}
             </p>
             <!-- Unassigned / Clear folder option -->
-            <button
-              type="button"
+            <button type="button"
               class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 bg-neutral-100/60 dark:bg-neutral-900/60 transition-colors cursor-pointer text-left"
-              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, null)"
-            >
+              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, null)">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-folder-minus" class="size-4 text-neutral-500 dark:text-neutral-400" />
                 <span class="text-xs font-medium text-neutral-600 dark:text-neutral-300">{{
                   t('tmcut.folders.clearFolder') }}</span>
               </div>
-              <UIcon
-                v-if="targetMoveAsset && !getAssetFolderId(targetMoveAsset)"
-                name="i-lucide-check"
-                class="size-4 text-primary"
-              />
+              <UIcon v-if="targetMoveAsset && !getAssetFolderId(targetMoveAsset)" name="i-lucide-check"
+                class="size-4 text-primary" />
             </button>
 
             <!-- List of existing folders -->
             <div v-if="projectFolders.length === 0" class="py-4 text-center text-xs text-neutral-500">
               {{ t('tmcut.folders.noFolders') }}
             </div>
-            <button
-              v-for="folder in projectFolders"
-              :key="folder.id"
-              type="button"
+            <button v-for="folder in projectFolders" :key="folder.id" type="button"
               class="w-full flex items-center justify-between p-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-700 bg-neutral-100/60 dark:bg-neutral-900/60 transition-colors cursor-pointer text-left"
-              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, folder.id)"
-            >
+              @click="targetMoveAsset && handleMoveAsset(targetMoveAsset.id, folder.id)">
               <div class="flex items-center gap-2 min-w-0">
                 <span class="size-3 rounded-full shrink-0" :style="{ backgroundColor: folder.color || '#3b82f6' }" />
                 <span class="text-xs font-medium text-neutral-700 dark:text-neutral-200 truncate">{{ folder.name
                 }}</span>
                 <span class="text-[10px] text-neutral-500 font-mono">({{ folderCounts[folder.id] || 0 }})</span>
               </div>
-              <UIcon
-                v-if="targetMoveAsset && getAssetFolderId(targetMoveAsset) === folder.id"
-                name="i-lucide-check"
-                class="size-4 text-primary shrink-0"
-              />
+              <UIcon v-if="targetMoveAsset && getAssetFolderId(targetMoveAsset) === folder.id" name="i-lucide-check"
+                class="size-4 text-primary shrink-0" />
             </button>
           </div>
         </template>
@@ -2232,6 +1845,9 @@ function handleEditorKeydown(e: KeyboardEvent) {
       <!-- AI Script & Storyboard Modal (Roadmap H-2) -->
       <TmcutAiScriptModal v-model:open="aiScriptModalOpen" />
       <TmcutAiEditor v-model:open="aiEditorModalOpen" />
+
+      <!-- Agent & voice commands (Roadmap v1 §4) -->
+      <TmcutAgentPanel v-model:open="agentPanelOpen" />
 
       <!-- Audio orchestration (Phase 8 §24) -->
       <TmcutAudioOrchestrationModal v-model:open="audioOrchestrationOpen" />
