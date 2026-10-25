@@ -8,6 +8,7 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import runwayAdapter from './runway-adapter.mjs'
+import klingAdapter from './kling-adapter.mjs'
 
 const require = createRequire(import.meta.url)
 const { app, ipcMain } = require('electron')
@@ -22,6 +23,11 @@ import {
   createGenerationResult
 } from '@tmcut/core/generationAdapter'
 
+import {
+  registerProviderAdapter,
+  listProviderAdapters
+} from '@tmcut/core/providerAdapter'
+
 // Adapter registry lives in @tmcut-core/generationAdapter — adapters registered
 // with registerGenerationAdapter() are retrievable with getGenerationAdapter().
 // (The previous local Map was never populated, so getMainAdapter always returned
@@ -30,11 +36,22 @@ function registerAllAdapters() {
   // Register Runway adapter
   try {
     registerGenerationAdapter('runway', runwayAdapter)
+    registerProviderAdapter('runway', runwayAdapter)
     console.log('[video-generation] Runway adapter registered')
   } catch (err) {
     console.warn('[video-generation] Failed to register Runway adapter:', err.message)
   }
-  // Future: registerKlingAdapter, registerLumaAdapter, etc.
+
+  // Register Kling adapter
+  try {
+    registerGenerationAdapter('kling', klingAdapter)
+    registerProviderAdapter('kling', klingAdapter)
+    console.log('[video-generation] Kling adapter registered')
+  } catch (err) {
+    console.warn('[video-generation] Failed to register Kling adapter:', err.message)
+  }
+
+  // Future: registerLumaAdapter, registerVeoAdapter, etc.
 }
 
 function getMainAdapter(providerId) {
