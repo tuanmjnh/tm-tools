@@ -12,6 +12,12 @@ import {
   AddClipParams, MoveClipParams, TrimClipParams, RemoveClipParams, SplitClipParams,
   SetVolumeParams, AddCaptionParams, SetTransitionParams, SetEffectParams,
   SeekParams, PlayParams, PauseParams,
+  // Phase 4: Asset Center
+  AssetListParams, InstallAssetParams, UninstallAssetParams, AssetInstallStatusParams,
+  // Phase 4: Templates
+  ListTemplatesParams, ApplyTemplateParams, SaveAsTemplateParams, DeleteTemplateParams, ImportTemplateParams, ExportTemplateParams,
+  // Phase 4: Export Queue
+  ListExportJobsParams, AddExportJobParams, PauseExportJobParams, ResumeExportJobParams, CancelExportJobParams, RetryExportJobParams, ClearExportHistoryParams,
   // Types
   ProjectSummary, TimelineSnapshot, AssetSummary, ProposalSnapshot, ProposalOperation,
   ServerCapabilities, SessionConfig, SessionInfo,
@@ -58,6 +64,32 @@ export interface McpIpc {
   seekPlayback(projectId: string, timeSec: number): Promise<void>
   playPlayback(projectId: string): Promise<void>
   pausePlayback(projectId: string): Promise<void>
+
+  // Events (server pushes to host via stdio)
+  emitEvent(event: any): void
+
+  // Phase 4: Asset Center
+  listAssetCatalog(projectId: string, params: any): Promise<any>
+  installAsset(projectId: string, entryId: string, version?: string): Promise<void>
+  uninstallAsset(projectId: string, entryId: string): Promise<void>
+  getAssetInstallStatus(projectId: string, entryId: string): Promise<any>
+
+  // Phase 4: Templates
+  listTemplates(projectId: string, params: any): Promise<any>
+  applyTemplate(projectId: string, templateId: string, replacements?: any, projectName?: string): Promise<void>
+  saveAsTemplate(projectId: string, params: any): Promise<any>
+  deleteTemplate(projectId: string, templateId: string): Promise<void>
+  importTemplate(projectId: string, filePath: string, name?: string): Promise<any>
+  exportTemplate(projectId: string, templateId: string, filePath?: string): Promise<any>
+
+  // Phase 4: Export Queue
+  listExportJobs(projectId: string, params: any): Promise<any>
+  addExportJob(projectId: string, params: any): Promise<any>
+  pauseExportJob(projectId: string, jobId: string): Promise<void>
+  resumeExportJob(projectId: string, jobId: string): Promise<void>
+  cancelExportJob(projectId: string, jobId: string): Promise<void>
+  retryExportJob(projectId: string, jobId: string): Promise<any>
+  clearExportHistory(projectId: string, status: string): Promise<void>
 
   // Events (server pushes to host via stdio)
   emitEvent(event: any): void
@@ -309,7 +341,200 @@ export const TOOL_REGISTRY: ToolDef[] = [
       await ipc.pausePlayback(projectId)
       return { ok: true }
     }
-  }
+  },
+
+  // === Asset Center (Phase 4) ===
+  {
+    name: 'asset.list_catalog',
+    description: 'List asset catalog entries with optional filtering',
+    parameters: AssetListParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.listAssetCatalog(projectId, params)
+    })
+  },
+  {
+    name: 'asset.install',
+    description: 'Install an asset from the catalog (queues download via Asset Center)',
+    parameters: InstallAssetParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.installAsset(projectId, params.entryId, params.version)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'asset.uninstall',
+    description: 'Uninstall an installed asset',
+    parameters: UninstallAssetParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.uninstallAsset(projectId, params.entryId)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'asset.install_status',
+    description: 'Get the installation status of an asset',
+    parameters: AssetInstallStatusParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.getAssetInstallStatus(projectId, params.entryId)
+    })
+  },
+
+  // === Templates (Phase 4) ===
+  {
+    name: 'template.list',
+    description: 'List available templates (built-in and user-created)',
+    parameters: ListTemplatesParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.listTemplates(projectId, params)
+    })
+  },
+  {
+    name: 'template.apply',
+    description: 'Apply a template to create a new project or insert into current project',
+    parameters: ApplyTemplateParams,
+    risk: 'reversible',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.applyTemplate(projectId, params.templateId, params.replacements, params.projectName)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'template.save_as',
+    description: 'Save current project as a user template',
+    parameters: SaveAsTemplateParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      const result = await ipc.saveAsTemplate(projectId, params)
+      return { ok: true, data: result }
+    }
+  },
+  {
+    name: 'template.delete',
+    description: 'Delete a user-created template',
+    parameters: DeleteTemplateParams,
+    risk: 'destructive',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.deleteTemplate(projectId, params.templateId)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'template.import',
+    description: 'Import a template from a .tmcut-template.json file',
+    parameters: ImportTemplateParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      const result = await ipc.importTemplate(projectId, params.filePath, params.name)
+      return { ok: true, data: result }
+    }
+  },
+  {
+    name: 'template.export',
+    description: 'Export a template to a .tmcut-template.json file',
+    parameters: ExportTemplateParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      const result = await ipc.exportTemplate(projectId, params.templateId, params.filePath)
+      return { ok: true, data: result }
+    }
+  },
+
+  // === Export Queue (Phase 4) ===
+  {
+    name: 'export.list_jobs',
+    description: 'List export jobs with optional status filter',
+    parameters: ListExportJobsParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.listExportJobs(projectId, params)
+    })
+  },
+  {
+    name: 'export.add_job',
+    description: 'Add a new export job to the queue',
+    parameters: AddExportJobParams,
+    risk: 'cost',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      const result = await ipc.addExportJob(projectId, params)
+      return { ok: true, data: result }
+    }
+  },
+  {
+    name: 'export.pause_job',
+    description: 'Pause a running or waiting export job',
+    parameters: PauseExportJobParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.pauseExportJob(projectId, params.jobId)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'export.resume_job',
+    description: 'Resume a paused export job',
+    parameters: ResumeExportJobParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.resumeExportJob(projectId, params.jobId)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'export.cancel_job',
+    description: 'Cancel a waiting or running export job',
+    parameters: CancelExportJobParams,
+    risk: 'destructive',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.cancelExportJob(projectId, params.jobId)
+      return { ok: true }
+    }
+  },
+  {
+    name: 'export.retry_job',
+    description: 'Retry a failed export job',
+    parameters: RetryExportJobParams,
+    risk: 'cost',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      const result = await ipc.retryExportJob(projectId, params.jobId)
+      return { ok: true, data: result }
+    }
+  },
+  {
+    name: 'export.clear_history',
+    description: 'Clear export job history by status',
+    parameters: ClearExportHistoryParams,
+    risk: 'destructive',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => {
+      await ipc.clearExportHistory(projectId, params.status)
+      return { ok: true }
+    }
+  },
 ]
 
 // -----------------------------------------------------------------------------
