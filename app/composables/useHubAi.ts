@@ -225,6 +225,7 @@ export function useHubAi() {
       environment?: string
       baseUrlOverride?: string
       isShared?: boolean
+      preserveSecrets?: boolean
     }): Promise<{ connection: HubAiConnection, test: { ok: boolean, message?: string } }> {
       return request<{ connection: HubAiConnection, test: { ok: boolean, message?: string } }>(
         `${aiBase(appId)}/connections/manual`,
