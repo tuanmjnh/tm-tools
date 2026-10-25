@@ -13,6 +13,10 @@ const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
 const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
 const { registerVideoGeneration } = require('./tools/video-generation/controller.mjs')
+// MCP server (Phase 2) — spawned child with IPC channel
+const { spawn } = require('child_process')
+const { fileURLToPath } = require('url')
+const { dirname, join } = require('path')
 // R139 (§203): API-key slots are encrypted AT REST with the OS keychain
 // (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
 // tokens, process.env holds plaintext (the gateway stays untouched — its
@@ -574,6 +578,103 @@ app.whenReady().then(() => {
   registerAssetCenterController(() => win)
   registerAiGateway()
   registerVideoGeneration()
+
+  // MCP server (Phase 2) — spawn child process with IPC channel
+  let mcpServerProcess = null
+  function spawnMcpServer() {
+    if (mcpServerProcess) return mcpServerProcess
+    const serverPath = join(dirname(fileURLToPath(import.meta.url)), 'tools', 'mcp', 'server.mjs')
+    mcpServerProcess = spawn(process.execPath, [serverPath], {
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+      env: {
+        ...process.env,
+        MCP_IDLE_TIMEOUT_MS: '300000'
+      }
+    })
+    mcpServerProcess.on('error', (err) => {
+      console.error('[MCP] Server spawn error:', err)
+      mcpServerProcess = null
+    })
+    mcpServerProcess.on('exit', (code, signal) => {
+      console.log(`[MCP] Server exited: code=${code}, signal=${signal}`)
+      mcpServerProcess = null
+    })
+    // Forward MCP server stderr to our logs
+    if (mcpServerProcess.stderr) {
+      mcpServerProcess.stderr.on('data', (data) => {
+        const text = data.toString().trim()
+        if (text) console.error('[MCP Server]', text)
+      })
+    }
+    return mcpServerProcess
+  }
+
+  // IPC handlers for MCP server -> main communication
+  // All gated by isTrustedSender via gateIpcMainHandle (R134)
+  ipcMain.handle('mcp:server:tool:invoke', async (event, { tool, params, requestId, projectId }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    // Route to existing tmcut controller or agent tools
+    try {
+      // For now, delegate to the existing tmcut controller pattern
+      // The actual implementation will call into the store/composables via the renderer
+      // This is a bridge — the server asks main to forward to renderer
+      if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+      return new Promise((resolve) => {
+        const channel = `mcp:forward:${tool}:${requestId}`
+        win.webContents.once(channel, (_evt, result) => resolve(result))
+        win.webContents.send('mcp:tool:invoke', { tool, params, requestId, projectId })
+        // Timeout after 10s
+        setTimeout(() => resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } }), 10000)
+      })
+    } catch (err) {
+      return { ok: false, error: { code: 'INTERNAL_ERROR', message: String(err), retryable: true } }
+    }
+  })
+
+  ipcMain.handle('mcp:server:session:init', async (event, { projectId }) => {
+    if (!isTrustedSender(event)) return { ok: false }
+    return { ok: true, projectId }
+  })
+
+  ipcMain.handle('mcp:server:session:close', async (event) => {
+    if (!isTrustedSender(event)) return { ok: false }
+    return { ok: true }
+  })
+
+  // Renderer -> main: proposal changed / project changed events from MCP server
+  // These are pushed via the PUSH_CHANNELS allowlist
+  ipcMain.handle('mcp:server:event:proposal_changed', (event, proposal) => {
+    if (!isTrustedSender(event)) return
+    // Forward to host via stdio (server logs it)
+    console.error(JSON.stringify({ type: 'event:proposal_changed', payload: proposal }))
+  })
+
+  ipcMain.handle('mcp:server:event:project_changed', (event, summary) => {
+    if (!isTrustedSender(event)) return
+    console.error(JSON.stringify({ type: 'event:project_changed', payload: summary }))
+  })
+
+  ipcMain.handle('mcp:server:event:job_status', (event, job) => {
+    if (!isTrustedSender(event)) return
+    console.error(JSON.stringify({ type: 'event:job_status', payload: job }))
+  })
+
+  // Start MCP server on demand when renderer requests it
+  ipcMain.handle('mcp:start', async (event) => {
+    if (!isTrustedSender(event)) return { ok: false }
+    spawnMcpServer()
+    return { ok: true }
+  })
+
+  ipcMain.handle('mcp:stop', async (event) => {
+    if (!isTrustedSender(event)) return { ok: false }
+    if (mcpServerProcess) {
+      mcpServerProcess.kill()
+      mcpServerProcess = null
+    }
+    return { ok: true }
+  })
+
   if (typeof initializePlatform === 'function') {
     initializePlatform()
   }

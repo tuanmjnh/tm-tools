@@ -12,6 +12,13 @@ const PUSH_CHANNELS = [
   'tmcut:assetCenter:progress',
   'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
+  // MCP server channels (Phase 2)
+  'mcp:server:tool:invoke',
+  'mcp:server:session:init',
+  'mcp:server:session:close',
+  'mcp:server:event:proposal_changed',
+  'mcp:server:event:project_changed',
+  'mcp:server:event:job_status',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
   'tools:ffmpeg:managerInitialized', 'tools:ffmpeg:beforeRunTask', 'tools:ffmpeg:progressTask', 'tools:ffmpeg:allTasksDone',

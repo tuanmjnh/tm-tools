@@ -38,6 +38,13 @@ const PUSH_CHANNELS = [
   // Generated-media download progress (bytes loaded of the declared total).
   'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
+  // MCP server channels (Phase 2)
+  'mcp:server:tool:invoke',
+  'mcp:server:session:init',
+  'mcp:server:session:close',
+  'mcp:server:event:proposal_changed',
+  'mcp:server:event:project_changed',
+  'mcp:server:event:job_status',
   ...TASK_EVENT_NAMES.map(n => `tools:youtube:${n}`),
   ...TASK_EVENT_NAMES.map(n => `tools:ffmpeg:${n}`)
 ]
