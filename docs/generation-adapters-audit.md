@@ -46,10 +46,9 @@ official URL and a verification date:
 | --- | --- | --- | --- |
 | **Runway** | video | **verified=false** / **needs update** | Adapter uses deprecated Gen-3 Alpha (sunset Jul 30 2026), wrong base URL (`api.runwayml.com` vs `api.dev.runwayml.com`), old model IDs (`gen3a`, `gen3a-turbo`). Current supported: Gen-4, Gen-4 Turbo, Gen-4.5. Must update adapter before marking verified. |
 | Seedance 2.5 (ByteDance) | video | `planned` / **unverified** | No official self-serve REST contract confirmed from primary docs this session. Do NOT code against community endpoints. |
-| Google Flow | video | `planned` / **unverified** | Flow is a product surface; the supported API path (if any) is the Gemini API video generation family — must be verified per checklist, incl. regional availability and pricing. |
-| OpenAI (Sora family) | video | `not started` | Verify API availability, region, pricing before adding. |
-| Kuaishou Kling | video | `not started` | |
-| Runway | video | `not started` | |
+| Google Flow / Veo 3.1 | video | `planned` / **unverified** | Flow is a product surface; the supported API path is the Gemini API video generation family (Veo 3.1 Standard/Fast). Must be verified per checklist, incl. regional availability and pricing. |
+| OpenAI (Sora family) | video | **DEPRECATED** — API shut down Sep 24 2026 | Sora 2 + Videos API no longer available. No one-to-one replacement API. Access via ChatGPT subscription only (Plus/Pro), not API. Do NOT build adapter. |
+| Kuaishou Kling 3.0 Pro | video | `not started` | Official docs at kling.ai/document-api. Models: kling3.0_pro, klingO3_pro. Need to verify self-serve REST contract, pricing, regional availability. |
 | fal.ai / Replicate (aggregators) | image+video | `rejected-as-substitute` | Useful products, but serving through an aggregator is a different rights/cost chain than the model owner; only allowed if explicitly labeled as aggregator in the capability manifest (`providerId`, `rights.license`). |
 
 Every row stays `unverified`/`not started` until checklist items 1–8 are
