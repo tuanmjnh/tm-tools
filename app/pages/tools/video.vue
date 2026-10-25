@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useElementSize } from '@vueuse/core'
-import type { ToolTask, FfmpegLabel, FfmpegSubFile, FfmpegVersions, ToolUpdateInfo, ToolUpdateProgress } from '~/types'
+import type { ToolTask, FfmpegLabel, FfmpegSubFile, FfmpegVersions, ToolUpdateInfo, ToolUpdateProgress } from '#shared/types/electron'
 
 const { t } = useI18n()
 const toast = useToast()

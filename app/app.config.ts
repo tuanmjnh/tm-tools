@@ -1,4 +1,4 @@
-import { name, version, description } from '../package.json'
+import { version, description } from '../package.json'
 
 export default defineAppConfig({
   // toaster: {
@@ -66,7 +66,7 @@ export default defineAppConfig({
     }
   },
   system: {
-    app_name: name,
+    app_name: 'TM Tools',
     app_version: version,
     app_description: description
   }

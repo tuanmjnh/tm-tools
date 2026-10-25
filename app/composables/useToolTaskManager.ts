@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { TaskStatus, ToolTask, ToolsNamespace, YoutubeDownloadResponse, FfmpegRenderResponse } from '~/types'
+import type { TaskStatus, ToolTask, ToolsNamespace, YoutubeDownloadResponse, FfmpegRenderResponse } from '#shared/types/electron'
 
 export type ToolKind = 'youtube' | 'ffmpeg'
 

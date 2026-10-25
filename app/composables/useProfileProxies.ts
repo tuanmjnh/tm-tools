@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { ProfileProxy } from '~/types'
+import type { ProfileProxy } from '#shared/types/electron'
 
 export function useProfileProxies() {
   const proxies = ref<ProfileProxy[]>([])

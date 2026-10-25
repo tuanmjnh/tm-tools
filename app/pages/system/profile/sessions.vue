@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
-import type { UserSession } from '~/types/auth'
+import type { UserSession } from '#shared/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
 import { formatDate } from '~/shared/utils/helper'
 

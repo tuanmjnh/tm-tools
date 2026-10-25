@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { BrowserProfile, ProfileGroup, ProfileProxy, ProfileAccount } from '~/types'
+import type { BrowserProfile, ProfileGroup, ProfileProxy, ProfileAccount } from '#shared/types/electron'
 import { generateRealisticFingerprint } from '~/utils/fingerprint'
 
 const props = defineProps<{

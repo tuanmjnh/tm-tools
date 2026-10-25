@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Sortable from 'sortablejs'
-import type { FfmpegConfig, FfmpegLabel, FfmpegSubFile } from '~/types'
+import type { FfmpegConfig, FfmpegLabel, FfmpegSubFile } from '#shared/types/electron'
 import { generateId, getMediaSize, alignAll, scalePercentUI, scaleElementX, scaleElementY, isVideoFile } from '~/utils/ffmpegHelper'
 
 defineOptions({ name: 'ToolsVideoConfigModal' })

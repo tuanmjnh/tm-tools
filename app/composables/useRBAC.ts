@@ -1,4 +1,4 @@
-import type { Role, ModuleDefinition, ModulePermission, PermissionAction } from '~/types/rbac'
+import type { Role, ModuleDefinition, ModulePermission, PermissionAction } from '#shared/types/rbac'
 import type { HubRole } from 'tm-hub-client'
 
 function mapHubRoleToRole(hubRole: HubRole): Role {

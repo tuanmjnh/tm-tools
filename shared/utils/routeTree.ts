@@ -1,4 +1,4 @@
-import type { SystemRoute, RouteTreeNode } from '~/types/rbac'
+import type { SystemRoute, RouteTreeNode } from '#shared/types/rbac'
 
 export function buildRouteTree(flatRoutes: SystemRoute[]): RouteTreeNode[] {
   const map = new Map<string, RouteTreeNode>()

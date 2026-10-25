@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { ToolTask } from '~/types'
+import type { ToolTask } from '#shared/types/electron'
 
 defineProps<{
   disabled?: boolean

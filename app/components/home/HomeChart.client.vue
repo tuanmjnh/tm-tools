@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, format } from 'date-fns'
 import { VisXYContainer, VisLine, VisAxis, VisArea, VisCrosshair, VisTooltip } from '@unovis/vue'
-import type { Period, Range } from '~/types'
+import type { Period, Range } from '#shared/types/index'
 
 const cardRef = useTemplateRef<HTMLElement | null>('cardRef')
 

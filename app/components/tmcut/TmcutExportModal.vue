@@ -11,7 +11,7 @@ import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { useTmcutExportQueue } from '~/composables/useTmcutExportQueue'
 import { useTmcutTelemetry } from '~/composables/useTmcutTelemetry'
 import { useTmcutUsageTracker } from '~/composables/useTmcutUsageTracker'
-import type { ToolTask } from '~/types'
+import type { ToolTask } from '#shared/types/electron'
 
 const open = defineModel<boolean>('open', { default: false })
 

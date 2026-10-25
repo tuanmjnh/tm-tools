@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { ProfileProxy } from '~/types'
+import type { ProfileProxy } from '#shared/types/electron'
 
 const props = defineProps<{
   modelValue: boolean

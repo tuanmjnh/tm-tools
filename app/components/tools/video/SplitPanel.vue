@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { FfmpegConfig, ToolTask, MediaProbeResult } from '~/types'
+import type { FfmpegConfig, ToolTask, MediaProbeResult } from '#shared/types/electron'
 
 const props = withDefaults(defineProps<{
   presets?: FfmpegConfig[]

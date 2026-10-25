@@ -1,5 +1,5 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
-import type { RouteTreeNode } from '~/types/rbac'
+import type { RouteTreeNode } from '#shared/types/rbac'
 import type { HubSystemRoute } from 'tm-hub-client'
 
 function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {

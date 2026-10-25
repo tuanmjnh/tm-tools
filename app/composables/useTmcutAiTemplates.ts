@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { AiChatMessage } from '~~/types/electron'
+import type { AiChatMessage } from '#shared/types/electron'
 import {
   TICKS_PER_SECOND,
   parseTemplatePlanReply,

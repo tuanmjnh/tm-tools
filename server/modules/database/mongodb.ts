@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Collection, Db } from 'mongodb'
-import type { AuthUser, UserSession } from '../../../types/auth'
-import type { Role, SystemRoute, UserRole } from '../../../types/rbac'
+import type { AuthUser, UserSession } from '#shared/types/auth'
+import type { Role, SystemRoute, UserRole } from '#shared/types/rbac'
 import { hashPassword, generateId } from '../../utils/crypto'
 import { getSharedConnection } from './shared'
 import type { DatabaseAdapter } from './index'

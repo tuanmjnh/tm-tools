@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import VueDraggableResizable from 'vue-draggable-resizable'
 import 'vue-draggable-resizable/style.css'
-import type { FfmpegLabel, FfmpegSubFile } from '~/types'
+import type { FfmpegLabel, FfmpegSubFile } from '#shared/types/electron'
 import { toURL, isVideoFile, hexToRgba, fontToStyle, getTextRenderTransform } from '~/utils/ffmpegHelper'
 
 defineOptions({ name: 'ToolsVideoFramePreview' })

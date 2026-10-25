@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { FfmpegHistory, ToolsNamespace } from '~/types'
+import type { FfmpegHistory, ToolsNamespace } from '#shared/types/electron'
 
 defineOptions({ name: 'ToolsVideoHistorySlideover' })
 

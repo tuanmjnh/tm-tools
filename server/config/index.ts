@@ -1,5 +1,5 @@
-import type { AuthConfig, AuthProvider } from '../../types/auth'
-import type { ModuleDefinition } from '../../types/rbac'
+import type { AuthConfig, AuthProvider } from '#shared/types/auth'
+import type { ModuleDefinition } from '#shared/types/rbac'
 
 export interface AppConfig {
   auth: AuthConfig

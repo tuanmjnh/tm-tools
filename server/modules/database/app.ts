@@ -1,5 +1,6 @@
 import type { Db } from 'mongodb'
-import type { User, Mail, Member, Notification } from '../../../types'
+import type { DemoUser as User } from '#shared/types/index'
+import type { Mail, Member, Notification } from '#shared/types/index'
 import { getSharedConnection } from './shared'
 
 export interface AppDatabase {

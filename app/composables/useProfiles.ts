@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import type { BrowserProfile, ProfileFilters } from '~/types'
+import type { BrowserProfile, ProfileFilters } from '#shared/types/electron'
 
 export function useProfiles() {
   const profiles = ref<BrowserProfile[]>([])

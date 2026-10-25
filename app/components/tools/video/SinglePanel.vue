@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import type { ToolTask, FfmpegConfig } from '~/types'
+import type { ToolTask, FfmpegConfig } from '#shared/types/electron'
 import { getMediaSize } from '~/utils/ffmpegHelper'
 
 const props = defineProps<{

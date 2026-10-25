@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { z } from 'zod'
-import type { ToolTask, PlaylistVideo, YoutubeFormat, YoutubeConfig, YoutubeHistory, ToolUpdateInfo, ToolUpdateProgress } from '~/types'
+import type { ToolTask, PlaylistVideo, YoutubeFormat, YoutubeConfig, YoutubeHistory, ToolUpdateInfo, ToolUpdateProgress } from '#shared/types/electron'
 import type { GridColumn } from '~/components/gridList/Index.vue'
 
 const { t } = useI18n()

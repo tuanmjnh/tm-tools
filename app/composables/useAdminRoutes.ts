@@ -1,4 +1,4 @@
-import type { SystemRoute, RouteTreeNode } from '~/types/rbac'
+import type { SystemRoute, RouteTreeNode } from '#shared/types/rbac'
 import { buildRouteTree } from '#shared/utils/routeTree'
 
 export const useAdminRoutes = () => {

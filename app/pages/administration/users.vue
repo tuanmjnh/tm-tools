@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuthUser } from '~/types/auth'
+import type { AuthUser } from '#shared/types/auth'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { z } from 'zod'
 import { getErrorMessage } from '~/shared/utils/errors'

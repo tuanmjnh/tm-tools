@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import type { BrowserProfile, GridColumn } from '~/types'
+import type { BrowserProfile } from '#shared/types/electron'
+import type { GridColumn } from '#shared/types/index'
 
 const { t } = useI18n()
 const {

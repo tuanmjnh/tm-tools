@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { ProfileGroup } from '~/types'
+import type { ProfileGroup } from '#shared/types/electron'
 
 export function useProfileGroups() {
   const groups = ref<ProfileGroup[]>([])

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { YoutubeConfig, YoutubeFormat } from '~/types'
+import type { YoutubeConfig, YoutubeFormat } from '#shared/types/electron'
 
 defineOptions({ name: 'ToolsDownloadConfigSlideover' })
 

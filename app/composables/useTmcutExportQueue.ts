@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { useToolTaskManager } from '~/composables/useToolTaskManager'
-import type { ToolTask } from '~/types'
+import type { ToolTask } from '#shared/types/electron'
 
 const STORAGE_KEY = 'tmcut:export-queue'
 const MAX_QUEUE_ENTRIES = 50

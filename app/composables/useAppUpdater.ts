@@ -1,4 +1,4 @@
-import type { AppUpdateStatus } from '~~/types/electron'
+import type { AppUpdateStatus } from '#shared/types/electron'
 
 const status = ref<AppUpdateStatus['state']>('idle')
 const currentVersion = ref('')

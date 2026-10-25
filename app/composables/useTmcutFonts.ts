@@ -12,7 +12,7 @@
  * instead of offering fonts it could neither enumerate nor export.
  */
 
-import type { TmcutFontEntry } from '~~/types/electron'
+import type { TmcutFontEntry } from '#shared/types/electron'
 
 function tmcutIpc() {
   return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined

@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from 'jose'
-import type { TokenPayload } from '../../types/auth'
+import type { TokenPayload } from '#shared/types/auth'
 import { config } from '../config/index'
 
 function getSecret(secret: string): Uint8Array {

@@ -1,4 +1,4 @@
-import type { DialogArgs, FileOptions, FileNode } from '~/types'
+import type { DialogArgs, FileOptions, FileNode } from '#shared/types/electron'
 
 function dialogApi() {
   return window.electronAPI?.dialog

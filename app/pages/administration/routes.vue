@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
-import type { Role, SystemRoute, RouteTreeNode } from '~/types/rbac'
+import type { Role, SystemRoute, RouteTreeNode } from '#shared/types/rbac'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { hasAllRoutes } from '#shared/rbac'
 import { getErrorMessage } from '~/shared/utils/errors'

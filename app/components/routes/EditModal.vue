@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import * as z from 'zod'
-import type { SystemRoute } from '~/types/rbac'
+import type { SystemRoute } from '#shared/types/rbac'
 import { getErrorMessage } from '~/shared/utils/errors'
 import { MODULE_DEFINITIONS } from '#shared/rbac'
 

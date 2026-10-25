@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useModuleExport, buildExportChildren } from '~/composables/useModuleExport'
 import type { GridColumn } from '~/components/gridList/Index.vue'
-import type { Role } from '~/types/rbac'
+import type { Role } from '#shared/types/rbac'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { isFullAccessRole, hasAllRoutes } from '#shared/rbac'
 import { getErrorMessage } from '~/shared/utils/errors'

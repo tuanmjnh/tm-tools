@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { ProfileProxy, GridColumn } from '~/types'
+import type { ProfileProxy } from '#shared/types/electron'
+import type { GridColumn } from '#shared/types/index'
 
 const { t } = useI18n()
 const toast = useToast()

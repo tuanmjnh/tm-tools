@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { ProfileGroup } from '~/types'
+import type { ProfileGroup } from '#shared/types/electron'
 
 const props = defineProps<{
   modelValue: boolean

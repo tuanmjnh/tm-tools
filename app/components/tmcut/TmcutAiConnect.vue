@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '~~/types/electron'
+import type { AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '#shared/types/electron'
 import { useTmcutAi } from '~/composables/useTmcutAi'
 import { AI_TASK_META, type AiTaskId } from '~/utils/tmcut/aiTasks'
 

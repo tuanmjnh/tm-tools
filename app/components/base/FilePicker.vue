@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DialogFileFilter } from '~/types'
+import type { DialogFileFilter } from '#shared/types/electron'
 
 const model = defineModel<string>({ default: '' })
 

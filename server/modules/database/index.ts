@@ -1,5 +1,5 @@
-import type { AuthUser, UserSession } from '../../../types/auth'
-import type { Role, SystemRoute, UserRole } from '../../../types/rbac'
+import type { AuthUser, UserSession } from '#shared/types/auth'
+import type { Role, SystemRoute, UserRole } from '#shared/types/rbac'
 import type { AppDatabase } from './app'
 
 export type { AppDatabase } from './app'

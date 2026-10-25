@@ -1,5 +1,5 @@
 import { ref, computed, watch } from 'vue'
-import type { FfmpegConfig } from '~/types'
+import type { FfmpegConfig } from '#shared/types/electron'
 
 const PRESET_STORAGE_KEY = 'tools:video:last_preset_id'
 

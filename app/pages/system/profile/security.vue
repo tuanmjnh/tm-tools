@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { NavigationMenuItem } from '@nuxt/ui'
-import type { PasskeyInfo } from '~/types/webauthn'
+import type { PasskeyInfo } from '#shared/types/webauthn'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({

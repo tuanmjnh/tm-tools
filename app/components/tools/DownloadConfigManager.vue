@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { YoutubeConfig, YoutubeFormat } from '~/types'
+import type { YoutubeConfig, YoutubeFormat } from '#shared/types/electron'
 
 defineOptions({ name: 'ToolsDownloadConfigManager' })
 
