@@ -197,7 +197,7 @@ export function useTmcutVoiceCommands() {
   }
 
   // --- Intent Parsing (keyword + LLM fallback) ---
-  function parseIntent(text: string, lang: 'vi' | 'en' = 'vi'): VoiceIntent | null {
+  async function parseIntent(text: string, lang: 'vi' | 'en' = 'vi'): Promise<VoiceIntent | null> {
     const t = text.trim().toLowerCase()
     if (!t) return null
 
@@ -222,7 +222,8 @@ export function useTmcutVoiceCommands() {
     }
 
     // 2. LLM fallback (structured, for ambiguous commands)
-    return null
+    // Uses the AI gateway's task-scoped PLAN endpoint with JSON mode
+    return parseIntentLLM(text, lang)
   }
 
   async function parseIntentLLM(text: string, lang: 'vi' | 'en' = 'vi'): Promise<VoiceIntent | null> {
@@ -319,10 +320,9 @@ export function useTmcutVoiceCommands() {
       const transcript = await transcribeAudio(filePath, language)
       lastTranscript.value = transcript
 
-      let intent = parseIntent(transcript, language)
-      if (!intent) intent = await parseIntentLLM(transcript, language)
-      if (!intent) {
-        return { ok: false, transcript, error: { code: 'no-intent', message: `Could not understand: "${transcript}"`, retryable: true } }
+      let intent = await parseIntent(transcript, language)
+      if (!intent) return {
+        ok: false, transcript, error: { code: 'no-intent', message: `Could not understand: "${transcript}"`, retryable: true }
       }
 
       const result = await executeIntent(intent, autoExecute, confirmCostThresholdUsd)
@@ -338,10 +338,9 @@ export function useTmcutVoiceCommands() {
   async function runTextCommand(text: string, options: VoiceCommandOptions = {}): Promise<VoiceResult> {
     const { language = 'vi', autoExecute = false, confirmCostThresholdUsd = DEFAULT_CONFIRM_COST_THRESHOLD } = options
     try {
-      let intent = parseIntent(text, language)
-      if (!intent) intent = await parseIntentLLM(text, language)
-      if (!intent) {
-        return { ok: false, error: { code: 'no-intent', message: `Could not parse: "${text}"`, retryable: true } }
+      const intent = await parseIntent(text, language)
+      if (!intent) return {
+        ok: false, error: { code: 'no-intent', message: `Could not parse: \"${text}\"`, retryable: true }
       }
       return await executeIntent(intent, autoExecute, confirmCostThresholdUsd)
     } catch (err) {
