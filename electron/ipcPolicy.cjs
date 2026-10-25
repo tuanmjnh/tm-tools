@@ -54,7 +54,18 @@ const PUSH_CHANNELS = [
 // handler in the app is ipcMain.handle/invoke; grep ipcMain.on = 0 hits),
 // so the honest allowlist is EMPTY. A future fire-and-forget channel must
 // be added here deliberately, not discovered implicitly.
-const OUTBOUND_CHANNELS = []
+const OUTBOUND_CHANNELS = [
+  // MCP server channels (Phase 3)
+  'mcp:server:tool:invoke',
+  'mcp:server:session:init',
+  'mcp:server:session:close',
+  'mcp:server:event:proposal_changed',
+  'mcp:server:event:project_changed',
+  'mcp:server:event:job_status',
+  // MCP server response channels (Phase 3): renderer -> main
+  'mcp:forward',
+  'mcp:forward:respond'
+]
 
 const PUSH_SET = new Set(PUSH_CHANNELS)
 const OUTBOUND_SET = new Set(OUTBOUND_CHANNELS)

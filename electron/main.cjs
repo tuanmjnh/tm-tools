@@ -613,18 +613,24 @@ app.whenReady().then(() => {
   // All gated by isTrustedSender via gateIpcMainHandle (R134)
   ipcMain.handle('mcp:server:tool:invoke', async (event, { tool, params, requestId, projectId }) => {
     if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    // Route to existing tmcut controller or agent tools
     try {
-      // For now, delegate to the existing tmcut controller pattern
-      // The actual implementation will call into the store/composables via the renderer
-      // This is a bridge — the server asks main to forward to renderer
       if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
       return new Promise((resolve) => {
-        const channel = `mcp:forward:${tool}:${requestId}`
-        win.webContents.once(channel, (_evt, result) => resolve(result))
-        win.webContents.send('mcp:tool:invoke', { tool, params, requestId, projectId })
+        // Listen for response from renderer via the preload bridge
+        const responseChannel = `mcp:forward:respond`
+        const handler = (_evt, { requestId: respId, result }) => {
+          if (respId === requestId) {
+            ipcMain.removeHandler(responseChannel, handler)
+            resolve(result)
+          }
+        }
+        ipcMain.on(responseChannel, handler)
+        win.webContents.send('mcp:forward', { tool, params, requestId, projectId })
         // Timeout after 10s
-        setTimeout(() => resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } }), 10000)
+        setTimeout(() => {
+          ipcMain.removeHandler(responseChannel, handler)
+          resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } })
+        }, 10000)
       })
     } catch (err) {
       return { ok: false, error: { code: 'INTERNAL_ERROR', message: String(err), retryable: true } }

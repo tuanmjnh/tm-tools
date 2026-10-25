@@ -27,7 +27,18 @@ const PUSH_CHANNELS = [
 // Nothing legitimately uses ipcRenderer.send today (all handlers are
 // invoke-based; grep ipcMain.on = 0 hits). Adding a channel here is a
 // deliberate act, reviewed like any other IPC surface change.
-const OUTBOUND_CHANNELS = []
+const OUTBOUND_CHANNELS = [
+  // MCP server channels (Phase 3)
+  'mcp:server:tool:invoke',
+  'mcp:server:session:init',
+  'mcp:server:session:close',
+  'mcp:server:event:proposal_changed',
+  'mcp:server:event:project_changed',
+  'mcp:server:event:job_status',
+  // MCP server response channels (Phase 3): renderer -> main
+  'mcp:forward',
+  'mcp:forward:respond'
+]
 const PUSH_SET = new Set(PUSH_CHANNELS)
 const OUTBOUND_SET = new Set(OUTBOUND_CHANNELS)
 
@@ -241,5 +252,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('eventbus:event', listener)
       return () => ipcRenderer.removeListener('eventbus:event', listener)
     }
+  },
+  mcp: {
+    onToolInvoke: (callback) => {
+      const listener = (_event, { tool, params, requestId, projectId }) => callback({ tool, params, requestId, projectId })
+      ipcRenderer.on('mcp:forward', listener)
+      return () => ipcRenderer.removeListener('mcp:forward', listener)
+    },
+    respond: (requestId, result) => ipcRenderer.send('mcp:forward:respond', { requestId, result })
   }
 })

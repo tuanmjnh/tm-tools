@@ -98,10 +98,21 @@ await check('push allow-list covers every real webContents.send call site', () =
   assert.ok(!isAllowedPushChannel(undefined as never))
 })
 
-await check('outbound allow-list is the honest empty set', () => {
-  // Nothing uses ipcRenderer.send today (ipcMain.on grep = 0 hits).
-  assert.deepEqual(OUTBOUND_CHANNELS, [])
+await check('outbound allow-list is the honest set with MCP channels', () => {
+  // MCP channels are the only outbound channels allowed (Phase 3)
+  const expected = [
+    'mcp:server:tool:invoke',
+    'mcp:server:session:init',
+    'mcp:server:session:close',
+    'mcp:server:event:proposal_changed',
+    'mcp:server:event:project_changed',
+    'mcp:server:event:job_status',
+    'mcp:forward',
+    'mcp:forward:respond'
+  ]
+  assert.deepEqual(OUTBOUND_CHANNELS.slice().sort(), expected.slice().sort())
   assert.ok(!isAllowedOutboundChannel('anything'))
+  assert.ok(!isAllowedOutboundChannel('tools:file-manager:read'))
 })
 
 await check('preload inline copies equal the canonical policy arrays', () => {

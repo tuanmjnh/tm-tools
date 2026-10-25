@@ -1066,12 +1066,16 @@ export interface ElectronAPI {
     testExecutable(input: TestExecutableInput): Promise<ApiResponse<TestExecutableResult>>
   }
   events: {
-    on<K extends keyof EventBusContracts>(
-      event: K,
-      callback: (payload: EventBusContracts[K]) => void
-    ): () => void
+      on<K extends keyof EventBusContracts>(
+        event: K,
+        callback: (payload: EventBusContracts[K]) => void
+      ): () => void
+    },
+    mcp: {
+      onToolInvoke(callback: (data: { tool: string; params: Record<string, unknown>; requestId: string; projectId: string }) => void): () => void
+      respond(requestId: string, result: unknown): void
+    }
   }
-}
 
 declare global {
   interface Window {
