@@ -2,6 +2,13 @@ import { ref, computed, watch } from 'vue'
 import { useToolTaskManager } from '~/composables/useToolTaskManager'
 import type { ToolTask } from '#shared/types/electron'
 
+// Event emitter for MCP job status events
+let emitEvent: (event: { type: string; payload: any }) => void = () => {}
+
+export function setMcpEventEmitter(emitter: (event: { type: string; payload: any }) => void) {
+  emitEvent = emitter
+}
+
 const STORAGE_KEY = 'tmcut:export-queue'
 const MAX_QUEUE_ENTRIES = 50
 
@@ -111,11 +118,17 @@ export function useTmcutExportQueue() {
     currentActive.speed = taskItem.speed || ''
     currentActive.downloaded = taskItem.downloaded || ''
 
+    // Emit progress event
+    emitEvent({ type: 'event:job_progress', payload: { jobId: currentActive.id, progress: currentActive.progress, speed: currentActive.speed, downloaded: currentActive.downloaded, projectId: currentActive.projectId } })
+
     if (taskItem.status === 'done' || (taskItem.progress >= 100 && currentActive.progress >= 100)) {
       currentActive.status = 'done'
       currentActive.completedAt = Date.now()
       currentActive.progress = 100
       activeJobId.value = null
+
+      // Emit job completed event
+      emitEvent({ type: 'event:job_status', payload: { jobId: currentActive.id, status: 'done', progress: 100, projectId: currentActive.projectId } })
 
       toast.add({
         title: `Export completed: ${currentActive.projectName}`,
@@ -170,6 +183,9 @@ export function useTmcutExportQueue() {
     next.startedAt = Date.now()
     next.progress = 0
 
+    // Emit job started event
+    emitEvent({ type: 'event:job_status', payload: { jobId: next.id, status: 'running', progress: 0, projectId: next.projectId } })
+
     try {
       await taskManager.initManager({
         threads: 1,
@@ -183,6 +199,7 @@ export function useTmcutExportQueue() {
       next.status = 'failed'
       next.error = err instanceof Error ? err.message : String(err)
       activeJobId.value = null
+      emitEvent({ type: 'event:job_status', payload: { jobId: next.id, status: 'failed', progress: next.progress, error: next.error, projectId: next.projectId } })
       processNextJob()
     }
   }
@@ -233,9 +250,11 @@ export function useTmcutExportQueue() {
       await taskManager.stopAll()
       job.status = 'cancelled'
       activeJobId.value = null
+      emitEvent({ type: 'event:job_status', payload: { jobId: job.id, status: 'cancelled', progress: job.progress, projectId: job.projectId } })
       processNextJob()
     } else if (job.status === 'waiting') {
       job.status = 'cancelled'
+      emitEvent({ type: 'event:job_status', payload: { jobId: job.id, status: 'cancelled', progress: job.progress, projectId: job.projectId } })
     }
   }
 

@@ -7,6 +7,7 @@ import { useTmcutRecorder } from '~/composables/useTmcutRecorder'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useAgentProposalCount } from '~/composables/useTmcutAgentTools'
+import { useMcpRendererBridge } from '~/composables/useMcpRendererBridge'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutTemplates } from '~/composables/useTmcutTemplates'
 import { formatDurationSec, formatFileSize, mediaFileKey } from '~/utils/tmcut/media'
@@ -709,6 +710,16 @@ onMounted(async () => {
   loadLibrary()
   checkMissing()
   loadSnapshots()
+
+  // Initialize MCP renderer bridge for Phase 6: job status events & progress streaming
+  useMcpRendererBridge()
+  // Connect the export queue's event emitter to the MCP renderer bridge
+  const { setMcpEventEmitter } = await import('~/composables/useTmcutExportQueue')
+  setMcpEventEmitter((event) => {
+    if (window.electronAPI?.mcp?.respond) {
+      window.electronAPI.mcp.respond(event.payload.requestId || '', event)
+    }
+  })
 })
 
 onUnmounted(() => {
