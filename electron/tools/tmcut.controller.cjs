@@ -1,8 +1,12 @@
 const { ipcMain, app } = require('electron')
 const fs = require('fs')
 const path = require('path')
+const http = require('http')
+const https = require('https')
 const { spawn } = require('child_process')
 const { getToolsBinaries, getResourcesDir } = require('./paths.cjs')
+const { pruneCommandRecordings } = require('./recordings.cjs')
+const { assertDownloadUrl, resolveDownloadTarget } = require('./media-download.cjs')
 
 const moduleName = 'tmcut'
 
@@ -20,7 +24,8 @@ function getDirs() {
     proxies: path.join(base, 'cache', 'proxies'),
     stabilized: path.join(base, 'cache', 'stabilized'),
     stabilizedTrf: path.join(base, 'cache', 'stabilized_trf'),
-    recordings: path.join(base, 'recordings')
+    recordings: path.join(base, 'recordings'),
+    downloads: path.join(base, 'downloads')
   }
 }
 
@@ -52,7 +57,7 @@ function isUserMediaPath(filePath) {
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings, d.downloads]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -777,7 +782,189 @@ async function stabilizeVideo(filePath, options = {}) {
   return { ok: true, path: toPosix(out), cached: false }
 }
 
+/**
+ * Generated media can arrive as a URL (a provider's download link). The
+ * renderer cannot turn that into a file — a blob: import would be persisted
+ * with a URL that dies on restart — so the download happens here, into
+ * <base>/downloads/, and the renderer imports the resulting path through the
+ * normal media pipeline (probe, thumbnail, filmstrip, waveform).
+ *
+ * Rules: http(s) only, manual redirects (max MAX_DOWNLOAD_REDIRECTS), a hard
+ * size cap, a timeout, no overwriting an existing file, and a `.part` file that
+ * is removed on any failure.
+ */
+const MAX_DOWNLOAD_REDIRECTS = 5
+const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024
+const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000
+
+function openDownloadStream(targetUrl, redirectsLeft, signal) {
+  return new Promise((resolve, reject) => {
+    const lib = targetUrl.startsWith('https:') ? https : http
+    const request = lib.get(targetUrl, {
+      headers: { 'user-agent': 'TM-Tools', 'accept': 'video/*,audio/*,image/*,*/*' }
+    }, (res) => {
+      const status = res.statusCode || 0
+      const location = res.headers.location
+      if (status >= 300 && status < 400 && location && redirectsLeft > 0) {
+        res.resume()
+        let next
+        try {
+          next = new URL(location, targetUrl).toString()
+        } catch (error) {
+          reject(new Error(`bad redirect: ${error.message}`))
+          return
+        }
+        openDownloadStream(next, redirectsLeft - 1, signal).then(resolve, reject)
+        return
+      }
+      if (status < 200 || status >= 300) {
+        res.resume()
+        reject(new Error(`HTTP ${status}`))
+        return
+      }
+      resolve(res)
+    })
+    request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
+      request.destroy(new Error('download timed out'))
+    })
+    request.on('error', reject)
+    if (signal) {
+      if (signal.aborted) {
+        request.destroy(new Error('cancelled'))
+      } else {
+        signal.addEventListener('abort', () => request.destroy(new Error('cancelled')), { once: true })
+      }
+    }
+  })
+}
+
+/** Active downloads by id, so the renderer can cancel one in flight. */
+const activeDownloads = new Map()
+
+function cancelMediaDownload(id) {
+  const entry = activeDownloads.get(String(id || ''))
+  if (!entry) return false
+  try {
+    entry.controller.abort()
+  } catch {
+    // the promise settles as cancelled either way
+  }
+  return true
+}
+
+async function downloadMediaToFile({ url, filename, dir, id, onProgress }) {
+  const checked = assertDownloadUrl(url)
+  if (!checked.ok) return { ok: false, error: checked.reason }
+
+  const downloadId = id ? String(id) : null
+  const controller = new AbortController()
+  if (downloadId) activeDownloads.set(downloadId, { controller })
+
+  let res
+  try {
+    if (dir) fs.mkdirSync(dir, { recursive: true })
+    else ensureDirs()
+    res = await openDownloadStream(checked.url, MAX_DOWNLOAD_REDIRECTS, controller.signal)
+  } catch (error) {
+    if (downloadId) activeDownloads.delete(downloadId)
+    const message = String((error && error.message) || error)
+    return { ok: false, error: controller.signal.aborted ? 'cancelled' : message }
+  }
+
+  const declared = Number(res.headers['content-length']) || 0
+  if (declared > MAX_DOWNLOAD_BYTES) {
+    res.destroy()
+    if (downloadId) activeDownloads.delete(downloadId)
+    return { ok: false, error: 'file too large' }
+  }
+
+  const target = resolveDownloadTarget({
+    dir: dir || getDirs().downloads,
+    url: checked.url,
+    filename,
+    exists: candidate => fs.existsSync(candidate)
+  })
+  const partPath = `${target.path}.part`
+
+  return await new Promise((resolve) => {
+    const out = fs.createWriteStream(partPath)
+    let bytes = 0
+    let settled = false
+    let lastProgressAt = 0
+
+    const emitProgress = (force = false) => {
+      if (typeof onProgress !== 'function') return
+      const now = Date.now()
+      // 200ms throttle: IPC per chunk would drown the renderer on a fast link.
+      if (!force && now - lastProgressAt < 200) return
+      lastProgressAt = now
+      onProgress({ loaded: bytes, total: declared })
+    }
+    emitProgress(true)
+
+    const cleanup = () => {
+      try {
+        if (fs.existsSync(partPath)) fs.unlinkSync(partPath)
+      } catch {
+        // best effort: an orphan .part is never referenced anywhere
+      }
+    }
+    const fail = (error) => {
+      if (settled) return
+      settled = true
+      if (downloadId) activeDownloads.delete(downloadId)
+      res.destroy()
+      out.destroy()
+      cleanup()
+      resolve({ ok: false, error })
+    }
+
+    controller.signal.addEventListener('abort', () => fail('cancelled'), { once: true })
+
+    res.on('data', (chunk) => {
+      bytes += chunk.length
+      if (bytes > MAX_DOWNLOAD_BYTES) {
+        fail('file too large')
+        return
+      }
+      emitProgress()
+    })
+    res.on('error', error => fail(String((error && error.message) || error)))
+    out.on('error', error => fail(String((error && error.message) || error)))
+    res.pipe(out)
+    out.on('finish', () => {
+      if (settled) return
+      if (bytes === 0) {
+        fail('empty response')
+        return
+      }
+      try {
+        fs.renameSync(partPath, target.path)
+      } catch (error) {
+        fail(String((error && error.message) || error))
+        return
+      }
+      settled = true
+      if (downloadId) activeDownloads.delete(downloadId)
+      if (typeof onProgress === 'function') onProgress({ loaded: bytes, total: declared || bytes, done: true })
+      resolve({ ok: true, path: target.path, name: target.name, bytes })
+    })
+  })
+}
+
 function registerTmcutController() {
+  // Voice-command captures are transcription scratch space: sweep yesterday's
+  // leftovers on startup (voiceover takes are never touched).
+  try {
+    ensureDirs()
+    const pruned = pruneCommandRecordings(getDirs().recordings)
+    if (pruned.removed > 0) {
+      console.log(`[tmcut] pruned ${pruned.removed} stale command recording(s)`)
+    }
+  } catch {
+    // Housekeeping must never block the editor from opening.
+  }
+
   ipcMain.handle(`${moduleName}:getPaths`, () => {
     ensureDirs()
     const d = getDirs()
@@ -947,7 +1134,7 @@ function registerTmcutController() {
   // Roadmap D-4: MediaRecorder blobs must land on disk for the desktop
   // pipeline (FFmpeg export reads real paths). Saved under
   // <base>/recordings/ with a timestamped name — no dialog friction.
-  ipcMain.handle(`${moduleName}:saveRecording`, async (_event, { data, ext }) => {
+  ipcMain.handle(`${moduleName}:saveRecording`, async (_event, { data, ext, prefix }) => {
     try {
       const bytes = data instanceof Uint8Array
         ? data
@@ -957,13 +1144,39 @@ function registerTmcutController() {
       if (!bytes || bytes.length === 0) return { ok: false, error: 'Empty recording' }
       ensureDirs()
       const safeExt = /^[a-z0-9]{1,8}$/i.test(String(ext || '')) ? String(ext) : 'webm'
-      const filePath = path.join(getDirs().recordings, `voiceover-${Date.now()}.${safeExt}`)
+      // Voiceover takes keep the historical name; command captures are
+      // labelled so the user can tell the two apart on disk.
+      const safePrefix = /^[a-z0-9-]{1,16}$/.test(String(prefix || '')) ? String(prefix) : 'voiceover'
+      const filePath = path.join(getDirs().recordings, `${safePrefix}-${Date.now()}.${safeExt}`)
       fs.writeFileSync(filePath, Buffer.from(bytes))
       return { ok: true, path: filePath }
     } catch (error) {
       return { ok: false, error: String((error && error.message) || error) }
     }
   })
+
+  // Generated media download (P4 groundwork): a provider hands out a URL, the
+  // renderer needs a local file the media pipeline can import.
+  ipcMain.handle(`${moduleName}:downloadMedia`, async (event, args) => {
+    const { url, filename, id } = args || {}
+    const downloadId = String(id || `dl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`)
+    return downloadMediaToFile({
+      url,
+      filename,
+      id: downloadId,
+      onProgress: (progress) => {
+        try {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(`${moduleName}:downloadProgress`, { id: downloadId, ...progress })
+          }
+        } catch {
+          // A closed window must not break an in-flight download.
+        }
+      }
+    })
+  })
+
+  ipcMain.handle(`${moduleName}:cancelDownload`, (_event, id) => cancelMediaDownload(id))
 
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {
     const safePath = isUserMediaPath(filePath)
@@ -1007,4 +1220,10 @@ function registerTmcutController() {
 // isUserMediaPath exported for the R110 regression spec (pure function,
 // no Electron state involved; requiring this module outside Electron is
 // side-effect-free because registration only runs from main.cjs).
-module.exports = { registerTmcutController, isUserMediaPath }
+module.exports = {
+  registerTmcutController,
+  isUserMediaPath,
+  // Exported for the download integration test; not part of the IPC surface.
+  downloadMediaToFile,
+  cancelMediaDownload
+}

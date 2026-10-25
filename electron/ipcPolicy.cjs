@@ -35,6 +35,8 @@ const PUSH_CHANNELS = [
   // Roadmap v3 PART A: asset download progress pushes (jobId/entryId/
   // loaded/total) — the Asset Center queue's only main->renderer channel.
   'tmcut:assetCenter:progress',
+  // Generated-media download progress (bytes loaded of the declared total).
+  'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
   ...TASK_EVENT_NAMES.map(n => `tools:youtube:${n}`),
   ...TASK_EVENT_NAMES.map(n => `tools:ffmpeg:${n}`)

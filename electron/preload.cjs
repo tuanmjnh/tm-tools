@@ -10,6 +10,7 @@ const PUSH_CHANNELS = [
   'app-updater:status-changed',
   'tmcut:renderDone',
   'tmcut:assetCenter:progress',
+  'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
@@ -88,6 +89,25 @@ const aiGateway = exposeNamespace('tools:ai-gateway', {
   on: []
 })
 
+const videoGeneration = exposeNamespace('tools:video-generation', {
+  invoke: [
+    'providers',
+    'provider:capabilities',
+    'estimate',
+    'submit',
+    'poll',
+    'cancel',
+    'download',
+    'jobs:list',
+    'jobs:get',
+    'jobs:retry',
+    'jobs:delete',
+    'usage-ledger',
+    'provider:health'
+  ],
+  on: []
+})
+
 const dialog = exposeNamespace('tools:dialog', {
   invoke: ['openFile', 'openFolder', 'saveFile'],
   on: []
@@ -99,11 +119,11 @@ const tmcut = exposeNamespace('tmcut', {
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset',
+    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset', 'downloadMedia', 'cancelDownload',
     'analyzeScenes', 'analyzeSilence', 'listFonts',
     'watchOutput', 'unwatchOutput'
   ],
-  on: ['renderDone']
+  on: ['renderDone', 'downloadProgress']
 })
 
 // Roadmap v3 PART A: on-demand Asset Center I/O (registry + verified
@@ -186,7 +206,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
-  tools: { youtube, ffmpeg, profiles, aiGateway },
+  tools: { youtube, ffmpeg, profiles, aiGateway, videoGeneration },
   dialog,
   fileManager,
   tmcut: { ...tmcut, assetCenter: tmcutAssetCenter },

@@ -12,6 +12,7 @@ const { registerProfilesController } = require('./tools/profiles.controller.cjs'
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
 const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
+const { registerVideoGeneration } = require('./tools/video-generation/controller.mjs')
 // R139 (§203): API-key slots are encrypted AT REST with the OS keychain
 // (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
 // tokens, process.env holds plaintext (the gateway stays untouched — its
@@ -572,6 +573,7 @@ app.whenReady().then(() => {
   // activate — registering here (not in createWindow) avoids double-handlers.
   registerAssetCenterController(() => win)
   registerAiGateway()
+  registerVideoGeneration()
   if (typeof initializePlatform === 'function') {
     initializePlatform()
   }

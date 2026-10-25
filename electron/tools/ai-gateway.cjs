@@ -137,6 +137,7 @@ const PROVIDER_PRESETS = [
   { id: 'mistral', label: 'Mistral AI', baseUrl: 'https://api.mistral.ai/v1' },
   { id: 'together', label: 'Together AI', baseUrl: 'https://api.together.xyz/v1' },
   { id: 'cerebras', label: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1' },
+  { id: 'amd_radeon', label: 'AMD Radeon AI', baseUrl: 'https://developer.amd.com.cn/radeon/api/v1' },
   { id: 'ollama', label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', keyless: true },
   // Multi-provider gateway: one API surface in front of many providers/models.
   { id: 'freellmapi', label: 'FreeLLMAPI (multi-provider gateway)', baseUrl: '', requiresModel: true },
