@@ -166,6 +166,17 @@ export function createMockIpc(projectId: string): McpIpc {
     seekPlayback: async () => {},
     playPlayback: async () => {},
     pausePlayback: async () => {},
-    emitEvent: () => {}
+    emitEvent: () => {},
+
+    // Phase 7: Video Factory (mock)
+    factoryEstimateBatch: async () => ({ ok: true, plan: { templateName: 'Mock', sceneCount: 0, validCount: 0, totalCount: 0 }, estimate: { estimatedCostUsd: 0, currency: 'USD', batchSize: 1, perJobCostUsd: 0 }, budget: { allowed: true, requiresConfirmation: false, spentTodayUsd: 0 } }),
+    factoryCreateBatch: async () => ({ ok: true, data: { batchId: 'mock-batch', templateId: 'mock', templateVersion: '1', totalItems: 1, completedItems: 0, failedItems: 0, budgetCapUsd: 0, estimatedCostUsd: 0, actualCostUsd: 0, createdAt: new Date().toISOString() } }),
+    factoryGetBatch: async () => ({ ok: true, data: { batch: null, items: [], jobs: [], progress: 0 } }),
+    factoryPauseBatch: async () => ({ ok: true }),
+    factoryResumeBatch: async () => ({ ok: true }),
+    factoryCancelBatch: async () => ({ ok: true }),
+    factoryGetJob: async () => ({ ok: true, data: null }),
+    factoryRetryJob: async () => ({ ok: true }),
+    factoryAssembleBatch: async () => ({ ok: true, assembled: [], failed: [] })
   }
 }

@@ -406,11 +406,11 @@ export const SaveAsTemplateParams = z.object({
   category: z.enum(['intro', 'outro', 'split-screen', 'promo', 'minimal', 'custom']),
   aspectRatio: z.enum(['9:16', '16:9', '1:1', '4:3', '21:9']),
   placeholderRules: z.array(z.object({
-    trackId: z.string(),
-    placeholderType: z.enum(['media', 'text']),
-    replaceWith: z.union([z.string(), z.number(), z.boolean()]).optional()
-  })).optional()
-}
+      trackId: z.string(),
+      placeholderType: z.enum(['media', 'text']),
+      replaceWith: z.union([z.string(), z.number(), z.boolean()]).optional()
+    })).optional()
+  })
 
 export const DeleteTemplateParams = z.object({
   templateId: z.string()
@@ -480,4 +480,115 @@ export const RetryExportJobParams = z.object({
 
 export const ClearExportHistoryParams = z.object({
   status: z.enum(['done', 'failed', 'cancelled', 'all']).default('done')
+})
+
+// -----------------------------------------------------------------------------
+// Video Factory (Phase 7 — MCP Factory tools, roadmap v1 §4)
+// -----------------------------------------------------------------------------
+
+export const BatchEstimateParams = z.object({
+  templateId: z.string(),
+  templateVersion: z.string(),
+  records: z.array(z.record(z.string(), z.unknown()))
+})
+
+export const BatchEstimateResult = z.object({
+  ok: z.boolean(),
+  plan: z.object({
+    templateName: z.string(),
+    sceneCount: z.number().int().nonnegative(),
+    validCount: z.number().int().nonnegative(),
+    totalCount: z.number().int().nonnegative(),
+    validationErrors: z.array(z.record(z.string(), z.unknown())).optional()
+  }).optional(),
+  estimate: z.object({
+    estimatedCostUsd: z.number().nonnegative(),
+    currency: z.string(),
+    batchSize: z.number().int().positive(),
+    perJobCostUsd: z.number().nonnegative()
+  }).optional(),
+  budget: z.object({
+    allowed: z.boolean(),
+    blockedBy: z.string().optional(),
+    requiresConfirmation: z.boolean(),
+    spentTodayUsd: z.number().nonnegative()
+  }).optional(),
+  error: z.string().optional()
+})
+export type BatchEstimateResult = z.infer<typeof BatchEstimateResult>
+
+export const CreateBatchParams = z.object({
+  templateId: z.string(),
+  templateVersion: z.string(),
+  records: z.array(z.record(z.string(), z.unknown())),
+  confirmed: z.boolean().default(false),
+  inputSource: z.enum(['form', 'csv', 'json', 'api']).default('csv'),
+  runMode: z.enum(['dry-run', 'live']).default('dry-run'),
+  providerId: z.string().optional()
+})
+
+export const BatchSummary = z.object({
+  batchId: z.string(),
+  templateId: z.string(),
+  templateVersion: z.string(),
+  inputSource: z.string(),
+  status: z.enum(['draft', 'queued', 'submitting', 'processing', 'completed', 'failed', 'canceled', 'paused', 'assembled']),
+  totalItems: z.number().int().nonnegative(),
+  completedItems: z.number().int().nonnegative(),
+  failedItems: z.number().int().nonnegative(),
+  budgetCapUsd: z.number().nonnegative(),
+  estimatedCostUsd: z.number().nonnegative(),
+  actualCostUsd: z.number().nonnegative(),
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional()
+})
+export type BatchSummary = z.infer<typeof BatchSummary>
+
+export const GetBatchParams = z.object({
+  batchId: z.string()
+})
+
+export const BatchDetail = z.object({
+  batch: BatchSummary,
+  items: z.array(z.record(z.string(), z.unknown())),
+  jobs: z.array(z.record(z.string(), z.unknown())),
+  progress: z.number().int().min(0).max(100)
+}).strict()
+export type BatchDetail = z.infer<typeof BatchDetail>
+
+export const BatchControlParams = z.object({
+  batchId: z.string()
+})
+
+export const GetJobParams = z.object({
+  jobId: z.string()
+})
+
+export const JobSummary = z.object({
+  jobId: z.string(),
+  batchId: z.string(),
+  type: z.enum(['script', 'image', 'video', 'voice', 'music']),
+  model: z.string(),
+  status: z.enum(['draft', 'queued', 'submitting', 'processing', 'completed', 'failed', 'canceled', 'needs_review', 'approved', 'assembled']),
+  attempts: z.number().int().nonnegative(),
+  maxAttempts: z.number().int().positive(),
+  estimatedCostUsd: z.number().nonnegative(),
+  actualCostUsd: z.number().optional(),
+  errorCategory: z.string().optional(),
+  errorMessage: z.string().optional(),
+  providerTaskId: z.string().optional(),
+  outputAssetId: z.string().optional(),
+  createdAt: z.string(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional()
+})
+export type JobSummary = z.infer<typeof JobSummary>
+
+export const RetryJobParams = z.object({
+  jobId: z.string()
+})
+
+export const AssembleProjectParams = z.object({
+  batchId: z.string()
 })

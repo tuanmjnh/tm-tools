@@ -590,6 +590,17 @@ export function useVideoFactory() {
     return counts
   }
 
+  function batchProgress(batchId: string): number {
+    const batchEntry = batch(batchId)
+    if (!batchEntry) return 0
+    const jobList = jobsOf(batchId)
+    if (jobList.length === 0) return 0
+    const settled = jobList.filter(job =>
+      ['completed', 'failed', 'canceled', 'needs_review', 'approved', 'assembled'].includes(job.status)
+    ).length
+    return Math.round((settled / jobList.length) * 100)
+  }
+
   return {
     batches,
     activeBatches,
@@ -614,6 +625,7 @@ export function useVideoFactory() {
     approveOutput,
     removeBatch,
     isRunning,
-    jobStatusCounts
+    jobStatusCounts,
+    batchProgress
   }
 }

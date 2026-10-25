@@ -18,6 +18,8 @@ import {
   ListTemplatesParams, ApplyTemplateParams, SaveAsTemplateParams, DeleteTemplateParams, ImportTemplateParams, ExportTemplateParams,
   // Phase 4: Export Queue
   ListExportJobsParams, AddExportJobParams, PauseExportJobParams, ResumeExportJobParams, CancelExportJobParams, RetryExportJobParams, ClearExportHistoryParams,
+  // Phase 7: Video Factory
+  BatchEstimateParams, CreateBatchParams, GetBatchParams, BatchControlParams, GetJobParams, RetryJobParams, AssembleProjectParams,
   // Types
   ProjectSummary, TimelineSnapshot, AssetSummary, ProposalSnapshot, ProposalOperation,
   ServerCapabilities, SessionConfig, SessionInfo,
@@ -90,6 +92,17 @@ export interface McpIpc {
   cancelExportJob(projectId: string, jobId: string): Promise<void>
   retryExportJob(projectId: string, jobId: string): Promise<any>
   clearExportHistory(projectId: string, status: string): Promise<void>
+
+  // Phase 7: Video Factory (roadmap v1 §4 factory.* tools)
+  factoryEstimateBatch(projectId: string, params: any): Promise<any>
+  factoryCreateBatch(projectId: string, params: any): Promise<any>
+  factoryGetBatch(projectId: string, batchId: string): Promise<any>
+  factoryPauseBatch(projectId: string, batchId: string): Promise<any>
+  factoryResumeBatch(projectId: string, batchId: string): Promise<any>
+  factoryCancelBatch(projectId: string, batchId: string): Promise<any>
+  factoryGetJob(projectId: string, jobId: string): Promise<any>
+  factoryRetryJob(projectId: string, jobId: string): Promise<any>
+  factoryAssembleBatch(projectId: string, batchId: string): Promise<any>
 
   // Events (server pushes to host via stdio)
   emitEvent(event: any): void
@@ -534,6 +547,107 @@ export const TOOL_REGISTRY: ToolDef[] = [
       await ipc.clearExportHistory(projectId, params.status)
       return { ok: true }
     }
+  },
+
+  // === Video Factory (Phase 7) ===
+  {
+    name: 'factory.estimate_batch',
+    description: 'Estimate cost and validate input records for a batch before creating it',
+    parameters: BatchEstimateParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryEstimateBatch(projectId, params)
+    })
+  },
+  {
+    name: 'factory.create_batch',
+    description: 'Create a new batch from a template and input records (confirmed estimate)',
+    parameters: CreateBatchParams,
+    risk: 'cost',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryCreateBatch(projectId, params)
+    })
+  },
+  {
+    name: 'factory.get_batch',
+    description: 'Get batch status with items and jobs',
+    parameters: GetBatchParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryGetBatch(projectId, params.batchId)
+    })
+  },
+  {
+    name: 'factory.pause_batch',
+    description: 'Pause a running or queued batch',
+    parameters: BatchControlParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryPauseBatch(projectId, params.batchId)
+    })
+  },
+  {
+    name: 'factory.resume_batch',
+    description: 'Resume a paused batch',
+    parameters: BatchControlParams,
+    risk: 'reversible',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryResumeBatch(projectId, params.batchId)
+    })
+  },
+  {
+    name: 'factory.cancel_batch',
+    description: 'Cancel a batch (jobs may still be billed on provider side)',
+    parameters: BatchControlParams,
+    risk: 'destructive',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryCancelBatch(projectId, params.batchId)
+    })
+  },
+  {
+    name: 'factory.get_job',
+    description: 'Get generation job status and details',
+    parameters: GetJobParams,
+    risk: 'read',
+    requiresApproval: false,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryGetJob(projectId, params.jobId)
+    })
+  },
+  {
+    name: 'factory.retry_job',
+    description: 'Retry a failed generation job',
+    parameters: RetryJobParams,
+    risk: 'cost',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryRetryJob(projectId, params.jobId)
+    })
+  },
+  {
+    name: 'factory.assemble_batch',
+    description: 'Assemble approved outputs from a batch into editor projects',
+    parameters: AssembleProjectParams,
+    risk: 'cost',
+    requiresApproval: true,
+    handler: async (params, { projectId, ipc }) => ({
+      ok: true,
+      data: await ipc.factoryAssembleBatch(projectId, params.batchId)
+    })
   },
 ]
 

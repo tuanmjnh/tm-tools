@@ -121,7 +121,17 @@ const videoGeneration = exposeNamespace('tools:video-generation', {
     'jobs:retry',
     'jobs:delete',
     'usage-ledger',
-    'provider:health'
+    'provider:health',
+    // Phase 7: Video Factory
+    'factory:estimate',
+    'factory:create',
+    'factory:get',
+    'factory:pause',
+    'factory:resume',
+    'factory:cancel',
+    'factory:job:get',
+    'factory:job:retry',
+    'factory:assemble'
   ],
   on: []
 })

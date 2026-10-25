@@ -285,6 +285,79 @@ function registerVideoGeneration() {
     return { ok: true }
   })
 
+  // =========================================================================
+  // Video Factory (Phase 7) — batch queue, items, assembly
+  // =========================================================================
+
+  // Estimate batch cost from template + records
+  ipcMain.handle('tools:video-generation:factory:estimate', async (_event, args) => {
+    const { templateId, templateVersion, records } = args || {}
+    if (!templateId || !templateVersion || !Array.isArray(records)) {
+      return { ok: false, error: { code: 'invalid-params', message: 'templateId, templateVersion, records[] required' } }
+    }
+    // Delegate to renderer via mcp:forward for preview (which uses useVideoFactory)
+    // This handler returns a request to the renderer bridge
+    return { ok: true, data: { mustForward: true, tool: 'factory.estimate_batch', params: args } }
+  })
+
+  // Create batch (after confirmed estimate)
+  ipcMain.handle('tools:video-generation:factory:create', async (_event, args) => {
+    const { templateId, templateVersion, records, confirmed, inputSource, runMode, providerId } = args || {}
+    if (!templateId || !templateVersion || !Array.isArray(records)) {
+      return { ok: false, error: { code: 'invalid-params', message: 'templateId, templateVersion, records[] required' } }
+    }
+    return { ok: true, data: { mustForward: true, tool: 'factory.create_batch', params: args } }
+  })
+
+  // Get batch with items + jobs
+  ipcMain.handle('tools:video-generation:factory:get', async (_event, args) => {
+    const { batchId } = args || {}
+    if (!batchId) return { ok: false, error: { code: 'invalid-params', message: 'batchId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.get_batch', params: args } }
+  })
+
+  // Pause batch
+  ipcMain.handle('tools:video-generation:factory:pause', async (_event, args) => {
+    const { batchId } = args || {}
+    if (!batchId) return { ok: false, error: { code: 'invalid-params', message: 'batchId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.pause_batch', params: args } }
+  })
+
+  // Resume batch
+  ipcMain.handle('tools:video-generation:factory:resume', async (_event, args) => {
+    const { batchId } = args || {}
+    if (!batchId) return { ok: false, error: { code: 'invalid-params', message: 'batchId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.resume_batch', params: args } }
+  })
+
+  // Cancel batch
+  ipcMain.handle('tools:video-generation:factory:cancel', async (_event, args) => {
+    const { batchId } = args || {}
+    if (!batchId) return { ok: false, error: { code: 'invalid-params', message: 'batchId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.cancel_batch', params: args } }
+  })
+
+  // Get generation job
+  ipcMain.handle('tools:video-generation:factory:job:get', async (_event, args) => {
+    const { jobId } = args || {}
+    if (!jobId) return { ok: false, error: { code: 'invalid-params', message: 'jobId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.get_job', params: args } }
+  })
+
+  // Retry job
+  ipcMain.handle('tools:video-generation:factory:job:retry', async (_event, args) => {
+    const { jobId } = args || {}
+    if (!jobId) return { ok: false, error: { code: 'invalid-params', message: 'jobId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.retry_job', params: args } }
+  })
+
+  // Assemble batch outputs
+  ipcMain.handle('tools:video-generation:factory:assemble', async (_event, args) => {
+    const { batchId } = args || {}
+    if (!batchId) return { ok: false, error: { code: 'invalid-params', message: 'batchId required' } }
+    return { ok: true, data: { mustForward: true, tool: 'factory.assemble_batch', params: args } }
+  })
+
   // Get usage ledger
   ipcMain.handle('tools:video-generation:usage-ledger', async (_event, args) => {
     const { from, to, providerId } = args || {}

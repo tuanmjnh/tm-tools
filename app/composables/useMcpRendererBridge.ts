@@ -7,6 +7,7 @@ import { useTmcutAgentTools } from './useTmcutAgentTools'
 import { useTmcutAssetCenter } from './useTmcutAssetCenter'
 import { useTmcutTemplates } from './useTmcutTemplates'
 import { useTmcutExportQueue } from './useTmcutExportQueue'
+import { useVideoFactory } from './useVideoFactory'
 
 /**
  * Sets up the MCP renderer-side bridge.
@@ -19,6 +20,7 @@ export function useMcpRendererBridge() {
   const assetCenter = useTmcutAssetCenter()
   const templates = useTmcutTemplates()
   const exportQueue = useTmcutExportQueue()
+  const factory = useVideoFactory()
 
   // Map of tool name to handler function
   const toolHandlers: Record<string, (params: any, projectId: string) => Promise<any>> = {
@@ -197,10 +199,67 @@ export function useMcpRendererBridge() {
       return { ok: true, data: result }
     },
     'export.clear_history': async (params, _projectId) => {
-      await exportQueue.clearDoneJobs()
-      return { ok: true }
-    },
-  }
+          await exportQueue.clearDoneJobs()
+          return { ok: true }
+        },
+
+        // === Video Factory (Phase 7) ===
+        'factory.estimate_batch': async (params, _projectId) => {
+          const result = factory.preview(params.templateId, params.templateVersion, params.records)
+          return { ok: true, data: result }
+        },
+        'factory.create_batch': async (params, _projectId) => {
+          const result = factory.commit(params.templateId, params.templateVersion, params.records, {
+            confirmed: params.confirmed,
+            inputSource: params.inputSource,
+            budget: params.budget
+          })
+          return { ok: true, data: result }
+        },
+        'factory.get_batch': async (params, _projectId) => {
+              const batch = factory.batch(params.batchId)
+              if (!batch) return { ok: false, error: { code: 'NOT_FOUND', message: 'Batch not found', retryable: false } }
+              const items = factory.itemsOf(params.batchId)
+              const jobs = factory.jobsOf(params.batchId)
+              const progress = factory.batchProgress(params.batchId)
+              return { ok: true, data: { batch, items, jobs, progress } }
+            },
+        'factory.pause_batch': async (params, _projectId) => {
+          const result = factory.pause(params.batchId)
+          return { ok: true, data: result }
+        },
+        'factory.resume_batch': async (params, _projectId) => {
+          const result = factory.resume(params.batchId)
+          if (result.ok && params.batchId) {
+            await factory.run(params.batchId)
+          }
+          return { ok: true, data: result }
+        },
+        'factory.cancel_batch': async (params, _projectId) => {
+          const result = factory.cancel(params.batchId)
+          return { ok: true, data: result }
+        },
+        'factory.get_job': async (params, _projectId) => {
+          const job = factory.jobs.value.find(j => j.jobId === params.jobId)
+          if (!job) return { ok: false, error: { code: 'NOT_FOUND', message: 'Job not found', retryable: false } }
+          return { ok: true, data: job }
+        },
+        'factory.retry_job': async (params, _projectId) => {
+          const result = factory.retryJob(params.jobId)
+          if (result.ok && params.jobId) {
+            // Find the batch for this job
+            const job = factory.jobs.value.find(j => j.jobId === params.jobId)
+            if (job) await factory.run(job.batchId)
+          }
+          return { ok: true, data: result }
+        },
+        'factory.assemble_batch': async (params, _projectId) => {
+          // The actual assemble needs the project writer which is editor-specific
+          // We return the assembly plan so the caller can invoke the writer
+          const result = factory.assemblyPlan(params.batchId)
+          return { ok: true, data: result }
+        },
+      }
 
   const unsubscribe = shallowRef<() => void>(() => {})
 
