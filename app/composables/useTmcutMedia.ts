@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import type { TmcutAsset, TmcutAssetKind, TmcutMediaFolder } from '~/types/tmcut'
+import type { DownloadProgressPayload } from '#shared/types/electron'
 import { createEmptyTmcutAssetMeta } from '~/types/tmcut'
 import { effectiveAssetKind } from '~/utils/tmcut/assetKind'
 import {
@@ -479,6 +480,48 @@ export function useTmcutMedia() {
     return created
   }
 
+  /**
+   * Import a remote output through the desktop download channel: main writes
+   * the bytes to <base>/downloads/, then the normal import pipeline probes it
+   * and builds the thumbnails. Returns the created/linked asset path.
+   *
+   * On the web runtime there is nothing to download to — `importWebFiles`
+   * (blob: URL, session-only) is the caller's job, so this refuses instead of
+   * pretending.
+   */
+  async function downloadRemoteMedia(
+    url: string,
+    options: { filename?: string, id?: string } = {}
+  ): Promise<{ ok: boolean, path?: string, error?: string }> {
+    const ipc = tmcutIpc()
+    if (!ipc?.downloadMedia) return { ok: false, error: 'desktop-only' }
+    const downloaded = await ipc.downloadMedia({ url, filename: options.filename, id: options.id })
+    if (!downloaded.ok || !downloaded.path) {
+      return { ok: false, error: downloaded.error || 'download failed' }
+    }
+    // The registry is persisted as a whole — importing before it is loaded
+    // would drop every existing asset from assets.json.
+    await loadLibrary()
+    await importFiles([downloaded.path])
+    return { ok: true, path: normalizeMediaPath(downloaded.path) }
+  }
+
+  /** Cancel one in-flight download (no-op when the channel is unavailable). */
+  async function cancelMediaDownload(id: string): Promise<boolean> {
+    const ipc = tmcutIpc()
+    if (!ipc?.cancelDownload) return false
+    return ipc.cancelDownload(id)
+  }
+
+  /** Byte progress for downloads that were started with an id. */
+  function onMediaDownloadProgress(
+    callback: (payload: DownloadProgressPayload) => void
+  ): () => void {
+    const ipc = tmcutIpc()
+    if (!ipc?.onDownloadProgress) return () => {}
+    return ipc.onDownloadProgress(callback)
+  }
+
   async function checkMissing() {
     const ipc = tmcutIpc()
     if (!ipc || assets.value.length === 0 || import.meta.server) return
@@ -700,6 +743,9 @@ export function useTmcutMedia() {
     loadLibrary,
     importFiles,
     importWebFiles,
+    downloadRemoteMedia,
+    cancelMediaDownload,
+    onMediaDownloadProgress,
     probeWebMedia,
     captureVideoThumb,
     checkMissing,

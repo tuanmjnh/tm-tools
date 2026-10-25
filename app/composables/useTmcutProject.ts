@@ -1494,10 +1494,29 @@ function historySnapshot(): string {
   })
 }
 
+// Multi-command transaction (orchestration: AI/voice/MCP proposals).
+// Every op inside the group is folded into ONE undo entry whose snapshot is
+// taken when the group opens; a refused/partial group can still be undone in
+// a single step. Nesting is counted so inner helpers stay callable.
+let historyGroupDepth = 0
+
+function beginHistoryGroup() {
+  if (!currentProject.value) return
+  if (historyGroupDepth === 0) pushHistory()
+  historyGroupDepth++
+}
+
+function endHistoryGroup() {
+  historyGroupDepth = Math.max(0, historyGroupDepth - 1)
+  lastCoalesce = null
+}
+
 // Capture state BEFORE a mutation so it can be restored with undo().
 // Call at drag/trim gesture start and inside discrete ops (add/remove/split).
 function pushHistory() {
   if (!currentProject.value) return
+  // Inside a transaction the opening snapshot already covers this change.
+  if (historyGroupDepth > 0) return
   undoStack.value.push(historySnapshot())
   if (undoStack.value.length > HISTORY_LIMIT) undoStack.value.shift()
   redoStack.value = []
@@ -1786,6 +1805,8 @@ export function useTmcutProject() {
     closeProjectGaps,
     pushHistory,
     pushHistoryCoalesced,
+    beginHistoryGroup,
+    endHistoryGroup,
     undo,
     redo,
     canUndo,

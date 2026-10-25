@@ -25,6 +25,18 @@ export interface VoiceoverResult {
   added: number
   failed: number
   discarded: boolean
+  /** Absolute path of the saved take (desktop only — web has no disk). */
+  path?: string
+}
+
+export interface StopRecordingOptions {
+  /**
+   * Voiceover capture imports the take into the media library (default).
+   * Command capture passes false: the file exists only to be transcribed.
+   */
+  importToLibrary?: boolean
+  /** File-name prefix in <base>/recordings/ (default `voiceover`). */
+  prefix?: string
 }
 
 export function useTmcutRecorder() {
@@ -77,8 +89,9 @@ export function useTmcutRecorder() {
     return true
   }
 
-  /** Stop and import the take. */
-  async function stop(): Promise<VoiceoverResult> {
+  /** Stop the take; import it to the library unless told otherwise. */
+  async function stop(options: StopRecordingOptions = {}): Promise<VoiceoverResult> {
+    const importToLibrary = options.importToLibrary !== false
     const recorder = mediaRecorder
     if (!recorder || !recording.value) return { seconds: 0, added: 0, failed: 0, discarded: true }
     recording.value = false
@@ -100,10 +113,18 @@ export function useTmcutRecorder() {
       const ipc = typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
       if (ipc) {
         const bytes = new Uint8Array(await blob.arrayBuffer())
-        const saved = await ipc.saveRecording({ data: bytes, ext })
+        const saved = await ipc.saveRecording({ data: bytes, ext, prefix: options.prefix })
         if (!saved.ok || !saved.path) throw new Error(saved.error || 'Recording save failed')
+        if (!importToLibrary) {
+          return { seconds, added: 0, failed: 0, discarded: false, path: saved.path }
+        }
         const result = await importFiles([saved.path])
-        return { seconds, added: result.added, failed: result.failed, discarded: false }
+        return { seconds, added: result.added, failed: result.failed, discarded: false, path: saved.path }
+      }
+      if (!importToLibrary) {
+        // No disk in the browser build: the speech gateway needs a real path,
+        // so command capture simply reports that it was not persisted.
+        return { seconds, added: 0, failed: 0, discarded: false }
       }
       const file = new File([blob], `voiceover-${Date.now()}.${ext}`, { type: blob.type })
       const created = await importWebFiles([file])

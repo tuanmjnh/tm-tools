@@ -1,4 +1,5 @@
-import type { AiCompleteInput, AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '~~/types/electron'
+import type { AiCompleteInput, AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '#shared/types/electron'
+import { useHub } from './useHub'
 
 function aiApi() {
   return typeof window !== 'undefined' ? window.electronAPI?.tools?.aiGateway : undefined
@@ -11,6 +12,16 @@ function aiApi() {
  */
 export function useTmcutAi() {
   const isDesktop = computed(() => !!aiApi())
+
+  // Resolved lazily on purpose: the gateway itself is Electron IPC and needs
+  // no hub session, so building the hub client here would make every consumer
+  // of this composable (Node unit harnesses included) require the Nuxt runtime.
+  // Only the hub provider catalogue touches it.
+  let hub: ReturnType<typeof useHub> | null = null
+  function hubClient() {
+    if (!hub) hub = useHub()
+    return hub
+  }
 
   async function complete(input: AiCompleteInput) {
     const api = aiApi()
@@ -60,15 +71,46 @@ export function useTmcutAi() {
     return res.data.models
   }
 
-  /** Provider presets (built-in endpoints + aggregator entries). */
+  /**
+   * Provider presets — gateway builtins (IPC) MERGED with the hub's global
+   * provider catalog (`GET /api/v1/apps/:appId/ai/providers`, user JWT +
+   * `ai.providers.read`; fail-soft 403/offline → gateway builtins only).
+   * A hub preset with the same id OVERRIDES the gateway builtin (central
+   * baseUrl correction); hub-only definitions are appended as new presets.
+   */
   async function providerPresets(): Promise<AiProviderPreset[]> {
-    const api = aiApi()
-    if (!api) return []
+    const gateway = await (async () => {
+      const api = aiApi()
+      if (!api) return []
+      try {
+        const res = await api.presets()
+        return res?.ok && res.data ? res.data.presets : []
+      } catch {
+        return []
+      }
+    })()
+
     try {
-      const res = await api.presets()
-      return res?.ok && res.data ? res.data.presets : []
+      const { hubFetch, appId } = hubClient()
+      const res = await hubFetch<{ success: boolean, data: Array<{ definition: { key: string, name: string, category: string, base_url_default: string | null } }> }>(
+        `/api/v1/apps/${appId}/ai/providers`
+      )
+      const defs = (res?.data ?? []).filter(d => d.definition?.category === 'ai_llm')
+      const byId = new Map(gateway.map(p => [p.id, { ...p }]))
+      for (const { definition } of defs) {
+        const preset: AiProviderPreset = {
+          id: definition.key,
+          label: definition.name,
+          baseUrl: definition.base_url_default || '',
+          keyless: false,
+          requiresModel: false,
+          needsBaseUrl: !definition.base_url_default
+        }
+        byId.set(definition.key, preset) // hub wins on the same id
+      }
+      return [...byId.values()]
     } catch {
-      return []
+      return gateway
     }
   }
 
