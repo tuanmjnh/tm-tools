@@ -665,21 +665,136 @@ app.whenReady().then(() => {
     console.error(JSON.stringify({ type: 'event:job_status', payload: job }))
   })
 
-  // Start MCP server on demand when renderer requests it
-  ipcMain.handle('mcp:start', async (event) => {
-    if (!isTrustedSender(event)) return { ok: false }
-    spawnMcpServer()
-    return { ok: true }
+  // Phase 4: Asset Center, Templates, Export Queue handlers
+  // All forward to renderer via mcp:forward channel
+  // ============================================================
+
+  // Asset Center
+  ipcMain.handle('mcp:asset:list_catalog', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('asset.list_catalog', { params, projectId }, event)
   })
 
-  ipcMain.handle('mcp:stop', async (event) => {
-    if (!isTrustedSender(event)) return { ok: false }
-    if (mcpServerProcess) {
-      mcpServerProcess.kill()
-      mcpServerProcess = null
-    }
-    return { ok: true }
+  ipcMain.handle('mcp:asset:install', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('asset.install', { params, projectId }, event)
   })
+
+  ipcMain.handle('mcp:asset:uninstall', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('asset.uninstall', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:asset:install_status', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('asset.install_status', { params, projectId }, event)
+  })
+
+  // Templates
+  ipcMain.handle('mcp:template:list', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.list', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:template:apply', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.apply', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:template:save_as', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.save_as', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:template:delete', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.delete', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:template:import', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.import', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:template:export', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('template.export', { params, projectId }, event)
+  })
+
+  // Export Queue
+  ipcMain.handle('mcp:export:list_jobs', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.list_jobs', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:add_job', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.add_job', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:pause_job', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.pause_job', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:resume_job', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.resume_job', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:cancel_job', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.cancel_job', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:retry_job', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.retry_job', { params, projectId }, event)
+  })
+
+  ipcMain.handle('mcp:export:clear_history', async (event, { projectId, params }) => {
+    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
+    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
+    return forwardToRenderer('export.clear_history', { params, projectId }, event)
+  })
+
+  // Forward helper: sends mcp:forward to renderer, waits for mcp:forward:respond
+  function forwardToRenderer(tool, payload, event) {
+    return new Promise((resolve) => {
+      const requestId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const responseChannel = 'mcp:forward:respond'
+      const handler = (_evt, { requestId: respId, result }) => {
+        if (respId === requestId) {
+          ipcMain.removeHandler(responseChannel, handler)
+          resolve(result)
+        }
+      }
+      ipcMain.on(responseChannel, handler)
+      win.webContents.send('mcp:forward', { tool, params: payload, requestId, projectId: payload.projectId })
+      setTimeout(() => {
+        ipcMain.removeHandler(responseChannel, handler)
+        resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } })
+      }, 30000)
+    })
+  }
+
+  // Start MCP server on demand when renderer requests it
 
   if (typeof initializePlatform === 'function') {
     initializePlatform()
