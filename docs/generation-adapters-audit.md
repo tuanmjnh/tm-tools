@@ -44,6 +44,7 @@ official URL and a verification date:
 
 | Provider | Modality | Status | Notes |
 | --- | --- | --- | --- |
+| **Runway** | video | **verified=false** / **needs update** | Adapter uses deprecated Gen-3 Alpha (sunset Jul 30 2026), wrong base URL (`api.runwayml.com` vs `api.dev.runwayml.com`), old model IDs (`gen3a`, `gen3a-turbo`). Current supported: Gen-4, Gen-4 Turbo, Gen-4.5. Must update adapter before marking verified. |
 | Seedance 2.5 (ByteDance) | video | `planned` / **unverified** | No official self-serve REST contract confirmed from primary docs this session. Do NOT code against community endpoints. |
 | Google Flow | video | `planned` / **unverified** | Flow is a product surface; the supported API path (if any) is the Gemini API video generation family — must be verified per checklist, incl. regional availability and pricing. |
 | OpenAI (Sora family) | video | `not started` | Verify API availability, region, pricing before adding. |

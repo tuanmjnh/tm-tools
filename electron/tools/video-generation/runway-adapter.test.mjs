@@ -7,27 +7,28 @@ import assert from 'node:assert/strict'
 import runwayAdapter, { RunwayAdapterError } from './runway-adapter.mjs'
 
 test('runwayAdapter.manifest', async (t) => {
-  await t.test('returns verified manifest with video modality', () => {
+  await t.test('returns manifest with video modality (verified=false until full audit)', () => {
     const m = runwayAdapter.manifest()
     assert.equal(m.schemaVersion, 1)
     assert.equal(m.providerId, 'runway')
-    assert.equal(m.verified, true)
+    assert.equal(m.verified, false)
     assert.deepEqual(m.modalities, ['video'])
     assert.deepEqual(m.outputFormats.video, ['mp4'])
     assert.equal(m.supportsAsync, true)
     assert.equal(m.supportsCancel, true)
+    assert.ok(m.displayName.includes('Gen-4'))
   })
 })
 
 test('runwayAdapter.estimateCost', async (t) => {
   await t.test('calculates estimate based on duration and model', () => {
-    const estTurbo = runwayAdapter.estimateCost({ params: { durationSec: 5, model: 'gen3a-turbo' } })
+    const estTurbo = runwayAdapter.estimateCost({ params: { durationSec: 5, model: 'gen4_turbo' } })
     assert.equal(estTurbo.estimatedCostUsd, 0.15) // 5 * 0.03
     assert.equal(estTurbo.budgetWarning, false)
 
-    const estAlpha = runwayAdapter.estimateCost({ params: { durationSec: 10, model: 'gen3a' } })
-    assert.equal(estAlpha.estimatedCostUsd, 0.50) // 10 * 0.05
-    assert.equal(estAlpha.budgetWarning, false)
+    const estGen4 = runwayAdapter.estimateCost({ params: { durationSec: 10, model: 'gen4' } })
+    assert.equal(estGen4.estimatedCostUsd, 0.50) // 10 * 0.05
+    assert.equal(estGen4.budgetWarning, false)
   })
 })
 

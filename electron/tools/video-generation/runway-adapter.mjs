@@ -16,13 +16,14 @@ import { probeVideo } from './video-probe.mjs'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const RUNWAY_BASE_URL = 'https://api.runwayml.com/v1'
+const RUNWAY_BASE_URL = 'https://api.dev.runwayml.com/v1'
 const RUNWAY_API_VERSION = '2024-11-06'
 
-// Runway model variants
+// Current Runway model variants (Gen-3 Alpha sunset Jul 30 2026 — https://docs.dev.runwayml.com/api-details/api_changelog/)
 const RUNWAY_MODELS = {
-  'gen3a': { id: 'gen3a', label: 'Gen-3 Alpha', maxDurationSec: 10, costPerSecond: 0.05 },
-  'gen3a-turbo': { id: 'gen3a-turbo', label: 'Gen-3 Alpha Turbo', maxDurationSec: 10, costPerSecond: 0.03 }
+  'gen4': { id: 'gen4', label: 'Gen-4', maxDurationSec: 10, costPerSecond: 0.05 },
+  'gen4_turbo': { id: 'gen4_turbo', label: 'Gen-4 Turbo', maxDurationSec: 10, costPerSecond: 0.03 },
+  'gen4.5': { id: 'gen4.5', label: 'Gen-4.5', maxDurationSec: 10, costPerSecond: 0.08 }
 }
 
 class RunwayAdapterError extends Error {
@@ -118,7 +119,7 @@ function manifest() {
   return {
     schemaVersion: 1,
     providerId: 'runway',
-    displayName: 'Runway Gen-3 Alpha',
+    displayName: 'Runway Gen-4 / Gen-4 Turbo / Gen-4.5',
     modalities: ['video'],
     outputFormats: { video: ['mp4'] },
     maxResolution: { video: { width: 1280, height: 720 } },
@@ -127,7 +128,7 @@ function manifest() {
     supportsCancel: true,
     supportsProgress: true,
     costModel: 'per-second',
-    estimatedCostPerUnit: 0.05, // $0.05/second for Gen-3 Alpha
+    estimatedCostPerUnit: 0.05, // $0.05/second for Gen-4
     costUnit: 'second',
     rights: {
       commercialUse: true,
@@ -141,7 +142,7 @@ function manifest() {
       loggingLevel: 'metadata'
     },
     rateLimitRpm: 20,
-    verified: true
+    verified: false
   }
 }
 
@@ -181,7 +182,7 @@ async function submitJob(input) {
   const idempotencyKey = input.idempotencyKey || `runway-${Date.now()}-${Math.random().toString(36).slice(2)}`
   
   const body = {
-    model: input.params?.model || 'gen3a-turbo',
+    model: input.params?.model || 'gen4_turbo',
     prompt: input.prompt,
     negative_prompt: input.negativePrompt || '',
     duration: input.params?.durationSec || 5,
