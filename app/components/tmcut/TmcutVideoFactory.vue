@@ -3,6 +3,7 @@ import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVideoFactory, type BatchPreview } from '~/composables/useVideoFactory'
 import { useVideoTemplates } from '~/composables/useVideoTemplates'
+import { useTmcutAi } from '~/composables/useTmcutAi'
 import { sampleRecordFor } from '~/utils/tmcut/videoTemplates'
 import { classifyOutputSource, planOutputIngest } from '~/utils/tmcut/outputSources'
 import {
@@ -27,6 +28,7 @@ const catalog = useVideoTemplates()
 const factory = useVideoFactory()
 const projectStore = useTmcutProject()
 const media = useTmcutMedia()
+const ai = useTmcutAi()
 
 // Run mode (Roadmap v1 P4): dry-run by default; switches to a live provider
 // runner when the user explicitly opts in and a provider/key is available.
@@ -36,6 +38,13 @@ const selectedProvider = ref('')
 const isElectron = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).electronAPI
 const availableProviders = ref<Array<{ id: string; label: string }>>([])
 const providersLoading = ref(false)
+
+// Prompt-to-Batch mode (Roadmap v1 §6): natural language → AI generates input records
+type InputMode = 'manual' | 'prompt'
+const inputMode = ref<InputMode>('manual')
+const generationPrompt = ref('')
+const promptVariants = ref(3)
+const promptGenerating = ref(false)
 
 // Fetch available video generation providers (desktop only).
 async function loadProviders() {
@@ -215,9 +224,70 @@ function parseInput(): BatchInputRecord[] | null {
     previewed.value = null
     return null
   }
-}
+  }
 
-function checkBatch() {
+  async function generateFromPrompt() {
+    if (!generationPrompt.value.trim() || !currentTemplate.value || !ai.isDesktop) return
+    promptGenerating.value = true
+    try {
+      const template = currentTemplate.value
+      // Build a prompt for the AI to generate input records
+      const fieldNames = template.inputSchema.map(f => f.id)
+      const requiredFields = template.inputSchema.filter(f => f.required).map(f => f.id)
+      const prompt = `Generate ${promptVariants.value} input records for a video template "${template.name}" (${template.topic}).
+  Each record must have these fields: ${fieldNames.join(', ')}
+  Required fields: ${requiredFields.join(', ')}
+  User brief: ${generationPrompt.value.trim()}
+
+  Return ONLY valid JSON array of objects, one per record. No markdown, no explanation.
+  Example format: [{"field1": "value1", "field2": "value2"}, {"field1": "value3", "field2": "value4"}]`
+
+      const res = await ai.complete({
+        task: 'plan',
+        jsonMode: true,
+        messages: [
+          { role: 'system', content: 'You generate structured input data for video templates. Output only valid JSON arrays.' },
+          { role: 'user', content: prompt }
+        ],
+        maxTokens: 2048,
+        temperature: 0.5
+      })
+
+      let records: BatchInputRecord[] | null = null
+      try {
+        const parsed = JSON.parse(res.content)
+        if (Array.isArray(parsed)) {
+          records = parsed.map((r, i) => ({
+            rowIndex: i,
+            label: String(r.name ?? r.title ?? `Variant ${i + 1}`),
+            record: r
+          }))
+        }
+      } catch {
+        toast.add({ title: t('tmcut.factory.aiParseFailed'), description: t('tmcut.factory.aiParseFailedDesc'), color: 'error' })
+        return
+      }
+
+      if (!records || records.length === 0) {
+        toast.add({ title: t('tmcut.factory.aiEmpty'), description: t('tmcut.factory.aiEmptyDesc'), color: 'warning' })
+        return
+      }
+
+      // Switch to manual mode and populate the textarea with generated JSON
+      inputMode.value = 'manual'
+      inputFormat.value = 'json'
+      rawInput.value = JSON.stringify(records.map(r => r.record), null, 2)
+      previewed.value = null
+      parseError.value = null
+      toast.add({ title: t('tmcut.factory.aiGenerated'), description: t('tmcut.factory.aiGeneratedDesc', { count: records.length }), color: 'success' })
+    } catch (error) {
+      toast.add({ title: t('tmcut.factory.aiError'), description: (error as Error)?.message || String(error), color: 'error' })
+    } finally {
+      promptGenerating.value = false
+    }
+  }
+
+  function checkBatch() {
   const records = parseInput()
   if (!records) return
   const [templateId, version] = selectedTemplate.value.split('@')
@@ -617,7 +687,78 @@ function removeBatch(batchId: string) {
         </div>
 
         <div>
-          <div class="flex items-center justify-between mb-1.5">
+          <!-- Input mode selector: Manual CSV/JSON vs Prompt-to-Batch -->
+          <div class="mb-2">
+            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {{ t('tmcut.factory.inputModeLabel') }}
+            </label>
+            <div class="flex items-center gap-1">
+              <UButton
+                size="xs"
+                :color="inputMode === 'manual' ? 'primary' : 'neutral'"
+                :variant="inputMode === 'manual' ? 'soft' : 'ghost'"
+                @click="inputMode = 'manual'; previewed = null"
+              >
+                {{ t('tmcut.factory.manualMode') }}
+              </UButton>
+              <UButton
+                size="xs"
+                :color="inputMode === 'prompt' ? 'primary' : 'neutral'"
+                :variant="inputMode === 'prompt' ? 'soft' : 'ghost'"
+                :disabled="!ai.isDesktop"
+                @click="inputMode = 'prompt'; previewed = null"
+              >
+                {{ t('tmcut.factory.promptMode') }}
+              </UButton>
+            </div>
+          </div>
+
+          <div v-if="inputMode === 'prompt'" class="mb-3">
+            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {{ t('tmcut.factory.promptLabel') }}
+            </label>
+            <UTextarea
+              v-model="generationPrompt"
+              :rows="4"
+              :placeholder="t('tmcut.factory.promptPlaceholder')"
+              class="w-full text-sm"
+            />
+            <div class="flex items-center gap-2 mt-2">
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :disabled="promptVariants <= 1"
+                @click="promptVariants--"
+              >
+                <UIcon name="i-lucide-minus" class="size-3" />
+              </UButton>
+              <span class="text-sm font-mono w-8 text-center">{{ promptVariants }}</span>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                :disabled="promptVariants >= 20"
+                @click="promptVariants++"
+              >
+                <UIcon name="i-lucide-plus" class="size-3" />
+              </UButton>
+              <span class="text-xs text-neutral-500 ml-2">{{ t('tmcut.factory.variants') }}</span>
+            </div>
+            <UButton
+              color="primary"
+              variant="soft"
+              icon="i-lucide-sparkles"
+              block
+              :disabled="!generationPrompt.trim() || !currentTemplate || !ai.isDesktop || promptGenerating"
+              :loading="promptGenerating"
+              @click="generateFromPrompt"
+            >
+              {{ t('tmcut.factory.generateFromPrompt') }}
+            </UButton>
+          </div>
+
+          <div v-else class="flex items-center justify-between mb-1.5">
             <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
               {{ t('tmcut.factory.inputLabel') }}
             </label>
@@ -664,6 +805,7 @@ function removeBatch(batchId: string) {
             {{ parseError }}
           </p>
         </div>
+
 
         <!-- Run mode: dry run (offline, safe) vs live provider (real cost) -->
         <div>
