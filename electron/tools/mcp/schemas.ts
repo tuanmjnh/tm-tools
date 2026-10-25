@@ -1,0 +1,301 @@
+// =============================================================================
+// TMCut MCP Tool Schemas — single source of truth for all tool contracts
+// Zod schemas ensure: validation at boundaries, self-describing JSON Schema for
+// MCP clients, and closed-set registry (no dynamic tool addition).
+// =============================================================================
+
+import { z } from 'zod'
+
+// -----------------------------------------------------------------------------
+// Base types (shared across tools)
+// -----------------------------------------------------------------------------
+
+export const ToolRisk = z.enum(['read', 'reversible', 'destructive', 'cost'])
+export type ToolRisk = z.infer<typeof ToolRisk>
+
+export const ToolErrorCode = z.enum([
+  'METHOD_NOT_FOUND',
+  'INVALID_PARAMS',
+  'INTERNAL_ERROR',
+  'RATE_LIMITED',
+  'DUPLICATE_REQUEST',
+  'REVISION_CONFLICT',
+  'NO_PROJECT',
+  'NO_PROPOSAL',
+  'PROPOSAL_STALE',
+  'VALIDATION_FAILED',
+  'APPROVAL_REQUIRED',
+  'BUDGET_EXCEEDED',
+  'PROVIDER_UNAVAILABLE',
+  'UNAUTHORIZED',
+  'FORBIDDEN'
+])
+export type ToolErrorCode = z.infer<typeof ToolErrorCode>
+
+export const ToolResult = z.object({
+  ok: z.boolean(),
+  data: z.unknown().optional(),
+  error: z.object({
+    code: ToolErrorCode,
+    message: z.string(),
+    retryable: z.boolean()
+  }).optional(),
+  warning: z.string().optional()
+})
+export type ToolResult = z.infer<typeof ToolResult>
+
+// JSON-RPC 2.0 framing (MCP transport)
+export const JsonRpcRequest = z.object({
+  jsonrpc: z.literal('2.0'),
+  id: z.union([z.string(), z.number(), z.null()]),
+  method: z.string(),
+  params: z.unknown().optional()
+})
+export type JsonRpcRequest = z.infer<typeof JsonRpcRequest>
+
+export const JsonRpcResponse = z.object({
+  jsonrpc: z.literal('2.0'),
+  id: z.union([z.string(), z.number(), z.null()]),
+  result: z.unknown().optional(),
+  error: z.object({
+    code: z.number(),
+    message: z.string(),
+    data: z.unknown().optional()
+  }).optional()
+})
+export type JsonRpcResponse = z.infer<typeof JsonRpcResponse>
+
+// -----------------------------------------------------------------------------
+// Project context (read-only)
+// -----------------------------------------------------------------------------
+
+export const ProjectSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  canvas: z.object({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    fps: z.number().positive()
+  }),
+  durationSec: z.number().nonnegative(),
+  trackCounts: z.object({
+    video: z.number().int().nonnegative(),
+    audio: z.number().int().nonnegative(),
+    text: z.number().int().nonnegative()
+  }),
+  clipCount: z.number().int().nonnegative(),
+  revision: z.number().int().nonnegative(),
+  lastSavedAt: z.string().datetime().optional()
+})
+export type ProjectSummary = z.infer<typeof ProjectSummary>
+
+export const TimelineSnapshot = z.object({
+  projectId: z.string(),
+  tracks: z.array(z.object({
+    id: z.string(),
+    type: z.enum(['video', 'audio', 'text']),
+    name: z.string(),
+    locked: z.boolean(),
+    hidden: z.boolean(),
+    muted: z.boolean(),
+    clips: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      trackId: z.string(),
+      startSec: z.number(),
+      durationSec: z.number(),
+      mediaKind: z.enum(['video', 'audio', 'text']).optional(),
+      volume: z.number().min(0).max(100).optional(),
+      effects: z.array(z.string()).optional()
+    }))
+  })),
+  markers: z.array(z.object({
+    id: z.string(),
+    timeSec: z.number(),
+    label: z.string(),
+    color: z.string()
+  })).optional()
+})
+export type TimelineSnapshot = z.infer<typeof TimelineSnapshot>
+
+export const AssetSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(['video', 'audio', 'image', 'font', 'lut']),
+  durationSec: z.number().nonnegative().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional()
+})
+export type AssetSummary = z.infer<typeof AssetSummary>
+
+// -----------------------------------------------------------------------------
+// Proposal system (declarative edits, validated twice, one undo group)
+// -----------------------------------------------------------------------------
+
+export const ProposalOperation = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('add_clip'), trackType: z.enum(['video', 'audio', 'text']), mediaRef: z.string().optional(), text: z.string().optional(), startSec: z.number(), durationSec: z.number().positive() }),
+  z.object({ type: z.literal('move_clip'), clipId: z.string(), startSec: z.number().nonnegative() }),
+  z.object({ type: z.literal('trim_clip'), clipId: z.string(), edge: z.enum(['in', 'out']), atSec: z.number() }),
+  z.object({ type: z.literal('remove_clip'), clipId: z.string() }),
+  z.object({ type: z.literal('split_clip'), clipId: z.string(), atSec: z.number() }),
+  z.object({ type: z.literal('set_volume'), trackId: z.string(), volume: z.number().min(0).max(100) }),
+  z.object({ type: z.literal('add_caption'), text: z.string(), atSec: z.number(), durationSec: z.number().positive() }),
+  z.object({ type: z.literal('set_transition'), clipId: z.string(), transitionType: z.string(), durationSec: z.number().positive() }),
+  z.object({ type: z.literal('set_effect'), clipId: z.string(), effects: z.array(z.object({ type: z.string(), params: z.record(z.unknown()) })) })
+])
+export type ProposalOperation = z.infer<typeof ProposalOperation>
+
+export const ProposalSnapshot = z.object({
+  id: z.string(),
+  intent: z.string(),
+  operations: z.array(ProposalOperation),
+  createdAt: z.string().datetime(),
+  validatedAt: z.string().datetime().optional(),
+  validationErrors: z.array(z.string()).optional(),
+  appliedAt: z.string().datetime().optional()
+})
+export type ProposalSnapshot = z.infer<typeof ProposalSnapshot>
+
+// -----------------------------------------------------------------------------
+// Tool parameter schemas (closed set — registry in tool-registry.ts)
+// -----------------------------------------------------------------------------
+
+// Context tools (read)
+export const GetContextParams = z.object({})
+export const GetTimelineParams = z.object({})
+export const ListAssetsParams = z.object({
+  query: z.string().optional(),
+  kind: z.enum(['video', 'audio', 'image', 'font', 'lut']).optional(),
+  limit: z.number().int().positive().max(100).default(50)
+})
+
+// Proposal tools
+export const CreateProposalParams = z.object({
+  intent: z.string().min(1).max(500)
+})
+export const GetProposalParams = z.object({})
+export const ValidateProposalParams = z.object({})
+export const DiscardProposalParams = z.object({})
+export const ApplyProposalParams = z.object({}) // requiresApproval = true in registry
+
+// Edit tools (all queue into proposal)
+export const AddClipParams = z.object({
+  trackType: z.enum(['video', 'audio', 'text']),
+  name: z.string().min(1).max(200),
+  mediaRef: z.string().optional(),
+  text: z.string().optional(),
+  startSec: z.number().nonnegative(),
+  durationSec: z.number().positive()
+})
+export const MoveClipParams = z.object({
+  clipId: z.string(),
+  startSec: z.number().nonnegative()
+})
+export const TrimClipParams = z.object({
+  clipId: z.string(),
+  edge: z.enum(['in', 'out']),
+  atSec: z.number().nonnegative()
+})
+export const RemoveClipParams = z.object({
+  clipId: z.string()
+})
+export const SplitClipParams = z.object({
+  clipId: z.string(),
+  atSec: z.number().nonnegative()
+})
+export const SetVolumeParams = z.object({
+  trackId: z.string(),
+  volume: z.number().min(0).max(100)
+})
+export const AddCaptionParams = z.object({
+  text: z.string().min(1).max(2000),
+  atSec: z.number().nonnegative(),
+  durationSec: z.number().positive()
+})
+export const SetTransitionParams = z.object({
+  clipId: z.string(),
+  transitionType: z.string(),
+  durationSec: z.number().positive()
+})
+export const SetEffectParams = z.object({
+  clipId: z.string(),
+  effects: z.array(z.object({
+    type: z.string(),
+    params: z.record(z.unknown())
+  }))
+})
+
+// Playback tools
+export const SeekParams = z.object({
+  timeSec: z.number().nonnegative()
+})
+export const PlayParams = z.object({})
+export const PauseParams = z.object({})
+
+// -----------------------------------------------------------------------------
+// Capability manifest (what the server advertises)
+// -----------------------------------------------------------------------------
+
+export const ServerCapabilities = z.object({
+  schemaVersion: z.literal(1),
+  tools: z.array(z.object({
+    name: z.string(),
+    description: z.string(),
+    parameters: z.record(z.unknown()), // JSON Schema subset
+    risk: ToolRisk,
+    requiresApproval: z.boolean()
+  })),
+  project: z.object({
+    currentProjectId: z.string().optional(),
+    canSwitchProject: z.boolean()
+  }).optional()
+})
+export type ServerCapabilities = z.infer<typeof ServerCapabilities>
+
+// -----------------------------------------------------------------------------
+// Session & config
+// -----------------------------------------------------------------------------
+
+export const SessionConfig = z.object({
+  projectId: z.string().optional(),
+  idleTimeoutMs: z.number().int().positive().default(300000)
+})
+export type SessionConfig = z.infer<typeof SessionConfig>
+
+export const SessionInfo = z.object({
+  sessionId: z.string(),
+  projectId: z.string().optional(),
+  capabilities: ServerCapabilities,
+  startedAt: z.string().datetime()
+})
+export type SessionInfo = z.infer<typeof SessionInfo>
+
+// -----------------------------------------------------------------------------
+// Event types (server → host pushes)
+// -----------------------------------------------------------------------------
+
+export const ProposalChangedEvent = z.object({
+  type: z.literal('proposal_changed'),
+  proposal: ProposalSnapshot
+})
+export const ProjectChangedEvent = z.object({
+  type: z.literal('project_changed'),
+  summary: ProjectSummary
+})
+export const JobStatusEvent = z.object({
+  type: z.literal('job_status'),
+  jobId: z.string(),
+  status: z.enum(['queued', 'processing', 'completed', 'failed', 'cancelled']),
+  progress: z.number().min(0).max(100).optional(),
+  result: z.unknown().optional(),
+  error: z.string().optional()
+})
+export type McpEvent = z.infer<typeof ProposalChangedEvent> | z.infer<typeof ProjectChangedEvent> | z.infer<typeof JobStatusEvent>
+
+// -----------------------------------------------------------------------------
+// Helper: validate and coerce
+// -----------------------------------------------------------------------------
+
+export function validateToolParams<T extends z.ZodTypeAny>(schema: T, input: unknown): z.infer<T> {
+  return schema.parse(input)
+}
