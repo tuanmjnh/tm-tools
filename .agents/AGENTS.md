@@ -75,11 +75,12 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
 - **Button Variants**:
   - Primary actions use `color="primary" variant="soft"`.
 - **GridList & Batch Operations**:
-  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.
-  - DELETE endpoints must support batch deletion via comma-separated query IDs.
+  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.- **Tailwind CSS Conventions**:
+  - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (	ailwindcss/enforces-shorthand) and canonical class warnings are disabled.
 
 ### i18n & Language Conventions
 - All user-facing text MUST reside in `i18n/locales/en.json` and `i18n/locales/vi.json` and be accessed via `t()`.
+- **No Inline i18n Fallbacks**: NEVER pass fallback text as a second string argument to `t()` (e.g. `t('key', 'Fallback text')` is strictly forbidden). Always define keys directly in both `i18n/locales/en.json` and `i18n/locales/vi.json`, and invoke `t('key')` without inline fallback string arguments.
 - Source code comments, technical logs, constants, and commit messages MUST ALWAYS be written in English.
 
 ## Testing & Verification

@@ -73,13 +73,25 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
   - Standard dashboard pages keep default padding.
   - Studio & editor pages (such as `/tmcut/editor`) MUST pass the `flush` prop (`<BasePage flush ...>`) to remove padding and gap, giving 100% of the viewport to canvas, timelines, and inspectors.
 - **Button Variants**:
-  - Primary actions use `color="primary" variant="soft"`.
+  - Primary action buttons (save, create, run, confirm, launch, export, …) use `color="primary" variant="soft"` — exactly one per surface.
+  - Dismissal / secondary buttons (cancel, back, close, skip, dismiss, …) use `variant="ghost"` (usually `color="neutral"`) — they must never compete visually with the primary action.
+  - Destructive confirmations use `color="error"`; their cancel counterpart stays `variant="ghost"`.
 - **GridList & Batch Operations**:
-  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.- **Tailwind CSS Conventions**:
+  - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.
+- **Lazy components (code splitting)**:
+  - Any component that mounts on demand (modals, slidesovers, drawers, heavy panels, tab content) MUST be referenced with the Nuxt `Lazy` prefix (e.g. `<LazyBaseResponsiveModal>`, `<LazyBaseConfirmModal>`). The Lazy prefix puts the component in its own chunk and defers loading until it is actually rendered.
+  - Direct (non-lazy) references are reserved for always-visible, above-the-fold chrome (BasePage, nav, grid list).
+- **Type placement (Nuxt 4 standard)**:
+  - Types used by BOTH the Vue app and the Nitro server live in `shared/types/` (import via the built-in `#shared/types/<file>` alias).
+  - App-only types live in `app/types/`; server-only types live in `server/types/`. There is NO root-level `types/` folder.
+  - One canonical definition per type name across the auto-imported surfaces (`app/types`, `server/types`, `shared/types`) — duplicated interface names across those folders trip the unimport "Duplicated imports" warnings.
+  - Values (type guards, status consts) belong in `shared/utils/` or `app/utils/`, not in types folders.
+- **Tailwind CSS Conventions**:
   - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (	ailwindcss/enforces-shorthand) and canonical class warnings are disabled.
 
 ### i18n & Language Conventions
 - All user-facing text MUST reside in `i18n/locales/en.json` and `i18n/locales/vi.json` and be accessed via `t()`.
+- **No Inline i18n Fallbacks**: NEVER pass fallback text as a second string argument to `t()` (e.g. `t('key', 'Fallback text')` is strictly forbidden). Always define keys directly in both `i18n/locales/en.json` and `i18n/locales/vi.json`, and invoke `t('key')` without inline fallback string arguments.
 - Source code comments, technical logs, constants, and commit messages MUST ALWAYS be written in English.
 
 ## Testing & Verification

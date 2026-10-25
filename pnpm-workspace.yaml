@@ -12,7 +12,7 @@ allowBuilds:
   vue-demi: true
 
 minimumReleaseAgeExclude:
-  - tm-hub-client@1.0.1 || 1.0.2 || 1.0.3 || 1.0.4 || 1.0.6
+  - tm-hub-client@1.0.1 || 1.0.2 || 1.0.3 || 1.0.4 || 1.0.6 || 1.0.7
   - electron@44.9.0 || 44.9.1
   - '@nuxt/image@2.2.0'
 

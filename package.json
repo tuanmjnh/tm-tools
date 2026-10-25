@@ -1,7 +1,7 @@
 {
   "name": "tm-tools",
   "version": "1.0.0",
-  "description": "Desktop Application",
+  "description": "Desktop Automation, Media Production & Multi-Profile Workspace",
   "author": "Developer",
   "private": true,
   "type": "module",
@@ -22,6 +22,11 @@
     "test:store": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_store_behaviour.spec.ts",
     "test:templates": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_templates.spec.ts",
     "test:history": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_history.spec.ts",
+    "test:agent": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_agent_tools.spec.ts",
+    "test:voice": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_voice_commands.spec.ts",
+    "test:video-templates": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_video_templates.spec.ts",
+    "test:recordings": "node --test electron/tools/recordings.test.mjs",
+    "test:media-download": "node --test electron/tools/media-download.test.mjs",
     "test:save": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_save_lifecycle.spec.ts",
     "test:ripple": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_ripple.spec.ts",
     "test:markers": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_markers.spec.ts",
@@ -47,7 +52,11 @@
     "build:electron:main": "esbuild electron/src/index.ts --bundle --platform=node --target=node20 --outfile=electron/dist/index.cjs --external:electron --external:better-sqlite3",
     "build:electron": "pnpm build:electron:main && nuxt build && electron-builder --win --config electron-builder.yml",
     "db:generate": "drizzle-kit generate",
-    "generate:vapid": "npx tsx -e \"const wp = require('web-push'); const keys = wp.generateVAPIDKeys(); console.log(JSON.stringify(keys, null, 2))\""
+    "generate:vapid": "npx tsx -e \"const wp = require('web-push'); const keys = wp.generateVAPIDKeys(); console.log(JSON.stringify(keys, null, 2))\"",
+    "test:factory": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_video_factory.spec.ts",
+    "test:assembly": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_video_assembly.spec.ts",
+    "test:sources": "tsx --tsconfig tsconfig.test.json tests/unit/tmcut_output_sources.spec.ts",
+    "test:runway": "node --test electron/tools/video-generation/runway-adapter.test.mjs"
   },
   "dependencies": {
     "@he-tree/vue": "2.10.1",
@@ -87,6 +96,7 @@
     "@tiptap/starter-kit": "^3.32.0",
     "@tiptap/suggestion": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
+    "@tmcut/core": "file:../tmcut-core",
     "@unovis/ts": "^1.6.7",
     "@unovis/vue": "^1.6.7",
     "@vueuse/core": "^15.0.0",
@@ -111,7 +121,7 @@
     "sortablejs": "^1.15.2",
     "striptags": "^3.2.0",
     "tailwindcss": "^4.3.3",
-    "tm-hub-client": "^1.0.6",
+    "tm-hub-client": "^1.0.7",
     "to-px": "^1.1.0",
     "uuid": "^14.0.2",
     "vanilla-jsoneditor": "^3.13.0",
@@ -138,5 +148,5 @@
     "vue-tsc": "^3.3.13",
     "wait-on": "^9.1.0"
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@12.15.0"
 }
