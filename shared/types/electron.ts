@@ -435,6 +435,9 @@ export interface ToolsNamespace {
   onTaskTimeout(cb: (data: { taskKey: number }) => void): EventUnsubscriber
   onManagerInitialized(cb: (data: Record<string, unknown>) => void): EventUnsubscriber
   onUpdateProgress?(cb: (data: ToolUpdateProgress) => void): EventUnsubscriber
+
+  // Video Generation (P4)
+  videoGeneration: VideoGenerationNamespace
 }
 
 export interface ToolUpdateInfo {
@@ -659,6 +662,129 @@ export interface AiGatewayNamespace {
   presets(): Promise<{ ok: boolean, data?: { presets: AiProviderPreset[] } }>
 }
 
+// =============================================================================
+// Video Generation (P4) — main process only, keys never leave main
+// =============================================================================
+
+export interface VideoGenerationProvider {
+  id: string
+  label: string
+  capabilities: string[]
+  models?: Array<{ id: string, label: string, maxDurationSec?: number, costPerSecond?: number }>
+}
+
+export interface VideoGenerationEstimate {
+  estimatedCostUsd: number
+  costBreakdown: Record<string, unknown>
+  budgetWarning: boolean
+  validUntil: string
+}
+
+export interface VideoGenerationSubmitResult {
+  jobId: string
+  providerTaskId: string
+  status: string
+  estimatedCompletionSec: number
+}
+
+export interface VideoGenerationPollResult {
+  jobId: string
+  providerId: string
+  providerTaskId: string
+  input: Record<string, unknown>
+  status: string
+  progress: number
+  createdAt: string
+  updatedAt: string
+  results: Array<Record<string, unknown>>
+  error: string | null
+  costSoFar: number
+  etaSec?: number
+}
+
+export interface VideoGenerationDownloadResult {
+  localPath: string
+  originalUrl: string
+  checksum: string
+  fileSizeBytes: number
+  mimeType: string
+  width: number
+  height: number
+  durationSec: number
+}
+
+export interface VideoGenerationJobRecord {
+  jobId: string
+  providerId: string
+  providerTaskId: string
+  input: Record<string, unknown>
+  status: string
+  progress: number
+  createdAt: string
+  updatedAt: string
+  results: Array<Record<string, unknown>>
+  error: string | null
+  costSoFar: number
+}
+
+export interface VideoGenerationUsageEntry {
+  jobId: string
+  providerId: string
+  providerTaskId: string
+  costUsd: number
+  action: string
+  at: string
+}
+
+export interface VideoGenerationUsageLedgerResult {
+  entries: VideoGenerationUsageEntry[]
+  totalCostUsd: number
+}
+
+export interface VideoGenerationProviderHealthResult {
+  healthy: boolean
+  providerId: string
+  error?: string
+  [key: string]: unknown
+}
+
+export interface VideoGenerationNamespace {
+  /** List available providers (manifests) */
+  providers(): Promise<{ ok: boolean, data?: VideoGenerationProvider[] }>
+  /** Get provider capabilities/manifest (runtime key: 'provider:capabilities'). */
+  'provider:capabilities'(args: { providerId: string }): Promise<{ ok: boolean, data?: VideoGenerationProvider }>
+  /** Estimate cost for a generation job */
+  estimate(args: { providerId: string, input: Record<string, unknown> }): Promise<{ ok: boolean, data?: VideoGenerationEstimate }>
+  /** Submit a generation job */
+  submit(args: { providerId: string, input: Record<string, unknown>, idempotencyKey?: string }): Promise<{ ok: boolean, data?: VideoGenerationSubmitResult }>
+  /** Poll job status */
+  poll(args: { jobId: string }): Promise<{ ok: boolean, data?: VideoGenerationPollResult }>
+  /** Cancel a job */
+  cancel(args: { jobId: string }): Promise<{ ok: boolean }>
+  /** Download result to Asset Center */
+  download(args: { jobId: string, destDir?: string }): Promise<{ ok: boolean, data?: VideoGenerationDownloadResult }>
+  /** List all jobs (runtime key: 'jobs:list'). */
+  'jobs:list'(): Promise<{ ok: boolean, data?: VideoGenerationJobRecord[] }>
+  /** Get single job (runtime key: 'jobs:get'). */
+  'jobs:get'(args: { jobId: string }): Promise<{ ok: boolean, data?: VideoGenerationJobRecord }>
+  /** Retry a failed job (runtime key: 'jobs:retry'). */
+  'jobs:retry'(args: { jobId: string }): Promise<{ ok: boolean, data?: VideoGenerationSubmitResult }>
+  /** Delete job (runtime key: 'jobs:delete'). */
+  'jobs:delete'(args: { jobId: string }): Promise<{ ok: boolean }>
+  /** Get usage ledger. */
+  'usage-ledger'(args?: { from?: string, to?: string, providerId?: string }): Promise<{ ok: boolean, data?: VideoGenerationUsageLedgerResult }>
+  /** Provider health check (runtime key: 'provider:health'). */
+  'provider:health'(args: { providerId: string }): Promise<{ ok: boolean, data?: VideoGenerationProviderHealthResult }>
+}
+
+export interface DownloadProgressPayload {
+  id: string
+  loaded: number
+  /** Declared content-length, 0 when the server does not say. */
+  total: number
+  done?: boolean
+}
+
 export interface TmcutNamespace {
   getPaths(): Promise<TmcutDirs>
   readAssetsFile(): Promise<unknown>
@@ -680,13 +806,27 @@ export interface TmcutNamespace {
   extractFrame(args: { src: string, atSec: number, width?: number }): Promise<TmcutFrameResult>
   /** Caption audio for Whisper (roadmap C-3): cached 16kHz mono MP3 extracted in main. */
   extractAudio(args: { filePath: string }): Promise<{ ok: boolean, path?: string, error?: string }>
-  /** Voiceover blob persistence (roadmap D-4): writes into <base>/recordings/, returns the path. */
-  saveRecording(args: { data: Uint8Array, ext?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
+  /**
+   * Recording blob persistence (roadmap D-4): writes into <base>/recordings/,
+   * returns the path. `prefix` names non-voiceover takes (e.g. a command clip
+   * captured for speech-to-text); it defaults to `voiceover`.
+   */
+  saveRecording(args: { data: Uint8Array, ext?: string, prefix?: string }): Promise<{ ok: boolean, path?: string, error?: string }>
   extractWaveform(args: { filePath: string, buckets?: number }): Promise<TmcutExtractResult>
   /** Preview proxy generator (roadmap F-4): converts video to lightweight 540p/720p H.264 preview in cache. */
   generateProxy(args: { filePath: string, width?: number }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
   /** 2-pass video stabilization (roadmap E-5): motion vector analysis + smoothing via vidstab. */
   stabilizeVideo(args: { filePath: string, options?: { level?: 'mild' | 'medium' | 'aggressive' } }): Promise<{ ok: boolean, path?: string, cached?: boolean, error?: string }>
+  /**
+   * Generated media download (P4 groundwork): pulls an http(s) URL into
+   * <base>/downloads/ so the renderer can import a real local file. Refuses
+   * non-http(s) schemes, existing names (suffixed instead), oversized bodies.
+   */
+  downloadMedia(args: { url: string, filename?: string, id?: string }): Promise<{ ok: boolean, path?: string, name?: string, bytes?: number, error?: string }>
+  /** Abort an in-flight download; the pending promise settles with 'cancelled'. */
+  cancelDownload(id: string): Promise<boolean>
+  /** Byte progress for a download started with the same `id`. */
+  onDownloadProgress(callback: (payload: DownloadProgressPayload) => void): () => void
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
   analyzeScenes(args: { filePath: string, threshold?: number }): Promise<TmcutAnalysisResult>
   analyzeSilence(args: { filePath: string, noiseDb?: number, minDuration?: number }): Promise<TmcutAnalysisResult>
@@ -907,6 +1047,7 @@ export interface ElectronAPI {
     ffmpeg: ToolsNamespace
     profiles: ProfilesNamespace
     aiGateway: AiGatewayNamespace
+    videoGeneration: VideoGenerationNamespace
   }
   dialog: DialogNamespace
   fileManager: FileManagerNamespace

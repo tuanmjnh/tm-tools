@@ -1,7 +1,7 @@
-import type { FfmpegConfig, FfmpegLabel, ToolTask } from '~/types'
+import type { FfmpegConfig, FfmpegLabel, ToolTask } from '#shared/types/electron'
 
 // Helper interfaces
-export interface AspectRatio {
+export interface RenderAspectRatio {
   id: number | string
   group: number
   title: string
@@ -544,7 +544,7 @@ export const CMDLabels = (renderCode: any, labels: FfmpegLabel[], baseSize: { w:
   return renderCode
 }
 
-export const CMDRenderArgs = (options: FfmpegModel, aspectRatio: AspectRatio, renderCode: any, format: any): string[] => {
+export const CMDRenderArgs = (options: FfmpegModel, aspectRatio: RenderAspectRatio, renderCode: any, format: any): string[] => {
   const args: string[] = []
   if (options.hideBanner) args.push('-hide_banner')
   if (options.overwrite) args.push('-y')
@@ -562,7 +562,7 @@ export const CMDRenderArgs = (options: FfmpegModel, aspectRatio: AspectRatio, re
 // 9. Task compilation requests (Fnc 0 to 6)
 export const taskRenderRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   renderCode: any,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
@@ -661,7 +661,7 @@ export const taskSplitRequest = async (
   }
 }
 
-export const CMDSplitRenderArgs = (options: FfmpegModel, aspectRatio: AspectRatio, renderCode: any, start: number, duration: number, format: any): string[] => {
+export const CMDSplitRenderArgs = (options: FfmpegModel, aspectRatio: RenderAspectRatio, renderCode: any, start: number, duration: number, format: any): string[] => {
   const args: string[] = []
   if (options.hideBanner) args.push('-hide_banner')
   if (options.overwrite) args.push('-y')
@@ -682,7 +682,7 @@ export const CMDSplitRenderArgs = (options: FfmpegModel, aspectRatio: AspectRati
 
 export const taskSplitRenderRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   renderCode: any,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
@@ -745,7 +745,7 @@ export const taskSplitRenderRequest = async (
   }
 }
 
-export const CMDJoin = (options: FfmpegModel, aspectRatio: AspectRatio, output: string) => {
+export const CMDJoin = (options: FfmpegModel, aspectRatio: RenderAspectRatio, output: string) => {
   const args: string[] = []
   if (options.hideBanner) args.push('-hide_banner')
   if (options.overwrite) args.push('-y')
@@ -770,7 +770,7 @@ export const CMDJoin = (options: FfmpegModel, aspectRatio: AspectRatio, output: 
 
 export const taskJoinRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
 ) => {
@@ -805,7 +805,7 @@ export const taskJoinRequest = async (
 
 export const taskJoinOneFolderRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
 ) => {
@@ -878,7 +878,7 @@ export const taskJoinOneFolderRequest = async (
 
 export const taskJoinsubfoldersRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
 ) => {
@@ -926,7 +926,7 @@ export const taskJoinsubfoldersRequest = async (
 
 export const taskJoinRenderRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   renderCode: any,
   getMediaInfoFunction?: (args: string[]) => Promise<any>
 ) => {
@@ -983,7 +983,7 @@ export const taskJoinRenderRequest = async (
 
 export const CMDSlideshowArgs = (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   images: string[],
   settings: {
     w: number
@@ -1128,7 +1128,7 @@ export const CMDSlideshowArgs = (
 
 export const taskSlideshowRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
 ) => {
@@ -1207,7 +1207,7 @@ export const taskSlideshowRequest = async (
 
 export const taskBatchSlideshowRequest = async (
   options: FfmpegModel,
-  aspectRatio: AspectRatio,
+  aspectRatio: RenderAspectRatio,
   getMediaInfoFunction?: (args: string[]) => Promise<any>,
   taskId?: string
 ) => {

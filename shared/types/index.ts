@@ -1,44 +1,3 @@
-export type { AuthUser, LoginRequest, RegisterRequest, AuthResponse, TokenPayload, LoginPlatform, AuthProvider } from './auth'
-export type { Role, ModulePermission, UserRole, ModuleDefinition, PermissionCheck, PermissionAction, RBACConfig, SystemRoute, RouteTreeNode } from './rbac'
-export type { ApiResponse, PaginationParams } from './api'
-export type { ElectronAPI } from './electron'
-export type {
-  TaskStatus,
-  ToolTaskMeta,
-  ToolTask,
-  YoutubeDownloadResponse,
-  FfmpegRenderResponse,
-  ExecutableCheck,
-  ToolsNamespace,
-  YoutubeFormat,
-  YoutubeConfig,
-  YoutubeHistory,
-  PlaylistVideo,
-  FfmpegConfig,
-  FfmpegBatchConfig,
-  FfmpegHistory,
-  FfmpegVersions,
-  FfmpegLabel,
-  FfmpegSubFile,
-  FileStat,
-  FileNode,
-  FileOptions,
-  DialogFileFilter,
-  DialogArgs,
-  DialogNamespace,
-  FileManagerNamespace,
-  MediaProbeResult,
-  JoinFolderItem,
-  ToolUpdateInfo,
-  ToolUpdateProgress,
-  BrowserProfile,
-  ProfileGroup,
-  ProfileProxy,
-  ProfileAccount,
-  ProfileFilters,
-  ProfilesListResult,
-  ProfilesNamespace
-} from './electron'
 
 export interface GridColumn {
   key: string
@@ -54,7 +13,7 @@ export interface GridColumn {
 export type UserStatus = 'subscribed' | 'unsubscribed' | 'bounced'
 export type SaleStatus = 'paid' | 'failed' | 'refunded'
 
-export interface User {
+export interface DemoUser {
   id: number
   name: string
   email: string
