@@ -1,4 +1,4 @@
-import type { RouteTreeNode } from '~/types/rbac'
+import type { RouteTreeNode } from '#shared/types/rbac'
 
 export default defineNuxtRouteMiddleware(async (to) => {
   if (import.meta.server) return
@@ -13,7 +13,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (!isAuthenticated.value && to.path !== '/login') {
-    return navigateTo('/login')
+    const redirect = to.fullPath !== '/' ? to.fullPath : undefined
+    return navigateTo(redirect ? { path: '/login', query: { redirect } } : '/login')
   }
 
   const auth = useAuth()

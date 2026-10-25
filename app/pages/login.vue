@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { LoginRequest, TotpChallenge } from '~/types/auth'
+import type { LoginRequest, TotpChallenge } from '#shared/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 definePageMeta({ layout: false })
 
 const auth = useAuth()
+const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const remember = ref(false)
 const { t } = useI18n()
 const { isSettingsSlideoverOpen } = useDashboard()
+
+function getRedirectTarget(): string {
+  const r = route.query.redirect
+  if (typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')) {
+    return r
+  }
+  return '/'
+}
 
 useHead(() => ({
   title: t('auth.signIn')
@@ -66,7 +75,7 @@ async function onSubmit() {
       totpCode.value = ''
       return
     }
-    await router.push('/')
+    await router.push(getRedirectTarget())
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   }
@@ -77,7 +86,7 @@ async function onPasskeyLogin() {
   passkeyLoading.value = true
   try {
     await auth.passkeyLogin()
-    await router.push('/')
+    await router.push(getRedirectTarget())
   } catch (err: unknown) {
     const name = (err as { name?: string })?.name
     if (name === 'NotAllowedError') toast.add({ title: t('auth.passkeyCancelled'), color: 'neutral' })
@@ -91,7 +100,7 @@ async function onVerifyTotp() {
   if (!totpChallenge.value) return
   try {
     await auth.verifyTotp(totpCode.value.trim(), totpChallenge.value.pendingTotpToken)
-    await router.push('/')
+    await router.push(getRedirectTarget())
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
     totpCode.value = ''

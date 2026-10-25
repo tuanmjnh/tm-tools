@@ -6,29 +6,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   let isLoggingOut = false
 
   const handleSessionExpired = async () => {
-    if (isLoggingOut) return
-    isLoggingOut = true
-
-    try {
-      await auth.logout()
-      if (router.currentRoute.value.path !== '/login') {
-        const toast = useToast()
-        const i18n = (nuxtApp as unknown as { $i18n?: { t: (key: string) => string } }).$i18n
-        const title = i18n?.t?.('auth.sessionExpired') ?? 'Session expired'
-        const description = i18n?.t?.('auth.sessionExpiredDesc') ?? 'Please log in again to continue.'
-
-        toast.add({
-          title,
-          description,
-          color: 'error'
-        })
-        await router.push('/login')
-      }
-    } finally {
-      setTimeout(() => {
-        isLoggingOut = false
-      }, 1000)
-    }
+    await auth.handleSessionExpired()
   }
 
   const originalFetch = globalThis.$fetch

@@ -14,7 +14,7 @@ export const useHub = () => {
     appId: appId,
     getAccessToken: () => auth.accessToken.value || tokenCookie.value,
     onUnauthorized: () => {
-      auth.logout()
+      auth.handleSessionExpired()
     },
     getRefreshToken: () => auth.refreshToken.value || useCookie('refreshToken').value,
     onTokensRefreshed: (tokens) => {
@@ -47,10 +47,31 @@ export const useHub = () => {
       headers.set('Authorization', `Bearer ${token}`)
     }
 
-    return (await $fetch(fullUrl, {
-      ...options,
-      headers
-    })) as T
+    try {
+      return (await $fetch(fullUrl, {
+        ...options,
+        headers
+      })) as T
+    } catch (err: unknown) {
+      const status = (err as { statusCode?: number, response?: { status?: number } })?.statusCode
+        || (err as { response?: { status?: number } })?.response?.status
+        || (err as { status?: number })?.status
+
+      if (status === 401 && !path.includes('/auth/login') && !path.includes('/auth/refresh') && !path.includes('/auth/register')) {
+        const refreshed = await auth.refresh()
+        if (refreshed) {
+          const newToken = auth.accessToken.value || tokenCookie.value
+          if (newToken) headers.set('Authorization', `Bearer ${newToken}`)
+          return (await $fetch(fullUrl, {
+            ...options,
+            headers
+          })) as T
+        } else {
+          await auth.handleSessionExpired()
+        }
+      }
+      throw err
+    }
   }
 
   return {

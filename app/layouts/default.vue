@@ -16,8 +16,15 @@ onMounted(() => {
 })
 
 watch(() => auth.isAuthenticated.value, async (val) => {
-  if (val) await nav.fetchRoutes()
-  else nav.clearRoutes()
+  if (val) {
+    await nav.fetchRoutes()
+  } else {
+    nav.clearRoutes()
+    if (route.path !== '/login' && route.path !== '/register') {
+      const redirect = route.fullPath !== '/' ? route.fullPath : undefined
+      await navigateTo(redirect ? { path: '/login', query: { redirect } } : '/login')
+    }
+  }
 }, { immediate: true })
 
 const links = computed<NavigationMenuItem[][]>(() => [nav.buildNavItems(open)])

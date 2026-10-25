@@ -1,5 +1,5 @@
-import type { AuthResponse, AuthUser, ForgotPasswordRequest, LoginPlatform, LoginRequest, RegisterRequest, ResetPasswordRequest, TotpChallenge } from '~/types/auth'
-import type { LoginStartResponse } from '~/types/webauthn'
+import type { AuthResponse, AuthUser, ForgotPasswordRequest, LoginPlatform, LoginRequest, RegisterRequest, ResetPasswordRequest, TotpChallenge } from '#shared/types/auth'
+import type { LoginStartResponse } from '#shared/types/webauthn'
 
 interface HubUserData {
   id: string
@@ -38,6 +38,10 @@ interface HubMeData {
   createdAt?: string
   updatedAt?: string
 }
+
+// Module-scope state for proactive refresh and session expiry handling
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
+let isHandlingSessionExpired = false
 
 export const useAuth = () => {
   const user = useState<AuthUser | null>('auth:user', () => null)
@@ -96,6 +100,8 @@ export const useAuth = () => {
 
     cookieAccess.value = data.accessToken
     cookieRefresh.value = data.refreshToken
+
+    scheduleProactiveRefresh(data.expiresIn)
 
     return {
       accessToken: data.accessToken,
@@ -299,6 +305,8 @@ export const useAuth = () => {
         cookieAccess.value = data.accessToken
         cookieRefresh.value = data.refreshToken
 
+        scheduleProactiveRefresh(data.expiresIn)
+
         // Refresh user info
         await fetchUser()
 
@@ -313,7 +321,62 @@ export const useAuth = () => {
     return refreshPromise
   }
 
-  async function logout(): Promise<void> {
+  function scheduleProactiveRefresh(expiresIn: number): void {
+    if (!import.meta.client) return
+    if (proactiveRefreshTimer) {
+      clearTimeout(proactiveRefreshTimer)
+      proactiveRefreshTimer = null
+    }
+    if (!Number.isFinite(expiresIn) || expiresIn <= 0) return
+
+    const leadSec = Math.min(120, Math.max(30, Math.floor(expiresIn * 0.15)))
+    const delayMs = Math.max(5_000, (expiresIn - leadSec) * 1000)
+
+    proactiveRefreshTimer = setTimeout(async () => {
+      proactiveRefreshTimer = null
+      const ok = await refresh()
+      if (!ok) {
+        await handleSessionExpired()
+      }
+    }, delayMs)
+  }
+
+  function clearProactiveRefresh(): void {
+    if (proactiveRefreshTimer) {
+      clearTimeout(proactiveRefreshTimer)
+      proactiveRefreshTimer = null
+    }
+  }
+
+  async function handleSessionExpired(): Promise<void> {
+    if (isHandlingSessionExpired) return
+    isHandlingSessionExpired = true
+
+    try {
+      await logout({ redirect: false })
+      if (import.meta.client) {
+        const router = useRouter()
+        const currentPath = router.currentRoute.value.path
+        if (currentPath !== '/login' && currentPath !== '/register') {
+          const toast = useToast()
+          const { t } = useI18n()
+          toast.add({
+            title: t('auth.sessionExpired'),
+            description: t('auth.sessionExpiredDesc'),
+            color: 'error'
+          })
+          const redirect = router.currentRoute.value.fullPath
+          await navigateTo(redirect && redirect !== '/' ? { path: '/login', query: { redirect } } : '/login')
+        }
+      }
+    } finally {
+      setTimeout(() => {
+        isHandlingSessionExpired = false
+      }, 1000)
+    }
+  }
+
+  async function logout(options: { redirect?: boolean } = { redirect: true }): Promise<void> {
     try {
       const rToken = refreshToken.value || useCookie('refreshToken').value
       if (rToken) {
@@ -329,6 +392,7 @@ export const useAuth = () => {
     } catch {
       // Ignore logout errors
     } finally {
+      clearProactiveRefresh()
       user.value = null
       accessToken.value = null
       refreshToken.value = null
@@ -337,6 +401,13 @@ export const useAuth = () => {
       const cookieRefresh = useCookie('refreshToken', { path: '/' })
       cookieAccess.value = null
       cookieRefresh.value = null
+
+      if (options?.redirect !== false && import.meta.client) {
+        const router = useRouter()
+        if (router.currentRoute.value.path !== '/login') {
+          await navigateTo('/login')
+        }
+      }
     }
   }
 
@@ -352,6 +423,12 @@ export const useAuth = () => {
         user.value = null
         accessToken.value = null
         refreshToken.value = null
+        if (import.meta.client) {
+          const router = useRouter()
+          if (router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register') {
+            await handleSessionExpired()
+          }
+        }
         return
       }
 
@@ -382,12 +459,18 @@ export const useAuth = () => {
         user.value = null
         accessToken.value = null
         refreshToken.value = null
+        if (import.meta.client) {
+          const router = useRouter()
+          if (router.currentRoute.value.path !== '/login' && router.currentRoute.value.path !== '/register') {
+            await handleSessionExpired()
+          }
+        }
       }
     }
   }
 
   async function revokeTokens(): Promise<void> {
-    await logout()
+    await logout({ redirect: true })
   }
 
   function setTokens(tokens: { accessToken: string, refreshToken: string, expiresIn: number }) {
@@ -397,6 +480,8 @@ export const useAuth = () => {
     const cookieRefresh = useCookie('refreshToken', { maxAge: 604800, path: '/', sameSite: 'lax' })
     cookieAccess.value = tokens.accessToken
     cookieRefresh.value = tokens.refreshToken
+
+    scheduleProactiveRefresh(tokens.expiresIn)
   }
 
   return {
@@ -415,6 +500,7 @@ export const useAuth = () => {
     logout,
     refresh,
     fetchUser,
+    handleSessionExpired,
     revokeTokens,
     setTokens
   }
