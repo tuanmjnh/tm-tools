@@ -24,6 +24,7 @@ import type {
   VideoBatchItem
 } from '~/types/videoFactory'
 import type { VideoTemplate } from '~/types/videoTemplate'
+import { routeStoryboard } from '@tmcut-core'
 import {
   buildStoryboard,
   buildTemplateInputs,
@@ -457,6 +458,8 @@ export interface CreateBatchOptions {
   budget?: BudgetGuardConfig
   connectionId?: string
   model?: string
+  /** Optional provider capability manifests for per-scene routing (P7). */
+  providers?: Array<Record<string, unknown>>
   /** Batch-level estimate, kept for the budget ledger. */
   estimatedCostUsd?: number
   /** Per-scene estimate, snapshotted on each job. */
@@ -509,9 +512,28 @@ export function createBatchFromPlan(
       return
     }
     const jobIds: string[] = []
+
+    // Per-scene provider routing (P7): use template's providerPolicy + capability
+    // manifests to pick the right provider for each scene's capability/duration.
+    let routedMap: Map<string, string> | null = null
+    if (options.providers?.length && template.providerPolicy) {
+      const { routed } = routeStoryboard({
+        scenes: planned.storyboard.map(s => ({
+          sceneId: s.sceneId,
+          capabilities: s.capabilities,
+          durationSec: s.durationSec
+        })),
+        manifests: options.providers,
+        policy: template.providerPolicy,
+        requireVerified: true // verified-only by default for production
+      })
+      routedMap = new Map(routed.filter(r => r.providerId && r.sceneId).map(r => [r.sceneId!, r.providerId!]))
+    }
+
     planned.storyboard.forEach((scene, sceneIndex) => {
       const jobId = `${itemId}:s${sceneIndex}`
       jobIds.push(jobId)
+      const providerId = routedMap?.get(scene.sceneId) || options.connectionId || 'dry-run'
       jobs.push({
         jobId,
         batchId,
@@ -520,8 +542,8 @@ export function createBatchFromPlan(
         type: scene.capabilities.includes('image-gen') && !scene.capabilities.includes('video-gen')
           ? 'image'
           : 'video',
-        connectionId: options.connectionId || 'dry-run',
-        model: options.model || 'dry-run',
+        connectionId: providerId,
+        model: providerId === 'dry-run' ? 'dry-run' : providerId,
         // Snapshot of the resolved prompt: a template edit after queueing must
         // not change what an already-queued job will generate.
         normalizedRequest: {

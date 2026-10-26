@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { createRequire } from 'node:module'
+import fs from 'node:fs'
 import path from 'node:path'
 import runwayAdapter from './runway-adapter.mjs'
 import klingAdapter from './kling-adapter.mjs'
