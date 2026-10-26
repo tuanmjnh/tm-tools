@@ -318,7 +318,7 @@ export function useVideoFactory() {
    */
   async function run(
     batchId: string,
-    options: { runner?: FactoryRunner, concurrencyCap?: number } = {}
+    options: { runner?: FactoryRunner, concurrencyCap?: number, providerConcurrency?: Record<string, number> } = {}
   ): Promise<{ ok: boolean, error?: string, steps?: number, truncated?: boolean }> {
     const initial = stateOf(batchId)
     if (!initial) return { ok: false, error: `No batch ${batchId}` }
@@ -332,6 +332,7 @@ export function useVideoFactory() {
       const report = await runBatchToCompletion(initial, {
         runner: options.runner || createDryRunRunner(),
         concurrencyCap: options.concurrencyCap ?? initial.batch.concurrencyCap,
+        providerConcurrency: options.providerConcurrency,
         onStep: (step) => {
           // Write each wave so a crash mid-batch keeps completed work.
           writeState({

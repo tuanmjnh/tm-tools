@@ -680,12 +680,26 @@ export function selectRunnableJobs(
     runningCount?: number
     concurrencyCap: number
     now?: number
+    /** Per-provider concurrency caps from capability manifests (rateLimitRpm). */
+    providerConcurrency?: Record<string, number>
   }
 ): GenerationJob[] {
   const now = options.now ?? Date.now()
   const running = options.runningCount ?? countRunningJobs(jobs)
-  const slots = Math.max(0, options.concurrencyCap - running)
-  if (slots === 0) return []
+  const globalSlots = Math.max(0, options.concurrencyCap - running)
+  if (globalSlots === 0) return []
+
+  // Count running per provider
+  const runningPerProvider: Record<string, number> = {}
+  if (options.providerConcurrency) {
+    for (const job of jobs) {
+      if (job.status === 'submitting' || job.status === 'processing') {
+        const pid = job.connectionId
+        if (pid) runningPerProvider[pid] = (runningPerProvider[pid] || 0) + 1
+      }
+    }
+  }
+
   return jobs
     .filter(job => job.status === 'queued')
     .filter((job) => {
@@ -693,8 +707,15 @@ export function selectRunnableJobs(
       const at = Date.parse(job.scheduledFor)
       return Number.isNaN(at) ? true : at <= now
     })
+    .filter((job) => {
+      if (!options.providerConcurrency) return true
+      const cap = options.providerConcurrency[job.connectionId]
+      if (!cap) return true // no cap = unlimited
+      const used = runningPerProvider[job.connectionId] || 0
+      return used < cap
+    })
     .sort((a, b) => (b.priority - a.priority) || (a.createdAt.localeCompare(b.createdAt)))
-    .slice(0, slots)
+    .slice(0, globalSlots)
 }
 
 // -----------------------------------------------------------------------------

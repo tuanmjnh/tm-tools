@@ -64,6 +64,8 @@ export interface StepOptions {
   random?: () => number
   /** Abort in-flight submissions (batch cancel while a step is awaiting). */
   shouldStop?: () => boolean
+  /** Per-provider concurrency caps from capability manifests (rateLimitRpm). */
+  providerConcurrency?: Record<string, number>
 }
 
 export interface StepReport {
@@ -100,7 +102,8 @@ export async function runBatchStep(state: FactoryState, options: StepOptions): P
   const runnable = selectRunnableJobs(jobs, {
     runningCount: countRunningJobs(jobs),
     concurrencyCap: cap,
-    now: clock()
+    now: clock(),
+    providerConcurrency: options.providerConcurrency
   })
   if (runnable.length === 0) {
     return { state: { ...state, jobs, items }, dispatched: [], retried: [], failed: [], idle: true }
