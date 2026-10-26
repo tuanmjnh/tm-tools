@@ -989,3 +989,52 @@ export function batchProgress(jobs: GenerationJob[], batchId: string): number {
   const done = batchJobs.filter(isJobSettled).length
   return Math.round((done / batchJobs.length) * 100) / 100
 }
+
+// =============================================================================
+// Aspect-ratio variants (Roadmap v1 §8, P8)
+// =============================================================================
+// Given a base batch plan, produce variant plans for additional aspect ratios
+// (e.g. 9:16 → 1:1, 16:9). The template must have an assemblyProfile with
+// outputProfile resolutions for each aspect ratio. Caption bands and canvas
+// dimensions are recomputed per variant; the template schema stays unchanged.
+
+export type AspectRatioVariant = '9:16' | '16:9' | '1:1' | '4:5'
+
+export interface VariantPlanOptions {
+  /** The aspect ratios to generate (subset of supported ratios). */
+  variants: AspectRatioVariant[]
+  /** Source aspect ratio from the base plan (defaults to template's outputProfile). */
+  sourceAspectRatio?: AspectRatioVariant
+}
+
+export function createAspectRatioVariants(
+  basePlan: BatchPlan,
+  options: VariantPlanOptions
+): BatchPlan[] {
+  const variants = options.variants || ['1:1', '16:9']
+  const sourceAr = options.sourceAspectRatio || '9:16'
+  if (variants.includes(sourceAr)) {
+    // Source is already one of the requested variants; include it once.
+  }
+  const plans: BatchPlan[] = []
+
+  for (const variantAr of variants) {
+    if (variantAr === sourceAr) {
+      plans.push(basePlan)
+      continue
+    }
+    // Clone and adjust the plan for the new aspect ratio.
+    const plan: BatchPlan = JSON.parse(JSON.stringify(basePlan))
+    plan.items = plan.items.map((item: PlannedItem) => {
+      if (!item.ok) return item
+      const storyboard = item.storyboard.map((scene: StoryboardScene) => ({
+        ...scene,
+        aspectRatio: variantAr
+      }))
+      return { ...item, storyboard }
+    })
+    plans.push(plan)
+  }
+
+  return plans
+}

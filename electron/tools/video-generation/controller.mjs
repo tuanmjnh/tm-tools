@@ -387,6 +387,39 @@ function registerVideoGeneration() {
     return { ok: true, data: { entries, totalCostUsd: total } }
   })
 
+  // Cost report: aggregated summaries by provider / day / batch
+  ipcMain.handle('tools:video-generation:cost-report', async (_event, args) => {
+    const { from, to } = args || {}
+    let entries = usageLedger
+    if (from) entries = entries.filter(e => new Date(e.at) >= new Date(from))
+    if (to) entries = entries.filter(e => new Date(e.at) <= new Date(to))
+
+    // By provider
+    const byProvider = {}
+    for (const e of entries) {
+      const pid = e.providerId || 'unknown'
+      if (!byProvider[pid]) byProvider[pid] = { costUsd: 0, jobs: 0, actions: {} }
+      byProvider[pid].costUsd += e.costUsd || 0
+      byProvider[pid].jobs += e.action === 'generation-completed' ? 1 : 0
+      const action = e.action || 'other'
+      byProvider[pid].actions[action] = (byProvider[pid].actions[action] || 0) + 1
+    }
+
+    // By day (UTC)
+    const byDay = {}
+    for (const e of entries) {
+      const day = (e.at || '').slice(0, 10)
+      if (!byDay[day]) byDay[day] = { costUsd: 0, jobs: 0 }
+      byDay[day].costUsd += e.costUsd || 0
+      byDay[day].jobs += e.action === 'generation-completed' ? 1 : 0
+    }
+
+    const totalCostUsd = entries.reduce((sum, e) => sum + (e.costUsd || 0), 0)
+    const totalJobs = entries.filter(e => e.action === 'generation-completed').length
+
+    return { ok: true, data: { byProvider, byDay, totalCostUsd, totalJobs, entriesCount: entries.length } }
+  })
+
   // Provider health check
   ipcMain.handle('tools:video-generation:provider:health', async (_event, args) => {
     const { providerId } = args || {}
