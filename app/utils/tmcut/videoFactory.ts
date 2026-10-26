@@ -991,6 +991,45 @@ export function batchProgress(jobs: GenerationJob[], batchId: string): number {
 }
 
 // =============================================================================
+// Scheduled batch execution (Roadmap v1 §8, P8)
+// =============================================================================
+
+/** Schedule a batch to auto-start at a future time. */
+export function scheduleBatch(
+  batch: VideoBatch,
+  scheduledFor: string,
+  now = new Date().toISOString()
+): { ok: boolean; batch?: VideoBatch; error?: { code: string; message: string } } {
+  const when = Date.parse(scheduledFor)
+  if (Number.isNaN(when)) {
+    return { ok: false, error: { code: 'invalid-scheduled-for', message: 'scheduledFor must be a valid ISO 8601 timestamp' } }
+  }
+  if (when <= Date.now()) {
+    return { ok: false, error: { code: 'scheduled-in-past', message: 'scheduledFor must be in the future' } }
+  }
+  if (batch.status !== 'draft' && batch.status !== 'queued') {
+    return { ok: false, error: { code: 'not-schedulable', message: `Cannot schedule a ${batch.status} batch` } }
+  }
+  return { ok: true, batch: { ...batch, scheduledFor, status: 'queued', updatedAt: now } }
+}
+
+/** Remove a future start time from a batch. */
+export function unscheduleBatch(
+  batch: VideoBatch,
+  now = new Date().toISOString()
+): { ok: boolean; batch: VideoBatch } {
+  return { ok: true, batch: { ...batch, scheduledFor: undefined, updatedAt: now } }
+}
+
+/**
+ * Check which scheduled batches are due to start. Pure; the caller (a cron
+ * tick in the main process) decides what to do with the result.
+ */
+export function getDueBatches(batches: VideoBatch[], now = Date.now()): VideoBatch[] {
+  return batches.filter(b => b.scheduledFor && Date.parse(b.scheduledFor) <= now && b.status === 'queued')
+}
+
+// =============================================================================
 // Aspect-ratio variants (Roadmap v1 §8, P8)
 // =============================================================================
 // Given a base batch plan, produce variant plans for additional aspect ratios

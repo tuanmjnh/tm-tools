@@ -53,6 +53,10 @@ export interface VideoBatch {
   startedAt?: string
   completedAt?: string
   pausedAt?: string
+  /** Optional future timestamp when the batch should automatically start. */
+  scheduledFor?: string
+  /** Last time the batch record was modified. */
+  updatedAt?: string
 }
 
 export interface VideoBatchItem {
