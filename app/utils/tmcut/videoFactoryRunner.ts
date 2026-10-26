@@ -436,3 +436,80 @@ export function createProviderRunner(options: ProviderRunnerOptions): FactoryRun
     }
   }
 }
+
+// =============================================================================
+// Auto runner (Roadmap v1 P7) — routes each job to its connectionId provider
+// =============================================================================
+
+export function createAutoRunner(options: ProviderRunnerOptions & { ipc: VideoGenerationIpc }): FactoryRunner {
+  const { ipc, pollIntervalMs = 2000, abortSignal, downloadDir } = options
+
+  async function pollUntilSettled(localJobId: string): Promise<{ status: string; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null }> {
+    while (!abortSignal?.aborted) {
+      const result = await ipc.poll({ jobId: localJobId })
+      if (!result.ok || !result.data) {
+        throw { category: 'network' as ErrorCategory, message: 'Poll failed', retryable: true }
+      }
+      const poll = result.data
+      const terminal = ['completed', 'failed', 'canceled', 'cancelled'].includes(poll.status)
+      if (terminal) {
+        return { status: poll.status, costSoFar: poll.costSoFar, results: poll.results, error: poll.error }
+      }
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, pollIntervalMs)
+        abortSignal?.addEventListener('abort', () => { clearTimeout(timer); reject({ category: 'network' as ErrorCategory, message: 'Aborted', retryable: false }) }, { once: true })
+      })
+    }
+    throw { category: 'network' as ErrorCategory, message: 'Aborted', retryable: false }
+  }
+
+  return {
+    key: 'provider:auto',
+
+    async run(job: GenerationJob): Promise<JobRunResult> {
+      const providerId = job.connectionId
+      if (!providerId || providerId === 'dry-run') {
+        return { status: 'failed', error: { category: 'provider-error', message: 'Auto runner requires a valid providerId on the job', retryable: false } }
+      }
+      const normalizedReq = job.normalizedRequest as Record<string, unknown>
+      const submitResult = await ipc.submit({ providerId, input: normalizedReq, idempotencyKey: job.jobId })
+      if (!submitResult.ok || !submitResult.data) {
+        const msg = submitResult.ok ? 'No data in submit response' : 'Submit failed'
+        throw { category: 'provider-error' as ErrorCategory, message: msg, retryable: false }
+      }
+      const { jobId: providerJobId, providerTaskId, estimatedCompletionSec } = submitResult.data
+
+      let finalStatus: string
+      let totalCostUsd = 0
+      let outputAssetId: string | undefined
+      try {
+        const settled = await pollUntilSettled(providerJobId)
+        finalStatus = settled.status
+        totalCostUsd = settled.costSoFar
+
+        if (finalStatus === 'completed') {
+          try {
+            const dl = await ipc.download({ jobId: providerJobId, destDir: downloadDir || '' })
+            if (dl.ok && dl.data) outputAssetId = dl.data.localPath
+          } catch {
+            // Download is best-effort; review board offers manual download.
+          }
+        }
+      } catch (pollError: unknown) {
+        const err = pollError as { category?: ErrorCategory; message?: string; retryable?: boolean }
+        return { status: 'failed', error: { category: (err.category || 'network') as ErrorCategory, message: err.message || 'Poll/Download failed', retryable: err.retryable ?? true } }
+      }
+
+      if (finalStatus !== 'completed') {
+        return { status: finalStatus === 'canceled' || finalStatus === 'cancelled' ? 'canceled' : 'failed', error: { category: 'provider-error', message: `Provider status: ${finalStatus}`, retryable: false }, actualCostUsd: totalCostUsd, providerTaskId, metadata: { estimatedCompletionSec } }
+      }
+
+      return { status: 'completed', outputAssetId: outputAssetId || providerJobId, providerTaskId, actualCostUsd: totalCostUsd, metadata: { estimatedCompletionSec } }
+    },
+
+    async cancel(job: GenerationJob): Promise<void> {
+      const task = job.providerTaskId || job.jobId
+      await ipc.cancel({ jobId: task })
+    }
+  }
+}

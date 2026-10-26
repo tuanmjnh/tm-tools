@@ -32,11 +32,13 @@ const ai = useTmcutAi()
 
 // Run mode (Roadmap v1 P4): dry-run by default; switches to a live provider
 // runner when the user explicitly opts in and a provider/key is available.
-type RunMode = 'dry-run' | 'live'
+// 'auto' = capability-driven per-scene routing (P7).
+type RunMode = 'dry-run' | 'live' | 'auto'
 const runMode = ref<RunMode>('dry-run')
 const selectedProvider = ref('')
 const isElectron = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).electronAPI
 const availableProviders = ref<Array<{ id: string; label: string }>>([])
+const providerManifests = ref<Array<Record<string, unknown>>>([])
 const providersLoading = ref(false)
 
 // Prompt-to-Batch mode (Roadmap v1 §6): natural language → AI generates input records
@@ -51,10 +53,11 @@ async function loadProviders() {
   if (!isElectron || providersLoading.value) return
   providersLoading.value = true
   try {
-    const api = (window as unknown as Record<string, unknown>).electronAPI as { tools?: { videoGeneration?: { providers(): Promise<{ ok: boolean; data?: Array<{ id: string; label: string }> }> } } } | undefined
+    const api = (window as unknown as Record<string, unknown>).electronAPI as { tools?: { videoGeneration?: { providers(): Promise<{ ok: boolean; data?: Array<{ id: string; label: string; manifest?: Record<string, unknown> }> }> } } } | undefined
     const res = await api?.tools?.videoGeneration?.providers()
     if (res?.ok && Array.isArray(res.data)) {
       availableProviders.value = res.data.map(p => ({ id: p.id, label: p.label || p.id }))
+      providerManifests.value = res.data.map(p => p.manifest).filter(Boolean) as Array<Record<string, unknown>>
       if (availableProviders.value.length > 0 && !selectedProvider.value) {
         selectedProvider.value = availableProviders.value[0]!.id
       }
@@ -67,6 +70,7 @@ async function loadProviders() {
 }
 
 const canGoLive = computed(() => isElectron && availableProviders.value.length > 0 && !!selectedProvider.value)
+const canGoAuto = computed(() => isElectron && providerManifests.value.length > 0)
 
 function getIpcBridge(): import('~/utils/tmcut/videoFactoryRunner').VideoGenerationIpc | null {
   if (!isElectron) return null
@@ -324,19 +328,35 @@ async function runBatch(batchId: string) {
   busy.value = true
   try {
     // Build the right runner for the current mode.
-    let runner: import('~/utils/tmcut/videoFactoryRunner').FactoryRunner | undefined
-    if (runMode.value === 'live') {
-      try {
-        const ipc = getIpcBridge()
-        if (!ipc) throw new Error('No IPC bridge')
-        const { createProviderRunner } = await import('~/utils/tmcut/videoFactoryRunner')
-        runner = createProviderRunner({ ipc, providerId: selectedProvider.value })
-      } catch (runnerErr) {
-        toast.add({ title: t('tmcut.factory.liveRunnerFailed', 'Live runner unavailable'), description: String(runnerErr), color: 'error' })
-        return
-      }
-    }
-    const result = await factory.run(batchId, { runner })
+        let runner: import('~/utils/tmcut/videoFactoryRunner').FactoryRunner | undefined
+        if (runMode.value === 'live') {
+          try {
+            const ipc = getIpcBridge()
+            if (!ipc) throw new Error('No IPC bridge')
+            const { createProviderRunner } = await import('~/utils/tmcut/videoFactoryRunner')
+            runner = createProviderRunner({ ipc, providerId: selectedProvider.value })
+          } catch (runnerErr) {
+            toast.add({ title: t('tmcut.factory.liveRunnerFailed', 'Live runner unavailable'), description: String(runnerErr), color: 'error' })
+            return
+          }
+        } else if (runMode.value === 'auto') {
+          try {
+            const ipc = getIpcBridge()
+            if (!ipc) throw new Error('No IPC bridge')
+            const { createAutoRunner } = await import('~/utils/tmcut/videoFactoryRunner')
+            runner = createAutoRunner({ ipc })
+          } catch (runnerErr) {
+            toast.add({ title: t('tmcut.factory.autoRunnerFailed', 'Auto runner unavailable'), description: String(runnerErr), color: 'error' })
+            return
+          }
+        }
+        // Build per-provider concurrency map from capability manifests (rateLimitRpm).
+        const providerConcurrency: Record<string, number> = {}
+        for (const m of providerManifests.value) {
+          const rpm = Number(m.rateLimitRpm)
+          if (Number.isFinite(rpm) && rpm > 0) providerConcurrency[m.providerId] = Math.max(1, Math.floor(rpm / 60)) // convert rpm to concurrent slots (rough)
+        }
+        const result = await factory.run(batchId, { runner, providerConcurrency })
     if (result.ok) {
       const batch = factory.batch(batchId)
       toast.add({
