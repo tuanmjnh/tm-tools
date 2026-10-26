@@ -4,6 +4,7 @@
 .nuxt
 .nitro
 .cache
+.playwright-mcp
 dist
 
 # Electron build outputs

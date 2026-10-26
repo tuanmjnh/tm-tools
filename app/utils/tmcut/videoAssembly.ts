@@ -27,10 +27,11 @@
  * synthesised narration (P4/P7). Narration lines are COUNTED, not faked into an
  * audio track that would render silence.
  */
-import { TICKS_PER_SECOND } from '@tmcut-core'
+import { TICKS_PER_SECOND, getAssemblyReadyAssets } from '@tmcut-core'
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
 import type { GenerationJob, VideoBatch, VideoBatchItem } from '~/types/videoFactory'
 import type { AssemblyProfile, VideoTemplate } from '~/types/videoTemplate'
+import type { AssetCenterCatalogEntry } from '@tmcut-core'
 import { labelFor } from '~/utils/tmcut/videoFactory'
 
 // -----------------------------------------------------------------------------
@@ -105,6 +106,8 @@ export interface AssemblyInput {
   items: VideoBatchItem[]
   jobs: GenerationJob[]
   template: VideoTemplate
+  /** Asset Center catalog for music/SFX (P7 marketplace) */
+  assetCatalog?: AssetCenterCatalogEntry[]
   /** Resolve a job to a playable source. Defaults to `job.outputAssetId`. */
   resolveSource?: (job: GenerationJob) => AssemblySource | undefined
   /** Deterministic project id (tests, or a caller with its own id scheme). */
@@ -373,6 +376,69 @@ export function buildAssemblyPlan(input: AssemblyInput): AssemblyBuildResult {
       clipCount: videoItems.length,
       captionCount: textItems.length
     }
+
+    // P7: add music/SFX from Asset Center catalog when the profile allows it
+    const audioTrack = plan.timeline.tracks[2]!
+    if (audioTrack && profile?.musicPolicy && profile.musicPolicy.source !== 'none' && input.assetCatalog?.length) {
+      const readyAssets = getAssemblyReadyAssets(input.assetCatalog)
+      const musicAssets = readyAssets.filter(e => e.category === 'music')
+      const sfxAssets = readyAssets.filter(e => e.category === 'sound-effects')
+      const policy = profile.musicPolicy
+
+      if (musicAssets.length > 0) {
+        const asset = musicAssets[0]!
+        const src = asset.source?.type === 'remote' ? asset.source.url : asset.sourceUrl
+        if (src) {
+          audioTrack.items.push({
+            id: `music-${asset.entryId}`,
+            name: `Music: ${asset.title}`,
+            src,
+            in: 0,
+            out: cursor,
+            offset: 0,
+            speed: 1,
+            opacity: 100,
+            scale: 100,
+            x: 0,
+            y: 0,
+            rotation: 0,
+            volume: policy.volumeLevel ?? 30,
+            effects: [],
+            keyframes: []
+          })
+        }
+      }
+
+      if (sfxAssets.length > 0) {
+        const asset = sfxAssets[0]!
+        const src = asset.source?.type === 'remote' ? asset.source.url : asset.sourceUrl
+        if (src) {
+          const sfxDuration = Math.min(ticksFromSec(5), cursor)
+          audioTrack.items.push({
+            id: `sfx-${asset.entryId}`,
+            name: `SFX: ${asset.title}`,
+            src,
+            in: 0,
+            out: sfxDuration,
+            offset: 0,
+            speed: 1,
+            opacity: 100,
+            scale: 100,
+            x: 0,
+            y: 0,
+            rotation: 0,
+            volume: 80,
+            effects: [],
+            keyframes: []
+          })
+        }
+      }
+
+      if (audioTrack.items.length > 0) {
+        plan.timeline.clipCount += audioTrack.items.length
+      }
+    }
+
     return plan
   })
 

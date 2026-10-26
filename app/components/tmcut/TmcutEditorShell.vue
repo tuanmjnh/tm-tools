@@ -8,6 +8,7 @@ const { t } = useI18n()
 const navItems = ref([
   { label: t('nav.tmcut_editor'), icon: 'i-lucide-film', to: '/tmcut/editor' },
   { label: t('nav.tmcut_templates'), icon: 'i-lucide-layout-template', to: '/tmcut/templates' },
+  { label: t('nav.tmcut_factory'), icon: 'i-lucide-factory', to: '/tmcut/factory' },
   { label: t('nav.tmcut_autocut'), icon: 'i-lucide-scissors', to: '/tmcut/autocut' }
 ])
 </script>
