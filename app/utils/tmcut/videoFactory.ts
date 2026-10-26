@@ -1038,3 +1038,94 @@ export function createAspectRatioVariants(
 
   return plans
 }
+
+// =============================================================================
+// Campaign management (Roadmap v1 §8, P8)
+// =============================================================================
+
+/** In-memory campaign store (persisted by the store/composable). */
+export interface CampaignStore {
+  campaigns: Map<string, VideoCampaign>
+  batchIndex: Map<string, string[]> // campaignId -> batchIds
+}
+
+/** Create a new campaign with defaults. */
+export function createCampaign(input: {
+  userId: string
+  title: string
+  intent: string
+  targetChannels: string[]
+  targetAspectRatios: Array<'9:16' | '16:9' | '1:1' | '4:5'>
+  targetLanguages: string[]
+  templateId: string
+  templateVersion: string
+}): VideoCampaign {
+  const now = new Date().toISOString()
+  return {
+    campaignId: `cmp_${Date.now().toString(36)}`,
+    userId: input.userId,
+    title: input.title,
+    intent: input.intent,
+    targetChannels: input.targetChannels,
+    targetAspectRatios: input.targetAspectRatios,
+    targetLanguages: input.targetLanguages,
+    templateId: input.templateId,
+    templateVersion: input.templateVersion,
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+/** Link a batch to a campaign. */
+export function linkBatchToCampaign(
+  campaign: VideoCampaign,
+  batchId: string,
+  store: CampaignStore
+): VideoCampaign {
+  const updated = { ...campaign, updatedAt: new Date().toISOString() }
+  store.campaigns.set(updated.campaignId, updated)
+  const batches = store.batchIndex.get(updated.campaignId) || []
+  if (!batches.includes(batchId)) {
+    batches.push(batchId)
+    store.batchIndex.set(updated.campaignId, batches)
+  }
+  return updated
+}
+
+/** Get all batches for a campaign. */
+export function getCampaignBatches(campaignId: string, store: CampaignStore): string[] {
+  return store.batchIndex.get(campaignId) || []
+}
+
+/** Aggregate cost/statistics across a campaign's batches. */
+export function summarizeCampaign(
+  campaign: VideoCampaign,
+  batches: Array<{ batchId: string; status: BatchStatus; actualCostUsd: number; completedItems: number; totalItems: number }>
+): {
+  totalBatches: number
+  totalCostUsd: number
+  totalItems: number
+  completedItems: number
+  byStatus: Record<BatchStatus, number>
+} {
+  const byStatus: Record<BatchStatus, number> = {
+    draft: 0, queued: 0, submitting: 0, processing: 0, paused: 0,
+    completed: 0, failed: 0, canceled: 0, assembled: 0
+  }
+  let totalCostUsd = 0
+  let totalItems = 0
+  let completedItems = 0
+  for (const b of batches) {
+    byStatus[b.status] = (byStatus[b.status] || 0) + 1
+    totalCostUsd += b.actualCostUsd || 0
+    totalItems += b.totalItems
+    completedItems += b.completedItems
+  }
+  return {
+    totalBatches: batches.length,
+    totalCostUsd,
+    totalItems,
+    completedItems,
+    byStatus
+  }
+}
