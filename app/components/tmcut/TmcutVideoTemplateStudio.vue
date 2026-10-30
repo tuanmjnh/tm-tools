@@ -489,22 +489,27 @@ function runTest() {
       <!-- Meta -->
       <div class="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-name" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
             {{ t('tmcut.videoTemplates.name') }}
           </label>
-          <UInput v-model="editing.name" class="w-full" />
+          <UInput id="tmcut-studio-name" v-model="editing.name" class="w-full" />
         </div>
         <div>
-          <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-topic" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
             {{ t('tmcut.videoTemplates.topic') }}
           </label>
-          <UInput v-model="editing.topic" class="w-full" />
+          <UInput id="tmcut-studio-topic" v-model="editing.topic" class="w-full" />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <label for="tmcut-studio-description" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
             {{ t('tmcut.videoTemplates.description') }}
           </label>
-          <UTextarea v-model="editing.description" :rows="2" class="w-full" />
+          <UTextarea
+            id="tmcut-studio-description"
+            v-model="editing.description"
+            :rows="2"
+            class="w-full"
+          />
         </div>
       </div>
 
@@ -537,12 +542,16 @@ function runTest() {
           >
             <UInput
               v-model="field.id"
+              name="template-field-id"
+              :aria-label="t('tmcut.videoTemplates.inputId')"
               :placeholder="t('tmcut.videoTemplates.inputId')"
               class="col-span-3"
               size="sm"
             />
             <UInput
               v-model="field.label"
+              name="template-field-label"
+              :aria-label="t('tmcut.videoTemplates.inputLabel')"
               :placeholder="t('tmcut.videoTemplates.inputLabel')"
               class="col-span-4"
               size="sm"
@@ -550,12 +559,14 @@ function runTest() {
             <USelect
               v-model="field.type"
               :items="inputTypeItems()"
+              :aria-label="t('tmcut.videoTemplates.inputType')"
               class="col-span-3"
               size="sm"
             />
             <div class="col-span-2 flex items-center justify-end gap-1">
-              <UToggle
+              <USwitch
                 :model-value="!!field.required"
+                :aria-label="t('tmcut.videoTemplates.inputRequired')"
                 size="xs"
                 @update:model-value="(value: boolean) => { field.required = value }"
               />
@@ -611,18 +622,22 @@ function runTest() {
               </UBadge>
               <UInput
                 v-model="scene.id"
+                name="template-scene-id"
+                :aria-label="t('tmcut.videoTemplates.sceneId')"
                 size="sm"
                 class="w-40"
                 :placeholder="t('tmcut.videoTemplates.sceneId')"
               />
               <USelect
                 v-model="scene.role"
+                :aria-label="t('tmcut.videoTemplates.sceneRole')"
                 :items="roleItems()"
                 size="sm"
                 class="w-36"
               />
               <USelect
                 v-model="scene.shotType"
+                :aria-label="t('tmcut.videoTemplates.sceneShot')"
                 :items="shotItems()"
                 size="sm"
                 class="w-40"
@@ -630,6 +645,8 @@ function runTest() {
               <div class="ml-auto flex items-center gap-1.5">
                 <UInput
                   v-model.number="scene.durationTargetSec"
+                  name="template-scene-duration"
+                  :aria-label="t('tmcut.videoTemplates.sceneDuration')"
                   type="number"
                   size="sm"
                   class="w-24"
@@ -644,10 +661,28 @@ function runTest() {
                 />
               </div>
             </div>
-            <UInput v-model="scene.visualIntent" size="sm" :placeholder="t('tmcut.videoTemplates.sceneVisual')" />
+            <UInput
+              v-model="scene.visualIntent"
+              name="template-scene-visual"
+              :aria-label="t('tmcut.videoTemplates.sceneVisual')"
+              size="sm"
+              :placeholder="t('tmcut.videoTemplates.sceneVisual')"
+            />
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <UInput v-model="scene.onScreenText" size="sm" :placeholder="t('tmcut.videoTemplates.sceneOnScreen')" />
-              <UInput v-model="scene.narration" size="sm" :placeholder="t('tmcut.videoTemplates.sceneNarration')" />
+              <UInput
+                v-model="scene.onScreenText"
+                name="template-scene-on-screen"
+                :aria-label="t('tmcut.videoTemplates.sceneOnScreen')"
+                size="sm"
+                :placeholder="t('tmcut.videoTemplates.sceneOnScreen')"
+              />
+              <UInput
+                v-model="scene.narration"
+                name="template-scene-narration"
+                :aria-label="t('tmcut.videoTemplates.sceneNarration')"
+                size="sm"
+                :placeholder="t('tmcut.videoTemplates.sceneNarration')"
+              />
             </div>
           </div>
           <p
@@ -689,12 +724,15 @@ function runTest() {
             <div class="flex items-center gap-2">
               <UInput
                 v-model="block.id"
+                name="template-block-id"
+                :aria-label="t('tmcut.videoTemplates.blockId')"
                 size="sm"
                 class="w-44"
                 :placeholder="t('tmcut.videoTemplates.blockId')"
               />
               <USelect
                 v-model="block.type"
+                :aria-label="t('tmcut.videoTemplates.blockTypeLabel')"
                 :items="blockTypeItems()"
                 size="sm"
                 class="w-52"
@@ -710,6 +748,8 @@ function runTest() {
             </div>
             <UTextarea
               v-model="block.content"
+              name="template-block-content"
+              :aria-label="t('tmcut.videoTemplates.blockContent')"
               :rows="2"
               size="sm"
               :placeholder="t('tmcut.videoTemplates.blockContent')"
@@ -757,14 +797,17 @@ function runTest() {
                 {{ field.label }}
                 <span v-if="field.required" class="text-red-400">*</span>
               </span>
-              <UToggle
+              <USwitch
                 v-if="field.type === 'boolean'"
                 :model-value="recordValue(field.id) === 'true'"
+                :aria-label="field.label"
                 size="sm"
                 @update:model-value="(value: boolean) => setRecord(field.id, String(value))"
               />
               <UInput
                 v-else
+                name="template-record-value"
+                :aria-label="field.label || field.id"
                 :model-value="recordValue(field.id)"
                 class="w-full"
                 size="sm"

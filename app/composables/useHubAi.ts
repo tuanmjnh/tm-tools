@@ -195,6 +195,19 @@ export function useHubAi() {
     },
 
     /**
+     * POST /api/v1/apps/:appId/ai/models
+     * Batch persist discovered models for a connection.
+     */
+    async addModels(appId: string, body: {
+      provider: string
+      connectionId: string | null
+      models: Array<{ id: string, displayName?: string, capabilities?: string[] }>
+    }): Promise<{ count: number, total: number }> {
+      return request<{ count: number, total: number }>(`${aiBase(appId)}/models`, { method: 'POST', body })
+    },
+
+
+    /**
      * PATCH /api/v1/apps/:appId/ai/models/:modelId
      * Toggle model enabled/disabled.
      */
@@ -248,6 +261,9 @@ export function useHubAi() {
     async patchConnection(appId: string, connectionId: string, body: {
       isEnabled?: boolean
       isShared?: boolean
+      status?: string
+      lastTestOk?: boolean
+      lastTestAt?: string
     }): Promise<HubAiConnection> {
       return request<HubAiConnection>(
         `${aiBase(appId)}/connections/${encodeURIComponent(connectionId)}`,

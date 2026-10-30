@@ -238,6 +238,7 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
 
         <div class="flex items-center gap-1 ml-1">
           <USelect
+            :aria-label="t('tmcut.keyframeLane.propertyLabel')"
             :items="availableProps.map(p => ({ label: propLabel(p), value: p }))"
             :model-value="activeProp"
             size="xs"
@@ -256,6 +257,7 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
           />
           <USelect
             v-if="activeKf"
+            :aria-label="t('tmcut.keyframeLane.easingLabel')"
             :items="KEYFRAME_EASINGS.map(e => ({ label: easingLabel(e), value: e }))"
             :model-value="activeKf.easing || 'linear'"
             size="xs"

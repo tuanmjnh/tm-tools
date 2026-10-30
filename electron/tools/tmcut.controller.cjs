@@ -7,6 +7,19 @@ const { spawn } = require('child_process')
 const { getToolsBinaries, getResourcesDir } = require('./paths.cjs')
 const { pruneCommandRecordings } = require('./recordings.cjs')
 const { assertDownloadUrl, resolveDownloadTarget } = require('./media-download.cjs')
+const { fetchStockJson } = require('./stock-proxy.cjs')
+const { sceneDetectionArgs, silenceDetectionArgs } = require('../../shared/utils/detection-args.cjs')
+const { randomUUID } = require('node:crypto')
+const {
+  DEFAULT_VIENEU_BASE_URL,
+  MAX_VOICE_REFERENCE_BYTES,
+  MAX_TTS_TEXT_LENGTH,
+  MAX_TTS_AUDIO_BYTES,
+  normalizeVieNeuBaseUrl,
+  parseVieNeuVoices,
+  validateSynthesisInput,
+  getServiceError
+} = require('./tmcut-voice.cjs')
 
 const moduleName = 'tmcut'
 
@@ -25,7 +38,8 @@ function getDirs() {
     stabilized: path.join(base, 'cache', 'stabilized'),
     stabilizedTrf: path.join(base, 'cache', 'stabilized_trf'),
     recordings: path.join(base, 'recordings'),
-    downloads: path.join(base, 'downloads')
+    downloads: path.join(base, 'downloads'),
+    voices: path.join(base, 'voices')
   }
 }
 
@@ -57,7 +71,7 @@ function isUserMediaPath(filePath) {
 
 function ensureDirs() {
   const d = getDirs()
-  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings, d.downloads]) {
+  for (const p of [d.base, d.projects, d.snapshots, d.cache, d.thumbs, d.waveforms, d.frames, d.proxies, d.stabilized, d.stabilizedTrf, d.recordings, d.downloads, d.voices]) {
     try {
       fs.mkdirSync(p, { recursive: true })
     } catch {
@@ -531,16 +545,9 @@ function runFfmpegLog(args, timeoutMs) {
 async function analyzeScenes(filePath, threshold) {
   const stat = getFileStat(filePath)
   if (!stat.exists) return { ok: false, error: 'File not found' }
-  const score = Number.isFinite(threshold) && threshold > 0 && threshold < 1 ? threshold : 0.4
   const probe = await probeMediaJson(filePath)
   const durationSec = probe && probe.format ? Number(probe.format.duration) || 0 : await probeDuration(filePath)
-  const { code, log } = await runFfmpegLog([
-    '-hide_banner',
-    '-i', filePath,
-    '-vf', `select='gt(scene,${score})',showinfo`,
-    '-vsync', '0',
-    '-f', 'null', '-'
-  ], 10 * 60 * 1000)
+  const { code, log } = await runFfmpegLog(sceneDetectionArgs(filePath, threshold), 10 * 60 * 1000)
   if (code !== 0) return { ok: false, error: 'Scene detection failed' }
   return { ok: true, log, durationSec }
 }
@@ -549,17 +556,9 @@ async function analyzeScenes(filePath, threshold) {
 async function analyzeSilence(filePath, noiseDb, minDuration) {
   const stat = getFileStat(filePath)
   if (!stat.exists) return { ok: false, error: 'File not found' }
-  const noise = Number.isFinite(noiseDb) ? noiseDb : -30
-  const minDur = Number.isFinite(minDuration) && minDuration > 0 ? minDuration : 0.5
   const probe = await probeMediaJson(filePath)
   const durationSec = probe && probe.format ? Number(probe.format.duration) || 0 : await probeDuration(filePath)
-  const { code, log } = await runFfmpegLog([
-    '-hide_banner',
-    '-i', filePath,
-    '-af', `silencedetect=noise=${noise}dB:d=${minDur}`,
-    '-vn', '-sn', '-dn',
-    '-f', 'null', '-'
-  ], 10 * 60 * 1000)
+  const { code, log } = await runFfmpegLog(silenceDetectionArgs(filePath, noiseDb, minDuration), 10 * 60 * 1000)
   if (code !== 0) return { ok: false, error: 'Silence detection failed' }
   return { ok: true, log, durationSec }
 }
@@ -968,9 +967,9 @@ function registerTmcutController() {
   ipcMain.handle(`${moduleName}:getPaths`, () => {
     ensureDirs()
     const d = getDirs()
-    return {
-      base: toPosix(d.base),
-      projects: toPosix(d.projects),
+  return {
+    base: toPosix(d.base),
+    projects: toPosix(d.projects),
       snapshots: toPosix(d.snapshots),
       assetsFile: toPosix(d.assetsFile),
       cache: toPosix(d.cache),
@@ -1131,6 +1130,204 @@ function registerTmcutController() {
     return extractCaptionAudio(safePath)
   })
 
+  ipcMain.handle(`${moduleName}:voiceStatus`, async (_event, args = {}) => {
+    try {
+      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const response = await fetchVieNeu(baseUrl, '/health')
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text()) }
+      let health = null
+      try { health = await response.json() } catch { health = null }
+      const voicesResponse = await fetchVieNeu(baseUrl, '/v1/voices')
+      if (!voicesResponse.ok) return { ok: false, error: getServiceError(voicesResponse.status, await voicesResponse.text()) }
+      return { ok: true, data: { baseUrl, health, voices: parseVieNeuVoices(await voicesResponse.json()) } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:enrollVoice`, async (_event, args = {}) => {
+    try {
+      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const filePath = isUserMediaPath(args.filePath)
+      if (!filePath) return { ok: false, error: 'Select a valid local reference audio file' }
+      const stat = fs.statSync(filePath)
+      if (!stat.isFile() || stat.size === 0) return { ok: false, error: 'Reference audio file is empty or invalid' }
+      if (stat.size > MAX_VOICE_REFERENCE_BYTES) return { ok: false, error: 'Reference audio exceeds the 20 MiB limit' }
+      if (!['.wav', '.mp3', '.m4a', '.ogg', '.flac', '.webm'].includes(path.extname(filePath).toLowerCase())) {
+        return { ok: false, error: 'Unsupported reference audio format' }
+      }
+      const name = String(args.name || '').trim()
+      if (!name || name.length > 64 || !/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(name)) return { ok: false, error: 'Voice name must start with a letter or number and contain at most 64 letters, numbers, spaces, dots, hyphens or underscores' }
+      const form = new FormData()
+      form.append('name', name)
+      form.append('description', String(args.description || '').slice(0, 500))
+      form.append('denoise', args.denoise === false ? 'false' : 'true')
+      form.append('file', new Blob([fs.readFileSync(filePath)]), path.basename(filePath))
+      const response = await fetchVieNeu(baseUrl, '/v1/voices', { method: 'POST', body: form })
+      const body = await response.text()
+      if (response.status === 409) {
+        const list = await fetchVieNeu(baseUrl, '/v1/voices')
+        if (list.ok && parseVieNeuVoices(await list.json()).some(item => item.name === name)) {
+          return { ok: true, data: { voice: name, alreadyPresent: true } }
+        }
+      }
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, body) }
+      return { ok: true, data: { voice: name, response: parseJsonOrText(body) } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:listManagedVoices`, () => {
+    ensureDirs()
+    return readManagedVoices()
+  })
+
+  ipcMain.handle(`${moduleName}:addManagedVoice`, async (_event, args = {}) => {
+    try {
+      const filePath = isUserMediaPath(args.filePath)
+      if (!filePath) return { ok: false, error: 'Select a valid local reference audio file' }
+      const stat = fs.statSync(filePath)
+      const ext = path.extname(filePath).toLowerCase()
+      if (!stat.isFile() || stat.size === 0 || stat.size > MAX_VOICE_REFERENCE_BYTES) return { ok: false, error: 'Reference audio must be a non-empty file of 20 MiB or less' }
+      if (!['.wav', '.mp3', '.m4a', '.ogg', '.flac'].includes(ext)) return { ok: false, error: 'Unsupported reference audio format' }
+      const name = String(args.name || '').trim()
+      if (!name || name.length > 64 || !/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(name)) return { ok: false, error: 'Voice name must start with a letter or number and contain at most 64 letters, numbers, spaces, dots, hyphens or underscores' }
+      ensureDirs()
+      const id = randomUUID().replace(/-/g, '')
+      const engineName = `tmcut_${id.slice(0, 16)}`
+      const referencePath = path.join(getDirs().voices, `${id}${ext}`)
+      fs.copyFileSync(filePath, referencePath, fs.constants.COPYFILE_EXCL)
+      const voices = readManagedVoices()
+      const voice = { id, name, engineName, description: String(args.description || '').trim().slice(0, 500), referenceFile: path.basename(referencePath), createdAt: new Date().toISOString() }
+      voices.push(voice)
+      try {
+        writeJsonAtomic(path.join(getDirs().voices, 'registry.json'), voices)
+      } catch (error) {
+        try { fs.unlinkSync(referencePath) } catch { /* preserve the original registry error */ }
+        throw error
+      }
+      return { ok: true, data: voice }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:deleteManagedVoice`, (_event, id) => {
+    const voiceId = String(id || '')
+    if (!/^[a-f0-9]{32}$/.test(voiceId)) return { ok: false, error: 'Invalid voice id' }
+    try {
+      const voices = readManagedVoices()
+      const voice = voices.find(item => item.id === voiceId)
+      if (!voice) return { ok: false, error: 'Voice not found' }
+      const referencePath = path.join(getDirs().voices, voice.referenceFile)
+      if (path.dirname(referencePath) !== getDirs().voices || path.basename(referencePath) !== voice.referenceFile) return { ok: false, error: 'Invalid reference path' }
+      writeJsonAtomic(path.join(getDirs().voices, 'registry.json'), voices.filter(item => item.id !== voiceId))
+      try { fs.unlinkSync(referencePath) } catch (error) { if (error.code !== 'ENOENT') throw error }
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:syncManagedVoice`, async (_event, args = {}) => {
+    try {
+      const voiceId = String(args.id || '')
+      if (!/^[a-f0-9]{32}$/.test(voiceId)) return { ok: false, error: 'Invalid voice id' }
+      const voice = readManagedVoices().find(item => item.id === voiceId)
+      if (!voice) return { ok: false, error: 'Voice not found' }
+      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const referencePath = path.join(getDirs().voices, voice.referenceFile)
+      const form = new FormData()
+      form.append('name', voice.engineName)
+      form.append('description', voice.description || voice.name)
+      form.append('denoise', 'true')
+      form.append('file', new Blob([fs.readFileSync(referencePath)]), voice.referenceFile)
+      const response = await fetchVieNeu(baseUrl, '/v1/voices', { method: 'POST', body: form })
+      const body = await response.text()
+      if (response.status === 409) {
+        const list = await fetchVieNeu(baseUrl, '/v1/voices')
+        if (list.ok && parseVieNeuVoices(await list.json()).some(item => item.name === voice.engineName)) return { ok: true, data: { voice: voice.engineName, alreadyPresent: true } }
+      }
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, body) }
+      return { ok: true, data: { voice: voice.engineName, response: parseJsonOrText(body) } }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:synthesizeGeminiVoice`, async (_event, args = {}) => {
+    try {
+      // Secret comes from Electron's encrypted config -> main-process env;
+      // never accept or forward an API key over renderer IPC.
+      const apiKey = String(process.env.TMCUT_GEMINI_API_KEY || '').trim()
+      const text = typeof args.text === 'string' ? args.text.trim() : ''
+      const voice = String(args.voice || '').trim()
+      if (!apiKey || apiKey.length > 512) return { ok: false, error: 'Set the Gemini API key in Voice Studio first' }
+      if (!text || text.length > MAX_TTS_TEXT_LENGTH) return { ok: false, error: `Narration must contain 1–${MAX_TTS_TEXT_LENGTH} characters` }
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(voice)) return { ok: false, error: 'Choose a supported Gemini voice' }
+      const style = String(args.style || '').trim().slice(0, 500)
+      const model = String(args.model || 'gemini-3.8-flash-tts').trim()
+      if (!['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts'].includes(model)) return { ok: false, error: 'Unsupported Gemini TTS model' }
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        method: 'POST',
+        headers: { 'x-goog-api-key': apiKey, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          input: [{ type: 'user_input', content: [{ type: 'text', text, ...(style ? { annotations: [{ type: 'speech_metadata', style }] } : {}) }] }],
+          response_format: { type: 'audio' },
+          generation_config: { speech_config: [{ voice }] },
+          // Avoid retaining Interaction objects when the editor only needs
+          // the one generated WAV file.
+          store: false
+        }),
+        signal: AbortSignal.timeout(120_000)
+      })
+      if (!response.ok) return { ok: false, error: `Gemini TTS HTTP ${response.status}: ${(await response.text()).slice(0, 500)}` }
+      const payload = await response.json()
+      const audio = Array.isArray(payload?.steps)
+        ? payload.steps.filter(step => step?.type === 'model_output').flatMap(step => step.content || []).reverse().find(part => part?.type === 'audio')
+        : null
+      const encoded = String(audio?.data || payload?.output_audio?.data || '')
+      if (!encoded || encoded.length > Math.ceil(MAX_TTS_AUDIO_BYTES * 4 / 3)) return { ok: false, error: 'Gemini returned empty audio or exceeded the 64 MiB limit' }
+      const bytes = Buffer.from(encoded, 'base64')
+      if (bytes.length > MAX_TTS_AUDIO_BYTES) return { ok: false, error: 'Gemini returned audio exceeding the 64 MiB limit' }
+      if (bytes.length < 44 || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') return { ok: false, error: 'Gemini did not return valid WAV audio' }
+      // RIFF stores the payload length as uint32; do not write malformed
+      // WAV output if Google ever returns an unexpectedly large container.
+      if (bytes.readUInt32LE(4) + 8 > bytes.length) return { ok: false, error: 'Gemini returned an incomplete WAV audio file' }
+      ensureDirs()
+      const filePath = path.join(getDirs().recordings, `gemini-tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`)
+      fs.writeFileSync(filePath, bytes, { flag: 'wx' })
+      return { ok: true, path: filePath, size: bytes.length }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
+  ipcMain.handle(`${moduleName}:synthesizeVoice`, async (_event, args = {}) => {
+    try {
+      const baseUrl = normalizeVieNeuBaseUrl(args.baseUrl || DEFAULT_VIENEU_BASE_URL)
+      const { text, voice } = validateSynthesisInput(args)
+      const response = await fetchVieNeu(baseUrl, '/v1/audio/speech', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'vieneu-v3-turbo', input: text, voice, response_format: 'wav', stream_format: 'audio' })
+      })
+      if (!response.ok) return { ok: false, error: getServiceError(response.status, await response.text()) }
+      const bytes = await readResponseBounded(response, MAX_TTS_AUDIO_BYTES)
+      if (bytes.length < 44 || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE') {
+        return { ok: false, error: 'VieNeu-TTS did not return a valid WAV audio stream' }
+      }
+      ensureDirs()
+      const filePath = path.join(getDirs().recordings, `tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.wav`)
+      fs.writeFileSync(filePath, bytes, { flag: 'wx' })
+      return { ok: true, path: filePath, size: bytes.length }
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) }
+    }
+  })
+
   // Roadmap D-4: MediaRecorder blobs must land on disk for the desktop
   // pipeline (FFmpeg export reads real paths). Saved under
   // <base>/recordings/ with a timestamped name — no dialog friction.
@@ -1178,6 +1375,13 @@ function registerTmcutController() {
 
   ipcMain.handle(`${moduleName}:cancelDownload`, (_event, id) => cancelMediaDownload(id))
 
+  // Stock media search (kho tài nguyên): the renderer builds the provider
+  // request, main enforces the https + host allowlist and the body cap, and
+  // returns JSON — never a raw response body.
+  ipcMain.handle(`${moduleName}:stockSearch`, async (_event, args = {}) => {
+    return fetchStockJson({ url: args?.url, headers: args?.headers })
+  })
+
   ipcMain.handle(`${moduleName}:extractWaveform`, async (_event, { filePath, buckets }) => {
     const safePath = isUserMediaPath(filePath)
     if (!safePath) return { ok: false, error: 'Invalid path' }
@@ -1220,6 +1424,48 @@ function registerTmcutController() {
 // isUserMediaPath exported for the R110 regression spec (pure function,
 // no Electron state involved; requiring this module outside Electron is
 // side-effect-free because registration only runs from main.cjs).
+function readManagedVoices() {
+  const voices = readJsonSafe(path.join(getDirs().voices, 'registry.json'))
+  if (!Array.isArray(voices)) return []
+  return voices.filter(voice => voice && /^[a-f0-9]{32}$/.test(String(voice.id || ''))
+    && typeof voice.name === 'string' && typeof voice.engineName === 'string'
+    && typeof voice.referenceFile === 'string' && path.basename(voice.referenceFile) === voice.referenceFile)
+}
+
+async function fetchVieNeu(baseUrl, route, options = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 120_000)
+  try {
+    return await fetch(`${baseUrl}${route}`, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function readResponseBounded(response, maxBytes) {
+  const declared = Number(response.headers.get('content-length')) || 0
+  if (declared > maxBytes) throw new Error('Generated audio exceeds the 64 MiB limit')
+  if (!response.body) throw new Error('VieNeu-TTS returned an empty response')
+  const reader = response.body.getReader()
+  const chunks = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new Error('Generated audio exceeds the 64 MiB limit')
+    }
+    chunks.push(Buffer.from(value))
+  }
+  return Buffer.concat(chunks, total)
+}
+
+function parseJsonOrText(value) {
+  try { return JSON.parse(value) } catch { return String(value || '') }
+}
+
 module.exports = {
   registerTmcutController,
   isUserMediaPath,

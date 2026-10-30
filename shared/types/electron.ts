@@ -578,6 +578,7 @@ export interface AiCompleteInput {
   maxTokens?: number
   temperature?: number
   jsonMode?: boolean
+  timeoutMs?: number
 }
 
 export interface AiCompleteResult {
@@ -590,6 +591,20 @@ export interface AiCompleteResult {
 export interface AiModelInfo {
   id: string
   label: string
+}
+
+/** One usable AI-LLM connection from the hub relay catalogue (R147 phase 2). */
+export interface AiRelayConnection {
+  connectionId: string
+  provider: string
+  name: string
+  adapterType: string
+  origin: 'own' | 'shared'
+  /** Has a stored key (keyless providers like local Ollama report false). */
+  hasKey: boolean
+  /** Saved default model (hub AI_MODEL config) or null. */
+  model: string | null
+  models: Array<{ modelId: string, displayName: string, isPrimary?: boolean }>
 }
 
 /** Picker entry for the provider select (electron/tools/ai-gateway.cjs presets). */
@@ -750,19 +765,19 @@ export interface VideoGenerationProviderHealthResult {
 
 export interface VideoGenerationNamespace {
   /** List available providers (manifests) */
-  providers(): Promise<{ ok: boolean, data?: VideoGenerationProvider[] }>
+  'providers'(): Promise<{ ok: boolean, data?: VideoGenerationProvider[] }>
   /** Get provider capabilities/manifest (runtime key: 'provider:capabilities'). */
   'provider:capabilities'(args: { providerId: string }): Promise<{ ok: boolean, data?: VideoGenerationProvider }>
   /** Estimate cost for a generation job */
-  estimate(args: { providerId: string, input: Record<string, unknown> }): Promise<{ ok: boolean, data?: VideoGenerationEstimate }>
+  'estimate'(args: { providerId: string, input: Record<string, unknown> }): Promise<{ ok: boolean, data?: VideoGenerationEstimate }>
   /** Submit a generation job */
-  submit(args: { providerId: string, input: Record<string, unknown>, idempotencyKey?: string }): Promise<{ ok: boolean, data?: VideoGenerationSubmitResult }>
+  'submit'(args: { providerId: string, input: Record<string, unknown>, idempotencyKey?: string }): Promise<{ ok: boolean, data?: VideoGenerationSubmitResult }>
   /** Poll job status */
-  poll(args: { jobId: string }): Promise<{ ok: boolean, data?: VideoGenerationPollResult }>
+  'poll'(args: { jobId: string }): Promise<{ ok: boolean, data?: VideoGenerationPollResult }>
   /** Cancel a job */
-  cancel(args: { jobId: string }): Promise<{ ok: boolean }>
+  'cancel'(args: { jobId: string }): Promise<{ ok: boolean }>
   /** Download result to Asset Center */
-  download(args: { jobId: string, destDir?: string }): Promise<{ ok: boolean, data?: VideoGenerationDownloadResult }>
+  'download'(args: { jobId: string, destDir?: string }): Promise<{ ok: boolean, data?: VideoGenerationDownloadResult }>
   /** List all jobs (runtime key: 'jobs:list'). */
   'jobs:list'(): Promise<{ ok: boolean, data?: VideoGenerationJobRecord[] }>
   /** Get single job (runtime key: 'jobs:get'). */
@@ -786,6 +801,18 @@ export interface DownloadProgressPayload {
 }
 
 export interface TmcutNamespace {
+  /** Capture and encode an HTML/CSS composition to an H.264 MP4 on the desktop. */
+  renderHtmlVideo(args: {
+    html: string
+    css?: string
+    width: number
+    height: number
+    fps: number
+    duration: number
+    outputPath: string
+    jobId?: string
+  }): Promise<{ ok: boolean, path?: string, size?: number, frames?: number, error?: string }>
+  onHtmlVideoProgress(callback: (payload: { jobId: string, frame: number, total: number }) => void): EventUnsubscriber
   getPaths(): Promise<TmcutDirs>
   readAssetsFile(): Promise<unknown>
   writeAssetsFile(data: unknown): Promise<boolean>
@@ -806,6 +833,15 @@ export interface TmcutNamespace {
   extractFrame(args: { src: string, atSec: number, width?: number }): Promise<TmcutFrameResult>
   /** Caption audio for Whisper (roadmap C-3): cached 16kHz mono MP3 extracted in main. */
   extractAudio(args: { filePath: string }): Promise<{ ok: boolean, path?: string, error?: string }>
+  voiceStatus(args?: { baseUrl?: string }): Promise<{ ok: boolean, data?: { baseUrl: string, health: unknown, voices: Array<{ name: string, description: string }> }, error?: string }>
+  enrollVoice(args: { baseUrl?: string, filePath: string, name: string, description?: string, denoise?: boolean }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
+  listManagedVoices(): Promise<Array<{ id: string, name: string, engineName: string, description: string, createdAt: string }>>
+  addManagedVoice(args: { filePath: string, name: string, description?: string }): Promise<{ ok: boolean, data?: { id: string, name: string, engineName: string, description: string, referenceFile: string, createdAt: string }, error?: string }>
+  deleteManagedVoice(id: string): Promise<{ ok: boolean, error?: string }>
+  syncManagedVoice(args: { id: string, baseUrl?: string }): Promise<{ ok: boolean, data?: { voice: string, alreadyPresent?: boolean }, error?: string }>
+  synthesizeVoice(args: { baseUrl?: string, text: string, voice: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
+  /** Uses the API key from encrypted desktop config; never pass credentials over renderer IPC. */
+  synthesizeGeminiVoice(args: { text: string, voice: string, style?: string, model?: string }): Promise<{ ok: boolean, path?: string, size?: number, error?: string }>
   /**
    * Recording blob persistence (roadmap D-4): writes into <base>/recordings/,
    * returns the path. `prefix` names non-voiceover takes (e.g. a command clip
@@ -825,6 +861,12 @@ export interface TmcutNamespace {
   downloadMedia(args: { url: string, filename?: string, id?: string }): Promise<{ ok: boolean, path?: string, name?: string, bytes?: number, error?: string }>
   /** Abort an in-flight download; the pending promise settles with 'cancelled'. */
   cancelDownload(id: string): Promise<boolean>
+  /**
+   * Stock media search (kho tài nguyên). Main fetches the provider URL after
+   * enforcing the https + host allowlist, the `Authorization`-only header
+   * rule, a 15 s timeout and a 2 MiB body cap, and returns parsed JSON.
+   */
+  stockSearch(args: { url: string, headers?: Record<string, string> }): Promise<{ ok: boolean, status?: number, data?: unknown, error?: string }>
   /** Byte progress for a download started with the same `id`. */
   onDownloadProgress(callback: (payload: DownloadProgressPayload) => void): () => void
   analyzeAsset(args: { filePath: string, kind: string }): Promise<TmcutAnalyzeResult>
@@ -837,6 +879,38 @@ export interface TmcutNamespace {
   onRenderDone(callback: (payload: { filePath: string, size: number }) => void): () => void
   /** On-demand Asset Center (roadmap v3 PART A): registry + verified installs. */
   assetCenter: TmcutAssetCenterNamespace
+}
+
+/**
+ * Production process artifact store (docs/production-process). Artifacts are
+ * real files under <userData>/tmcut/process/runs/<runId>/, one directory per
+ * version; the stage machine that decides WHEN to write them lives in the
+ * renderer (`utils/process/stageMachine.ts`). Every call answers an envelope
+ * so a refused path is a message instead of an exception.
+ */
+export interface ProcessStoreEnvelope<T> {
+  ok: boolean
+  data?: T
+  error?: string
+}
+
+export interface ProcessNamespace {
+  root(): Promise<ProcessStoreEnvelope<{ path: string }>>
+  openRoot(): Promise<ProcessStoreEnvelope<{ path: string }>>
+  list(): Promise<ProcessStoreEnvelope<Array<{
+    runId: string
+    title: string
+    status: string
+    processId: string
+    processVersion: string
+    currentStage: string
+    updatedAt: string
+    artifacts: number
+  }>>>
+  read(runId: string): Promise<ProcessStoreEnvelope<Record<string, unknown>>>
+  save(payload: { runId: string, run: unknown }): Promise<ProcessStoreEnvelope<{ file: string }>>
+  writeArtifact(payload: { runId: string, name: string, content: string }): Promise<ProcessStoreEnvelope<{ version: number, hash: string, file: string }>>
+  readArtifact(payload: { runId: string, name: string, version?: number }): Promise<ProcessStoreEnvelope<{ version: number, content: string }>>
 }
 
 /**
@@ -1052,6 +1126,8 @@ export interface ElectronAPI {
   dialog: DialogNamespace
   fileManager: FileManagerNamespace
   tmcut: TmcutNamespace
+  /** Production process artifacts (stage → artifact → gate). */
+  process: ProcessNamespace
   appUpdater?: AppUpdaterNamespace
   system: {
     getInfo(): Promise<ApiResponse<SystemInfoResponse>>
@@ -1066,16 +1142,16 @@ export interface ElectronAPI {
     testExecutable(input: TestExecutableInput): Promise<ApiResponse<TestExecutableResult>>
   }
   events: {
-      on<K extends keyof EventBusContracts>(
-        event: K,
-        callback: (payload: EventBusContracts[K]) => void
-      ): () => void
-    },
-    mcp: {
-      onToolInvoke(callback: (data: { tool: string; params: Record<string, unknown>; requestId: string; projectId: string }) => void): () => void
-      respond(requestId: string, result: unknown): void
-    }
+    on<K extends keyof EventBusContracts>(
+      event: K,
+      callback: (payload: EventBusContracts[K]) => void
+    ): () => void
   }
+  mcp: {
+    onToolInvoke(callback: (data: { tool: string, params: Record<string, unknown>, requestId: string, projectId: string }) => void): () => void
+    respond(requestId: string, result: unknown): void
+  }
+}
 
 declare global {
   interface Window {

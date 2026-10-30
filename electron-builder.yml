@@ -10,6 +10,10 @@ publish:
   releaseType: release
 files:
   - electron/**/*
+  # The main process requires shared/utils/detection-args.cjs (the AutoCut
+  # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
+  # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
+  - shared/**/*
   - .output/**/*
   - public/icon.ico
   - public/icon.png

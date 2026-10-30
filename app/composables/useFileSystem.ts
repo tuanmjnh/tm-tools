@@ -88,6 +88,9 @@ export function useFileSystem() {
     return new Promise((resolve) => {
       const input = document.createElement('input')
       input.type = 'file'
+      // Hidden helper input, but DevTools still flags unlabelled form fields.
+      input.name = 'tm-pick-files'
+      input.setAttribute('aria-label', 'Select files')
       if (multiple) input.multiple = true
       if (extensions.length > 0) {
         input.accept = extensions.map(ext => `.${String(ext).replace(/^\./, '')}`).join(',')

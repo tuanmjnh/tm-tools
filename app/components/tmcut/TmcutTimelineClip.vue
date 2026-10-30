@@ -8,7 +8,8 @@ import { useTmcutUiPrefs } from '~/composables/useTmcutUiPrefs'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useI18n } from 'vue-i18n'
 import { propsWithKeyframes, keyframeTimes, secToTicks, ticksToSec, KNOWN_TRANSITIONS, TICKS_PER_SECOND } from '@tmcut-core'
-import { clipDurationSec, clipStartSec, clipEndTicks } from '~/utils/tmcut/clipTime'
+import { clipDurationSec, clipStartSec, clipEndSec, clipEndTicks } from '~/utils/tmcut/clipTime'
+import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'
 
 const props = withDefaults(defineProps<{
   trackType: 'video' | 'text' | 'audio'
@@ -19,7 +20,7 @@ const props = withDefaults(defineProps<{
 })
 
 const { t } = useI18n()
-const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject, gesturePreview, setGesturePreview, clearGesturePreview } = useTmcutProject()
+const { selectedClipId, selectClip, updateClip, pushHistory, snapTimeSec, relatedOffsetsFor, checkClipTransition, applyClipTransition, clearClipTransition, saveProject, gesturePreview, setGesturePreview, clearGesturePreview, currentProject, clipboard, splitClip, removeClip, copySelectedClips, pasteClipboardAt, duplicateSelectedClips, rippleDeleteSelected, toggleTrackLock } = useTmcutProject()
 const { zoom, playhead } = useTmcutPlayback()
 const { findAssetBySrc, loadWaveform, mediaUrl, isDesktop } = useTmcutMedia()
 const { snapOn } = useTmcutUiPrefs()
@@ -362,23 +363,39 @@ function onTrimRightStart(e: PointerEvent) {
   }, { onFirstMove: pushHistory })
 }
 
-// ===== Right-click transition menu (roadmap B3 / core C5) =====
-// Video clips only: the preview crossfades VIDEO layers (two <video>
-// elements, complementary ramps). Text/audio transitions are omitted —
-// offering them would be a dead control (no preview, export ships in R3,
-// the export modal carries the honest badge). Applying shifts the clip
-// left to overlap its neighbor; "None" restores the original cut.
+// ===== Right-click clip menu =====
+// One menu for every clip type: the editing actions every clip shares
+// (split / copy / duplicate / paste / delete / ripple / track lock) plus the
+// transition section, which stays video-only — the preview crossfades VIDEO
+// layers and offering it elsewhere would be a dead control.
 const DEFAULT_TRANSITION_SEC = 0.5
 const DURATION_PRESETS = [0.2, 0.5, 1, 2]
 
-const menuOpen = ref(false)
-const menuEl = ref<HTMLElement | null>(null)
-const menuPos = ref({ x: 0, y: 0 })
+const {
+  open: menuOpen,
+  ready: menuReady,
+  pos: menuPos,
+  el: menuEl,
+  openAt: openMenuAt,
+  close: closeMenu
+} = useTmcutContextMenu()
+
 // Pending selections — seeded from the clip's current transition on open.
 const menuType = ref<string>(KNOWN_TRANSITIONS[0] ?? 'fade')
 const menuDuration = ref(DEFAULT_TRANSITION_SEC)
 
 const hasTransition = computed(() => (props.clip.transitionIn?.duration ?? 0) > 0)
+
+// Menu header identity: text clips read their own line, media clips their
+// name (a raw src path is unreadable in a 240px panel).
+const clipMenuLabel = computed(() => {
+  const raw = props.trackType === 'text'
+    ? (props.clip.text || props.clip.name)
+    : (props.clip.name || props.clip.src?.split(/[\\/]/).pop())
+  return raw?.trim() || '—'
+})
+
+const clipMenuDuration = computed(() => `${clipDurationSec(props.clip).toFixed(1)}s`)
 
 // Applied-state label in the menu header (truthful: what is saved).
 const appliedLabel = computed(() => {
@@ -422,45 +439,75 @@ function clearTransitionPick() {
 }
 
 function onClipContextMenu(e: MouseEvent) {
-  // Always suppress the browser menu over a clip (select on right-click).
-  e.preventDefault()
+  // Select on right-click, then open the clip menu for EVERY clip type —
+  // text/audio/locked clips used to swallow the event and show nothing.
   e.stopPropagation()
   selectClip(props.clip.id)
-  if (props.locked || props.trackType !== 'video') return
-  menuType.value = props.clip.transitionIn?.type ?? KNOWN_TRANSITIONS[0] ?? 'fade'
-  menuDuration.value = props.clip.transitionIn
-    ? ticksToSec(props.clip.transitionIn.duration)
-    : DEFAULT_TRANSITION_SEC
-  // Keep the panel inside the viewport (rough box size for clamping).
-  menuPos.value = {
-    x: Math.max(8, Math.min(e.clientX, window.innerWidth - 240)),
-    y: Math.max(8, Math.min(e.clientY, window.innerHeight - 250))
+  if (props.trackType === 'video') {
+    menuType.value = props.clip.transitionIn?.type ?? KNOWN_TRANSITIONS[0] ?? 'fade'
+    menuDuration.value = props.clip.transitionIn
+      ? ticksToSec(props.clip.transitionIn.duration)
+      : DEFAULT_TRANSITION_SEC
   }
-  menuOpen.value = true
+  openMenuAt(e)
 }
 
-// Close on outside mousedown / Escape (capture phase so clicks inside
-// the panel register first).
-function onDocMouseDown(e: MouseEvent) {
-  if (menuEl.value && e.target instanceof Node && menuEl.value.contains(e.target)) return
-  menuOpen.value = false
+// ---- Shared clip actions (same store calls the toolbar and hotkeys use) ----
+const toast = useToast()
+const canPaste = computed(() => (clipboard.value?.clips?.length ?? 0) > 0)
+
+// Split needs the playhead strictly inside the clip with a 0.1s margin —
+// the same rule splitClip enforces, surfaced here so the row can be disabled
+// instead of silently doing nothing.
+const canSplitHere = computed(() => {
+  const at = playhead.value
+  return at > clipStartSec(props.clip) + 0.1 && at < clipEndSec(props.clip) - 0.1
+})
+
+function runSplit() {
+  if (!canSplitHere.value) return
+  splitClip(props.clip.id, playhead.value)
+  closeMenu()
 }
-function onDocKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape') menuOpen.value = false
+
+function runCopy() {
+  if (copySelectedClips()) toast.add({ title: t('tmcut.timelineActions.copied'), color: 'success' })
+  closeMenu()
 }
-watch(menuOpen, (open) => {
-  if (open) {
-    document.addEventListener('mousedown', onDocMouseDown, true)
-    document.addEventListener('keydown', onDocKeyDown, true)
-  } else {
-    document.removeEventListener('mousedown', onDocMouseDown, true)
-    document.removeEventListener('keydown', onDocKeyDown, true)
+
+function runDuplicate() {
+  if (duplicateSelectedClips().length > 0) {
+    toast.add({ title: t('tmcut.timelineActions.duplicated'), color: 'success' })
   }
-})
-onUnmounted(() => {
-  document.removeEventListener('mousedown', onDocMouseDown, true)
-  document.removeEventListener('keydown', onDocKeyDown, true)
-})
+  closeMenu()
+}
+
+function runPaste() {
+  if (pasteClipboardAt(playhead.value).length > 0) {
+    toast.add({ title: t('tmcut.timelineActions.pasted'), color: 'success' })
+  }
+  closeMenu()
+}
+
+function runDelete() {
+  removeClip(props.clip.id)
+  closeMenu()
+}
+
+function runRippleDelete() {
+  if (rippleDeleteSelected()) toast.add({ title: t('tmcut.timelineActions.clipDeleted'), color: 'success' })
+  closeMenu()
+}
+
+// Lock lives on the TRACK (clips inherit it), so the menu resolves the
+// owning track by clip id — the item carries no trackId of its own.
+const owningTrack = computed(() =>
+  currentProject.value?.timeline?.tracks?.find(track => track.items?.some(i => i.id === props.clip.id)) ?? null)
+
+function runToggleLock() {
+  if (owningTrack.value) toggleTrackLock(owningTrack.value.id)
+  closeMenu()
+}
 </script>
 
 <template>
@@ -559,87 +606,203 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <!-- Right-click transition menu (roadmap B3): type + duration presets,
-       live-validated via core C5. Teleported to the body so the timeline's
-       overflow can never clip it. -->
+  <!-- Right-click clip menu: shared editing actions plus the video-only
+       transition section. Teleported to the body and measured after mount
+       (useTmcutContextMenu) so the timeline's overflow can never clip it and
+       a panel opened near the bottom edge flips up instead of running off
+       the screen — the old fixed 250px guess left ~500px unreachable. -->
   <Teleport to="body">
     <div
       v-if="menuOpen"
       ref="menuEl"
-      class="fixed z-120 w-56 rounded-lg border border-neutral-400 dark:border-neutral-700 bg-neutral-100/95 dark:bg-neutral-900/95 shadow-2xl p-2 text-xs text-neutral-700 dark:text-neutral-200 select-none"
+      data-tmcut-clip-menu
+      class="fixed z-[120] w-60 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-neutral-400 bg-neutral-100/95 p-1.5 text-xs text-neutral-700 shadow-2xl backdrop-blur-sm select-none dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-200"
+      :class="menuReady ? 'opacity-100' : 'opacity-0'"
       :style="{ left: `${menuPos.x}px`, top: `${menuPos.y}px` }"
       @contextmenu.prevent
     >
-      <div class="flex items-center justify-between gap-2 px-1 pb-1.5">
-        <span class="font-semibold text-[11px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          {{ t('tmcut.clipMenu.transition') }}
-        </span>
-        <span class="text-[10px] font-mono text-neutral-500 truncate">{{ appliedLabel }}</span>
+      <div class="flex items-center justify-between gap-2 px-1.5 pb-1">
+        <span class="min-w-0 truncate text-[11px] font-semibold">{{ clipMenuLabel }}</span>
+        <span class="shrink-0 font-mono text-[10px] text-neutral-500 dark:text-neutral-400">{{ clipMenuDuration }}</span>
       </div>
 
-      <!-- Transition types (core KNOWN_TRANSITIONS — single source) -->
-      <div class="grid grid-cols-3 gap-1">
-        <button
-          v-for="type in KNOWN_TRANSITIONS"
-          :key="type"
-          type="button"
-          class="rounded border px-1 py-1.5 text-[10px] leading-tight transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          :class="clip.transitionIn?.type === type
-            ? 'bg-primary/30 border-primary/60 text-primary-100'
-            : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
-          :disabled="!!reasonFor(type, menuDuration)"
-          :title="titleFor(type, menuDuration)"
-          @click="pickType(type)"
+      <div class="flex flex-col gap-0.5">
+        <UButton
+          icon="i-lucide-scissors"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked || !canSplitHere"
+          data-menu-action="split"
+          @click="runSplit"
         >
-          {{ t(`tmcut.clipMenu.types.${type}`) }}
-        </button>
-      </div>
-
-      <!-- Duration presets (apply with the pending type) -->
-      <div class="mt-1.5 px-1 text-[10px] uppercase tracking-wide text-neutral-500">
-        {{ t('tmcut.clipMenu.duration') }}
-      </div>
-      <div class="mt-1 grid grid-cols-4 gap-1">
-        <button
-          v-for="d in DURATION_PRESETS"
-          :key="d"
-          type="button"
-          class="rounded border px-1 py-1 text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          :class="Math.abs((ticksToSec(clip.transitionIn?.duration ?? 0)) - d) < 0.001
-            ? 'bg-primary/30 border-primary/60 text-primary-100'
-            : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
-          :disabled="!!reasonFor(menuType, d)"
-          :title="titleFor(menuType, d)"
-          @click="pickDuration(d)"
+          {{ t('tmcut.clipMenu.actions.split') }}
+          <span class="ml-auto font-mono text-[10px] text-neutral-500">S</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-copy"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked"
+          data-menu-action="copy"
+          @click="runCopy"
         >
-          {{ d }}s
-        </button>
-      </div>
-
-      <!-- Clear + honest scope note: the desktop render pipeline maps
-           these transitions to xfade, so only the web build is honest
-           about being preview-only (no FFmpeg there). -->
-      <div class="mt-1.5 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          class="rounded border border-neutral-400 dark:border-neutral-700 bg-neutral-200/70 dark:bg-neutral-800/70 px-2 py-1 text-[10px] text-neutral-600 dark:text-neutral-300 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          :disabled="!hasTransition"
-          @click="clearTransitionPick"
+          {{ t('tmcut.clipMenu.actions.copy') }}
+          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+C</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-files"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked"
+          data-menu-action="duplicate"
+          @click="runDuplicate"
         >
-          {{ t('tmcut.clipMenu.none') }}
-        </button>
-        <span v-if="!isDesktop" class="text-[9px] leading-tight text-neutral-500 text-right">
-          {{ t('tmcut.clipMenu.previewOnly') }}
-        </span>
+          {{ t('tmcut.clipMenu.actions.duplicate') }}
+          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+D</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-clipboard-paste"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked || !canPaste"
+          data-menu-action="paste"
+          @click="runPaste"
+        >
+          {{ t('tmcut.clipMenu.actions.paste') }}
+          <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+V</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-trash-2"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked"
+          data-menu-action="delete"
+          @click="runDelete"
+        >
+          {{ t('tmcut.clipMenu.actions.delete') }}
+          <span class="ml-auto font-mono text-[10px] text-neutral-500">Del</span>
+        </UButton>
+        <UButton
+          icon="i-lucide-arrow-left-to-line"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          :disabled="locked"
+          data-menu-action="ripple-delete"
+          @click="runRippleDelete"
+        >
+          {{ t('tmcut.clipMenu.actions.ripple') }}
+        </UButton>
       </div>
 
-      <!-- Why the current selection cannot apply -->
-      <p
-        v-if="menuReason"
-        class="mt-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-300"
-      >
-        {{ t(`tmcut.clipMenu.reason.${menuReason}`) }}
-      </p>
+      <!-- Track section: clips inherit their track's lock, so this is the
+           one place to release a locked clip without hunting the track head. -->
+      <div class="mt-1 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+        <UButton
+          :icon="locked ? 'i-lucide-lock-open' : 'i-lucide-lock'"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          block
+          class="justify-start gap-2"
+          data-menu-action="toggle-lock"
+          @click="runToggleLock"
+        >
+          {{ locked ? t('tmcut.clipMenu.unlockTrack') : t('tmcut.clipMenu.lockTrack') }}
+        </UButton>
+        <p v-if="locked" class="px-1.5 pt-1 text-[10px] leading-tight text-amber-400">
+          {{ t('tmcut.clipMenu.lockedHint') }}
+        </p>
+      </div>
+
+      <!-- Transition section (video only): type + duration presets, live
+           validated via core C5. The type grid scrolls inside a capped box so
+           the whole panel stays inside the viewport. -->
+      <template v-if="trackType === 'video'">
+        <div class="mt-1 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+          <div class="flex items-center justify-between gap-2 px-1 pb-1">
+            <span class="text-[10px] font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
+              {{ t('tmcut.clipMenu.transition') }}
+            </span>
+            <span class="truncate font-mono text-[10px] text-neutral-500">{{ appliedLabel }}</span>
+          </div>
+
+          <div class="grid max-h-44 grid-cols-3 gap-1 overflow-y-auto pr-0.5">
+            <button
+              v-for="type in KNOWN_TRANSITIONS"
+              :key="type"
+              type="button"
+              class="rounded border px-1 py-1.5 text-[10px] leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              :class="clip.transitionIn?.type === type
+                ? 'bg-primary/30 border-primary/60 text-primary-100'
+                : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
+              :disabled="locked || !!reasonFor(type, menuDuration)"
+              :title="titleFor(type, menuDuration)"
+              @click="pickType(type)"
+            >
+              {{ t(`tmcut.clipMenu.types.${type}`) }}
+            </button>
+          </div>
+
+          <div class="mt-1.5 px-1 text-[10px] tracking-wide text-neutral-500 uppercase">
+            {{ t('tmcut.clipMenu.duration') }}
+          </div>
+          <div class="mt-1 grid grid-cols-4 gap-1">
+            <button
+              v-for="d in DURATION_PRESETS"
+              :key="d"
+              type="button"
+              class="rounded border px-1 py-1 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              :class="Math.abs((ticksToSec(clip.transitionIn?.duration ?? 0)) - d) < 0.001
+                ? 'bg-primary/30 border-primary/60 text-primary-100'
+                : 'bg-neutral-200/70 dark:bg-neutral-800/70 border-neutral-400 dark:border-neutral-700 hover:bg-neutral-300/70 dark:hover:bg-neutral-700/70 text-neutral-600 dark:text-neutral-300'"
+              :disabled="locked || !!reasonFor(menuType, d)"
+              :title="titleFor(menuType, d)"
+              @click="pickDuration(d)"
+            >
+              {{ d }}s
+            </button>
+          </div>
+
+          <div class="mt-1.5 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              class="rounded border border-neutral-400 px-2 py-1 text-[10px] text-neutral-600 transition-colors hover:bg-neutral-300/70 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-800/70 dark:text-neutral-300 dark:hover:bg-neutral-700/70"
+              :disabled="locked || !hasTransition"
+              @click="clearTransitionPick"
+            >
+              {{ t('tmcut.clipMenu.none') }}
+            </button>
+            <span v-if="!isDesktop" class="text-right text-[9px] leading-tight text-neutral-500">
+              {{ t('tmcut.clipMenu.previewOnly') }}
+            </span>
+          </div>
+
+          <p
+            v-if="menuReason"
+            class="mt-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-300"
+          >
+            {{ t(`tmcut.clipMenu.reason.${menuReason}`) }}
+          </p>
+        </div>
+      </template>
     </div>
   </Teleport>
 </template>

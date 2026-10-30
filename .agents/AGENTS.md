@@ -65,6 +65,7 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
 - Routes are fetched at runtime via `nav.fetchRoutes()`, mapped into `NavigationMenuItem[]` by `useNavMenu.ts`.
 
 ### Page & Layout Conventions
+- **Open Source First**: Đối với những chức năng chưa quen thuộc, đừng viết từ con số 0, hãy tìm kiếm các dự án mã nguồn mở trên GitHub để so sánh ý tưởng trước khi bắt tay vào làm.
 - **BasePage Mandatory**:
   - All new pages/modules MUST wrap their content in `<BasePage :title="..." :description="...">` (`app/components/base/Page.vue`).
   - Left slot: Displays title and optional description.
@@ -74,6 +75,8 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
   - Studio & editor pages (such as `/tmcut/editor`) MUST pass the `flush` prop (`<BasePage flush ...>`) to remove padding and gap, giving 100% of the viewport to canvas, timelines, and inspectors.
 - **Button Variants**:
   - Primary actions use `color="primary" variant="soft"`.
+- **Form Controls & Inputs**:
+  - Always add class `w-full` for inputs (`UInput`, `USelect`, `USelectMenu`, `UTextarea`, etc.) to ensure consistent responsive layout across all forms.
 - **GridList & Batch Operations**:
   - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.- **Tailwind CSS Conventions**:
   - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (	ailwindcss/enforces-shorthand) and canonical class warnings are disabled.

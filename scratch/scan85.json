@@ -1,0 +1,445 @@
+[
+ {
+  "model": "databricks/dbrx-instruct",
+  "state": "missing",
+  "ms": 482
+ },
+ {
+  "model": "bigcode/starcoder2-15b",
+  "state": "missing",
+  "ms": 646
+ },
+ {
+  "model": "aisingapore/sea-lion-7b-instruct",
+  "state": "missing",
+  "ms": 677
+ },
+ {
+  "model": "adept/fuyu-8b",
+  "state": "missing",
+  "ms": 683
+ },
+ {
+  "model": "01-ai/yi-large",
+  "state": "missing",
+  "ms": 705
+ },
+ {
+  "model": "ai21labs/jamba-1.5-large-instruct",
+  "state": "missing",
+  "ms": 698
+ },
+ {
+  "model": "deepseek-ai/deepseek-coder-6.7b-instruct",
+  "state": "missing",
+  "ms": 299
+ },
+ {
+  "model": "google/codegemma-7b",
+  "state": "missing",
+  "ms": 119
+ },
+ {
+  "model": "google/codegemma-1.1-7b",
+  "state": "missing",
+  "ms": 131
+ },
+ {
+  "model": "google/deplot",
+  "state": "missing",
+  "ms": 119
+ },
+ {
+  "model": "google/gemma-2b",
+  "state": "missing",
+  "ms": 122
+ },
+ {
+  "model": "google/gemma-3-12b-it",
+  "state": "missing",
+  "ms": 118
+ },
+ {
+  "model": "google/gemma-3-4b-it",
+  "state": "missing",
+  "ms": 119
+ },
+ {
+  "model": "google/recurrentgemma-2b",
+  "state": "missing",
+  "ms": 126
+ },
+ {
+  "model": "ibm/granite-3.0-3b-a800m-instruct",
+  "state": "missing",
+  "ms": 121
+ },
+ {
+  "model": "ibm/granite-3.0-8b-instruct",
+  "state": "missing",
+  "ms": 118
+ },
+ {
+  "model": "ibm/granite-8b-code-instruct",
+  "state": "missing",
+  "ms": 120
+ },
+ {
+  "model": "ibm/granite-34b-code-instruct",
+  "state": "missing",
+  "ms": 132
+ },
+ {
+  "model": "meta/codellama-70b",
+  "state": "missing",
+  "ms": 126
+ },
+ {
+  "model": "deepseek-ai/deepseek-v4.1-flash",
+  "state": "timeout",
+  "ms": 12011,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "google/diffusiongemma-26b-a4b-it",
+  "state": "timeout",
+  "ms": 12004,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "google/gemma-4-31b-it",
+  "state": "timeout",
+  "ms": 12016,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "meta/llama2-70b",
+  "state": "missing",
+  "ms": 336
+ },
+ {
+  "model": "microsoft/kosmos-2",
+  "state": "missing",
+  "ms": 286
+ },
+ {
+  "model": "microsoft/phi-3-vision-128k-instruct",
+  "state": "missing",
+  "ms": 128
+ },
+ {
+  "model": "meta/llama-3.2-11b-vision-instruct",
+  "state": "timeout",
+  "ms": 12010,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "meta/llama-3.2-90b-vision-instruct",
+  "state": "timeout",
+  "ms": 12010,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "meta/llama-guard-4-12b",
+  "state": "timeout",
+  "ms": 12007,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "microsoft/phi-3.5-moe-instruct",
+  "state": "missing",
+  "ms": 241
+ },
+ {
+  "model": "mistralai/codestral-22b-instruct-v0.1",
+  "state": "missing",
+  "ms": 186
+ },
+ {
+  "model": "mistralai/mistral-7b-instruct-v0.3",
+  "state": "missing",
+  "ms": 186
+ },
+ {
+  "model": "mistralai/mistral-large",
+  "state": "missing",
+  "ms": 183
+ },
+ {
+  "model": "mistralai/mixtral-8x22b-v0.1",
+  "state": "missing",
+  "ms": 133
+ },
+ {
+  "model": "moonshotai/kimi-k2.6",
+  "state": "missing",
+  "ms": 291
+ },
+ {
+  "model": "mistralai/mistral-large-2-instruct",
+  "state": "missing",
+  "ms": 306
+ },
+ {
+  "model": "nv-mistralai/mistral-nemo-12b-instruct",
+  "state": "missing",
+  "ms": 299
+ },
+ {
+  "model": "nvidia/embed-qa-4",
+  "state": "missing",
+  "ms": 204
+ },
+ {
+  "model": "nvidia/cosmos-reason2-8b",
+  "state": "missing",
+  "ms": 216
+ },
+ {
+  "model": "nvidia/ai-synthetic-video-detector",
+  "state": "http-500",
+  "ms": 378,
+  "detail": "{\"type\":\"urn:nvcf-worker-service:problem-details:internal-se"
+ },
+ {
+  "model": "minimaxai/minimax-m3.1-flash",
+  "state": "ok",
+  "ms": 811
+ },
+ {
+  "model": "nvidia/llama-3.1-nemotron-51b-instruct",
+  "state": "missing",
+  "ms": 120
+ },
+ {
+  "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+  "state": "missing",
+  "ms": 117
+ },
+ {
+  "model": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+  "state": "missing",
+  "ms": 120
+ },
+ {
+  "model": "nvidia/llama-3.1-nemoguard-8b-topic-control",
+  "state": "http-500",
+  "ms": 350,
+  "detail": "{\"error\":\"Error during inference of request chat-71c1fb196f1"
+ },
+ {
+  "model": "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+  "state": "missing",
+  "ms": 91
+ },
+ {
+  "model": "nvidia/llama-3.2-nv-embedqa-1b-v1",
+  "state": "missing",
+  "ms": 92
+ },
+ {
+  "model": "nvidia/llama-nemotron-embed-vl-1b-v2",
+  "state": "missing",
+  "ms": 97
+ },
+ {
+  "model": "nvidia/llama3-chatqa-1.5-70b",
+  "state": "missing",
+  "ms": 130
+ },
+ {
+  "model": "nvidia/mistral-nemo-minitron-8b-8k-instruct",
+  "state": "missing",
+  "ms": 122
+ },
+ {
+  "model": "nvidia/nemotron-3-embed-1b",
+  "state": "missing",
+  "ms": 96
+ },
+ {
+  "model": "nvidia/nemotron-3-super-120b-a12b",
+  "state": "missing",
+  "ms": 116
+ },
+ {
+  "model": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+  "state": "ok",
+  "ms": 666
+ },
+ {
+  "model": "nvidia/nemotron-3.5-bolt-e4b",
+  "state": "ok",
+  "ms": 406
+ },
+ {
+  "model": "nvidia/nemotron-3.5-content-safety",
+  "state": "ok",
+  "ms": 494
+ },
+ {
+  "model": "nvidia/nemotron-3.5-embed-1b",
+  "state": "missing",
+  "ms": 93
+ },
+ {
+  "model": "nvidia/nemotron-3.5-embed-8b",
+  "state": "missing",
+  "ms": 94
+ },
+ {
+  "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+  "state": "ok",
+  "ms": 1597
+ },
+ {
+  "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+  "state": "ok",
+  "ms": 2496
+ },
+ {
+  "model": "nvidia/nemotron-4-340b-instruct",
+  "state": "missing",
+  "ms": 116
+ },
+ {
+  "model": "nvidia/nemotron-4-340b-reward",
+  "state": "missing",
+  "ms": 130
+ },
+ {
+  "model": "nvidia/nemotron-nano-3-30b-a3b",
+  "state": "missing",
+  "ms": 114
+ },
+ {
+  "model": "nvidia/nemotron-parse",
+  "state": "http-400",
+  "ms": 1511,
+  "detail": "{\"object\":\"error\",\"message\":\"Content cannot be a plain strin"
+ },
+ {
+  "model": "meta/muse-glimmer-30b",
+  "state": "ok",
+  "ms": 7410
+ },
+ {
+  "model": "nvidia/neva-22b",
+  "state": "missing",
+  "ms": 114
+ },
+ {
+  "model": "nvidia/nv-embedqa-mistral-7b-v2",
+  "state": "missing",
+  "ms": 440
+ },
+ {
+  "model": "nvidia/nvclip",
+  "state": "missing",
+  "ms": 91
+ },
+ {
+  "model": "nvidia/riva-translate-4b-instruct",
+  "state": "missing",
+  "ms": 120
+ },
+ {
+  "model": "nvidia/nemotron-parse-2.0",
+  "state": "no-content",
+  "ms": 935,
+  "finish": "length",
+  "rl": 0
+ },
+ {
+  "model": "nvidia/vila",
+  "state": "missing",
+  "ms": 122
+ },
+ {
+  "model": "nvidia/ising-calibration-1.5-31b",
+  "state": "timeout",
+  "ms": 12008,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+  "state": "timeout",
+  "ms": 12008,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "snowflake/arctic-embed-l",
+  "state": "missing",
+  "ms": 274
+ },
+ {
+  "model": "poolside/laguna-xs-2.1",
+  "state": "ok",
+  "ms": 527
+ },
+ {
+  "model": "writer/palmyra-creative-122b",
+  "state": "missing",
+  "ms": 115
+ },
+ {
+  "model": "writer/palmyra-fin-70b-32k",
+  "state": "missing",
+  "ms": 115
+ },
+ {
+  "model": "writer/palmyra-med-70b",
+  "state": "missing",
+  "ms": 118
+ },
+ {
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "state": "timeout",
+  "ms": 12008,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "writer/palmyra-med-70b-32k",
+  "state": "missing",
+  "ms": 125
+ },
+ {
+  "model": "stepfun-ai/step-5-preview",
+  "state": "ok",
+  "ms": 1441
+ },
+ {
+  "model": "zyphra/zamba2-7b-instruct",
+  "state": "missing",
+  "ms": 128
+ },
+ {
+  "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  "state": "timeout",
+  "ms": 12007,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "z-ai/glm-5.3-flash",
+  "state": "ok",
+  "ms": 1622
+ },
+ {
+  "model": "nvidia/riva-translate-4b-instruct-v2",
+  "state": "timeout",
+  "ms": 12008,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "openai/gpt-oss-20b",
+  "state": "timeout",
+  "ms": 12015,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "z-ai/glm-5.3",
+  "state": "timeout",
+  "ms": 12009,
+  "detail": "This operation was aborted"
+ }
+]

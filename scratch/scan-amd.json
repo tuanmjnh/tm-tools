@@ -1,0 +1,93 @@
+[
+ {
+  "model": "d3",
+  "state": "http-400",
+  "ms": 970,
+  "detail": "Model d3 is not a chat model; call /v1/systemone instead of /v1/chat/completions"
+ },
+ {
+  "model": "DeepSeek-V4-Flash-Vision-Exp",
+  "state": "http-400",
+  "ms": 675,
+  "detail": "Requested model DeepSeek-V4-Flash-Vision-Exp not supported"
+ },
+ {
+  "model": "d3-flash",
+  "state": "http-400",
+  "ms": 2363,
+  "detail": "Model d3-flash is not a chat model; call /v1/systemone instead of /v1/chat/compl"
+ },
+ {
+  "model": "Clef",
+  "state": "network",
+  "ms": 10733,
+  "detail": "fetch failed"
+ },
+ {
+  "model": "DeepSeek-V4-Flash",
+  "state": "timeout",
+  "ms": 15014,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "DeepSeek-V4.1-Flash",
+  "state": "timeout",
+  "ms": 15005,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "Gemma-4-31B-IT",
+  "state": "timeout",
+  "ms": 15010,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "MiMo-V2.6-Flash",
+  "state": "ok",
+  "ms": 2636
+ },
+ {
+  "model": "MinerU2.5-Pro",
+  "state": "http-400",
+  "ms": 1166,
+  "detail": "Model MinerU2.5-Pro is not a chat model; call /v1/ocr instead of /v1/chat/comple"
+ },
+ {
+  "model": "MiniCPM-V-4.7-1B",
+  "state": "ok",
+  "ms": 518
+ },
+ {
+  "model": "OmniVoice",
+  "state": "http-400",
+  "ms": 579,
+  "detail": "Model OmniVoice is not a chat model; call /v1/audio/speech instead of /v1/chat/c"
+ },
+ {
+  "model": "MiniCPM-V-4.7-35B-A3B",
+  "state": "ok",
+  "ms": 821
+ },
+ {
+  "model": "MiniCPM5-2B",
+  "state": "ok",
+  "ms": 806
+ },
+ {
+  "model": "Qwen3.8-27B",
+  "state": "ok",
+  "ms": 2117
+ },
+ {
+  "model": "GLM-5.3-Flash",
+  "state": "timeout",
+  "ms": 15007,
+  "detail": "This operation was aborted"
+ },
+ {
+  "model": "Qwen3.8-Flash-Next",
+  "state": "timeout",
+  "ms": 15005,
+  "detail": "This operation was aborted"
+ }
+]

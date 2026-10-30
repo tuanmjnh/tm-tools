@@ -29,15 +29,19 @@ const previewVolume = ref(1)
 const previewMuted = ref(false)
 
 export function useTmcutPlayback() {
-  const { currentProject, totalDuration } = useTmcutProject()
+  const { currentProject, totalDuration, contentDuration } = useTmcutProject()
 
-  // Format seconds to HH:MM:SS.ff or MM:SS.ff
-  function formatTimecode(seconds: number): string {
+  // Format seconds to HH:MM:SS.ff or MM:SS.ff. The frame field follows the
+  // canvas rate (a 60fps project must not count frames 0-29); 30 stays the
+  // default for callers that have no project in scope (export queue, ruler).
+  function formatTimecode(seconds: number, fps = 30): string {
     if (isNaN(seconds) || seconds < 0) seconds = 0
-    const hrs = Math.floor(seconds / 3600)
-    const mins = Math.floor((seconds % 3600) / 60)
-    const secs = Math.floor(seconds % 60)
-    const frames = Math.floor((seconds % 1) * 30) // assume 30fps frames
+    const rate = Number.isFinite(fps) && fps > 0 ? fps : 30
+    const whole = Math.floor(seconds)
+    const hrs = Math.floor(whole / 3600)
+    const mins = Math.floor((whole % 3600) / 60)
+    const secs = whole % 60
+    const frames = Math.min(Math.ceil(rate) - 1, Math.floor((seconds - whole) * rate))
 
     const m = String(mins).padStart(2, '0')
     const s = String(secs).padStart(2, '0')
@@ -202,7 +206,7 @@ export function useTmcutPlayback() {
       && renderOut.value - renderIn.value >= 0.05
     return hasRange
       ? { start: renderIn.value!, end: renderOut.value! }
-      : { start: 0, end: totalDuration.value }
+      : { start: 0, end: contentDuration.value }
   }
 
   function step(timestamp: number) {
@@ -268,8 +272,8 @@ export function useTmcutPlayback() {
       } else {
         playhead.value = newTime
       }
-    } else if (newTime >= totalDuration.value) {
-      playhead.value = totalDuration.value
+    } else if (newTime >= contentDuration.value) {
+      playhead.value = contentDuration.value
       pause()
       return
     } else {
@@ -329,11 +333,11 @@ export function useTmcutPlayback() {
   }
 
   function play() {
-    if (totalDuration.value <= 0) return
+    if (contentDuration.value <= 0) return
     // Do not animate the playhead when the timeline has no clips
     const hasClips = currentProject.value?.timeline?.tracks?.some(t => (t.items?.length || 0) > 0)
     if (!hasClips) return
-    if (playhead.value >= totalDuration.value) {
+    if (playhead.value >= contentDuration.value) {
       playhead.value = 0
     } else if (loopPlayback.value && playhead.value >= loopBounds().end) {
       // Loop zone is over: restart from the zone start
@@ -374,7 +378,7 @@ export function useTmcutPlayback() {
 
   // Guards shared by the J/K/L shuttle: same conditions as play()
   function canShuttle(): boolean {
-    if (totalDuration.value <= 0) return false
+    if (contentDuration.value <= 0) return false
     return !!currentProject.value?.timeline?.tracks?.some(t => (t.items?.length || 0) > 0)
   }
 

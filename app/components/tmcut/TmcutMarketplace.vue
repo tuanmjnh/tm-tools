@@ -109,14 +109,14 @@ async function handleUninstall(entryId: string) {
 function getCategoryIcon(category: string): string {
   if (category === 'music') return 'i-lucide-music'
   if (category === 'sound-effects') return 'i-lucide-audio-lines'
-  if (category === 'fonts') return 'i-lucide-letter-case'
+  if (category === 'fonts') return 'i-lucide-case-sensitive'
   return 'i-lucide-package'
 }
 
 const tabOptions = [
   { id: 'music', label: 'Music', icon: 'i-lucide-music' },
   { id: 'sfx', label: 'Sound Effects', icon: 'i-lucide-audio-lines' },
-  { id: 'fonts', label: 'Fonts', icon: 'i-lucide-letter-case' }
+  { id: 'fonts', label: 'Fonts', icon: 'i-lucide-case-sensitive' }
 ]
 
 onMounted(async () => {
@@ -142,15 +142,18 @@ const webOnly = !isDesktop.value
       <div class="relative flex-1">
         <UIcon name="i-lucide-search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
         <input
+          id="tmcut-marketplace-search"
           v-model="search"
           type="text"
           :placeholder="t('tmcut.assetCenter.search')"
+          :aria-label="t('tmcut.assetCenter.search')"
           class="w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg pl-9 pr-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-primary/50"
         />
       </div>
       <div class="flex items-center gap-1.5">
         <USelect
           v-model="activeCategory"
+          :aria-label="t('tmcut.assetCenter.filterCategory')"
           :items="categories.filter(c => marketplaceCategories.includes(c) || c === 'all')"
           value-key="id"
           label-key="label"
@@ -309,7 +312,7 @@ const webOnly = !isDesktop.value
       <!-- Empty State -->
       <div v-else class="flex flex-col items-center justify-center py-16 text-center px-4">
         <div class="w-16 h-16 rounded-xl bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center text-neutral-400 mb-4">
-          <UIcon :name="activeTab === 'music' ? 'i-lucide-music' : activeTab === 'sfx' ? 'i-lucide-audio-lines' : 'i-lucide-letter-case'" class="w-8 h-8" />
+          <UIcon :name="activeTab === 'music' ? 'i-lucide-music' : activeTab === 'sfx' ? 'i-lucide-audio-lines' : 'i-lucide-case-sensitive'" class="w-8 h-8" />
         </div>
         <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
           {{ t('tmcut.marketplace.emptyTitle') }}

@@ -65,6 +65,7 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
 - Routes are fetched at runtime via `nav.fetchRoutes()`, mapped into `NavigationMenuItem[]` by `useNavMenu.ts`.
 
 ### Page & Layout Conventions
+- **Open Source First**: Đối với những chức năng chưa quen thuộc, đừng viết từ con số 0, hãy tìm kiếm các dự án mã nguồn mở trên GitHub để so sánh ý tưởng trước khi bắt tay vào làm.
 - **BasePage Mandatory**:
   - All new pages/modules MUST wrap their content in `<BasePage :title="..." :description="...">` (`app/components/base/Page.vue`).
   - Left slot: Displays title and optional description.
@@ -76,8 +77,16 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
   - Primary action buttons (save, create, run, confirm, launch, export, …) use `color="primary" variant="soft"` — exactly one per surface.
   - Dismissal / secondary buttons (cancel, back, close, skip, dismiss, …) use `variant="ghost"` (usually `color="neutral"`) — they must never compete visually with the primary action.
   - Destructive confirmations use `color="error"`; their cancel counterpart stays `variant="ghost"`.
+- **Form Controls & Inputs**:
+  - Always add class `w-full` for inputs (`UInput`, `USelect`, `USelectMenu`, `UTextarea`, etc.) to ensure consistent responsive layout across all forms.
 - **GridList & Batch Operations**:
   - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.
+- **Animation, Status & Icons (optimized surfaces)**:
+  - **Motion budget**: subtle and purposeful only — 150–200 ms ease transitions for hover/focus/press (`transition-colors`, `duration-200`); entrance motion is owned by Nuxt UI (modal/sheet/drawer built-ins). Never hand-roll `animate-*` for decoration: the only legitimate loops are skeleton `pulse`, live-recording pulse, and canvas/WebGPU scenes (use the `threejs-*` skills for those, never for hover feedback).
+  - **Triple state rule**: every async surface (lists, panels, dialogs) renders ALL of loading (skeleton/`pulse`, ≥1 line), empty (dashed card + one icon + one-line hint + CTA), and error (inline banner + retry) — a surface must never flash raw "No data" or a permanently blank box while wiring resolves.
+  - **Status language**: one lucide icon + ≤2-word label in `UBadge variant="subtle"` — `i-lucide-circle-check` (emerald) / `i-lucide-triangle-alert` (amber) / `i-lucide-circle-alert` or `i-lucide-circle-x` (red) / `i-lucide-info` (primary) / `i-lucide-clock` (neutral pending). Color must never be the only signal; a "connected/online/OK" badge without its icon is a bug. Progress states show the measurable value (`{done}/{total}`, `{ms}`) instead of repeating "loading…".
+  - **Icon economy**: single family (`i-lucide-*`). Decorative icons ride text (`size-3.5`–`size-4` in labels, `size-5`–`size-6` in headers). One icon per verb/button; an icon that duplicates the adjacent word is redundant — drop the icon or shorten the label, not both. Icon-only controls MUST carry `:title`/`:aria-label`. Misaligned leading icons (e.g. `size-3` inside a `size-6` header box) is a layout bug, fix the container not the icon.
+  - **Redundancy check (text)**: a header's `description` must add information the title doesn't already say; card sections must not echo the page description; unit chips like "1920×1080 · 30fps" appear at most once per card. When a list state already explains itself ("2 projects"), don't repeat a counter badge next to it.
 - **Lazy components (code splitting)**:
   - Any component that mounts on demand (modals, slidesovers, drawers, heavy panels, tab content) MUST be referenced with the Nuxt `Lazy` prefix (e.g. `<LazyBaseResponsiveModal>`, `<LazyBaseConfirmModal>`). The Lazy prefix puts the component in its own chunk and defers loading until it is actually rendered.
   - Direct (non-lazy) references are reserved for always-visible, above-the-fold chrome (BasePage, nav, grid list).

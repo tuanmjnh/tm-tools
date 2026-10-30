@@ -174,8 +174,6 @@ export const useWebPush = () => {
       let fcmToken: string | null = null
       if (registration && provider === 'firebase' && hasFirebaseConfig) {
         try {
-          console.log('[FirebasePush] Initializing Firebase Cloud Messaging...')
-
           const firebaseConfig = {
             apiKey: sysConfig.FIREBASE_API_KEY,
             authDomain: sysConfig.FIREBASE_AUTH_DOMAIN || `${sysConfig.FIREBASE_PROJECT_ID}.firebaseapp.com`,
@@ -222,7 +220,6 @@ export const useWebPush = () => {
       if (!subscriptionData.fcmToken && registration) {
         const vapidPublicKey = sysConfig.WEB_PUSH_PUBLIC_KEY
         if (vapidPublicKey) {
-          console.log('[WebPush] Using standard VAPID Web Push Public Key:', vapidPublicKey)
           try {
             const pushSubscription = await registration.pushManager.subscribe({
               userVisibleOnly: true,

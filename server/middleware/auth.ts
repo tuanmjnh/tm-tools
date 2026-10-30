@@ -34,9 +34,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid or expired token' })
   }
 
-  // Security constraint: Token must match tm-tools appId
+  // Security constraint: Token must match tm-tools appId (except root / cross-app)
   const currentAppId = process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
-  if (payload.appId && payload.appId !== currentAppId) {
+  const rawPayload = payload as unknown as Record<string, unknown>
+  const capabilities = Array.isArray(rawPayload.capabilities) ? rawPayload.capabilities as string[] : []
+  const isRootOrCrossApp = payload.role === 'root'
+    || (payload.permissions || []).includes('*')
+    || (payload.permissions || []).includes('platform.crossapp.read')
+    || (payload.permissions || []).includes('platform.crossapp.write')
+    || capabilities.includes('*')
+    || capabilities.includes('platform.crossapp.read')
+
+  if (payload.appId && payload.appId !== currentAppId && !isRootOrCrossApp) {
     throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: 'Token not issued for this application' })
   }
 

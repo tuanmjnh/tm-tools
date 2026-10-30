@@ -348,13 +348,19 @@ export function createProviderRunner(options: ProviderRunnerOptions): FactoryRun
           error: poll.error
         }
       }
-      // Wait before next poll unless aborted.
+      // Wait before next poll unless aborted. The abort listener must be
+      // detached on the timeout path too, otherwise a long job stacks one
+      // closure per poll tick on the same signal.
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, pollIntervalMs)
-        abortSignal?.addEventListener('abort', () => {
+        const onAbort = () => {
           clearTimeout(timer)
           reject({ category: 'network' as ErrorCategory, message: 'Aborted', retryable: false })
-        }, { once: true })
+        }
+        const timer = setTimeout(() => {
+          abortSignal?.removeEventListener('abort', onAbort)
+          resolve()
+        }, pollIntervalMs)
+        abortSignal?.addEventListener('abort', onAbort, { once: true })
       })
     }
     throw { category: 'network' as ErrorCategory, message: 'Aborted', retryable: false }
@@ -441,7 +447,11 @@ export function createProviderRunner(options: ProviderRunnerOptions): FactoryRun
 // Auto runner (Roadmap v1 P7) — routes each job to its connectionId provider
 // =============================================================================
 
-export function createAutoRunner(options: ProviderRunnerOptions & { ipc: VideoGenerationIpc }): FactoryRunner {
+export type AutoRunnerOptions = Omit<ProviderRunnerOptions, 'providerId'> & {
+  providerId?: string
+}
+
+export function createAutoRunner(options: AutoRunnerOptions): FactoryRunner {
   const { ipc, pollIntervalMs = 2000, abortSignal, downloadDir } = options
 
   async function pollUntilSettled(localJobId: string): Promise<{ status: string; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null }> {
@@ -455,9 +465,18 @@ export function createAutoRunner(options: ProviderRunnerOptions & { ipc: VideoGe
       if (terminal) {
         return { status: poll.status, costSoFar: poll.costSoFar, results: poll.results, error: poll.error }
       }
+      // Same listener-detach rule as the provider runner's poll loop: one
+      // closure per tick on a long-lived signal adds up over a job.
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, pollIntervalMs)
-        abortSignal?.addEventListener('abort', () => { clearTimeout(timer); reject({ category: 'network' as ErrorCategory, message: 'Aborted', retryable: false }) }, { once: true })
+        const onAbort = () => {
+          clearTimeout(timer)
+          reject({ category: 'network' as ErrorCategory, message: 'Aborted', retryable: false })
+        }
+        const timer = setTimeout(() => {
+          abortSignal?.removeEventListener('abort', onAbort)
+          resolve()
+        }, pollIntervalMs)
+        abortSignal?.addEventListener('abort', onAbort, { once: true })
       })
     }
     throw { category: 'network' as ErrorCategory, message: 'Aborted', retryable: false }

@@ -42,6 +42,21 @@ interface HubMeData {
 // Module-scope state for proactive refresh and session expiry handling
 let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
 let isHandlingSessionExpired = false
+/** Instance-bound toast API derived from the auto-imported useToast(). */
+type ToastApi = ReturnType<typeof useToast>
+
+// Instance-bound toast captured inside the setup context (see handleSessionExpired).
+let boundToast: ToastApi | null = null
+
+/** useToast() outside a component instance emits a Vue inject() warning; shield it. */
+function useSafeToast(): ToastApi | null {
+  try {
+    // getCurrentInstance() is only non-null during setup/synchronous component work.
+    return getCurrentInstance() ? useToast() : null
+  } catch {
+    return null
+  }
+}
 
 export const useAuth = () => {
   const user = useState<AuthUser | null>('auth:user', () => null)
@@ -52,6 +67,10 @@ export const useAuth = () => {
   const config = useRuntimeConfig()
   const hubUrl = (config.public.hubUrl as string) || 'http://localhost:4000'
   const appId = (config.public.hubAppId as string) || 'tm-tools'
+
+  // Capturing the toast binding while the setup context is still active lets
+  // the async session-expiry path show toasts without the inject() warning.
+  if (import.meta.client && boundToast === null) boundToast = useSafeToast()
 
   const isAuthenticated = computed(() => !!user.value)
   const can = (module: string, action: string) => {
@@ -276,10 +295,10 @@ export const useAuth = () => {
   async function refresh(): Promise<boolean> {
     if (refreshPromise) return refreshPromise
 
-    refreshPromise = (async () => {
-      const rToken = refreshToken.value || useCookie('refreshToken').value
-      if (!rToken) return false
+    const rToken = refreshToken.value || useCookie('refreshToken').value
+    if (!rToken) return false
 
+    refreshPromise = (async () => {
       try {
         const res = await fetch(`${hubUrl}/api/v1/auth/refresh`, {
           method: 'POST',
@@ -307,8 +326,8 @@ export const useAuth = () => {
 
         scheduleProactiveRefresh(data.expiresIn)
 
-        // Refresh user info
-        await fetchUser()
+        // Never let this user request re-enter its own pending refresh.
+        await fetchUser(false)
 
         return true
       } catch {
@@ -358,13 +377,20 @@ export const useAuth = () => {
         const router = useRouter()
         const currentPath = router.currentRoute.value.path
         if (currentPath !== '/login' && currentPath !== '/register') {
-          const toast = useToast()
-          const { t } = useI18n()
-          toast.add({
-            title: t('auth.sessionExpired'),
-            description: t('auth.sessionExpiredDesc'),
-            color: 'error'
-          })
+          const nuxtApp = useNuxtApp()
+          const i18n = (nuxtApp as unknown as { $i18n?: { t: (key: string) => string } }).$i18n
+          const t = (key: string) => (i18n ? i18n.t(key) : key)
+          // useToast() is an inject() — calling it here (timer/refresh path, no
+          // component instance) used to warn "inject() can only be used inside
+          // setup()". The instance-bound binding is captured once in setup.
+          const toast = boundToast ?? useSafeToast()
+          if (toast) {
+            toast.add({
+              title: t('auth.sessionExpired'),
+              description: t('auth.sessionExpiredDesc'),
+              color: 'error'
+            })
+          }
           const redirect = router.currentRoute.value.fullPath
           await navigateTo(redirect && redirect !== '/' ? { path: '/login', query: { redirect } } : '/login')
         }
@@ -411,11 +437,13 @@ export const useAuth = () => {
     }
   }
 
-  async function fetchUser(): Promise<void> {
+  async function fetchUser(allowRefresh = true): Promise<void> {
     try {
-      const token = useCookie('accessToken').value
+      // Cookie writes may not have flushed yet after token rotation.
+      const token = accessToken.value || useCookie('accessToken').value
       if (!token) {
-        const rToken = useCookie('refreshToken').value
+        if (!allowRefresh) throw new Error('Missing access token after refresh')
+        const rToken = refreshToken.value || useCookie('refreshToken').value
         if (rToken) {
           const success = await refresh()
           if (success) return
@@ -433,7 +461,7 @@ export const useAuth = () => {
       }
 
       accessToken.value = token
-      refreshToken.value = useCookie('refreshToken').value || null
+      refreshToken.value = refreshToken.value || useCookie('refreshToken').value || null
 
       const { data } = await $fetch<{ success: boolean, data: HubMeData }>(`${hubUrl}/api/v1/auth/me`, {
         headers: {
@@ -453,7 +481,8 @@ export const useAuth = () => {
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: data.updatedAt || new Date().toISOString()
       }
-    } catch {
+    } catch (error) {
+      if (!allowRefresh) throw error
       const success = await refresh()
       if (!success) {
         user.value = null

@@ -9,6 +9,7 @@ const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
   'tmcut:renderDone',
+  'tmcut:htmlVideoProgress',
   'tmcut:assetCenter:progress',
   'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
@@ -143,15 +144,16 @@ const dialog = exposeNamespace('tools:dialog', {
 
 const tmcut = exposeNamespace('tmcut', {
   invoke: [
-    'getPaths', 'readAssetsFile', 'writeAssetsFile',
+    'renderHtmlVideo', 'getPaths', 'readAssetsFile', 'writeAssetsFile',
     'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
     'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
     'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset', 'downloadMedia', 'cancelDownload',
+    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset', 'downloadMedia', 'cancelDownload', 'stockSearch',
+    'voiceStatus', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
     'analyzeScenes', 'analyzeSilence', 'listFonts',
     'watchOutput', 'unwatchOutput'
   ],
-  on: ['renderDone', 'downloadProgress']
+  on: ['renderDone', 'downloadProgress', 'htmlVideoProgress']
 })
 
 // Roadmap v3 PART A: on-demand Asset Center I/O (registry + verified
@@ -164,6 +166,14 @@ const tmcutAssetCenter = exposeNamespace('tmcut:assetCenter', {
     'downloadPackage', 'cancelDownload', 'installLocal', 'removePackageDir', 'verifyFile'
   ],
   on: ['progress']
+})
+
+// Production process artifacts: thin, path-pinned read/write I/O. The stage
+// machine itself lives renderer-side (utils/process/stageMachine.ts), so this
+// namespace only stores bytes and run records.
+const processStore = exposeNamespace('process', {
+  invoke: ['root', 'openRoot', 'list', 'read', 'save', 'writeArtifact', 'readArtifact'],
+  on: []
 })
 
 const fileManager = exposeNamespace('tools:file-manager', {
@@ -238,6 +248,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog,
   fileManager,
   tmcut: { ...tmcut, assetCenter: tmcutAssetCenter },
+  process: processStore,
   appUpdater,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),

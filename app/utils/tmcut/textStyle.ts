@@ -11,3 +11,12 @@ export function textStrokeWidth(fontSize: number): number {
 export function textShadowOffset(fontSize: number): number {
   return Math.max(1, Math.round(fontSize / 14))
 }
+
+/**
+ * Plate padding in px — drawtext `boxborderw` and the CSS padding of the
+ * preview's plate. Same number on both sides, so the box hugs the text the
+ * same way before and after export.
+ */
+export function textBoxPadding(fontSize: number): number {
+  return Math.max(2, Math.round(fontSize * 0.25))
+}

@@ -274,11 +274,13 @@ onUnmounted(() => {
                 class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-neutral-500 pointer-events-none"
               />
               <input
+                id="tmcut-shortcuts-search"
                 ref="searchInput"
                 v-model="query"
                 type="text"
                 class="w-full h-9 pl-9 pr-16 rounded-lg bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-primary/60"
                 :placeholder="t('tmcut.hotkeys.searchPlaceholder')"
+                :aria-label="t('tmcut.hotkeys.searchPlaceholder')"
               >
               <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
                 <kbd class="px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 font-mono text-[10px]">Ctrl</kbd>
@@ -383,10 +385,18 @@ onUnmounted(() => {
         <div
           class="px-5 py-3 bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0"
         >
-          <label class="flex items-center gap-2 cursor-pointer select-none">
-            <UCheckbox v-model="shortcutTips" size="sm" />
+          <div
+            class="flex items-center gap-2 cursor-pointer select-none"
+            @click="shortcutTips = !shortcutTips"
+          >
+            <UCheckbox
+              v-model="shortcutTips"
+              :aria-label="t('tmcut.hotkeys.tipsToggle')"
+              size="sm"
+              @click.stop
+            />
             <span class="text-xs text-neutral-600 dark:text-neutral-300">{{ t('tmcut.hotkeys.tipsToggle') }}</span>
-          </label>
+          </div>
           <div class="flex items-center gap-4">
             <span class="hidden md:inline font-mono text-[10px] text-neutral-500">
               {{ t('tmcut.hotkeys.langNote') }}

@@ -1,4 +1,5 @@
 import type { TmcutAsset } from '~/types/tmcut'
+import type { TmcutAnalysisResult } from '#shared/types/electron'
 import type { TmcutEdl, TmcutEdlSegment } from '@tmcut-core'
 import {
   parseSceneOutput,
@@ -70,6 +71,24 @@ function tmcutIpc() {
 }
 
 /**
+ * The two detection passes (shots, silence) for one source, from the desktop
+ * main process or — for a web asset, which already lives on the local server as
+ * a `/uploads/` file — from POST /api/v1/media/analyze. Both run the same
+ * ffmpeg filters and hand back the raw log, so @tmcut/core scores identically
+ * on either runtime. Null when neither can read the file.
+ */
+function resolveAnalyzer(filePath: string): ((kind: 'scenes' | 'silence') => Promise<TmcutAnalysisResult>) | null {
+  const ipc = tmcutIpc()
+  if (ipc?.analyzeScenes && ipc.analyzeSilence) {
+    return kind => (kind === 'scenes' ? ipc.analyzeScenes!({ filePath }) : ipc.analyzeSilence!({ filePath }))
+  }
+  if (filePath.startsWith('/uploads/')) {
+    return kind => $fetch<TmcutAnalysisResult>('/api/v1/media/analyze', { method: 'POST', body: { kind, src: filePath } })
+  }
+  return null
+}
+
+/**
  * AutoCut pipeline driver (roadmap section 65.6): scene/silence detection
  * in main, optional Whisper transcript via the AI gateway, pure scoring
  * in @tmcut/core, draft project application without touching sources.
@@ -88,8 +107,8 @@ export function useTmcutAutocut() {
     profile: AutocutProfile,
     options?: AutocutOptions
   ): Promise<AutocutAnalysis | null> {
-    const ipc = tmcutIpc()
-    if (!ipc?.analyzeScenes || !ipc?.analyzeSilence) {
+    const analyze = resolveAnalyzer(asset.path)
+    if (!analyze) {
       analysisError.value = 'desktop-only'
       return null
     }
@@ -97,11 +116,11 @@ export function useTmcutAutocut() {
     analysisError.value = null
     try {
       stageKey.value = 'tmcut.steps.stageScenes'
-      const scenes = await ipc.analyzeScenes({ filePath: asset.path })
+      const scenes = await analyze('scenes')
       if (!scenes?.ok) throw new Error(scenes?.error || 'scene-detection-failed')
 
       stageKey.value = 'tmcut.steps.stageSilence'
-      const silence = await ipc.analyzeSilence({ filePath: asset.path })
+      const silence = await analyze('silence')
       if (!silence?.ok) throw new Error(silence?.error || 'silence-detection-failed')
 
       const durationSec = scenes.durationSec || silence.durationSec || asset.meta.durationSec || 0
@@ -150,6 +169,10 @@ export function useTmcutAutocut() {
               { role: 'user', content: triageUserMessage(spans, spans.length < transcriptText.length) }
             ],
             jsonMode: true,
+            // Reasoning headroom: see useTmcutAiScript — GLM/Nemotron never
+            // emit final content at tiny maxTokens and the triage step would
+            // silently fall back to heuristic-only spans.
+            maxTokens: 2048,
             temperature: 0.2
           })
           aiItems = parseTriageItems(aiResponse.content, spans, durationSec)

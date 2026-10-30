@@ -1,0 +1,357 @@
+[
+  {
+    "route": "/tmcut",
+    "title": "",
+    "mounted": false,
+    "bridges": [
+      "getPathForFile",
+      "getConfig",
+      "setConfig",
+      "aiKeyStatus",
+      "aiMigrateKeys",
+      "verifyPath",
+      "openPath",
+      "openExternal",
+      "showItemInFolder",
+      "send",
+      "on"
+    ],
+    "markers": {
+      "electronFlag": true,
+      "headings": [
+        "TM Tools"
+      ],
+      "buttons": [],
+      "inputs": 0,
+      "canvas": 0,
+      "textLen": 61,
+      "unresolved": []
+    },
+    "problems": [
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      },
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      }
+    ],
+    "textSample": "TM Tools\n\nMedia, Utilities & System Tools\n\nINITIALIZING\n.\n.\n."
+  },
+  {
+    "route": "/tmcut/autocut",
+    "title": "AutoCut - TM Tools",
+    "mounted": true,
+    "bridges": [
+      "getPathForFile",
+      "getConfig",
+      "setConfig",
+      "aiKeyStatus",
+      "aiMigrateKeys",
+      "verifyPath",
+      "openPath",
+      "openExternal",
+      "showItemInFolder",
+      "send",
+      "on"
+    ],
+    "markers": {
+      "electronFlag": true,
+      "headings": [
+        "AutoCut\nAutomated video analysis and short-form video generation using AI (AutoCut)",
+        "Drag & drop source video here"
+      ],
+      "buttons": [
+        "v1.0.0",
+        "Search\nCTRL\nK",
+        "Tools",
+        "TMCut",
+        "Browser Hub",
+        "Resources",
+        "Administration",
+        "System",
+        "Utilities",
+        "System Root",
+        "Back",
+        "Select from Device",
+        "Choose from Media",
+        "Continue to Step 2: Choose AI Profile"
+      ],
+      "inputs": 0,
+      "canvas": 0,
+      "textLen": 463,
+      "unresolved": []
+    },
+    "problems": [
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      },
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      }
+    ],
+    "textSample": "TM TOOLS\nv1.0.0\nSearch\nCTRL\nK\nHome\nAI Chat\nTools\nTMCut\nBrowser Hub\nResources\nAdministration\nSystem\nUtilities\nSystem Root\nAutoCut\nAutomated video analysis and short-form video generation using AI (AutoCut)\nBack\n1\nSTEP 1\nUpload Source Clip\n2\nSTEP 2\nChoose AI Profile\n3\nSTEP 3\nReview EDL\n4\nSTEP 4\nRender"
+  },
+  {
+    "route": "/tmcut/factory",
+    "title": "TM Tools",
+    "mounted": true,
+    "bridges": [
+      "getPathForFile",
+      "getConfig",
+      "setConfig",
+      "aiKeyStatus",
+      "aiMigrateKeys",
+      "verifyPath",
+      "openPath",
+      "openExternal",
+      "showItemInFolder",
+      "send",
+      "on"
+    ],
+    "markers": {
+      "electronFlag": true,
+      "headings": [
+        "Video Factory",
+        "New batch",
+        "Batch queue"
+      ],
+      "buttons": [
+        "v1.0.0",
+        "Search\nCTRL\nK",
+        "Tools",
+        "TMCut",
+        "Browser Hub",
+        "Resources",
+        "Administration",
+        "System",
+        "Utilities",
+        "System Root",
+        "Pick a published template",
+        "Manual (CSV/JSON)",
+        "Prompt → Batch",
+        "CSV",
+        "JSON",
+        "Sample rows",
+        "Dry run",
+        "Live provider",
+        "Validate & estimate"
+      ],
+      "inputs": 1,
+      "canvas": 0,
+      "textLen": 531,
+      "unresolved": []
+    },
+    "problems": [
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      },
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      }
+    ],
+    "textSample": "TM TOOLS\nv1.0.0\nSearch\nCTRL\nK\nHome\nAI Chat\nTools\nTMCut\nBrowser Hub\nResources\nAdministration\nSystem\nUtilities\nSystem Root\nVideo Factory\n\nRun one published template over many input records. Every scene becomes its own job.\n\n← Back to Templates\nNew batch\nTemplate\nPick a published template\nInput mode\nMa"
+  },
+  {
+    "route": "/tmcut/templates",
+    "title": "TMCut Template Library - TM Tools",
+    "mounted": true,
+    "bridges": [
+      "getPathForFile",
+      "getConfig",
+      "setConfig",
+      "aiKeyStatus",
+      "aiMigrateKeys",
+      "verifyPath",
+      "openPath",
+      "openExternal",
+      "showItemInFolder",
+      "send",
+      "on"
+    ],
+    "markers": {
+      "electronFlag": true,
+      "headings": [
+        "TMCut Template Library\nProfessional project templates, viral openers, split-screen layouts & lower-thirds",
+        "TikTok / Reels Hook Intro",
+        "YouTube Cinematic Title",
+        "Dual Split-Screen (Top & Bottom)",
+        "Instagram Square Product Promo",
+        "YouTube Outro & Subscribe Card",
+        "Minimal Vlog & Lower Third",
+        "Customize Template"
+      ],
+      "buttons": [
+        "v1.0.0",
+        "Search\nCTRL\nK",
+        "Tools",
+        "TMCut",
+        "Browser Hub",
+        "Resources",
+        "Administration",
+        "System",
+        "Utilities",
+        "System Root",
+        "Back",
+        "Import",
+        "New Blank Project",
+        "AI Template",
+        "Timeline templates",
+        "Template Studio",
+        "Video Factory",
+        "Asset Marketplace",
+        "All Ratios",
+        "Vertical (9:16)",
+        "Horizontal (16:9)",
+        "Square (1:1)",
+        "All Categories\n6",
+        "Intro & Openers\n2",
+        "Outro & End Cards\n1"
+      ],
+      "inputs": 2,
+      "canvas": 0,
+      "textLen": 1968,
+      "unresolved": []
+    },
+    "problems": [
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      },
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      }
+    ],
+    "textSample": "TM TOOLS\nv1.0.0\nSearch\nCTRL\nK\nHome\nAI Chat\nTools\nTMCut\nBrowser Hub\nResources\nAdministration\nSystem\nUtilities\nSystem Root\nTMCut Template Library\nProfessional project templates, viral openers, split-screen layouts & lower-thirds\nBack\nImport\nNew Blank Project\nAI Template\nTimeline templates\nTemplate Stu"
+  },
+  {
+    "route": "/tmcut/editor",
+    "title": "Untitled Project - TM Tools",
+    "mounted": true,
+    "bridges": [
+      "getPathForFile",
+      "getConfig",
+      "setConfig",
+      "aiKeyStatus",
+      "aiMigrateKeys",
+      "verifyPath",
+      "openPath",
+      "openExternal",
+      "showItemInFolder",
+      "send",
+      "on"
+    ],
+    "markers": {
+      "electronFlag": true,
+      "headings": [],
+      "buttons": [
+        "v1.0.0",
+        "Search\nCTRL\nK",
+        "Tools",
+        "TMCut",
+        "Browser Hub",
+        "Resources",
+        "Administration",
+        "System",
+        "Utilities",
+        "System Root",
+        "Shortcuts",
+        "16:9 (30fps)",
+        "Save",
+        "Export Queue",
+        "AI Script",
+        "AI Edit",
+        "Agent",
+        "Audio Orchestration",
+        "Export Video",
+        "Import Media",
+        "Media",
+        "Video",
+        "Audio",
+        "Image",
+        "Text"
+      ],
+      "inputs": 7,
+      "canvas": 0,
+      "textLen": 1159,
+      "unresolved": []
+    },
+    "problems": [
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      },
+      {
+        "kind": "console.warning",
+        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
+        "stack": "node:electron/js2c/sandbox_bundle:2:97406",
+        "frames": [
+          "node:electron/js2c/sandbox_bundle:2:97406",
+          "node:electron/js2c/sandbox_bundle:2:97500",
+          "node:electron/js2c/sandbox_bundle:2:97940"
+        ]
+      }
+    ],
+    "textSample": "TM TOOLS\nv1.0.0\nSearch\nCTRL\nK\nHome\nAI Chat\nTools\nTMCut\nBrowser Hub\nResources\nAdministration\nSystem\nUtilities\nSystem Root\nShortcuts\n16:9 (30fps)\nSave\nExport Queue\nAI Script\nAI Edit\nAgent\nAudio Orchestration\nExport Video\nMEDIA LIBRARY\nImport Media\nMedia\nVideo\nAudio\nImage\nText\nStickers\nEffects\nTransiti"
+  }
+]

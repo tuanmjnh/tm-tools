@@ -387,10 +387,10 @@ export function buildAssemblyPlan(input: AssemblyInput): AssemblyBuildResult {
 
       if (musicAssets.length > 0) {
         const asset = musicAssets[0]!
-        const src = asset.source?.type === 'remote' ? asset.source.url : asset.sourceUrl
+        const src = asset.source?.type === 'remote' ? asset.source.url : (asset as { sourceUrl?: string }).sourceUrl
         if (src) {
           audioTrack.items.push({
-            id: `music-${asset.entryId}`,
+            id: `music-${asset.id}`,
             name: `Music: ${asset.title}`,
             src,
             in: 0,
@@ -411,11 +411,11 @@ export function buildAssemblyPlan(input: AssemblyInput): AssemblyBuildResult {
 
       if (sfxAssets.length > 0) {
         const asset = sfxAssets[0]!
-        const src = asset.source?.type === 'remote' ? asset.source.url : asset.sourceUrl
+        const src = asset.source?.type === 'remote' ? asset.source.url : (asset as { sourceUrl?: string }).sourceUrl
         if (src) {
           const sfxDuration = Math.min(ticksFromSec(5), cursor)
           audioTrack.items.push({
-            id: `sfx-${asset.entryId}`,
+            id: `sfx-${asset.id}`,
             name: `SFX: ${asset.title}`,
             src,
             in: 0,

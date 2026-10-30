@@ -20,7 +20,6 @@
  * across player code.
  */
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { toURL } from '~/utils/ffmpegHelper'
 
 export type TmcutPreviewEngineKind = 'electron' | 'web'
 
@@ -58,10 +57,14 @@ export function useTmcutPreviewEngine(): TmcutPreviewEngine {
 
   return {
     kind: 'web',
-    capabilities: { proxyPreview: false, stabilize: false },
-    // importWebFiles stores blob: URLs; toURL passes blob:/data:/https:
-    // through untouched (an absolute path could never load in a browser
-    // tab anyway — same behaviour as before the seam existed).
-    resolveSrc: src => toURL(src)
+    // Web-parity (web-parity step 2): the proxy pass is server-side now —
+    // POST /api/v1/media/proxy scales uploaded sources through the local
+    // Nitro ffmpeg, so proxy preview is available on the web runtime too.
+    // Stabilization remains desktop-only (it is still a full render job).
+    capabilities: { proxyPreview: true, stabilize: false },
+    // resolveMediaSrc serves the ready proxy when the toggle is on,
+    // otherwise the /uploads/ URL of the original file (mediaUrl is
+    // toURL, so /uploads/…, blob:/data:/https: pass through unchanged).
+    resolveSrc: src => resolveMediaSrc(src)
   }
 }

@@ -140,7 +140,7 @@ const PROVIDER_PRESETS = [
   { id: 'amd_radeon', label: 'AMD Radeon AI', baseUrl: 'https://developer.amd.com.cn/radeon/api/v1' },
   { id: 'ollama', label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', keyless: true },
   // Multi-provider gateway: one API surface in front of many providers/models.
-  { id: 'freellmapi', label: 'FreeLLMAPI (multi-provider gateway)', baseUrl: '', requiresModel: true },
+  { id: 'freellmapi', label: 'FreeLLMAPI (multi-provider gateway)', baseUrl: '', keyless: true, requiresModel: true },
   { id: 'custom', label: 'Custom (OpenAI-compatible)', baseUrl: '', requiresModel: true }
 ]
 
@@ -187,9 +187,25 @@ function assertEndpoint(cfg) {
   }
 }
 
+function isLocalEndpoint(baseUrl) {
+  if (!baseUrl) return false
+  const s = String(baseUrl).trim()
+  if (!s) return false
+  try {
+    const raw = s.includes('://') ? s : `http://${s}`
+    const u = new URL(raw)
+    const h = u.hostname.toLowerCase()
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '0.0.0.0' || h.endsWith('.local')
+      || /^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/.test(h)
+  } catch {
+    return /localhost|127\.0\.0\.1|::1|0\.0\.0\.0|\.local/i.test(s)
+  }
+}
+
 function assertCredentials(cfg) {
   const preset = presetFor(cfg.provider)
   if (preset && preset.keyless) return
+  if (isLocalEndpoint(cfg.baseUrl)) return
   if (!cfg.apiKey) throw new AIGatewayError('ai.no-key', `Missing API key for provider "${cfg.provider}"`)
 }
 
@@ -387,7 +403,8 @@ async function complete(args, opts) {
     temperature: input.temperature,
     jsonMode: input.jsonMode
   })
-  const { status, json, text } = await postJson(request.url, request.headers, request.body, envCfg.timeoutMs, options.fetchImpl)
+  const timeoutMs = Number(input.timeoutMs) > 0 ? Number(input.timeoutMs) : envCfg.timeoutMs
+  const { status, json, text } = await postJson(request.url, request.headers, request.body, timeoutMs, options.fetchImpl)
   if (status === 429) {
     throw new AIGatewayError('ai.rate-limited', 'Provider rate limit (429)')
   }
@@ -524,11 +541,29 @@ async function listModels(args, opts) {
   const timer = setTimeout(() => controller.abort(), envCfg.timeoutMs)
   try {
     const fetchFn = options.fetchImpl || fetch
-    const res = await fetchFn(`${cfg.baseUrl}/models`, {
+    let res = await fetchFn(`${cfg.baseUrl}/models`, {
       method: 'GET',
       headers,
       signal: controller.signal
     })
+    if (res.status === 404) {
+      const altBase = cfg.baseUrl.endsWith('/v1') ? cfg.baseUrl.replace(/\/v1$/, '') : `${cfg.baseUrl}/v1`
+      try {
+        const altRes = await fetchFn(`${altBase}/models`, { method: 'GET', headers, signal: controller.signal })
+        if (altRes.status >= 200 && altRes.status < 300) res = altRes
+      } catch {
+        // keep original res
+      }
+      if (res.status === 404) {
+        try {
+          const tagsUrl = `${cfg.baseUrl.replace(/\/v1$/, '')}/api/tags`
+          const tagsRes = await fetchFn(tagsUrl, { method: 'GET', headers, signal: controller.signal })
+          if (tagsRes.status >= 200 && tagsRes.status < 300) res = tagsRes
+        } catch {
+          // keep original res
+        }
+      }
+    }
     const text = await res.text()
     let json = null
     try {

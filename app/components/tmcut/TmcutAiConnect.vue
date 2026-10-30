@@ -2,8 +2,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AiGatewayStatus, AiModelInfo, AiProviderPreset, AiTaskStatus } from '#shared/types/electron'
+import { useHub } from '~/composables/useHub'
+import { useHubAi } from '~/composables/useHubAi'
 import { useTmcutAi } from '~/composables/useTmcutAi'
 import { AI_TASK_META, type AiTaskId } from '~/utils/tmcut/aiTasks'
+import {
+  connectionBaseUrl,
+  connectionModel,
+  firstAnsweringModel,
+  isUsableHubConnection,
+  resolveGatewayProvider,
+  selectHubConnection,
+  type HubConnectionLike,
+  type ModelProbeVerdict
+} from '~/utils/tmcut/hubAiConnection'
 
 // =============================================================================
 //  AI connection panel (roadmap R128 / R129).
@@ -28,7 +40,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToast()
-const { status, listModels, providerPresets, tasks } = useTmcutAi()
+const { status, listModels, providerPresets, tasks, complete } = useTmcutAi()
 
 const expanded = ref(false)
 const loading = ref(false)
@@ -77,12 +89,14 @@ const statusColor = computed(() => {
 })
 
 onMounted(async () => {
-  if (!isDesktop.value) return
+  // Web: refresh() reads the relay status/presets/hub choices — the status
+  // badge must reflect the real runtime on both desktop and web.
   await refresh()
 })
 
 async function refresh() {
   await loadPresets()
+  void loadHubChoices()
   gatewayStatus.value = await status()
   hasStoredKey.value = gatewayStatus.value?.hasKey === true
   if (gatewayStatus.value) {
@@ -159,7 +173,6 @@ function handleSurfaceToggle(task: SurfaceTask) {
 
 /** Load models for the FORM the button sits next to (global or a surface). */
 async function handleLoadModels(target: 'global' | SurfaceTask) {
-  if (!isDesktop.value) return
   loading.value = true
   try {
     const args: { provider?: string, baseUrl?: string, apiKey?: string } = {}
@@ -263,6 +276,169 @@ async function handleSave() {
     })
   } finally {
     saving.value = false
+  }
+}
+
+// ===== Adopt a TM Hub connection (R151, spec tmcut_hub_ai_connection) =====
+// AI Script / AutoCut should run on the SAME providers the app is connected
+// to on TM Hub, without hand-typing a key. The panel fetches the stored key
+// ONCE (it travels to the main process only), proves a candidate model
+// answers with a REAL completion, then writes the GLOBAL gateway slots
+// through the exact same save path as the manual form.
+const ADOPT_PROBE_TIMEOUT_MS = 20_000
+
+interface HubChoice {
+  id: string
+  connection: HubConnectionLike
+  /** Display label: hub provider name — connection name. */
+  label: string
+}
+
+const hubChoices = ref<HubChoice[]>([])
+const hubLoading = ref(false)
+const hubSelected = ref('')
+const hubAdopting = ref(false)
+const hubError = ref('')
+
+/** Usable connections this app may adopt, fail-soft when the hub is away. */
+async function loadHubChoices() {
+  hubLoading.value = true
+  hubError.value = ''
+  try {
+    const { appId } = useHub()
+    const items = await useHubAi().listProviders(appId)
+    const found: HubChoice[] = []
+    for (const item of items) {
+      for (const connection of item.connections || []) {
+        if (!isUsableHubConnection(connection as HubConnectionLike)) continue
+        const providerName = item.definition?.name || connection.provider
+        found.push({
+          id: connection.id,
+          connection: connection as unknown as HubConnectionLike,
+          label: `${providerName} — ${connection.name}`
+        })
+      }
+    }
+    hubChoices.value = found
+    if (!hubChoices.value.some(c => c.id === hubSelected.value)) {
+      hubSelected.value = found[0]?.id || ''
+    }
+  } catch (err) {
+    hubChoices.value = []
+    hubError.value = String((err as Error)?.message || err).slice(0, 120)
+  } finally {
+    hubLoading.value = false
+  }
+}
+
+async function handleAdoptHub() {
+  const choice = hubChoices.value.find(c => c.id === hubSelected.value)
+  if (!choice || hubAdopting.value) return
+  hubAdopting.value = true
+  try {
+    // 1) The stored key, fetched once from the hub key endpoint.
+    const { appId, hubFetch } = useHub()
+    const keyRes = await hubFetch<{ success: boolean, data?: { apiKey?: string } }>(
+      `/api/v1/apps/${encodeURIComponent(appId)}/ai/connections/${encodeURIComponent(choice.id)}/key`
+    )
+    const apiKey = String(keyRes?.data?.apiKey || '').trim()
+    if (!apiKey) throw new Error(t('tmcut.aiConnect.hubNoKey'))
+
+    const presetList = await providerPresets()
+    const probeProvider = resolveGatewayProvider(choice.connection.provider, presetList)
+    const probeBaseUrl = connectionBaseUrl(choice.connection, presetList)
+
+    // 2) Candidate models: the stored pick first, then every enabled row
+    //    of the hub catalogue for this connection (aggregators have no
+    //    stored model, which is exactly why the walk exists).
+    let catalogue: string[] = []
+    try {
+      const rows = await useHubAi().listModels(appId, { provider: choice.connection.provider, connectionId: choice.id })
+      catalogue = rows.filter(m => m.isEnabled !== false).map(m => m.modelId)
+    } catch {
+      // A provider without a published catalogue still has the stored model.
+    }
+    const storedModel = connectionModel(choice.connection, catalogue)
+    const candidates = Array.from(new Set([storedModel, ...catalogue].map(m => m.trim()).filter(Boolean)))
+
+    // 3) PROBE before saving anything. A stored-but-retired id (NVIDIA's
+    //    01-ai/yi-large answers 404) would silence BOTH AI callers at once,
+    //    because they swallow errors and fall back to presets — so the
+    //    first walk verdict must be a real answer, not the catalogue.
+    const probe = async (model: string): Promise<ModelProbeVerdict> => {
+      try {
+        await complete({
+          provider: probeProvider,
+          baseUrl: probeBaseUrl,
+          apiKey,
+          model,
+          task: 'plan',
+          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+          // Reasoning models (GLM, Nemotron…) spend their first tokens
+          // thinking: 8 tokens would end inside the reasoning block. 512
+          // gives them room, 20s fails a hanging endpoint quickly.
+          maxTokens: 512,
+          timeoutMs: ADOPT_PROBE_TIMEOUT_MS
+        })
+        return { state: 'ok' }
+      } catch (err) {
+        const msg = String((err as Error)?.message || err)
+        if (/401|403|unauthorized|forbidden/i.test(msg)) return { state: 'unreachable', detail: msg }
+        if (/timed?[\s-]?out|timeout/i.test(msg)) return { state: 'timeout', detail: msg }
+        return { state: 'missing', detail: msg }
+      }
+    }
+    const answer = await firstAnsweringModel(candidates, probe, { concurrency: 3, silentLimit: 3 })
+    if (!answer.model) {
+      const silent = answer.reason === 'silent'
+      toast.add({
+        title: t('tmcut.aiConnect.hubProbeFailTitle'),
+        description: silent
+          ? t('tmcut.aiConnect.hubProbeSilentDesc')
+          : t('tmcut.aiConnect.hubProbeFailDesc', { detail: (answer.last?.detail || '').slice(0, 140) }),
+        color: 'warning'
+      })
+      return
+    }
+
+    // 4) Resolve every slot through the shared rules, then save through the
+    //    SAME handleSave() path as the manual form. Surface overrides are
+    //    reset first so plan/transcribe/triage ALL inherit the adoption.
+    const selection = selectHubConnection(choice.connection, presetList, { apiKey, model: answer.model })
+    if (!selection.ok) {
+      toast.add({
+        title: t('tmcut.aiConnect.hubNoModelTitle'),
+        description: selection.error === 'missing-base-url'
+          ? t('tmcut.aiConnect.needsBaseDesc')
+          : t('tmcut.aiConnect.hubNoModelDesc'),
+        color: 'warning'
+      })
+      return
+    }
+    const swapped = gatewayStatus.value?.hasKey === true
+    form.value.provider = selection.provider
+    form.value.baseUrl = selection.baseUrl
+    form.value.model = selection.model
+    form.value.apiKey = selection.apiKey
+    for (const task of SURFACE_KEYS) {
+      surfaces.value[task] = { custom: false, provider: '', baseUrl: '', apiKey: '', model: '' }
+    }
+    await handleSave()
+    toast.add({
+      title: t('tmcut.aiConnect.hubAdoptedTitle'),
+      description: swapped
+        ? t('tmcut.aiConnect.hubAdoptedSwappedDesc', { model: selection.model })
+        : t('tmcut.aiConnect.hubAdoptedDesc', { model: selection.model }),
+      color: 'success'
+    })
+  } catch (err) {
+    toast.add({
+      title: t('tmcut.aiConnect.hubKeyFailedTitle'),
+      description: String((err as Error)?.message || err).slice(0, 180),
+      color: 'error'
+    })
+  } finally {
+    hubAdopting.value = false
   }
 }
 
@@ -404,6 +580,54 @@ const testedRows = computed(() => {
           {{ t('tmcut.aiConnect.surfaceHint') }}
         </p>
 
+        <!-- ============ Adopt a TM Hub connection (no re-typing) ========= -->
+        <div class="flex items-center gap-2">
+          <UIcon name="i-lucide-cloud-download" class="w-3.5 h-3.5 text-neutral-400" />
+          <span class="text-[11px] font-semibold text-neutral-600 dark:text-neutral-300 uppercase tracking-wide">
+            {{ t('tmcut.aiConnect.hubLabel') }}
+          </span>
+        </div>
+        <template v-if="hubChoices.length > 0">
+          <div class="flex items-center gap-1.5">
+            <select
+              id="tmcut-aiconnect-hub"
+              v-model="hubSelected"
+              :aria-label="t('tmcut.aiConnect.hubLabel')"
+              class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
+              :disabled="hubAdopting"
+            >
+              <option value="">
+                {{ t('tmcut.aiConnect.hubEmpty') }}
+              </option>
+              <option v-for="choice in hubChoices" :key="choice.id" :value="choice.id">
+                {{ choice.label }}
+              </option>
+            </select>
+            <UButton
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-download"
+              class="shrink-0"
+              :loading="hubAdopting"
+              :disabled="!hubSelected"
+              @click="handleAdoptHub"
+            >
+              {{ t('tmcut.aiConnect.hubUse') }}
+            </UButton>
+          </div>
+          <p class="text-[10px] text-neutral-400 dark:text-neutral-500 -mt-1.5">
+            {{ t('tmcut.aiConnect.hubHint') }}
+          </p>
+        </template>
+        <p
+          v-else-if="!hubLoading"
+          class="text-[10px]"
+          :class="hubError ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-400 dark:text-neutral-500'"
+        >
+          {{ hubError || t('tmcut.aiConnect.hubEmpty') }}
+        </p>
+
         <!-- ============ Global (default) configuration ==================== -->
         <div class="flex items-center gap-2">
           <UIcon name="i-lucide-settings" class="w-3.5 h-3.5 text-neutral-400" />
@@ -414,10 +638,11 @@ const testedRows = computed(() => {
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label for="tmcut-aiconnect-provider" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
               {{ t('tmcut.aiConnect.providerLabel') }}
             </label>
             <select
+              id="tmcut-aiconnect-provider"
               v-model="form.provider"
               class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
               @change="handleProviderChange"
@@ -428,12 +653,13 @@ const testedRows = computed(() => {
             </select>
           </div>
           <div>
-            <label class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label for="tmcut-aiconnect-model" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
               {{ t('tmcut.aiConnect.modelLabel') }}
             </label>
             <div class="flex items-center gap-1">
               <select
                 v-if="models.length > 0"
+                id="tmcut-aiconnect-model"
                 v-model="form.model"
                 class="w-full min-w-0 text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
               >
@@ -446,6 +672,7 @@ const testedRows = computed(() => {
               </select>
               <input
                 v-else
+                id="tmcut-aiconnect-model"
                 v-model="form.model"
                 type="text"
                 spellcheck="false"
@@ -466,10 +693,11 @@ const testedRows = computed(() => {
         </div>
 
         <div>
-          <label class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          <label for="tmcut-aiconnect-base-url" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
             {{ t('tmcut.aiConnect.baseUrlLabel') }}
           </label>
           <input
+            id="tmcut-aiconnect-base-url"
             v-model="form.baseUrl"
             type="text"
             spellcheck="false"
@@ -482,10 +710,11 @@ const testedRows = computed(() => {
         </div>
 
         <div>
-          <label class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          <label for="tmcut-aiconnect-api-key" class="block text-[11px] font-medium text-neutral-600 dark:text-neutral-400 mb-1">
             {{ t('tmcut.aiConnect.apiKeyLabel') }}
           </label>
           <input
+            id="tmcut-aiconnect-api-key"
             v-model="form.apiKey"
             type="password"
             autocomplete="off"
@@ -527,10 +756,11 @@ const testedRows = computed(() => {
           <template v-if="surfaces[task].custom">
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                <label :for="`tmcut-aiconnect-${task}-provider`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
                   {{ t('tmcut.aiConnect.providerLabel') }}
                 </label>
                 <select
+                  :id="`tmcut-aiconnect-${task}-provider`"
                   v-model="surfaces[task].provider"
                   class="w-full text-xs rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-2 py-1.5"
                 >
@@ -540,10 +770,11 @@ const testedRows = computed(() => {
                 </select>
               </div>
               <div>
-                <label class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+                <label :for="`tmcut-aiconnect-${task}-model`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
                   {{ t('tmcut.aiConnect.modelLabel') }}
                 </label>
                 <input
+                  :id="`tmcut-aiconnect-${task}-model`"
                   v-model="surfaces[task].model"
                   type="text"
                   spellcheck="false"
@@ -553,10 +784,11 @@ const testedRows = computed(() => {
               </div>
             </div>
             <div>
-              <label class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+              <label :for="`tmcut-aiconnect-${task}-base-url`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
                 {{ t('tmcut.aiConnect.baseUrlLabel') }}
               </label>
               <input
+                :id="`tmcut-aiconnect-${task}-base-url`"
                 v-model="surfaces[task].baseUrl"
                 type="text"
                 spellcheck="false"
@@ -565,10 +797,11 @@ const testedRows = computed(() => {
               >
             </div>
             <div>
-              <label class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
+              <label :for="`tmcut-aiconnect-${task}-api-key`" class="block text-[11px] font-medium text-neutral-500 dark:text-neutral-400 mb-1">
                 {{ t('tmcut.aiConnect.apiKeyLabel') }}
               </label>
               <input
+                :id="`tmcut-aiconnect-${task}-api-key`"
                 v-model="surfaces[task].apiKey"
                 type="password"
                 autocomplete="off"

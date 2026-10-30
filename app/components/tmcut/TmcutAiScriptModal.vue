@@ -186,16 +186,19 @@ function closeModal() {
       <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto">
         <!-- Left Panel: Configuration -->
         <div class="lg:col-span-5 flex flex-col gap-4">
-          <!-- R128: provider / base URL / key / model setup, built for
-               multi-provider gateways (FreeLLMAPI style: one endpoint,
-               many models). Badge above reflects the stored config. -->
-          <TmcutAiConnect @saved="checkGatewayStatus()" />
+          <!-- R148: MODEL CHOOSER, not a connection form. This surface only
+               offers models whose provider is already connected and enabled
+               on TM Hub (keys are configured once, in the AI panel of AutoCut
+               step 2), plus a Test button that runs a real completion. The
+               Badge above reflects the stored config for this surface. -->
+          <TmcutAiModelPicker @applied="checkGatewayStatus()" />
 
           <div>
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aiscriptmodal-topic-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.aiScript.topicLabel') }}
             </label>
             <UTextarea
+              id="tmcut-aiscriptmodal-topic-label"
               v-model="prompt"
               :placeholder="t('tmcut.aiScript.topicPlaceholder')"
               :rows="3"

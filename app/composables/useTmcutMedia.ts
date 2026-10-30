@@ -10,6 +10,7 @@ import {
   normalizeMediaPath
 } from '~/utils/tmcut/media'
 import { clampWaveformPoints } from '~/utils/tmcut/waveform'
+import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 import { useTmcutProject } from '~/composables/useTmcutProject'
 import { toURL } from '~/utils/ffmpegHelper'
 import {
@@ -37,20 +38,63 @@ const selectedFolderId = ref<string | null>(null)
 const libraryLoaded = ref(false)
 const importing = ref(false)
 const importError = ref<string | null>(null)
+// Web upload throughput readout ({done}/{total}), shown by the media panel
+// banner while importWebFiles streams files to the local server.
+const webUpload = ref<{ done: number, total: number } | null>(null)
 const proxyPreview = ref(true)
 
 if (import.meta.client && typeof window !== 'undefined') {
-  const stored = window.localStorage.getItem(PROXY_PREVIEW_KEY)
-  if (stored !== null) proxyPreview.value = stored === '1'
+  proxyPreview.value = readStoredFlag(PROXY_PREVIEW_KEY, true)
   watch(proxyPreview, (v) => {
-    window.localStorage.setItem(PROXY_PREVIEW_KEY, v ? '1' : '0')
+    writeStored(PROXY_PREVIEW_KEY, v ? '1' : '0')
   })
 }
 
 const waveformCache = new Map<string, number[]>()
 
+// Keyed index of the asset list. findAssetBySrc used to scan every asset with
+// mediaFileKey() on each call, and the preview player plus timeline clips call
+// it several times per animation frame.
+const assetKeyIndex = computed(() => {
+  const index = new Map<string, TmcutAsset>()
+  for (const asset of assets.value) {
+    const key = mediaFileKey(asset.path)
+    // First match wins, matching the Array#find scan it replaces.
+    if (!index.has(key)) index.set(key, asset)
+  }
+  return index
+})
+
 function tmcutIpc() {
   return typeof window !== 'undefined' ? window.electronAPI?.tmcut : undefined
+}
+
+// ===== Web uploads (R152) =====
+// The web runtime ships picked files to the local Nitro server
+// (POST /api/v1/media/upload) and stores the returned /uploads/ URL as the
+// asset path. That copy survives reloads — blob: URLs never did.
+function isWebUploadPath(path: string | null | undefined): boolean {
+  return !!path && path.startsWith('/uploads/')
+}
+
+// localStorage persistence on web keeps only assets whose bytes still exist
+// somewhere: uploaded server copies. Blob:/data: URLs are session-bound.
+function isDurableAssetPath(path: string): boolean {
+  return isWebUploadPath(path) || /^(https?:)/.test(path)
+}
+
+function thumbNameFor(name: string): string {
+  // Strip the source extension and stamp thumbnails as jpg (they are
+  // captured as image/jpeg data URLs).
+  return `${name.replace(/\.[^.]+$/, '')}.jpg`
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob | null> {
+  try {
+    return await (await fetch(dataUrl)).blob()
+  } catch {
+    return null
+  }
 }
 
 function mediaUrl(filePath: string): string {
@@ -99,8 +143,7 @@ export function useTmcutMedia() {
 
   function findAssetBySrc(src?: string | null): TmcutAsset | undefined {
     if (!src) return undefined
-    const key = mediaFileKey(src)
-    return assets.value.find(a => mediaFileKey(a.path) === key)
+    return assetKeyIndex.value.get(mediaFileKey(src))
   }
 
   function loadFolders() {
@@ -181,10 +224,23 @@ export function useTmcutMedia() {
     libraryLoaded.value = true
     loadFolders()
     const ipc = tmcutIpc()
-    // Web runtime is session-only: blob: URLs die on reload, so neither
-    // load nor persist the library here (see persistLibrary).
+    // Web runtime: keep assets whose bytes live on the local server
+    // (/uploads/…); blob: URLs from a previous page load can never resolve
+    // again, so they are dropped here (R152 — uploads made the library
+    // durable, see persistLibrary).
     if (!ipc) {
-      assets.value = []
+      if (import.meta.server) {
+        assets.value = []
+        return
+      }
+      try {
+        const raw = localStorage.getItem(ASSET_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) as TmcutAsset[] : []
+        assets.value = Array.isArray(parsed) ? parsed.filter(a => isDurableAssetPath(a.path)) : []
+      } catch (error) {
+        console.error('Failed to parse media registry from localStorage:', error)
+        assets.value = []
+      }
       return
     }
     if (!import.meta.server) {
@@ -212,14 +268,25 @@ export function useTmcutMedia() {
   }
 
   function persistLibrary() {
-    // Web runtime is session-only (blob: URLs do not survive reload).
-    if (!tmcutIpc()) return
+    const ipc = tmcutIpc()
+    if (!ipc) {
+      // Web runtime: uploaded assets (/uploads/… URLs) persist through
+      // reloads. Session-bound blob: URLs are filtered out — persisting them
+      // would resurrect dead references on the next load.
+      if (import.meta.server) return
+      try {
+        const durable = assets.value.filter(a => isDurableAssetPath(a.path))
+        localStorage.setItem(ASSET_STORAGE_KEY, JSON.stringify(durable))
+      } catch (error) {
+        console.error('Failed to persist media registry to localStorage:', error)
+      }
+      return
+    }
     try {
       localStorage.setItem(ASSET_STORAGE_KEY, JSON.stringify(assets.value))
     } catch (error) {
       console.error('Failed to persist media registry to localStorage:', error)
     }
-    const ipc = tmcutIpc()
     if (ipc) {
       // Convert Vue reactive proxies to plain objects — Electron's
       // structured clone algorithm cannot serialize reactive proxies
@@ -262,6 +329,14 @@ export function useTmcutMedia() {
     const ipc = tmcutIpc()
     try {
       if (!ipc || typeof ipc.analyzeAsset !== 'function') {
+        // No ffprobe in the browser: everything that reaches this path is a
+        // /uploads/ URL the page can load itself, so probe it with a media
+        // element. Without this a web-imported clip lands on the timeline at
+        // the 5s/10s default length instead of its real duration.
+        if (asset.kind !== 'image') {
+          const duration = await probeWebMedia(mediaUrl(asset.path), asset.kind)
+          if (duration > 0) asset.meta.durationSec = Math.round(duration * 100) / 100
+        }
         asset.status = 'ready'
         asset.meta.probedAt = new Date().toISOString()
         return
@@ -434,49 +509,120 @@ export function useTmcutMedia() {
     })
   }
 
-  // Web-runtime import: File objects -> blob: URL assets with probed
-  // duration and captured thumbnails. Session-only (see loadLibrary).
-  // Returns the created records.
+  // Stream one file to the local Nitro server. Returns the /uploads/ URL the
+  // server assigned.
+  //
+  // Uses the app's patched $fetch instead of raw fetch: that adds X-App-Id and
+  // the bearer token, and its 401 handler refreshes the session. A token that
+  // expires mid-session used to make an import fail outright with
+  // `error.invalidToken` (raw fetch has no refresh/retry); now one retry after
+  // the refresh recovers it. The Blob is re-readable, so the retry is safe.
+  async function uploadWebFile(file: Blob, name: string): Promise<{ url: string, size: number }> {
+    const post = () => $fetch<{ url?: string, size?: number }>(`/api/v1/media/upload?name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: file
+    })
+    let data: { url?: string, size?: number }
+    try {
+      data = await post()
+    } catch (error) {
+      const status = (error as { statusCode?: number, response?: { status?: number } }).statusCode
+        ?? (error as { response?: { status?: number } }).response?.status
+      if (status !== 401) throw error
+      data = await post()
+    }
+    if (!data?.url) {
+      throw new Error('upload response missing url')
+    }
+    return { url: data.url, size: data.size ?? file.size }
+  }
+
+  // Shared upload-then-thumbnail step (importWebFiles + web relink): a
+  // captured data URL thumb becomes a durable /uploads/ copy too, falling
+  // back to the inline data URL when the extra upload fails.
+  async function uploadVideoThumb(file: File | Blob, dataUrl: string): Promise<string> {
+    const blob = await dataUrlToBlob(dataUrl)
+    if (blob) {
+      try {
+        const sourceName = 'name' in file && file.name ? file.name : 'thumb.jpg'
+        const up = await uploadWebFile(blob, thumbNameFor(sourceName))
+        return up.url
+      } catch {
+        // fall through to the inline thumbnail
+      }
+    }
+    return dataUrl
+  }
+
+  // Web-runtime import: File objects are streamed to the local server and
+  // referenced as /uploads/ URLs (durable across reloads — R152). Duration
+  // probing and thumbnails still ride a temporary blob: URL, which is
+  // revoked as soon as the upload in flight finishes.
   async function importWebFiles(files: File[]): Promise<TmcutAsset[]> {
     importError.value = null
     const created: TmcutAsset[] = []
     if (files.length === 0) return created
     importing.value = true
+    webUpload.value = { done: 0, total: 0 }
     try {
       const seen = new Set(assets.value.map(a => `web:${a.name.toLowerCase()}:${a.meta.fileSize}`))
+      const work: Array<{ file: File, kind: TmcutAssetKind }> = []
       for (const file of files) {
         const kind = classifyAssetKind(file.name)
         if (!kind) continue
         const fingerprint = `web:${file.name.toLowerCase()}:${file.size}`
         if (seen.has(fingerprint)) continue
         seen.add(fingerprint)
-        const url = URL.createObjectURL(file)
-        const asset = buildAsset(url, kind)
-        asset.name = file.name
-        asset.meta.fileSize = file.size
-        assets.value.unshift(asset)
-        if (kind !== 'image') {
-          const duration = await probeWebMedia(url, kind)
-          if (duration > 0) asset.meta.durationSec = Math.round(duration * 100) / 100
+        work.push({ file, kind })
+      }
+      webUpload.value = { done: 0, total: work.length }
+      for (const { file, kind } of work) {
+        const blobUrl = URL.createObjectURL(file)
+        try {
+          // Upload and duration probe run in parallel so a large video does
+          // not pay for the transfer and the probe one after the other.
+          const [uploaded, duration] = await Promise.all([
+            uploadWebFile(file, file.name),
+            kind === 'image' ? Promise.resolve(0) : probeWebMedia(blobUrl, kind)
+          ])
+          const asset = buildAsset(uploaded.url, kind)
+          asset.name = file.name
+          asset.meta.fileSize = uploaded.size
+          if (duration > 0) {
+            asset.meta.durationSec = Math.round(duration * 100) / 100
+          }
+          if (kind === 'video') {
+            // Push the captured cover frame to the server too so the
+            // thumbnail survives reloads (the desktop pipeline keeps its
+            // cover on disk; the web equivalent is another /uploads/ URL).
+            const thumb = await captureVideoThumb(blobUrl)
+            if (thumb) {
+              asset.thumbPath = await uploadVideoThumb(file, thumb)
+            }
+          } else if (kind === 'image') {
+            // Image assets point thumbPath at the source — mirrors the
+            // desktop pipeline so the grid shows pixels, not the placeholder.
+            asset.thumbPath = uploaded.url
+          }
+          asset.status = 'ready'
+          asset.meta.probedAt = new Date().toISOString()
+          assets.value.unshift(asset)
+          created.push(asset)
+        } catch (error) {
+          console.error('Web media upload failed:', file.name, error)
+          importError.value = error instanceof Error ? error.message : 'upload failed'
+        } finally {
+          URL.revokeObjectURL(blobUrl)
+          if (webUpload.value) webUpload.value.done += 1
         }
-        if (kind === 'video') {
-          const thumb = await captureVideoThumb(url)
-          if (thumb) asset.thumbPath = thumb
-        } else if (kind === 'image') {
-          // The image file is its own thumbnail —
-          // mirrors the desktop pipeline, which points
-          // thumbPath at the source file. Without this
-          // the library grid shows the placeholder
-          // icon instead of the image.
-          asset.thumbPath = url
-        }
-        asset.status = 'ready'
-        asset.meta.probedAt = new Date().toISOString()
-        created.push(asset)
       }
     } finally {
       importing.value = false
+      webUpload.value = null
     }
+    // Keep the registry (and any linked project) durable.
+    persistLibrary()
     return created
   }
 
@@ -485,9 +631,8 @@ export function useTmcutMedia() {
    * the bytes to <base>/downloads/, then the normal import pipeline probes it
    * and builds the thumbnails. Returns the created/linked asset path.
    *
-   * On the web runtime there is nothing to download to — `importWebFiles`
-   * (blob: URL, session-only) is the caller's job, so this refuses instead of
-   * pretending.
+   * On the web runtime `importWebFiles` uploads the source itself, so
+   * this remains a desktop-only download channel and refuses elsewhere.
    */
   async function downloadRemoteMedia(
     url: string,
@@ -524,7 +669,55 @@ export function useTmcutMedia() {
 
   async function checkMissing() {
     const ipc = tmcutIpc()
-    if (!ipc || assets.value.length === 0 || import.meta.server) return
+    if (assets.value.length === 0 || import.meta.server) return
+    // Web: no stat-files IPC — the /uploads/** stream route answers every
+    // request the server stores, so a ranged GET is authoritative proof of
+    // life. A plain HEAD is unreliable against the Nuxt dev server (it
+    // short-circuits with cached 200s), while a ranged GET always runs the
+    // real handler; Range keeps the transfer to a few bytes and no-store
+    // skips the HTTP cache. Legacy desktop-path assets cannot be proven on
+    // the web and stay in whatever status they already have.
+    if (!ipc) {
+      let changed = false
+      const paths = new Set<string>()
+      for (const asset of assets.value) {
+        if (asset.status === 'analyzing') continue
+        if (asset.path.startsWith('/uploads/')) paths.add(asset.path)
+        if (asset.proxyPath && asset.proxyPath.startsWith('/uploads/')) paths.add(asset.proxyPath)
+      }
+      const existsByPath: Record<string, boolean> = {}
+      await Promise.all([...paths].map(async (p) => {
+        try {
+          const res = await fetch(p, {
+            headers: { Range: 'bytes=0-1' },
+            cache: 'no-store'
+          })
+          existsByPath[p] = res.status >= 200 && res.status < 300
+        } catch {
+          existsByPath[p] = false
+        }
+      }))
+      for (const asset of assets.value) {
+        if (asset.status === 'analyzing') continue
+        if (asset.path in existsByPath) {
+          const exists = existsByPath[asset.path]
+          if (exists && asset.status === 'missing') {
+            asset.status = 'ready'
+            changed = true
+          } else if (!exists && asset.status !== 'missing') {
+            asset.status = 'missing'
+            changed = true
+          }
+        }
+        if (asset.proxyPath && existsByPath[asset.proxyPath] === false) {
+          asset.proxyPath = null
+          asset.proxyStatus = 'none'
+          changed = true
+        }
+      }
+      if (changed) persistLibrary()
+      return
+    }
     try {
       const stats = await ipc.statFiles(assets.value.map(a => a.path))
       let changed = false
@@ -700,8 +893,33 @@ export function useTmcutMedia() {
   async function generateProxy(asset: TmcutAsset, width = 960): Promise<boolean> {
     if (asset.kind !== 'video' || asset.status === 'missing') return false
     const ipc = tmcutIpc()
-    if (!ipc || typeof ipc.generateProxy !== 'function') return false
     asset.proxyStatus = 'generating'
+    asset.proxyPath = null
+    // Web: the local Nitro server runs ffmpeg itself and stores the proxy
+    // next to the uploads it streams — the same /uploads/ URL the media
+    // library uses, so `mediaUrl` streams it with zero extra plumbing.
+    if (!ipc || typeof ipc.generateProxy !== 'function') {
+      try {
+        const res = await $fetch<{ ok: boolean, path?: string, cached?: boolean }>('/api/v1/media/proxy', {
+          method: 'POST',
+          body: { path: asset.path, width }
+        })
+        if (res?.ok && res.path) {
+          asset.proxyPath = res.path
+          asset.proxyStatus = 'ready'
+          persistLibrary()
+          return true
+        }
+        asset.proxyStatus = 'error'
+        persistLibrary()
+        return false
+      } catch (err) {
+        console.error('generateProxy error:', err)
+        asset.proxyStatus = 'error'
+        persistLibrary()
+        return false
+      }
+    }
     try {
       const res = await ipc.generateProxy({ filePath: asset.path, width })
       if (res?.ok && res.path) {
@@ -735,14 +953,18 @@ export function useTmcutMedia() {
     libraryLoaded,
     importing,
     importError,
+    webUpload,
     isDesktop,
     proxyPreview,
     resolveMediaSrc,
     generateProxy,
     removeProxy,
     loadLibrary,
+    persistLibrary,
     importFiles,
     importWebFiles,
+    uploadWebFile,
+    uploadVideoThumb,
     downloadRemoteMedia,
     cancelMediaDownload,
     onMediaDownloadProgress,
@@ -774,8 +996,8 @@ export function useTmcutMedia() {
 
 // Dev/QA hook (R124): same pattern as useTmcutProject — lets the e2e
 // harness seed the media library and assert drop behaviour. The web
-// runtime deliberately clears the library on load (blob: URLs do not
-// survive a reload), so a browser-driven harness must push fixtures
+// runtime self-heals on load (durable /uploads assets stay, stale blob:
+// entries are dropped), so a browser-driven harness must push fixtures
 // through this ref instead of localStorage.
 if (import.meta.client && import.meta.dev && typeof window !== 'undefined') {
   const w = window as unknown as Record<string, unknown>

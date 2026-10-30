@@ -273,28 +273,36 @@ function closeModal() {
       <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto">
         <!-- Left: command entry -->
         <div class="lg:col-span-5 flex flex-col gap-3">
-          <div class="flex items-end gap-2">
-            <div class="flex-1">
-              <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-                {{ t('tmcut.agent.commandLabel') }}
-              </label>
-              <UTextarea
-                v-model="command"
-                :rows="4"
-                :placeholder="t('tmcut.agent.commandPlaceholder')"
-                class="w-full text-sm"
-                @keydown.ctrl.enter="handleRun"
-                @keydown.meta.enter="handleRun"
-              />
-            </div>
-            <USelect
-              v-model="language"
-              :items="languageItems"
-              size="sm"
-              class="w-28 shrink-0"
+          <div>
+            <label for="tmcut-agentpanel-command-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {{ t('tmcut.agent.commandLabel') }}
+            </label>
+            <UTextarea
+              id="tmcut-agentpanel-command-label"
+              v-model="command"
+              :rows="4"
+              :placeholder="t('tmcut.agent.commandPlaceholder')"
+              class="w-full text-sm"
+              @keydown.ctrl.enter="handleRun"
+              @keydown.meta.enter="handleRun"
             />
           </div>
 
+          <div>
+            <span class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+              {{ t('tmcut.agent.languageLabel') }}
+            </span>
+            <USelect
+              v-model="language"
+              :aria-label="t('tmcut.agent.languageLabel')"
+              :items="languageItems"
+              size="sm"
+              class="w-full"
+            />
+          </div>
+
+          <!-- Action row on its own full-width line so the primary label never
+               wraps against the mic button (was a 2-col grid). -->
           <div class="flex items-center gap-2">
             <UButton
               class="flex-1"
@@ -308,6 +316,7 @@ function closeModal() {
               {{ t('tmcut.agent.runButton') }}
             </UButton>
             <UButton
+              shrink-0
               :color="micRecording ? 'error' : 'neutral'"
               :variant="micRecording ? 'soft' : 'ghost'"
               :icon="micRecording ? 'i-lucide-square' : 'i-lucide-mic'"
@@ -359,7 +368,7 @@ function closeModal() {
         <div class="lg:col-span-7 flex flex-col gap-3 min-h-0">
           <div
             v-if="draftCount === 0"
-            class="flex-1 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg p-6 text-center"
+            class="border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg px-6 py-8 text-center"
           >
             <UIcon name="i-lucide-clipboard-list" class="size-8 mx-auto text-neutral-400 mb-2" />
             <p class="text-xs text-neutral-500 dark:text-neutral-400">

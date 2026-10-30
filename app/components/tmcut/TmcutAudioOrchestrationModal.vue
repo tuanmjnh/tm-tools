@@ -101,8 +101,16 @@ function handleOrchestrate() {
         </div>
 
         <div class="flex items-center gap-3">
-          <label class="text-xs font-medium text-neutral-700 dark:text-neutral-300">{{ t('tmcut.audioOrchestration.bedVolume') }}</label>
-          <UInputNumber v-model="bedVolume" :min="0" :max="100" />
+          <label for="tmcut-audio-bed-volume" class="text-xs font-medium text-neutral-700 dark:text-neutral-300">{{ t('tmcut.audioOrchestration.bedVolume') }}</label>
+          <!-- UInputNumber forwards `id` to its inner <input>, so this is a real
+               label association (the control is labelable, unlike the slider and
+               select roots elsewhere in the editor). -->
+          <UInputNumber
+            id="tmcut-audio-bed-volume"
+            v-model="bedVolume"
+            :min="0"
+            :max="100"
+          />
         </div>
 
         <div class="rounded-lg border border-neutral-300 dark:border-neutral-800 overflow-hidden max-h-56">

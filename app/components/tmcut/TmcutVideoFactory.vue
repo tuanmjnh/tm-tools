@@ -37,7 +37,7 @@ type RunMode = 'dry-run' | 'live' | 'auto'
 const runMode = ref<RunMode>('dry-run')
 const selectedProvider = ref('')
 const isElectron = typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).electronAPI
-const availableProviders = ref<Array<{ id: string; label: string }>>([])
+const availableProviders = ref<Array<{ id: string, label: string }>>([])
 const providerManifests = ref<Array<Record<string, unknown>>>([])
 const providersLoading = ref(false)
 
@@ -53,7 +53,7 @@ async function loadProviders() {
   if (!isElectron || providersLoading.value) return
   providersLoading.value = true
   try {
-    const api = (window as unknown as Record<string, unknown>).electronAPI as { tools?: { videoGeneration?: { providers(): Promise<{ ok: boolean; data?: Array<{ id: string; label: string; manifest?: Record<string, unknown> }> }> } } } | undefined
+    const api = (window as unknown as Record<string, unknown>).electronAPI as { tools?: { videoGeneration?: { providers(): Promise<{ ok: boolean, data?: Array<{ id: string, label: string, manifest?: Record<string, unknown> }> }> } } } | undefined
     const res = await api?.tools?.videoGeneration?.providers()
     if (res?.ok && Array.isArray(res.data)) {
       availableProviders.value = res.data.map(p => ({ id: p.id, label: p.label || p.id }))
@@ -70,27 +70,26 @@ async function loadProviders() {
 }
 
 const canGoLive = computed(() => isElectron && availableProviders.value.length > 0 && !!selectedProvider.value)
-const canGoAuto = computed(() => isElectron && providerManifests.value.length > 0)
 
 function getIpcBridge(): import('~/utils/tmcut/videoFactoryRunner').VideoGenerationIpc | null {
   if (!isElectron) return null
   const api = (window as unknown as Record<string, unknown>).electronAPI as {
     tools?: {
       videoGeneration?: {
-        submit(args: { providerId: string; input: Record<string, unknown>; idempotencyKey?: string }): Promise<{ ok: boolean; data?: { jobId: string; providerTaskId: string; status: string; estimatedCompletionSec: number } }>
-        poll(args: { jobId: string }): Promise<{ ok: boolean; data?: { jobId: string; status: string; progress: number; costSoFar: number; results: Array<Record<string, unknown>>; error: string | null; etaSec?: number } }>
+        submit(args: { providerId: string, input: Record<string, unknown>, idempotencyKey?: string }): Promise<{ ok: boolean, data?: { jobId: string, providerTaskId: string, status: string, estimatedCompletionSec: number } }>
+        poll(args: { jobId: string }): Promise<{ ok: boolean, data?: { jobId: string, status: string, progress: number, costSoFar: number, results: Array<Record<string, unknown>>, error: string | null, etaSec?: number } }>
         cancel(args: { jobId: string }): Promise<{ ok: boolean }>
-        download(args: { jobId: string; destDir?: string }): Promise<{ ok: boolean; data?: { localPath: string; checksum: string; fileSizeBytes: number; mimeType: string; width: number; height: number; durationSec: number } }>
+        download(args: { jobId: string, destDir?: string }): Promise<{ ok: boolean, data?: { localPath: string, checksum: string, fileSizeBytes: number, mimeType: string, width: number, height: number, durationSec: number } }>
       }
     }
   } | undefined
   const vg = api?.tools?.videoGeneration
   if (!vg) throw new Error('videoGeneration IPC bridge not available')
   return {
-    submit: (args) => vg.submit(args),
-    poll: (args) => vg.poll(args),
-    cancel: (args) => vg.cancel(args),
-    download: (args) => vg.download(args)
+    submit: args => vg.submit(args),
+    poll: args => vg.poll(args),
+    cancel: args => vg.cancel(args),
+    download: args => vg.download(args)
   }
 }
 
@@ -111,8 +110,13 @@ const templateOptions = computed(() => catalog.families.value
     value: `${family.templateId}@${family.publishedVersion}`
   })))
 
+// AI availability gate. Web: probed on mount against the relay catalogue —
+// previously gated on isDesktop, which kept generation buttons dead even
+// though ai.complete runs over the relay.
+const aiReady = ref(false)
 onMounted(() => {
   loadProviders()
+  void ai.probeAiReady().then(ok => (aiReady.value = ok))
 })
 
 const currentTemplate = computed(() => {
@@ -228,17 +232,17 @@ function parseInput(): BatchInputRecord[] | null {
     previewed.value = null
     return null
   }
-  }
+}
 
-  async function generateFromPrompt() {
-    if (!generationPrompt.value.trim() || !currentTemplate.value || !ai.isDesktop) return
-    promptGenerating.value = true
-    try {
-      const template = currentTemplate.value
-      // Build a prompt for the AI to generate input records
-      const fieldNames = template.inputSchema.map(f => f.id)
-      const requiredFields = template.inputSchema.filter(f => f.required).map(f => f.id)
-      const prompt = `Generate ${promptVariants.value} input records for a video template "${template.name}" (${template.topic}).
+async function generateFromPrompt() {
+  if (!generationPrompt.value.trim() || !currentTemplate.value || !aiReady.value) return
+  promptGenerating.value = true
+  try {
+    const template = currentTemplate.value
+    // Build a prompt for the AI to generate input records
+    const fieldNames = template.inputSchema.map(f => f.id)
+    const requiredFields = template.inputSchema.filter(f => f.required).map(f => f.id)
+    const prompt = `Generate ${promptVariants.value} input records for a video template "${template.name}" (${template.topic}).
   Each record must have these fields: ${fieldNames.join(', ')}
   Required fields: ${requiredFields.join(', ')}
   User brief: ${generationPrompt.value.trim()}
@@ -246,52 +250,52 @@ function parseInput(): BatchInputRecord[] | null {
   Return ONLY valid JSON array of objects, one per record. No markdown, no explanation.
   Example format: [{"field1": "value1", "field2": "value2"}, {"field1": "value3", "field2": "value4"}]`
 
-      const res = await ai.complete({
-        task: 'plan',
-        jsonMode: true,
-        messages: [
-          { role: 'system', content: 'You generate structured input data for video templates. Output only valid JSON arrays.' },
-          { role: 'user', content: prompt }
-        ],
-        maxTokens: 2048,
-        temperature: 0.5
-      })
+    const res = await ai.complete({
+      task: 'plan',
+      jsonMode: true,
+      messages: [
+        { role: 'system', content: 'You generate structured input data for video templates. Output only valid JSON arrays.' },
+        { role: 'user', content: prompt }
+      ],
+      maxTokens: 2048,
+      temperature: 0.5
+    })
 
-      let records: BatchInputRecord[] | null = null
-      try {
-        const parsed = JSON.parse(res.content)
-        if (Array.isArray(parsed)) {
-          records = parsed.map((r, i) => ({
-            rowIndex: i,
-            label: String(r.name ?? r.title ?? `Variant ${i + 1}`),
-            record: r
-          }))
-        }
-      } catch {
-        toast.add({ title: t('tmcut.factory.aiParseFailed'), description: t('tmcut.factory.aiParseFailedDesc'), color: 'error' })
-        return
+    let records: BatchInputRecord[] | null = null
+    try {
+      const parsed = JSON.parse(res.content)
+      if (Array.isArray(parsed)) {
+        records = parsed.map((r, i) => ({
+          rowIndex: i,
+          label: String(r.name ?? r.title ?? `Variant ${i + 1}`),
+          record: r
+        }))
       }
-
-      if (!records || records.length === 0) {
-        toast.add({ title: t('tmcut.factory.aiEmpty'), description: t('tmcut.factory.aiEmptyDesc'), color: 'warning' })
-        return
-      }
-
-      // Switch to manual mode and populate the textarea with generated JSON
-      inputMode.value = 'manual'
-      inputFormat.value = 'json'
-      rawInput.value = JSON.stringify(records.map(r => r.record), null, 2)
-      previewed.value = null
-      parseError.value = null
-      toast.add({ title: t('tmcut.factory.aiGenerated'), description: t('tmcut.factory.aiGeneratedDesc', { count: records.length }), color: 'success' })
-    } catch (error) {
-      toast.add({ title: t('tmcut.factory.aiError'), description: (error as Error)?.message || String(error), color: 'error' })
-    } finally {
-      promptGenerating.value = false
+    } catch {
+      toast.add({ title: t('tmcut.factory.aiParseFailed'), description: t('tmcut.factory.aiParseFailedDesc'), color: 'error' })
+      return
     }
-  }
 
-  function checkBatch() {
+    if (!records || records.length === 0) {
+      toast.add({ title: t('tmcut.factory.aiEmpty'), description: t('tmcut.factory.aiEmptyDesc'), color: 'warning' })
+      return
+    }
+
+    // Switch to manual mode and populate the textarea with generated JSON
+    inputMode.value = 'manual'
+    inputFormat.value = 'json'
+    rawInput.value = JSON.stringify(records.map(r => r.record), null, 2)
+    previewed.value = null
+    parseError.value = null
+    toast.add({ title: t('tmcut.factory.aiGenerated'), description: t('tmcut.factory.aiGeneratedDesc', { count: records.length }), color: 'success' })
+  } catch (error) {
+    toast.add({ title: t('tmcut.factory.aiError'), description: (error as Error)?.message || String(error), color: 'error' })
+  } finally {
+    promptGenerating.value = false
+  }
+}
+
+function checkBatch() {
   const records = parseInput()
   if (!records) return
   const [templateId, version] = selectedTemplate.value.split('@')
@@ -328,35 +332,37 @@ async function runBatch(batchId: string) {
   busy.value = true
   try {
     // Build the right runner for the current mode.
-        let runner: import('~/utils/tmcut/videoFactoryRunner').FactoryRunner | undefined
-        if (runMode.value === 'live') {
-          try {
-            const ipc = getIpcBridge()
-            if (!ipc) throw new Error('No IPC bridge')
-            const { createProviderRunner } = await import('~/utils/tmcut/videoFactoryRunner')
-            runner = createProviderRunner({ ipc, providerId: selectedProvider.value })
-          } catch (runnerErr) {
-            toast.add({ title: t('tmcut.factory.liveRunnerFailed', 'Live runner unavailable'), description: String(runnerErr), color: 'error' })
-            return
-          }
-        } else if (runMode.value === 'auto') {
-          try {
-            const ipc = getIpcBridge()
-            if (!ipc) throw new Error('No IPC bridge')
-            const { createAutoRunner } = await import('~/utils/tmcut/videoFactoryRunner')
-            runner = createAutoRunner({ ipc })
-          } catch (runnerErr) {
-            toast.add({ title: t('tmcut.factory.autoRunnerFailed', 'Auto runner unavailable'), description: String(runnerErr), color: 'error' })
-            return
-          }
-        }
-        // Build per-provider concurrency map from capability manifests (rateLimitRpm).
-        const providerConcurrency: Record<string, number> = {}
-        for (const m of providerManifests.value) {
-          const rpm = Number(m.rateLimitRpm)
-          if (Number.isFinite(rpm) && rpm > 0) providerConcurrency[m.providerId] = Math.max(1, Math.floor(rpm / 60)) // convert rpm to concurrent slots (rough)
-        }
-        const result = await factory.run(batchId, { runner, providerConcurrency })
+    let runner: import('~/utils/tmcut/videoFactoryRunner').FactoryRunner | undefined
+    if (runMode.value === 'live') {
+      try {
+        const ipc = getIpcBridge()
+        if (!ipc) throw new Error('No IPC bridge')
+        const { createProviderRunner } = await import('~/utils/tmcut/videoFactoryRunner')
+        runner = createProviderRunner({ ipc, providerId: selectedProvider.value })
+      } catch (runnerErr) {
+        toast.add({ title: t('tmcut.factory.liveRunnerFailed', 'Live runner unavailable'), description: String(runnerErr), color: 'error' })
+        return
+      }
+    } else if (runMode.value === 'auto') {
+      try {
+        const ipc = getIpcBridge()
+        if (!ipc) throw new Error('No IPC bridge')
+        const { createAutoRunner } = await import('~/utils/tmcut/videoFactoryRunner')
+        runner = createAutoRunner({ ipc })
+      } catch (runnerErr) {
+        toast.add({ title: t('tmcut.factory.autoRunnerFailed', 'Auto runner unavailable'), description: String(runnerErr), color: 'error' })
+        return
+      }
+    }
+    // Build per-provider concurrency map from capability manifests (rateLimitRpm).
+    const providerConcurrency: Record<string, number> = {}
+    for (const m of providerManifests.value) {
+      const rpm = Number(m.rateLimitRpm)
+      if (Number.isFinite(rpm) && rpm > 0 && m.providerId) {
+        providerConcurrency[String(m.providerId)] = Math.max(1, Math.floor(rpm / 60)) // convert rpm to concurrent slots (rough)
+      }
+    }
+    const result = await factory.run(batchId, { runner, providerConcurrency })
     if (result.ok) {
       const batch = factory.batch(batchId)
       toast.add({
@@ -685,18 +691,21 @@ function removeBatch(batchId: string) {
           <h3 class="text-sm font-semibold text-neutral-900 dark:text-white">
             {{ t('tmcut.factory.newBatch') }}
           </h3>
-          <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-            {{ t('tmcut.factory.newBatchDesc') }}
-          </p>
+          <!-- No card description: the page header already shows the same
+               tmcut.factory.newBatchDesc sentence one screen above. -->
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <!-- The accessible name goes on the control itself (aria-label): a
+               <label> without a for/wrapped control names nothing, and these
+               fields showed up in the browser as unlabelled form controls. -->
+          <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
             {{ t('tmcut.factory.templateLabel') }}
-          </label>
+          </p>
           <USelect
             v-model="selectedTemplate"
             :items="templateOptions"
+            :aria-label="t('tmcut.factory.templateLabel')"
             :placeholder="t('tmcut.factory.templatePlaceholder')"
             class="w-full"
             @update:model-value="previewed = null"
@@ -709,10 +718,10 @@ function removeBatch(batchId: string) {
         <div>
           <!-- Input mode selector: Manual CSV/JSON vs Prompt-to-Batch -->
           <div class="mb-2">
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.factory.inputModeLabel') }}
-            </label>
-            <div class="flex items-center gap-1">
+            </p>
+            <div class="flex items-center gap-1" role="group" :aria-label="t('tmcut.factory.inputModeLabel')">
               <UButton
                 size="xs"
                 :color="inputMode === 'manual' ? 'primary' : 'neutral'"
@@ -725,7 +734,7 @@ function removeBatch(batchId: string) {
                 size="xs"
                 :color="inputMode === 'prompt' ? 'primary' : 'neutral'"
                 :variant="inputMode === 'prompt' ? 'soft' : 'ghost'"
-                :disabled="!ai.isDesktop"
+                :disabled="!aiReady"
                 @click="inputMode = 'prompt'; previewed = null"
               >
                 {{ t('tmcut.factory.promptMode') }}
@@ -734,12 +743,14 @@ function removeBatch(batchId: string) {
           </div>
 
           <div v-if="inputMode === 'prompt'" class="mb-3">
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.factory.promptLabel') }}
-            </label>
+            </p>
             <UTextarea
               v-model="generationPrompt"
+              name="factory-prompt"
               :rows="4"
+              :aria-label="t('tmcut.factory.promptLabel')"
               :placeholder="t('tmcut.factory.promptPlaceholder')"
               class="w-full text-sm"
             />
@@ -749,6 +760,7 @@ function removeBatch(batchId: string) {
                 color="neutral"
                 variant="ghost"
                 :disabled="promptVariants <= 1"
+                :aria-label="t('tmcut.factory.fewerVariants')"
                 @click="promptVariants--"
               >
                 <UIcon name="i-lucide-minus" class="size-3" />
@@ -759,6 +771,7 @@ function removeBatch(batchId: string) {
                 color="neutral"
                 variant="ghost"
                 :disabled="promptVariants >= 20"
+                :aria-label="t('tmcut.factory.moreVariants')"
                 @click="promptVariants++"
               >
                 <UIcon name="i-lucide-plus" class="size-3" />
@@ -770,7 +783,7 @@ function removeBatch(batchId: string) {
               variant="soft"
               icon="i-lucide-sparkles"
               block
-              :disabled="!generationPrompt.trim() || !currentTemplate || !ai.isDesktop || promptGenerating"
+              :disabled="!generationPrompt.trim() || !currentTemplate || !aiReady || promptGenerating"
               :loading="promptGenerating"
               @click="generateFromPrompt"
             >
@@ -779,9 +792,9 @@ function removeBatch(batchId: string) {
           </div>
 
           <div v-else class="flex items-center justify-between mb-1.5">
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
+            <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300">
               {{ t('tmcut.factory.inputLabel') }}
-            </label>
+            </p>
             <div class="flex items-center gap-1">
               <UButton
                 size="xs"
@@ -813,7 +826,9 @@ function removeBatch(batchId: string) {
           </div>
           <UTextarea
             v-model="rawInput"
+            name="factory-input"
             :rows="8"
+            :aria-label="t('tmcut.factory.inputLabel')"
             :placeholder="inputFormat === 'json' ? t('tmcut.factory.jsonPlaceholder') : t('tmcut.factory.csvPlaceholder')"
             class="w-full font-mono text-xs"
             @update:model-value="previewed = null; parseError = null"
@@ -826,13 +841,12 @@ function removeBatch(batchId: string) {
           </p>
         </div>
 
-
         <!-- Run mode: dry run (offline, safe) vs live provider (real cost) -->
         <div>
-          <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+          <p class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
             {{ t('tmcut.factory.runModeLabel', 'Run mode') }}
-          </label>
-          <div class="flex items-center gap-1.5 mb-2">
+          </p>
+          <div class="flex items-center gap-1.5 mb-2" role="group" :aria-label="t('tmcut.factory.runModeLabel', 'Run mode')">
             <UButton
               size="xs"
               :color="runMode === 'dry-run' ? 'primary' : 'neutral'"
@@ -860,6 +874,7 @@ function removeBatch(batchId: string) {
               :items="availableProviders"
               value-key="id"
               label-key="label"
+              :aria-label="t('tmcut.factory.providerPlaceholder', 'Pick a provider')"
               :placeholder="t('tmcut.factory.providerPlaceholder', 'Pick a provider')"
               :loading="providersLoading"
               class="w-full"
@@ -956,7 +971,7 @@ function removeBatch(batchId: string) {
         </div>
 
         <div v-if="guard.requiresConfirmation && !guard.blockedBy" class="flex items-start gap-2">
-          <USwitch v-model="confirmed" size="sm" />
+          <USwitch v-model="confirmed" size="sm" :aria-label="t('tmcut.factory.confirmLabel')" />
           <div>
             <p class="text-xs font-medium text-neutral-700 dark:text-neutral-300">
               {{ t('tmcut.factory.confirmLabel') }}
@@ -997,12 +1012,18 @@ function removeBatch(batchId: string) {
             {{ queue.length }}
           </UBadge>
         </div>
-        <div v-if="queue.length === 0" class="px-4 py-8 text-center">
+        <!-- `queue` is the ACTIVE queue, so a finished batch leaves it while
+             its detail card stays open just below. Rendering "No batch is
+             queued." in that state contradicted the card underneath it. -->
+        <div v-if="queue.length === 0 && !selectedBatch" class="px-4 py-8 text-center">
           <UIcon name="i-lucide-inbox" class="size-7 mx-auto text-neutral-400 mb-2" />
           <p class="text-xs text-neutral-500">
             {{ t('tmcut.factory.emptyQueue') }}
           </p>
         </div>
+        <p v-else-if="queue.length === 0" class="px-4 py-3 text-[11px] text-neutral-500">
+          {{ t('tmcut.factory.queueIdle') }}
+        </p>
         <ul v-else class="divide-y divide-neutral-200 dark:divide-neutral-800">
           <li
             v-for="batch in queue"
@@ -1235,6 +1256,7 @@ function removeBatch(batchId: string) {
                 color="neutral"
                 variant="ghost"
                 icon="i-lucide-trash-2"
+                :aria-label="t('tmcut.factory.deleteBatch')"
                 @click.stop="removeBatch(batch.batchId)"
               />
             </div>

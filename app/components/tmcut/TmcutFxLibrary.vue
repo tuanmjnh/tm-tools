@@ -31,7 +31,6 @@ import {
   groupEffectsByCategory,
   effectCategoryOf,
   filterPresets,
-  lutSwatch,
   humanizeKey,
   groupsFromCatalog,
   groupTransitions,
@@ -52,7 +51,7 @@ watch(() => props.tab, (v) => {
 }, { immediate: true })
 const showSubTabs = computed(() => props.tab === 'all')
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const toast = useToast()
 const {
   selectedClip,
@@ -74,6 +73,9 @@ watch(fxTab, () => {
   activeCategory.value = 'all'
 })
 const query = computed(() => search.value.trim())
+// The hint names what the active tab actually searches (R153): a stale
+// "Search effects…" on the Transitions tab was the copy bug users reported.
+const searchPlaceholder = computed(() => t(`tmcut.fxLib.searchPh_${fxTab.value}`))
 
 // Icon per effect type (registry owns the truth; this is presentation only).
 const EFFECT_ICONS: Record<string, string> = {
@@ -140,6 +142,24 @@ function effectIcon(type: string): string {
   return EFFECT_ICONS[type] || 'i-lucide-sparkles'
 }
 
+/**
+ * The selected clip's live params for one effect, so an applied tile previews
+ * the strength the clip actually carries instead of the registry default.
+ * The resolver clamps whatever is stored, so a dirty project JSON cannot
+ * drive an out-of-range tile.
+ */
+function clipParamsFor(type: string): Record<string, unknown> {
+  return clipEffects.value.find(effect => effect.type === type)?.params || {}
+}
+
+// A tile that has keyboard focus plays its reveal too (Roadmap v1 §6.4: hover,
+// focus or selection, consistently across the three tabs). The library owns the
+// button, so it forwards that state as the thumb's `active` prop.
+const focusedKey = ref<string | null>(null)
+function tileActive(kind: 'effect' | 'filter' | 'transition', key: string, applied: boolean): boolean {
+  return applied || focusedKey.value === `${kind}:${key}`
+}
+
 function effectCategoryLabel(category: string): string {
   return t(`tmcut.fxLib.effectCategories.${category}`, humanizeKey(category))
 }
@@ -189,10 +209,13 @@ const effectGroups = computed(() => {
       label: effectLabel(desc),
       // Honest fallback: no per-effect description key yet -> name the
       // category the registry filed it under instead of an empty line.
-      desc: t(
-        `tmcut.effects.${desc.type === 'eq-grade' ? 'eqGradeDesc' : `${desc.type}Desc`}`,
-        effectCategoryLabel(effectCategoryOf(desc))
-      ),
+      // te() guards the lookup: `t(key, fallback)` still logs
+      // "[intlify] Not found '<key>'" for every described-as-category
+      // effect, which buried real console errors in dev (R148).
+      desc: (() => {
+        const key = `tmcut.effects.${desc.type === 'eq-grade' ? 'eqGradeDesc' : `${desc.type}Desc`}`
+        return te(key) ? t(key) : effectCategoryLabel(effectCategoryOf(desc))
+      })(),
       active: activeEffectTypes.value.has(desc.type)
     }))
   }))
@@ -214,8 +237,7 @@ const filterCards = computed(() => {
     .map(preset => ({
       preset,
       label: filterLabel(preset),
-      active: activeLut.value === preset,
-      swatch: lutSwatch(preset)
+      active: activeLut.value === preset
     }))
 })
 
@@ -365,11 +387,13 @@ function handlePickTransition(type: string) {
     <!-- Search (matches registry type + label, catalog key + label) -->
     <div class="px-2 pt-2">
       <UInput
+        id="tmcut-fx-library-search"
         v-model="search"
         icon="i-lucide-search"
         size="xs"
         class="w-full"
-        :placeholder="t('tmcut.fxLib.searchPlaceholder')"
+        :placeholder="searchPlaceholder"
+        :aria-label="searchPlaceholder"
       />
     </div>
 
@@ -404,19 +428,28 @@ function handlePickTransition(type: string) {
               v-for="card in group.items"
               :key="card.type"
               type="button"
-              class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
+              class="flex flex-col gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
               :class="card.active
                 ? 'border-primary bg-primary/10'
                 : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
               :title="card.desc"
               @click="handleToggleEffect(card.type)"
+              @focusin="focusedKey = `effect:${card.type}`"
+              @focusout="focusedKey = null"
             >
-              <div class="flex items-center justify-between w-full">
-                <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+              <!-- Real demo frame: the scene through the effect's own CSS face,
+                   scaled by the clip's params (registry-driven, see fxPreview). -->
+              <TmcutFxThumb
+                kind="effect"
+                :type="card.type"
+                :params="clipParamsFor(card.type)"
+                :active="tileActive('effect', card.type, card.active)"
+              />
+              <div class="flex items-center gap-1.5 w-full px-0.5">
+                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
+                <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight truncate flex-1">{{ card.label }}</span>
+                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
               </div>
-              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
-              <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug line-clamp-2">{{ card.desc }}</span>
             </button>
           </div>
         </div>
@@ -437,19 +470,23 @@ function handlePickTransition(type: string) {
             v-for="card in filterCards"
             :key="card.preset"
             type="button"
-            class="flex flex-col items-stretch gap-1.5 p-2 rounded-lg border text-left transition-colors cursor-pointer"
+            class="flex flex-col items-stretch gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
             :class="card.active
               ? 'border-primary bg-primary/10'
               : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
             @click="handleToggleLut(card.preset)"
+            @focusin="focusedKey = `filter:${card.preset}`"
+            @focusout="focusedKey = null"
           >
-            <span
-              class="h-10 rounded-md border border-neutral-300 dark:border-neutral-700"
-              :style="{ background: card.swatch }"
+            <!-- Real demo frame: the scene graded by this preset's export chain. -->
+            <TmcutFxThumb
+              kind="filter"
+              :type="card.preset"
+              :active="tileActive('filter', card.preset, card.active)"
             />
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">{{ card.label }}</span>
-              <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+            <div class="flex items-center gap-1.5 px-0.5">
+              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 truncate flex-1">{{ card.label }}</span>
+              <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
             </div>
           </button>
         </div>
@@ -473,18 +510,27 @@ function handlePickTransition(type: string) {
               v-for="card in group.items"
               :key="card.key"
               type="button"
-              class="flex flex-col items-start gap-1 p-2.5 rounded-lg border text-left transition-colors cursor-pointer"
+              class="flex flex-col gap-1.5 p-1.5 rounded-lg border text-left transition-colors cursor-pointer"
               :class="card.active
                 ? 'border-primary bg-primary/10'
                 : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+              :title="t('tmcut.fxLib.transitionDefault')"
               @click="handlePickTransition(card.key)"
+              @focusin="focusedKey = `transition:${card.key}`"
+              @focusout="focusedKey = null"
             >
-              <div class="flex items-center justify-between w-full">
-                <UIcon :name="card.icon" class="size-4" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
-                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary" />
+              <!-- A/B schematic: the outgoing frame's geometry morphing into the
+                   incoming one, keyed by the same catalog the export reads. -->
+              <TmcutFxThumb
+                kind="transition"
+                :type="card.key"
+                :active="tileActive('transition', card.key, card.active)"
+              />
+              <div class="flex items-center gap-1.5 w-full px-0.5">
+                <UIcon :name="card.icon" class="size-3.5 shrink-0" :class="card.active ? 'text-primary' : 'text-neutral-500 dark:text-neutral-400'" />
+                <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight truncate flex-1">{{ card.label }}</span>
+                <UIcon v-if="card.active" name="i-lucide-check" class="size-3.5 text-primary shrink-0" />
               </div>
-              <span class="text-[11px] font-medium text-neutral-700 dark:text-neutral-200 leading-tight">{{ card.label }}</span>
-              <span class="text-[9px] text-neutral-500 dark:text-neutral-500 leading-snug">{{ t('tmcut.fxLib.transitionDefault') }}</span>
             </button>
           </div>
         </div>

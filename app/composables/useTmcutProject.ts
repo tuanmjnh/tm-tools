@@ -2,6 +2,7 @@ import type { TmcutCanvas, TmcutCropRect, TmcutFitMode, FrameRate } from '~/type
 import { findCanvasPreset, normalizeCanvas, reframeTransform, canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipStartSec, clipEndSec, clipStartTicks, clipEndTicks } from '~/utils/tmcut/clipTime'
 import { decideRecovery } from '~/utils/tmcut/recovery'
+import { readStored, removeStored } from '~/utils/tmcut/localStore'
 import {
   checkpointRecovery,
   addTrack,
@@ -55,6 +56,12 @@ export interface TmcutTimelineItem {
   align?: 'left' | 'center' | 'right'
   shadow?: boolean
   stroke?: boolean
+  /** Text effect colours + background plate (roadmap đợt 2). Undefined keeps
+      the legacy black shadow/outline and no plate, so an untouched project
+      exports the byte-identical drawtext filter. */
+  shadowColor?: string
+  strokeColor?: string
+  bgColor?: string
   /** Text animation in (intro) and out (outro) (Roadmap C-5). */
   animIn?: TmcutTextAnimationType
   animInDuration?: number
@@ -248,8 +255,10 @@ const selectedClip = computed(() => {
   return null
 })
 
-// Compute total timeline duration in seconds
-const totalDuration = computed(() => {
+// End of the actual content in seconds — what the project really is. This is
+// what plays, saves as the project duration and exports; the ruler below it
+// may be longer, but nothing else should treat the padding as media.
+const contentDuration = computed(() => {
   if (!currentProject.value?.timeline?.tracks) return 0
   let maxSec = 0
   for (const track of currentProject.value.timeline.tracks) {
@@ -260,7 +269,14 @@ const totalDuration = computed(() => {
       }
     }
   }
-  return Math.max(maxSec, 5) // Minimum 5 seconds ruler
+  return maxSec
+})
+
+// Timeline extent in seconds, used for ruler drawing and playhead parking.
+// Keeps a 5-second floor so a short project still fills the ruler.
+const totalDuration = computed(() => {
+  if (!currentProject.value?.timeline?.tracks) return 0
+  return Math.max(contentDuration.value, 5)
 })
 
 // True when at least one clip exists on any timeline track.
@@ -451,7 +467,7 @@ async function loadProject(projectId: string) {
   }
 
   if (!import.meta.server) {
-    const stored = localStorage.getItem(`tmcut_project_${projectId}`)
+    const stored = readStored(`tmcut_project_${projectId}`)
     if (stored) {
       try {
         const local = JSON.parse(stored) as TmcutProject
@@ -580,7 +596,7 @@ function saveProject(options?: { revision?: number }) {
   if (!currentProject.value || import.meta.server) return
 
   currentProject.value.updated_at = new Date().toISOString()
-  currentProject.value.durationMs = Math.round(totalDuration.value * 1000)
+  currentProject.value.durationMs = Math.round(contentDuration.value * 1000)
   // R132: the mutation counter is the single source of truth for "did
   // anything change since I opened this". Bumped on every save, never on
   // open (lastOpenedAt is independent of it, see the field comment).
@@ -766,7 +782,7 @@ function duplicateProject(projectId: string, copySuffix = 'copy'): TmcutProject 
 // Delete project
 async function deleteProject(projectId: string) {
   if (!import.meta.server) {
-    localStorage.removeItem(`tmcut_project_${projectId}`)
+    removeStored(`tmcut_project_${projectId}`)
   }
 
   projects.value = projects.value.filter(p => p.id !== projectId)
@@ -1782,6 +1798,7 @@ export function useTmcutProject() {
     isCropEditing,
     toggleCropEditing,
     totalDuration,
+    contentDuration,
     hasTimelineClips,
     saveStatus,
     lastSavedAt,

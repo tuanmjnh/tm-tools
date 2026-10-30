@@ -9,6 +9,8 @@ const navItems = ref([
   { label: t('nav.tmcut_editor'), icon: 'i-lucide-film', to: '/tmcut/editor' },
   { label: t('nav.tmcut_templates'), icon: 'i-lucide-layout-template', to: '/tmcut/templates' },
   { label: t('nav.tmcut_factory'), icon: 'i-lucide-factory', to: '/tmcut/factory' },
+  { label: t('nav.tmcut_html_video'), icon: 'i-lucide-code-2', to: '/tmcut/html-video' },
+  { label: t('nav.tmcut_voice'), icon: 'i-lucide-audio-lines', to: '/tmcut/voice' },
   { label: t('nav.tmcut_autocut'), icon: 'i-lucide-scissors', to: '/tmcut/autocut' }
 ])
 </script>

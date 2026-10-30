@@ -4,18 +4,18 @@ import { useI18n } from 'vue-i18n'
 import { useTmcutProject, TMCUT_DEFAULT_FADE_SEC } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
-import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects } from '@tmcut-core'
+import { keyframeAt, setKeyframe, removeKeyframe, propsWithKeyframes, TICKS_PER_SECOND, secToTicks, ticksToSec, withSpeed, isRamped, buildRampPreset, SPEED_RAMP_PRESETS, EFFECT_REGISTRY, normalizeEffects, clampEffectParam } from '@tmcut-core'
 import type { TmcutTextAnimationType, TmcutStabilizeLevel } from '@tmcut-core'
 import { canvasFpsValue } from '~/utils/tmcut/canvas'
 import { clipDurationSec, clipDurationTicks, clipStartTicks } from '~/utils/tmcut/clipTime'
-import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey } from '~/utils/tmcut/fxLibrary'
+import { applyMediaAnimPreset, effectDefaultParams, groupEffectsByCategory, registryEntries, humanizeKey, filterPresets, setLutPresetOnClip, activeLutPreset } from '~/utils/tmcut/fxLibrary'
 import type { MediaAnimPreset } from '~/utils/tmcut/fxLibrary'
 
 const { t } = useI18n()
 const toast = useToast()
 const { isDesktop } = useTmcutMedia()
 const { selectedClip, selectedClipId, selectClip, updateClip, removeClip, pushHistory, pushHistoryCoalesced, isCropEditing, toggleCropEditing } = useTmcutProject()
-const { currentProject, totalDuration, saveStatus, lastSavedAt } = useTmcutProject()
+const { currentProject, contentDuration, saveStatus, lastSavedAt } = useTmcutProject()
 const { choices: fontChoices, ensureFonts, resolveFace } = useTmcutFonts()
 const { formatTimecode, playhead } = useTmcutPlayback()
 
@@ -25,13 +25,15 @@ const trackType = computed(() => selectedClip.value?.track)
 // Clip property tabs (design #2 + R112): every clip type gets its full
 // editor — video: Visual / Audio / Speed / Animation / Effects; the tab list
 // follows the clip type so no dead (always-empty) tab ever shows.
-type TabKey = 'visual' | 'audio' | 'speed' | 'effects' | 'animation'
+type TabKey = 'visual' | 'audio' | 'speed' | 'effects' | 'filters' | 'animation'
 const activeTab = ref<TabKey>('visual')
 
 const availableTabs = computed<TabKey[]>(() => {
-  if (trackType.value === 'audio') return ['audio', 'speed']
-  if (trackType.value === 'text') return ['visual', 'animation', 'speed']
-  return ['visual', 'audio', 'speed', 'animation', 'effects']
+  // Audio clips get the animation tab too: their motion property is the
+  // volume envelope, which the export evaluates through `keyframeExpr`.
+  if (trackType.value === 'audio') return ['audio', 'animation', 'speed']
+  if (trackType.value === 'text') return ['visual', 'effects', 'animation', 'speed']
+  return ['visual', 'audio', 'speed', 'animation', 'effects', 'filters']
 })
 
 const currentTab = computed(() => (
@@ -48,7 +50,9 @@ const tabItems = computed(() => availableTabs.value.map(key => ({
         ? t('tmcut.inspectorProps.tabSpeed')
         : key === 'effects'
           ? t('tmcut.inspectorProps.tabEffects')
-          : t('tmcut.animation.tab'),
+          : key === 'filters'
+            ? t('tmcut.inspectorProps.tabFilters')
+            : t('tmcut.animation.tab'),
   icon: key === 'visual'
     ? (trackType.value === 'text' ? 'i-lucide-type' : 'i-lucide-image')
     : key === 'audio'
@@ -57,7 +61,9 @@ const tabItems = computed(() => availableTabs.value.map(key => ({
         ? 'i-lucide-gauge'
         : key === 'effects'
           ? 'i-lucide-sparkles'
-          : 'i-lucide-wand-sparkles'
+          : key === 'filters'
+            ? 'i-lucide-palette'
+            : 'i-lucide-wand-sparkles'
 })))
 
 // Speed options
@@ -156,6 +162,14 @@ function handleFontUpdate(family: string) {
 // entry each (B8). Bold/italic re-resolve fontFile in the SAME patch so
 // export picks the real bold/italic face — desktop only; web has no
 // faces and keeps the preview CSS flag (web cannot export anyway).
+// Background plate (roadmap đợt 2): drawtext `box=1:boxborderw=`. Stored as
+// `bgColor`; undefined = no plate, so the legacy filter string is untouched.
+function toggleTextPlate() {
+  if (!selectedClipId.value || !clip.value) return
+  pushHistory()
+  updateClip(selectedClipId.value, { bgColor: clip.value.bgColor ? undefined : '#000000' })
+}
+
 async function handleStyleToggle(field: 'bold' | 'italic' | 'shadow' | 'stroke') {
   if (!selectedClipId.value || !clip.value) return
   const next = !clip.value[field]
@@ -605,7 +619,9 @@ function ensureEqGradeAndUpdate(param: string, value: number) {
     eq = { type: 'eq-grade', params: effectDefaultParams(eqGradeDesc) }
     effects.push(eq)
   }
-  eq.params = { ...eq.params, [param]: value }
+  const clean = clampEffectParam('eq-grade', param, value)
+  if (clean === undefined) return
+  eq.params = { ...eq.params, [param]: clean }
   pushHistoryCoalesced(`${id}:eqgrade-${param}`)
   updateClip(id, { effects })
 }
@@ -702,11 +718,46 @@ function handleResetEffect(index: number) {
 
 function handleUpdateEffectParam(effectIndex: number, paramName: string, value: unknown) {
   if (!selectedClipId.value) return
-  const current = JSON.parse(JSON.stringify(clip.value?.effects || [])) as Array<{ type: string, params: Record<string, unknown> }>
-  if (!current[effectIndex]) return
-  current[effectIndex].params[paramName] = value
+  // Normalise first so the index matches the list the panel renders, then let
+  // the registry schema be the only writer (§5.3): an out-of-range value is
+  // repaired to its documented bounds and a param the schema does not declare
+  // never enters the project.
+  const current = normalizeEffects(clip.value?.effects || [])
+  const entry = current[effectIndex]
+  if (!entry) return
+  const clean = clampEffectParam(entry.type, paramName, value)
+  if (clean === undefined) return
+  entry.params[paramName] = clean
   pushHistoryCoalesced(`${selectedClipId.value}:effect:${effectIndex}:${paramName}`)
   updateClip(selectedClipId.value, { effects: current })
+}
+
+// --- Filters tab (LUT presets, right panel) --------------------------------
+// Same registry enum the Filters library tab renders, surfaced next to the
+// clip's other properties so a look can be picked without leaving the panel.
+// Clicking the active preset removes it (toggle), matching the library.
+const lutPresets = computed(() => filterPresets(EFFECT_REGISTRY))
+const activeFilter = computed(() => activeLutPreset(clip.value?.effects || []))
+
+function filterLabel(preset: string): string {
+  return t(`tmcut.fxLib.lut.${preset}`, humanizeKey(preset))
+}
+
+function applyFilter(preset: string) {
+  const id = selectedClipId.value
+  if (!id) return
+  const effects = clip.value?.effects || []
+  const next = setLutPresetOnClip(effects, preset)
+  pushHistory() // discrete grade change → its own undo entry
+  if (next === null) updateClip(id, { effects: effects.filter(e => e.type !== 'lut3d') })
+  else updateClip(id, { effects: next })
+}
+
+function clearFilter() {
+  const id = selectedClipId.value
+  if (!id || !activeFilter.value) return
+  pushHistory()
+  updateClip(id, { effects: (clip.value?.effects || []).filter(e => e.type !== 'lut3d') })
 }
 
 function handleDelete() {
@@ -741,7 +792,7 @@ const detailRows = computed(() => {
       label: t('tmcut.details.fps'),
       value: project?.canvas ? `${canvasFpsValue(project.canvas)}fps` : '—'
     },
-    { label: t('tmcut.details.duration'), value: formatTimecode(totalDuration.value) },
+    { label: t('tmcut.details.duration'), value: formatTimecode(contentDuration.value) },
     { label: t('tmcut.details.tracks'), value: String(tracks.length) },
     { label: t('tmcut.details.clips'), value: String(clipCount) },
     {
@@ -802,8 +853,9 @@ const saveStateLabel = computed(() => {
 
     <!-- Text Content Editor (If Text Track) -->
     <div v-if="currentTab === 'visual' && trackType === 'text'" class="space-y-2">
-      <label class="font-medium text-neutral-500 dark:text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
+      <label for="tmcut-insp-text-content" class="font-medium text-neutral-500 dark:text-neutral-400">{{ t('tmcut.inspectorProps.textContent') }}</label>
       <UTextarea
+        id="tmcut-insp-text-content"
         :model-value="clip.text || ''"
         :placeholder="t('tmcut.inspectorProps.textPlaceholder')"
         :rows="3"
@@ -813,8 +865,9 @@ const saveStateLabel = computed(() => {
 
       <div class="grid grid-cols-2 gap-2 pt-1">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.fontSize') }}</label>
+          <label for="tmcut-insp-font-size" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.fontSize') }}</label>
           <UInput
+            id="tmcut-insp-font-size"
             type="number"
             :model-value="clip.fontSize || 36"
             :min="12"
@@ -824,9 +877,10 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.textColor') }}</label>
+          <label for="tmcut-insp-text-color" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.textColor') }}</label>
           <div class="flex items-center gap-1.5 mt-0.5">
             <input
+              id="tmcut-insp-text-color"
               type="color"
               :value="clip.color || '#ffffff'"
               class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
@@ -909,6 +963,12 @@ const saveStateLabel = computed(() => {
       </div>
     </div>
 
+    <!-- Audio motion: the volume envelope the export already renders
+         (render/audio.ts -> keyframeExpr(clip,'volume')). -->
+    <div v-if="currentTab === 'animation' && trackType === 'audio'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <TmcutKeyframeEditor :allowed="['volume']" />
+    </div>
+
     <!-- Tab: Text Animation (Roadmap C-5) -->
     <div v-if="currentTab === 'animation' && trackType === 'text'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <!-- Quick Presets -->
@@ -970,6 +1030,7 @@ const saveStateLabel = computed(() => {
           </span>
         </div>
         <USelect
+          :aria-label="t('tmcut.animation.animIn')"
           :model-value="clip.animIn || 'none'"
           :items="animInOptions"
           size="xs"
@@ -982,6 +1043,8 @@ const saveStateLabel = computed(() => {
             <span class="font-mono text-neutral-600 dark:text-neutral-300">{{ clip.animInDuration ?? 0.5 }}s</span>
           </div>
           <input
+            id="tmcut-insp-anim-in-duration"
+            :aria-label="t('tmcut.animation.duration')"
             type="range"
             min="0.1"
             max="2.0"
@@ -1007,6 +1070,7 @@ const saveStateLabel = computed(() => {
           </span>
         </div>
         <USelect
+          :aria-label="t('tmcut.animation.animOut')"
           :model-value="clip.animOut || 'none'"
           :items="animOutOptions"
           size="xs"
@@ -1019,6 +1083,8 @@ const saveStateLabel = computed(() => {
             <span class="font-mono text-neutral-600 dark:text-neutral-300">{{ clip.animOutDuration ?? 0.5 }}s</span>
           </div>
           <input
+            id="tmcut-insp-anim-out-duration"
+            :aria-label="t('tmcut.animation.duration')"
             type="range"
             min="0.1"
             max="2.0"
@@ -1029,12 +1095,15 @@ const saveStateLabel = computed(() => {
           >
         </div>
       </div>
+
+      <!-- Motion keyframes for text: the three channels the drawtext
+           chain evaluates (x, y, opacity). Scale is a static field for text,
+           so it is deliberately not offered here. -->
+      <TmcutKeyframeEditor :allowed="['opacity', 'x', 'y']" />
     </div>
 
-    <!-- Media Animation (R112, video only): whole-clip presets written as
-         the SAME opacity/scale keyframes the ⏱ buttons produce, so they
-         stay visible & editable in the keyframe lanes. Preview-only like
-         every other keyframe until the render pipeline lands. -->
+    <!-- Animation presets (R112, video only). The keyframe list below is the
+         shared motion editor; presets are the one-click shortcut into it. -->
     <div v-if="currentTab === 'animation' && trackType === 'video'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
@@ -1065,6 +1134,10 @@ const saveStateLabel = computed(() => {
       <p class="text-[10px] text-neutral-500 dark:text-neutral-500 leading-snug">
         {{ t('tmcut.fxLib.animPresetsHint') }}
       </p>
+
+      <!-- Motion keyframes: every channel the renderer evaluates, editable
+           (time / value / easing / delete) instead of write-only ⏱ buttons. -->
+      <TmcutKeyframeEditor :allowed="['opacity', 'scale', 'x', 'y']" />
     </div>
 
     <!-- Timing & Speed Settings -->
@@ -1074,8 +1147,9 @@ const saveStateLabel = computed(() => {
 
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.inPoint') }}</label>
+          <label for="tmcut-insp-in-point" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.inPoint') }}</label>
           <UInput
+            id="tmcut-insp-in-point"
             type="number"
             step="0.1"
             :model-value="inPointSec"
@@ -1084,8 +1158,9 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.outPoint') }}</label>
+          <label for="tmcut-insp-out-point" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.outPoint') }}</label>
           <UInput
+            id="tmcut-insp-out-point"
             type="number"
             step="0.1"
             :model-value="outPointSec"
@@ -1097,8 +1172,9 @@ const saveStateLabel = computed(() => {
 
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.offset') }}</label>
+          <label for="tmcut-insp-offset" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.offset') }}</label>
           <UInput
+            id="tmcut-insp-offset"
             type="number"
             step="0.1"
             :model-value="offsetSec"
@@ -1107,8 +1183,9 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.speed') }}</label>
+          <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.speed') }}</span>
           <USelect
+            :aria-label="t('tmcut.inspectorProps.speed')"
             :items="speedOptions"
             :model-value="clip.speed || 1"
             size="xs"
@@ -1123,8 +1200,12 @@ const saveStateLabel = computed(() => {
            TEXT clips: a text overlay has no directional playback, so the
            toggle would change nothing anywhere (dead control). -->
       <div v-if="trackType !== 'text'" class="flex items-center justify-between">
-        <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</label>
-        <USwitch :model-value="!!clip.reverse" @update:model-value="handleUpdate('reverse', !!$event)" />
+        <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.reverse') }}</span>
+        <USwitch
+          :model-value="!!clip.reverse"
+          :aria-label="t('tmcut.inspectorProps.reverse')"
+          @update:model-value="handleUpdate('reverse', !!$event)"
+        />
       </div>
 
       <!-- Speed curve (R124 A4, CapCut §5.4): preset curves replace the
@@ -1141,6 +1222,7 @@ const saveStateLabel = computed(() => {
             </span>
           </div>
           <USelect
+            :aria-label="t('tmcut.ramp.title')"
             :items="rampItems"
             :model-value="activeRampKind"
             size="xs"
@@ -1161,6 +1243,7 @@ const saveStateLabel = computed(() => {
 
       <div>
         <USelect
+          :aria-label="t('tmcut.fit.label')"
           :items="fitOptions"
           :model-value="clip.fit || 'fit'"
           size="xs"
@@ -1170,8 +1253,9 @@ const saveStateLabel = computed(() => {
 
       <div v-if="isSmartFit" class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusX') }}</label>
+          <label for="tmcut-insp-focus-x" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusX') }}</label>
           <UInput
+            id="tmcut-insp-focus-x"
             type="number"
             step="0.05"
             :min="0"
@@ -1182,8 +1266,9 @@ const saveStateLabel = computed(() => {
           />
         </div>
         <div>
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusY') }}</label>
+          <label for="tmcut-insp-focus-y" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.focusY') }}</label>
           <UInput
+            id="tmcut-insp-focus-y"
             type="number"
             step="0.05"
             :min="0"
@@ -1218,8 +1303,9 @@ const saveStateLabel = computed(() => {
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropX') }}</label>
+            <label for="tmcut-insp-crop-x" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropX') }}</label>
             <UInput
+              id="tmcut-insp-crop-x"
               type="number"
               step="0.05"
               :min="0"
@@ -1230,8 +1316,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropY') }}</label>
+            <label for="tmcut-insp-crop-y" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropY') }}</label>
             <UInput
+              id="tmcut-insp-crop-y"
               type="number"
               step="0.05"
               :min="0"
@@ -1242,8 +1329,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropW') }}</label>
+            <label for="tmcut-insp-crop-w" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropW') }}</label>
             <UInput
+              id="tmcut-insp-crop-w"
               type="number"
               step="0.05"
               :min="0.05"
@@ -1254,8 +1342,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropH') }}</label>
+            <label for="tmcut-insp-crop-h" class="text-[10px] text-neutral-500">{{ t('tmcut.fit.cropH') }}</label>
             <UInput
+              id="tmcut-insp-crop-h"
               type="number"
               step="0.05"
               :min="0.05"
@@ -1282,6 +1371,7 @@ const saveStateLabel = computed(() => {
           </span>
         </div>
         <USelect
+          :aria-label="t('tmcut.mask.title')"
           :items="MASK_SHAPE_ITEMS"
           :model-value="clip.mask?.shape ?? 'none'"
           size="xs"
@@ -1293,8 +1383,9 @@ const saveStateLabel = computed(() => {
       <template v-if="clip.mask">
         <div class="grid grid-cols-4 gap-2">
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.x') }}</label>
+            <label for="tmcut-insp-x" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.x') }}</label>
             <UInput
+              id="tmcut-insp-x"
               type="number"
               step="0.05"
               :min="0"
@@ -1305,8 +1396,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.y') }}</label>
+            <label for="tmcut-insp-y" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.y') }}</label>
             <UInput
+              id="tmcut-insp-y"
               type="number"
               step="0.05"
               :min="0"
@@ -1317,8 +1409,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.w') }}</label>
+            <label for="tmcut-insp-w" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.w') }}</label>
             <UInput
+              id="tmcut-insp-w"
               type="number"
               step="0.05"
               :min="0.05"
@@ -1329,8 +1422,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.h') }}</label>
+            <label for="tmcut-insp-h" class="text-[10px] text-neutral-500">{{ t('tmcut.mask.h') }}</label>
             <UInput
+              id="tmcut-insp-h"
               type="number"
               step="0.05"
               :min="0.05"
@@ -1343,8 +1437,9 @@ const saveStateLabel = computed(() => {
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.feather') }}</label>
+            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.feather') }}</span>
             <USlider
+              :aria-label="t('tmcut.mask.feather')"
               :model-value="clip.mask.feather"
               :min="0"
               :max="100"
@@ -1353,8 +1448,9 @@ const saveStateLabel = computed(() => {
             />
           </div>
           <div>
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.mask.rotation') }}</label>
+            <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.rotation') }}</span>
             <USlider
+              :aria-label="t('tmcut.mask.rotation')"
               :model-value="clip.mask.rotation"
               :min="-180"
               :max="180"
@@ -1364,18 +1460,27 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
         <div class="flex items-center justify-between">
-          <label class="flex items-center gap-1.5 text-[10px] text-neutral-500 cursor-pointer">
+          <!-- UCheckbox/USwitch render role on a button, which <label> cannot
+               bind; the row is the click target and the switch stops
+               propagation so a direct click toggles once. -->
+          <div
+            class="flex items-center gap-1.5 text-[10px] text-neutral-500 cursor-pointer select-none"
+            @click="maskPatch({ invert: !clip.mask.invert })"
+          >
             <USwitch
               :model-value="clip.mask.invert"
+              :aria-label="t('tmcut.mask.invert')"
               size="sm"
+              @click.stop
               @update:model-value="maskPatch({ invert: Boolean($event) })"
             />
             {{ t('tmcut.mask.invert') }}
-          </label>
+          </div>
           <!-- Linear wipe direction — only meaningful for the linear shape -->
           <div v-if="clip.mask.shape === 'linear'" class="flex items-center gap-1.5">
             <span class="text-[10px] text-neutral-500">{{ t('tmcut.mask.axis') }}</span>
             <USelect
+              :aria-label="t('tmcut.mask.axis')"
               :items="[
                 { label: t('tmcut.mask.axis_x'), value: 'x' },
                 { label: t('tmcut.mask.axis_y'), value: 'y' }
@@ -1401,6 +1506,7 @@ const saveStateLabel = computed(() => {
         </div>
         <USwitch
           :model-value="!!clip.stabilize"
+          :aria-label="t('tmcut.stabilize.title')"
           size="sm"
           @update:model-value="handleStabilizeToggle"
         />
@@ -1408,7 +1514,7 @@ const saveStateLabel = computed(() => {
 
       <div v-if="clip.stabilize" class="space-y-2.5 p-2.5 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
         <div class="flex items-center justify-between text-[11px]">
-          <label class="text-neutral-500 dark:text-neutral-400">{{ t('tmcut.stabilize.level') }}</label>
+          <span class="text-neutral-500 dark:text-neutral-400">{{ t('tmcut.stabilize.level') }}</span>
           <span v-if="clip.stabilizeStatus === 'ready'" class="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-medium">
             <UIcon name="i-lucide-check-circle" class="size-3" />
             {{ t('tmcut.stabilize.ready') }}
@@ -1424,6 +1530,7 @@ const saveStateLabel = computed(() => {
         </div>
 
         <USelect
+          :aria-label="t('tmcut.stabilize.level')"
           :model-value="clip.stabilizeLevel || 'medium'"
           :items="stabilizeLevelOptions"
           :disabled="clip.stabilizeStatus === 'processing'"
@@ -1466,7 +1573,7 @@ const saveStateLabel = computed(() => {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
+            <label for="tmcut-insp-scale" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.scale') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
@@ -1478,6 +1585,7 @@ const saveStateLabel = computed(() => {
             </button>
           </div>
           <UInput
+            id="tmcut-insp-scale"
             type="number"
             :min="10"
             :max="300"
@@ -1488,7 +1596,7 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.opacity') }}</label>
+            <label for="tmcut-insp-opacity" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.opacity') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
@@ -1500,6 +1608,7 @@ const saveStateLabel = computed(() => {
             </button>
           </div>
           <UInput
+            id="tmcut-insp-opacity"
             type="number"
             :min="0"
             :max="100"
@@ -1516,10 +1625,11 @@ const saveStateLabel = computed(() => {
            + modal toast). -->
       <div>
         <div class="flex items-center justify-between">
-          <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.rotation') }}</label>
+          <span class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.rotation') }}</span>
           <span class="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">{{ clip.rotation || 0 }}°</span>
         </div>
         <USlider
+          :aria-label="t('tmcut.inspectorProps.rotation')"
           :model-value="clip.rotation || 0"
           :min="-180"
           :max="180"
@@ -1535,10 +1645,11 @@ const saveStateLabel = computed(() => {
            (R116); 'normal' keeps the classic overlay. Video clips only:
            a text clip already composites via drawtext/overlay. -->
       <div v-if="trackType === 'video'">
-        <label class="text-[10px] text-neutral-500 block mb-1">
+        <span class="text-[10px] text-neutral-500 block mb-1">
           {{ t('tmcut.inspectorProps.blendMode') }}
-        </label>
+        </span>
         <USelect
+          :aria-label="t('tmcut.inspectorProps.blendMode')"
           :items="BLEND_OPTIONS"
           :model-value="blendMode"
           size="xs"
@@ -1549,7 +1660,7 @@ const saveStateLabel = computed(() => {
       <div class="grid grid-cols-2 gap-2">
         <div>
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionX') }}</label>
+            <label for="tmcut-insp-position-x" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionX') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
@@ -1561,6 +1672,7 @@ const saveStateLabel = computed(() => {
             </button>
           </div>
           <UInput
+            id="tmcut-insp-position-x"
             type="number"
             :model-value="clip.x || 0"
             size="xs"
@@ -1569,7 +1681,7 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex items-center justify-between">
-            <label class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionY') }}</label>
+            <label for="tmcut-insp-position-y" class="text-[10px] text-neutral-500">{{ t('tmcut.inspectorProps.positionY') }}</label>
             <button
               type="button"
               class="rounded p-0.5 transition-colors"
@@ -1581,6 +1693,7 @@ const saveStateLabel = computed(() => {
             </button>
           </div>
           <UInput
+            id="tmcut-insp-position-y"
             type="number"
             :model-value="clip.y || 0"
             size="xs"
@@ -1598,10 +1711,11 @@ const saveStateLabel = computed(() => {
       <div class="space-y-2">
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.brightness') }}</label>
+            <label for="tmcut-eq-brightness">{{ t('tmcut.inspectorProps.brightness') }}</label>
             <span class="font-mono text-[10px]">{{ eqBrightness }}</span>
           </div>
           <input
+            id="tmcut-eq-brightness"
             type="range"
             min="-100"
             max="100"
@@ -1612,10 +1726,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.contrast') }}</label>
+            <label for="tmcut-eq-contrast">{{ t('tmcut.inspectorProps.contrast') }}</label>
             <span class="font-mono text-[10px]">{{ eqContrast }}</span>
           </div>
           <input
+            id="tmcut-eq-contrast"
             type="range"
             min="0"
             max="200"
@@ -1626,10 +1741,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.saturation') }}</label>
+            <label for="tmcut-eq-saturation">{{ t('tmcut.inspectorProps.saturation') }}</label>
             <span class="font-mono text-[10px]">{{ eqSaturation }}</span>
           </div>
           <input
+            id="tmcut-eq-saturation"
             type="range"
             min="0"
             max="200"
@@ -1643,13 +1759,14 @@ const saveStateLabel = computed(() => {
              colorbalance (core), preview approximates with sepia/hue. -->
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.colorTemp') }}</label>
+            <label for="tmcut-eq-colorTemp">{{ t('tmcut.inspectorProps.colorTemp') }}</label>
             <span class="font-mono text-[10px]">
               {{ tempValue }}
               {{ tempValue < 0 ? t('tmcut.inspectorProps.tempCool') : tempValue > 0 ? t('tmcut.inspectorProps.tempWarm') : '' }}
             </span>
           </div>
           <input
+            id="tmcut-eq-colorTemp"
             type="range"
             min="-100"
             max="100"
@@ -1662,10 +1779,11 @@ const saveStateLabel = computed(() => {
              as the sliders above (ensureEqGradeAndUpdate). -->
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.hue') }}</label>
+            <label for="tmcut-eq-hue">{{ t('tmcut.inspectorProps.hue') }}</label>
             <span class="font-mono text-[10px]">{{ eqHue }}°</span>
           </div>
           <input
+            id="tmcut-eq-hue"
             type="range"
             min="-180"
             max="180"
@@ -1676,10 +1794,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.gamma') }}</label>
+            <label for="tmcut-eq-gamma">{{ t('tmcut.inspectorProps.gamma') }}</label>
             <span class="font-mono text-[10px]">{{ eqGamma }}</span>
           </div>
           <input
+            id="tmcut-eq-gamma"
             type="range"
             min="10"
             max="300"
@@ -1690,10 +1809,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.fade') }}</label>
+            <label for="tmcut-eq-fade">{{ t('tmcut.inspectorProps.fade') }}</label>
             <span class="font-mono text-[10px]">{{ eqFade }}</span>
           </div>
           <input
+            id="tmcut-eq-fade"
             type="range"
             min="0"
             max="100"
@@ -1704,10 +1824,11 @@ const saveStateLabel = computed(() => {
         </div>
         <div>
           <div class="flex justify-between text-[10px] text-neutral-500 mb-1">
-            <label>{{ t('tmcut.inspectorProps.vibrance') }}</label>
+            <label for="tmcut-eq-vibrance">{{ t('tmcut.inspectorProps.vibrance') }}</label>
             <span class="font-mono text-[10px]">{{ eqVibrance }}</span>
           </div>
           <input
+            id="tmcut-eq-vibrance"
             type="range"
             min="-100"
             max="100"
@@ -1757,6 +1878,8 @@ const saveStateLabel = computed(() => {
       <div class="flex items-center gap-3">
         <UIcon name="i-lucide-volume-2" class="size-4 text-neutral-500 dark:text-neutral-400 shrink-0" />
         <input
+          id="tmcut-insp-volume"
+          :aria-label="t('tmcut.inspectorProps.volume')"
           type="range"
           min="0"
           max="150"
@@ -1784,6 +1907,8 @@ const saveStateLabel = computed(() => {
           </button>
           <template v-if="fadeInTicks > 0">
             <input
+              id="tmcut-insp-fade-in"
+              :aria-label="t('tmcut.inspectorProps.fadeIn')"
               type="range"
               min="0"
               :max="maxFadeSec"
@@ -1807,6 +1932,8 @@ const saveStateLabel = computed(() => {
           </button>
           <template v-if="fadeOutTicks > 0">
             <input
+              id="tmcut-insp-fade-out"
+              :aria-label="t('tmcut.inspectorProps.fadeOut')"
               type="range"
               min="0"
               :max="maxFadeSec"
@@ -1821,8 +1948,98 @@ const saveStateLabel = computed(() => {
       </div>
     </div>
 
-    <!-- Effects Tab (Roadmap Phase E, C6 registry) -->
-    <div v-if="currentTab === 'effects'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+    <!-- Text effects tab (roadmap đợt 2): exactly the three looks the drawtext
+         export renders — shadow, outline, background plate. Colours are
+         optional fields, so an untouched text keeps the legacy black look. -->
+    <div v-if="currentTab === 'effects' && trackType === 'text'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+        {{ t('tmcut.textFx.title') }}
+      </span>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <UIcon name="i-lucide-copy" class="size-3.5 shrink-0" :class="clip.shadow ? 'text-primary' : 'text-neutral-500'" />
+            <span class="text-[11px] truncate">{{ t('tmcut.textFx.shadow') }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <input
+              v-if="clip.shadow"
+              id="tmcut-text-shadow-color"
+              type="color"
+              :value="clip.shadowColor || '#000000'"
+              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              :aria-label="t('tmcut.textFx.color')"
+              @input="handleUpdate('shadowColor', ($event.target as HTMLInputElement).value)"
+            >
+            <USwitch
+              :model-value="!!clip.shadow"
+              size="sm"
+              :aria-label="t('tmcut.textFx.shadow')"
+              @update:model-value="handleStyleToggle('shadow')"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <UIcon name="i-lucide-type-outline" class="size-3.5 shrink-0" :class="clip.stroke ? 'text-primary' : 'text-neutral-500'" />
+            <span class="text-[11px] truncate">{{ t('tmcut.textFx.stroke') }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <input
+              v-if="clip.stroke"
+              id="tmcut-text-stroke-color"
+              type="color"
+              :value="clip.strokeColor || '#000000'"
+              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              :aria-label="t('tmcut.textFx.color')"
+              @input="handleUpdate('strokeColor', ($event.target as HTMLInputElement).value)"
+            >
+            <USwitch
+              :model-value="!!clip.stroke"
+              size="sm"
+              :aria-label="t('tmcut.textFx.stroke')"
+              @update:model-value="handleStyleToggle('stroke')"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-neutral-100/60 dark:bg-neutral-900/60 border border-neutral-300/80 dark:border-neutral-800/80">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <UIcon name="i-lucide-square" class="size-3.5 shrink-0" :class="clip.bgColor ? 'text-primary' : 'text-neutral-500'" />
+            <span class="text-[11px] truncate">{{ t('tmcut.textFx.plate') }}</span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <input
+              v-if="clip.bgColor"
+              id="tmcut-text-plate-color"
+              type="color"
+              :value="clip.bgColor"
+              class="w-6 h-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer"
+              :aria-label="t('tmcut.textFx.plateColor')"
+              @input="handleUpdate('bgColor', ($event.target as HTMLInputElement).value)"
+            >
+            <USwitch
+              :model-value="!!clip.bgColor"
+              size="sm"
+              :aria-label="t('tmcut.textFx.plate')"
+              @update:model-value="toggleTextPlate"
+            />
+          </div>
+        </div>
+      </div>
+
+      <p class="text-[10px] text-neutral-500 leading-snug">
+        {{ t('tmcut.textFx.hint') }}
+      </p>
+    </div>
+
+    <!-- Effects Tab (Roadmap Phase E, C6 registry). Video only: these are
+         IMAGE effects (FFmpeg filter chains on the footage). Text has its own
+         export-true effect panel below instead of pretending a LUT can grade
+         drawtext glyphs. -->
+    <div v-if="currentTab === 'effects' && trackType === 'video'" class="space-y-4 pt-2 border-t border-neutral-300 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
           {{ t('tmcut.effects.title') }}
@@ -1887,6 +2104,17 @@ const saveStateLabel = computed(() => {
             </div>
           </div>
 
+          <!-- Live look preview (the same registry-driven tile the library
+               grid uses, so the applied parameters drive the animation). An
+               effect with no adapter says "no preview" instead of animating
+               something the export will not produce. -->
+          <TmcutFxThumb
+            kind="effect"
+            :type="eff.type"
+            :params="eff.params"
+            active
+          />
+
           <!-- Parameter Controls based on EFFECT_REGISTRY[eff.type].params -->
           <div class="space-y-2.5">
             <div
@@ -1895,9 +2123,20 @@ const saveStateLabel = computed(() => {
               class="space-y-1"
             >
               <div class="flex items-center justify-between text-[11px]">
-                <label class="text-neutral-500 dark:text-neutral-400">
+                <!-- number/color params own a labelable native control, so the
+                     caption can be a real <label>. enum/bool render Reka button
+                     roots (role=combobox / role=switch), which <label for>
+                     cannot bind — those get a plain caption plus aria-label. -->
+                <label
+                  v-if="param.kind === 'number' || param.kind === 'color'"
+                  :for="`tmcut-fx-${idx}-${param.name}`"
+                  class="text-neutral-500 dark:text-neutral-400"
+                >
                   {{ paramLabel(param.name) }}
                 </label>
+                <span v-else class="text-neutral-500 dark:text-neutral-400">
+                  {{ paramLabel(param.name) }}
+                </span>
                 <span class="font-mono text-neutral-600 dark:text-neutral-300">
                   {{ eff.params[param.name] }}
                 </span>
@@ -1906,6 +2145,7 @@ const saveStateLabel = computed(() => {
               <!-- Number Param Slider -->
               <div v-if="param.kind === 'number'" class="flex items-center gap-2">
                 <input
+                  :id="`tmcut-fx-${idx}-${param.name}`"
                   type="range"
                   :min="param.min ?? 0"
                   :max="param.max ?? 100"
@@ -1920,6 +2160,7 @@ const saveStateLabel = computed(() => {
               <div v-else-if="param.kind === 'enum'" class="pt-0.5">
                 <USelect
                   :model-value="String(eff.params[param.name] ?? param.default)"
+                  :aria-label="paramLabel(param.name)"
                   :items="param.options?.map(opt => ({ label: opt, value: opt })) || []"
                   size="xs"
                   class="w-full"
@@ -1930,12 +2171,15 @@ const saveStateLabel = computed(() => {
               <!-- Color Param Input -->
               <div v-else-if="param.kind === 'color'" class="flex items-center gap-2 pt-0.5">
                 <input
+                  :id="`tmcut-fx-${idx}-${param.name}`"
                   type="color"
                   :value="String(eff.params[param.name] ?? param.default ?? '#00ff00')"
                   class="size-6 rounded border border-neutral-400 dark:border-neutral-700 bg-transparent cursor-pointer p-0 shrink-0"
                   @input="handleUpdateEffectParam(idx, param.name, ($event.target as HTMLInputElement).value)"
                 >
                 <UInput
+                  :id="`tmcut-fx-${idx}-${param.name}-hex`"
+                  :aria-label="paramLabel(param.name)"
                   :model-value="String(eff.params[param.name] ?? param.default ?? '#00ff00')"
                   size="xs"
                   class="flex-1 font-mono"
@@ -1947,6 +2191,7 @@ const saveStateLabel = computed(() => {
               <div v-else-if="param.kind === 'bool'" class="flex items-center justify-between pt-0.5">
                 <USwitch
                   :model-value="Boolean(eff.params[param.name] ?? param.default)"
+                  :aria-label="paramLabel(param.name)"
                   size="sm"
                   @update:model-value="handleUpdateEffectParam(idx, param.name, $event)"
                 />
@@ -1955,6 +2200,47 @@ const saveStateLabel = computed(() => {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Filters Tab: LUT grades for the selected media clip (right panel) -->
+    <div v-if="currentTab === 'filters' && trackType === 'video'" class="space-y-3 pt-2 border-t border-neutral-300 dark:border-neutral-800">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider text-[10px]">
+          {{ t('tmcut.inspectorProps.filtersTitle') }}
+        </span>
+        <UButton
+          v-if="activeFilter"
+          icon="i-lucide-rotate-ccw"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          :title="t('tmcut.inspectorProps.filtersClear')"
+          @click="clearFilter"
+        />
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button
+          v-for="preset in lutPresets"
+          :key="preset"
+          type="button"
+          class="flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer"
+          :class="activeFilter === preset
+            ? 'border-primary bg-primary/10'
+            : 'border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 hover:border-primary/60'"
+          @click="applyFilter(preset)"
+        >
+          <TmcutFxThumb kind="filter" :type="preset" :active="activeFilter === preset" />
+          <span class="flex items-center gap-1 px-0.5 w-full">
+            <span class="text-[10px] font-medium text-neutral-700 dark:text-neutral-200 truncate flex-1">
+              {{ filterLabel(preset) }}
+            </span>
+            <UIcon v-if="activeFilter === preset" name="i-lucide-check" class="size-3 text-primary shrink-0" />
+          </span>
+        </button>
+      </div>
+      <p class="text-[10px] text-neutral-500 leading-snug">
+        {{ t('tmcut.inspectorProps.filtersHint') }}
+      </p>
     </div>
 
     <!-- Actions -->

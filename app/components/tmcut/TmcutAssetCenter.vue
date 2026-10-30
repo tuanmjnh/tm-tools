@@ -113,7 +113,7 @@ function kindIcon(entry: { assetKind: string, category: string }): string {
   if (entry.assetKind === 'effect-preset') return 'i-lucide-palette'
   if (entry.category === 'music') return 'i-lucide-music'
   if (entry.category === 'sound-effects') return 'i-lucide-audio-lines'
-  if (entry.category === 'fonts') return 'i-lucide-letter-case'
+  if (entry.category === 'fonts') return 'i-lucide-case-sensitive'
   return 'i-lucide-package'
 }
 
@@ -219,7 +219,7 @@ function handleApply(entryId: string, assetKind: string) {
   <!-- Web runtime: no verified install path (no local packages) — honest note,
        no dead controls (roadmap: every control does something real). -->
   <div v-if="!isDesktopStore" class="px-3 py-6 text-center text-[11px] text-neutral-500 dark:text-neutral-500">
-    <UIcon name="i-lucide-monitor-desktop" class="size-5 mx-auto mb-2 opacity-60" />
+    <UIcon name="i-lucide-monitor-pc" class="size-5 mx-auto mb-2 opacity-60" />
     {{ t('tmcut.assetCenter.webOnly') }}
   </div>
 
@@ -227,12 +227,14 @@ function handleApply(entryId: string, assetKind: string) {
     <!-- Search + category chips -->
     <div class="space-y-2">
       <UInput
+        id="tmcut-asset-center-search"
         v-model="search"
         icon="i-lucide-search"
         size="xs"
         color="neutral"
         class="w-full"
         :placeholder="t('tmcut.assetCenter.search')"
+        :aria-label="t('tmcut.assetCenter.search')"
       />
       <div class="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
         <button

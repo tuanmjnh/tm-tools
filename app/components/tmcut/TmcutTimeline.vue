@@ -3,6 +3,8 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TICKS_PER_SECOND, parseSrt, serializeSrt, cuesToCaptionClips, secToTicks, ticksToSec } from '@tmcut-core'
 import { useTmcutProject } from '~/composables/useTmcutProject'
+import type { TmcutTrack } from '~/composables/useTmcutProject'
+import { useTmcutContextMenu } from '~/composables/useTmcutContextMenu'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { useFileSystem } from '~/composables/useFileSystem'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
@@ -18,6 +20,7 @@ const {
   currentProject,
   selectedClipId,
   totalDuration,
+  contentDuration,
   addClipToTrack,
   removeClip,
   splitClip,
@@ -71,6 +74,65 @@ const { isDesktop, importWebFiles, addAssetToTimeline } = useTmcutMedia()
 const { transcribe } = useTmcutAi()
 const { tip, shortcutsOpen, snapOn } = useTmcutUiPrefs()
 const toast = useToast()
+
+// ===== Right-click track menu =====
+// Right-clicking the EMPTY part of a track row is the quickest path to
+// whole-row actions (paste at the playhead, close gaps, hide/lock/mute,
+// remove) without hunting the small header buttons. Placement is shared
+// with the clip menu, so neither panel is clipped by the timeline's
+// overflow nor runs off the bottom of the window.
+const {
+  open: trackMenuOpen,
+  ready: trackMenuReady,
+  pos: trackMenuPos,
+  el: trackMenuEl,
+  openAt: openTrackMenuAt,
+  close: closeTrackMenu
+} = useTmcutContextMenu()
+const trackMenuId = ref<string | null>(null)
+const trackMenuTarget = computed<TmcutTrack | null>(() =>
+  currentProject.value?.timeline?.tracks?.find(track => track.id === trackMenuId.value) ?? null)
+const canPasteOnTrack = computed(() => (clipboard.value?.clips?.length ?? 0) > 0)
+
+function onTrackContextMenu(e: MouseEvent, track: TmcutTrack) {
+  trackMenuId.value = track.id
+  openTrackMenuAt(e)
+}
+
+function runTrackPaste() {
+  if (pasteClipboardAt(playhead.value).length > 0) {
+    toast.add({ title: t('tmcut.timelineActions.pasted'), color: 'success' })
+  }
+  closeTrackMenu()
+}
+
+function runTrackCloseGaps() {
+  const closedTicks = closeProjectGaps()
+  if (closedTicks > 0) {
+    toast.add({
+      title: t('tmcut.timelineActions.gapsClosed', { seconds: Number(ticksToSec(closedTicks).toFixed(2)) }),
+      color: 'success'
+    })
+  } else {
+    toast.add({ title: t('tmcut.timelineActions.noGaps'), color: 'neutral' })
+  }
+  closeTrackMenu()
+}
+
+function runTrackToggle(action: 'hidden' | 'locked' | 'muted') {
+  const track = trackMenuTarget.value
+  if (!track) return
+  if (action === 'hidden') toggleTrackHidden(track.id)
+  else if (action === 'locked') toggleTrackLock(track.id)
+  else toggleTrackMute(track.id)
+  closeTrackMenu()
+}
+
+function runTrackRemove() {
+  const track = trackMenuTarget.value
+  if (track && !track.locked) removeTrackFromProject(track.id)
+  closeTrackMenu()
+}
 
 const tracksContainerRef = ref<HTMLDivElement | null>(null)
 const rulerRef = ref<HTMLDivElement | null>(null)
@@ -876,7 +938,7 @@ function onTracksScroll(e: Event) {
 // R ripple toggle, N snap toggle, M add marker, I/O render marks,
 // Alt+[/] trim edge to playhead, ?/F1 shortcuts help (§65.1).
 const emit = defineEmits<{
-  (e: 'open-export'): void
+  (e: 'open-export' | 'open-voice-studio'): void
 }>()
 
 // Shared help overlay state (useTmcutUiPrefs.shortcutsOpen) — also opened
@@ -973,7 +1035,7 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     scrollPlayheadIntoView()
   } else if (key === 'end') {
     e.preventDefault()
-    seek(totalDuration.value)
+    seek(contentDuration.value)
     scrollPlayheadIntoView()
   } else if (e.altKey && (key === '[' || key === ']')) {
     // Alt+[ / Alt+] cut the selected clip's In/Out edge to the
@@ -1016,9 +1078,9 @@ onUnmounted(() => {
 <template>
   <div class="h-full flex flex-col bg-neutral-100 dark:bg-neutral-900 border-t border-neutral-300 dark:border-neutral-800 text-neutral-700 dark:text-neutral-200 select-none">
     <!-- Timeline Toolbar -->
-    <div class="h-10 px-3 border-b border-neutral-300 dark:border-neutral-800 flex items-center justify-between bg-neutral-100/90 dark:bg-neutral-900/90 shrink-0">
+    <div class="min-h-10 px-3 py-1 gap-2 border-b border-neutral-300 dark:border-neutral-800 flex flex-wrap items-center justify-between bg-neutral-100/90 dark:bg-neutral-900/90 shrink-0">
       <!-- Left: History + Tools (Undo, Redo, Split, Delete, Add Media) -->
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center gap-1.5 max-w-full overflow-x-auto whitespace-nowrap *:shrink-0">
         <UButton
           icon="i-lucide-undo-2"
           size="xs"
@@ -1133,6 +1195,16 @@ onUnmounted(() => {
         >
           + {{ t('tmcut.addAudio') }}
         </UButton>
+        <UButton
+          icon="i-lucide-audio-lines"
+          size="xs"
+          variant="soft"
+          color="secondary"
+          :title="t('tmcut.voice.openStudio')"
+          @click="emit('open-voice-studio')"
+        >
+          {{ t('tmcut.voice.openStudio') }}
+        </UButton>
 
         <!-- SRT import/export (roadmap C-4): desktop only — the dialog
              + file IPC do not exist on web sessions. -->
@@ -1175,7 +1247,7 @@ onUnmounted(() => {
       >
         <span class="text-primary font-semibold">{{ formatTimecode(playhead) }}</span>
         <span class="text-neutral-500">/</span>
-        <span class="text-neutral-500 dark:text-neutral-400">{{ formatTimecode(totalDuration) }}</span>
+        <span class="text-neutral-500 dark:text-neutral-400">{{ formatTimecode(contentDuration) }}</span>
       </div>
 
       <!-- In/Out render zone chip (clears on click) -->
@@ -1206,7 +1278,9 @@ onUnmounted(() => {
         />
         <UIcon name="i-lucide-zoom-out" class="size-3.5 text-neutral-500" />
         <input
+          id="tmcut-timeline-zoom"
           v-model.number="zoom"
+          :aria-label="t('tmcut.timelineActions.zoom')"
           type="range"
           min="15"
           max="200"
@@ -1353,8 +1427,14 @@ onUnmounted(() => {
                  ≈ 300px in 176px). Now: labels + two grow-to-fit number
                  inputs, always inside the row width. -->
             <div v-if="track.type === 'audio'" class="flex items-center gap-1.5 min-w-0">
-              <label class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0" :title="t('tmcut.tracks.volume')">Vol</label>
+              <label
+                :for="`track-volume-${track.id}`"
+                class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0"
+                :title="t('tmcut.tracks.volume')"
+              >Vol</label>
               <UInput
+                :id="`track-volume-${track.id}`"
+                :aria-label="t('tmcut.tracks.volume')"
                 type="number"
                 min="0"
                 max="100"
@@ -1364,8 +1444,14 @@ onUnmounted(() => {
                 :model-value="track.volume ?? 100"
                 @update:model-value="updateTrackVolume(track.id, Number($event))"
               />
-              <label class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0" :title="t('tmcut.tracks.pan')">Pan</label>
+              <label
+                :for="`track-pan-${track.id}`"
+                class="text-[9px] text-neutral-500 dark:text-neutral-400 shrink-0"
+                :title="t('tmcut.tracks.pan')"
+              >Pan</label>
               <UInput
+                :id="`track-pan-${track.id}`"
+                :aria-label="t('tmcut.tracks.pan')"
                 type="number"
                 min="-100"
                 max="100"
@@ -1528,13 +1614,15 @@ onUnmounted(() => {
               :style="{ left: `${tick.left}px` }"
             />
 
-            <!-- Track Rows -->
+            <!-- Track Rows (right-click the empty lane for the track menu;
+                 the clips stopPropagation, so this only fires off-clip) -->
             <div
               v-for="track in currentProject?.timeline?.tracks || []"
               :key="track.id"
               :data-track-row="track.id"
               class="h-14 relative bg-neutral-100/40 dark:bg-neutral-900/40 hover:bg-neutral-200/20 dark:hover:bg-neutral-800/20 transition-colors"
               :class="track.hidden ? 'opacity-40' : ''"
+              @contextmenu.prevent="onTrackContextMenu($event, track)"
             >
               <!-- Clips inside track -->
               <TmcutTimelineClip
@@ -1557,6 +1645,118 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Right-click track menu (empty lane area): whole-row actions with the
+         same measured placement as the clip menu. -->
+    <Teleport to="body">
+      <div
+        v-if="trackMenuOpen && trackMenuTarget"
+        ref="trackMenuEl"
+        data-tmcut-track-menu
+        class="fixed z-[120] w-56 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-neutral-400 bg-neutral-100/95 p-1.5 text-xs text-neutral-700 shadow-2xl backdrop-blur-sm select-none dark:border-neutral-700 dark:bg-neutral-900/95 dark:text-neutral-200"
+        :class="trackMenuReady ? 'opacity-100' : 'opacity-0'"
+        :style="{ left: `${trackMenuPos.x}px`, top: `${trackMenuPos.y}px` }"
+        @contextmenu.prevent
+      >
+        <div class="flex items-center justify-between gap-2 px-1.5 pb-1">
+          <span class="flex min-w-0 items-center gap-1.5">
+            <UIcon
+              :name="trackMenuTarget.type === 'video' ? 'i-lucide-film' : trackMenuTarget.type === 'text' ? 'i-lucide-type' : 'i-lucide-music'"
+              class="size-3.5 shrink-0 opacity-80"
+            />
+            <span class="truncate text-[11px] font-semibold">{{ trackMenuTarget.name || trackMenuTarget.type }}</span>
+          </span>
+          <span class="shrink-0 font-mono text-[10px] text-neutral-500 dark:text-neutral-400">
+            {{ t('tmcut.workspace.clipCount', { count: trackMenuTarget.items.length }) }}
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-0.5">
+          <UButton
+            icon="i-lucide-clipboard-paste"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            :disabled="!!trackMenuTarget.locked || !canPasteOnTrack"
+            data-track-menu-action="paste"
+            @click="runTrackPaste"
+          >
+            {{ t('tmcut.clipMenu.actions.paste') }}
+            <span class="ml-auto font-mono text-[10px] text-neutral-500">Ctrl+V</span>
+          </UButton>
+          <UButton
+            icon="i-lucide-chevrons-left"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            data-track-menu-action="close-gaps"
+            @click="runTrackCloseGaps"
+          >
+            {{ t('tmcut.clipMenu.actions.closeGapsAll') }}
+          </UButton>
+        </div>
+
+        <div class="mt-1 flex flex-col gap-0.5 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+          <UButton
+            :icon="trackMenuTarget.locked ? 'i-lucide-lock-open' : 'i-lucide-lock'"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            data-track-menu-action="toggle-lock"
+            @click="runTrackToggle('locked')"
+          >
+            {{ trackMenuTarget.locked ? t('tmcut.tracks.unlock') : t('tmcut.tracks.lock') }}
+          </UButton>
+          <UButton
+            :icon="trackMenuTarget.hidden ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            data-track-menu-action="toggle-hidden"
+            @click="runTrackToggle('hidden')"
+          >
+            {{ trackMenuTarget.hidden ? t('tmcut.tracks.show') : t('tmcut.tracks.hide') }}
+          </UButton>
+          <UButton
+            v-if="trackMenuTarget.type !== 'text'"
+            :icon="trackMenuTarget.muted ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+            variant="ghost"
+            color="neutral"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            data-track-menu-action="toggle-muted"
+            @click="runTrackToggle('muted')"
+          >
+            {{ trackMenuTarget.muted ? t('tmcut.tracks.unmute') : t('tmcut.tracks.mute') }}
+          </UButton>
+        </div>
+
+        <div class="mt-1 border-t border-neutral-300/80 pt-1 dark:border-neutral-700/80">
+          <UButton
+            icon="i-lucide-trash-2"
+            variant="ghost"
+            color="error"
+            size="xs"
+            block
+            class="justify-start gap-2"
+            :disabled="!!trackMenuTarget.locked"
+            data-track-menu-action="remove"
+            @click="runTrackRemove"
+          >
+            {{ t('tmcut.tracks.removeTrack') }}
+          </UButton>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Marker label/color editor (roadmap B5): fixed-positioned so the
          ruler's overflow-hidden never clips it. Enter or an outside
          click commits the label; Esc discards; dots recolor, trash
@@ -1569,8 +1769,10 @@ onUnmounted(() => {
       @mousedown.stop
     >
       <input
+        id="tmcut-timeline-marker-label"
         ref="markerLabelInputRef"
         v-model="editingMarkerLabel"
+        :aria-label="t('tmcut.marker.label')"
         class="h-7 w-full rounded border border-neutral-400 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-950 px-2 text-xs text-neutral-700 dark:text-neutral-200 outline-none focus:border-primary"
         @keydown.enter="commitMarkerEditor"
         @keydown.esc="editingMarkerId = null"

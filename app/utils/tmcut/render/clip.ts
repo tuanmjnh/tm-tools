@@ -1,5 +1,5 @@
 import type { TmcutTimelineItem, TmcutTrack } from '~/composables/useTmcutProject'
-import { ticksToSec } from '@tmcut-core'
+import { classifyAssetKind, ticksToSec } from '@tmcut-core'
 import { clipDurationTicks } from '~/utils/tmcut/clipTime'
 
 /**
@@ -22,6 +22,13 @@ export interface RenderClip {
   footagePath: string | null
   /** Text clip body (text tracks). */
   text: string | null
+  /**
+   * True when `footagePath` is a still image (png/jpg/webp…). A still decodes
+   * as a single frame and carries NO audio stream, so the graph must loop it
+   * into a video stream and synthesise its (silent) audio lane — otherwise the
+   * `[i:a]` audio chain matches no stream and ffmpeg rejects the graph.
+   */
+  isImage: boolean
   /** Source in-point, media seconds (decoded from store ticks). */
   inSec: number
   /** Source out-point, media seconds (decoded from store ticks). */
@@ -66,9 +73,11 @@ export interface RenderClip {
  */
 export function toRenderClip(item: TmcutTimelineItem, track?: TmcutTrack | null): RenderClip {
   const src = item.src ?? null
+  const footagePath = (item.stabilize && item.stabilizedPath) ? item.stabilizedPath : src
   return {
     id: item.id,
-    footagePath: (item.stabilize && item.stabilizedPath) ? item.stabilizedPath : src,
+    footagePath,
+    isImage: classifyAssetKind(footagePath || '') === 'image',
     text: item.text ?? null,
     inSec: ticksToSec(item.in || 0),
     outSec: ticksToSec(item.out || 0),

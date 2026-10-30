@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { HubConnectionProvider, HubConnectionTestResult } from 'tm-hub-client'
-import { useHubAi } from '~/composables/useHubAi'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 type ConnectionProvider = HubConnectionProvider & { quick?: boolean, ai?: boolean, category?: string, connections?: HubConnectionProvider['connection'][] }
@@ -18,7 +17,6 @@ definePageMeta({
 const { t } = useI18n()
 const toast = useToast()
 const { appId, connections, hubUrl } = useHub()
-const { saveCredential: hubSaveCredential } = useHubAi()
 
 const loading = ref(false)
 const providers = ref<ConnectionProvider[]>([])
@@ -40,8 +38,12 @@ const addCategory = ref<string>('')
 const addProvider = ref<ConnectionProvider | null>(null)
 const addSaving = ref(false)
 const addValues = ref<Record<string, string>>({})
-const addCredentialName = ref('')
-const addShared = ref(false)
+const addSearchQuery = ref('')
+const wizardTitle = computed(() => {
+  if (addStep.value === 'category') return t('connections.add')
+  if (addStep.value === 'provider') return categoryLabel(addCategory.value) || t('connections.add')
+  return addProvider.value ? `${t('connections.configure')} - ${addProvider.value.name}` : t('connections.add')
+})
 
 const isConnected = (p: ConnectionProvider) => !!p.connection && p.connection.status === 'connected'
 const hasRow = (p: ConnectionProvider) => !!p.connection
@@ -77,7 +79,7 @@ async function refresh() {
     // code-registry providers (cloudinary, google) + DB-backed AI
     // providers flagged `ai: true` with all credentials in `connections`.
     const res = await connections.list(appId)
-    providers.value = (res.data || []) as ConnectionProvider[]
+    providers.value = ((res.data || []) as ConnectionProvider[]).filter(p => !p.ai && p.category !== "exchange" && p.category !== "market_data")
   } catch (err: unknown) {
     toast.add({ title: getErrorMessage(err, key => t(key)), color: 'error' })
   } finally {
@@ -266,13 +268,8 @@ async function doDisconnect() {
 // categories with no registered provider yet show an honest empty state —
 // Phase 4 registers non-AI categories incrementally.
 const CATEGORIES = [
-  { key: 'ai_llm', icon: 'i-lucide-brain' },
-  { key: 'coding_gateway', icon: 'i-lucide-terminal' },
-  { key: 'media_generation', icon: 'i-lucide-sparkles' },
-  { key: 'exchange', icon: 'i-lucide-coin' },
-  { key: 'market_data', icon: 'i-lucide-chart-line' },
-  { key: 'news', icon: 'i-lucide-newspaper' },
   { key: 'media_storage', icon: 'i-lucide-hard-drive' },
+  { key: 'media_generation', icon: 'i-lucide-sparkles' },
   { key: 'notifications', icon: 'i-lucide-bell' },
   { key: 'mcp', icon: 'i-lucide-plug-zap' },
   { key: 'custom', icon: 'i-lucide-plus-circle' }
@@ -286,8 +283,8 @@ function openAddWizard() {
   addStep.value = 'category'
   addCategory.value = ''
   addProvider.value = null
-  addCredentialName.value = ''
   addValues.value = {}
+  addSearchQuery.value = ''
   isAddOpen.value = true
 }
 
@@ -300,8 +297,12 @@ function selectCategory(cat: typeof CATEGORIES[number]) {
  *  with a category, then a provider-specific form). Legacy code-registry
  *  providers carry no category — they show under custom. */
 const categoryProviders = computed(() => {
-  if (addCategory.value === 'custom') return providers.value.filter(p => !p.category)
-  return providers.value.filter(p => p.category === addCategory.value)
+  const list = addCategory.value === 'custom'
+    ? providers.value.filter(p => !p.category)
+    : providers.value.filter(p => p.category === addCategory.value)
+  if (!addSearchQuery.value.trim()) return list
+  const q = addSearchQuery.value.trim().toLowerCase()
+  return list.filter(p => p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q))
 })
 
 function providerFields(p: ConnectionProvider) {
@@ -310,7 +311,6 @@ function providerFields(p: ConnectionProvider) {
 
 function selectProvider(p: ConnectionProvider) {
   addProvider.value = p
-  addCredentialName.value = 'default'
   addValues.value = {}
   for (const field of providerFields(p)) {
     if (field.type !== 'password') addValues.value[field.key] = ''
@@ -326,13 +326,6 @@ function backToProvider() {
   addStep.value = 'provider'
 }
 
-/** Open the wizard straight on a provider's form — used by the
- *  "Add credential" action on connected provider cards (multi-key R147). */
-function addCredentialFor(p: ConnectionProvider) {
-  addCategory.value = p.category || 'custom'
-  isAddOpen.value = true
-  selectProvider(p)
-}
 
 async function saveAddConnection() {
   const p = addProvider.value
@@ -350,19 +343,8 @@ async function saveAddConnection() {
     // Same canonical record for both screens (roadmap §2: no duplicate
     // writes): AI credentials go through the AI endpoint which persists
     // name/environment/isShared alongside the AES-GCM secret.
-    let test: HubConnectionTestResult | undefined
-    if (p.ai) {
-      const saved = await hubSaveCredential(appId, {
-        provider: p.key,
-        name: addCredentialName.value.trim() || 'default',
-        values: cleanedValues,
-        isShared: addShared.value
-      })
-      test = saved?.test
-    } else {
-      const saved = await connections.saveManual(p.key, cleanedValues, appId)
-      test = saved.data?.test
-    }
+    const saved = await connections.saveManual(p.key, cleanedValues, appId)
+    const test = saved.data?.test
     if (test?.ok) toast.add({ title: t('connections.saved'), icon: 'i-lucide-check', color: 'success' })
     else if (test) showTestFail(test)
     else toast.add({ title: t('connections.saved'), icon: 'i-lucide-check', color: 'success' })
@@ -465,10 +447,7 @@ useHead({ title: t('connections.title') })
               <span class="text-toned">{{ t('connections.account') }}: </span>
               <span class="text-highlighted">{{ accountOf(p) }}</span>
             </p>
-            <p v-if="p.ai">
-              <span class="text-toned">{{ t('aiProviders.credentials_count', [String(p.connections?.length || (p.connection ? 1 : 0))]) }}</span>
-            </p>
-            <p>
+                        <p>
               <span class="text-toned">{{ t('connections.last_test') }}: </span>
               <span :class="p.connection?.lastTestOk === false ? 'text-error' : 'text-highlighted'">
                 {{ p.connection?.lastTestAt ? new Date(p.connection.lastTestAt).toLocaleString() : t('connections.never') }}
@@ -533,7 +512,7 @@ useHead({ title: t('connections.title') })
               @click="quickConnect(p)"
             />
             <UButton
-              v-if="p.mode === 'manual' && !p.ai"
+              v-if="p.mode === 'manual'"
               :label="hasRow(p) ? t('connections.configure') : t('connections.connect')"
               icon="i-lucide-key-round"
               color="primary"
@@ -541,29 +520,8 @@ useHead({ title: t('connections.title') })
               size="sm"
               @click="openManual(p)"
             />
-            <!-- AI cards manage credentials per provider (multi-key R147):
-                 the wizard's AI branch writes through /ai/connections/manual,
-                 and health/governance live on the AI providers screen. -->
-            <UButton
-              v-if="p.ai"
-              :label="t('aiProviders.add_credential')"
-              icon="i-lucide-key-round"
-              color="primary"
-              variant="soft"
-              size="sm"
-              @click="addCredentialFor(p)"
-            />
-            <UButton
-              v-if="p.ai"
-              :label="t('connections.manage_ai')"
-              icon="i-lucide-external-link"
-              color="neutral"
-              variant="soft"
-              size="sm"
-              :to="`/system/ai-keys`"
-            />
-            <UButton
-              v-if="hasRow(p) && !p.ai"
+                        <UButton
+              v-if="hasRow(p)"
               :label="t('connections.test')"
               icon="i-lucide-activity"
               :loading="testingKey === p.key"
@@ -573,7 +531,7 @@ useHead({ title: t('connections.title') })
               @click="testConnection(p)"
             />
             <UButton
-              v-if="hasRow(p) && !p.ai"
+              v-if="hasRow(p)"
               :label="t('connections.disconnect')"
               icon="i-lucide-unplug"
               color="error"
@@ -615,152 +573,222 @@ useHead({ title: t('connections.title') })
     <!-- Add Connection Wizard Modal -->
     <BaseResponsiveModal
       v-model:open="isAddOpen"
-      :title="t('connections.add')"
+      :title="wizardTitle"
       :close="!addSaving"
       :dismissible="!addSaving"
     >
       <template #body>
-        <!-- Step 1: Category -->
-        <div v-if="addStep === 'category'" class="space-y-4">
-          <p class="text-sm text-muted">
+        <!-- Step Indicator -->
+        <div class="flex items-center justify-between pb-4 border-b border-default/40">
+          <div class="flex items-center gap-2">
+            <span
+              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
+              :class="addStep === 'category'
+                ? 'bg-primary text-white'
+                : 'bg-primary/20 text-primary cursor-pointer'"
+              @click="!addSaving && (addStep = 'category')"
+            >
+              1
+            </span>
+            <span class="text-xs font-medium" :class="addStep === 'category' ? 'text-highlighted font-semibold' : 'text-muted'">
+              {{ t('connections.wizard.category_step', 'Category') }}
+            </span>
+            <UIcon name="i-lucide-chevron-right" class="size-3.5 text-muted/60" />
+
+            <span
+              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
+              :class="addStep === 'provider'
+                ? 'bg-primary text-white'
+                : (addStep === 'form' ? 'bg-primary/20 text-primary cursor-pointer' : 'bg-elevated text-muted')"
+              @click="!addSaving && addCategory && (addStep = 'provider')"
+            >
+              2
+            </span>
+            <span class="text-xs font-medium" :class="addStep === 'provider' ? 'text-highlighted font-semibold' : 'text-muted'">
+              {{ t('connections.wizard.provider_step', 'Provider') }}
+            </span>
+            <UIcon name="i-lucide-chevron-right" class="size-3.5 text-muted/60" />
+
+            <span
+              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold"
+              :class="addStep === 'form' ? 'bg-primary text-white' : 'bg-elevated text-muted'"
+            >
+              3
+            </span>
+            <span class="text-xs font-medium" :class="addStep === 'form' ? 'text-highlighted font-semibold' : 'text-muted'">
+              {{ t('connections.wizard.configure_step', 'Configure') }}
+            </span>
+          </div>
+
+          <UBadge
+            v-if="addStep === 'form' && addProvider"
+            :label="addProvider.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')"
+            variant="subtle"
+            size="xs"
+          />
+        </div>
+
+        <!-- Step 1: Category Selection -->
+        <div v-if="addStep === 'category'" class="space-y-4 pt-4">
+          <p class="text-xs text-muted">
             {{ t('connections.add_category_hint') }}
           </p>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div
               v-for="cat in CATEGORIES"
               :key="cat.key"
-              class="rounded-xl border border-default/50 p-4 cursor-pointer hover:border-primary/50 transition-colors"
+              class="group relative rounded-xl border border-default/60 p-4 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center text-center gap-2"
               @click="selectCategory(cat)"
             >
-              <div class="flex items-center justify-center size-12 rounded-lg bg-primary/10 mb-2">
-                <UIcon :name="cat.icon" class="size-6 text-primary" />
+              <div class="flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform">
+                <UIcon :name="cat.icon" class="size-6" />
               </div>
-              <p class="font-medium text-highlighted text-center">
-                {{ categoryLabel(cat.key) }}
-              </p>
-              <p class="text-xs text-muted text-center mt-1">
-                {{ t(`connections.wizard.${cat.key}_desc`) }}
-              </p>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-highlighted group-hover:text-primary transition-colors">
+                  {{ categoryLabel(cat.key) }}
+                </p>
+                <p class="text-[11px] text-muted line-clamp-2 mt-1">
+                  {{ t(`connections.wizard.${cat.key}_desc`) }}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Step 2: Provider (within category) -->
-        <div v-if="addStep === 'provider'" class="space-y-4">
-          <div class="flex items-center gap-2">
-            <UButton
-              variant="ghost"
-              size="sm"
-              icon="i-lucide-chevron-left"
-              @click="backToCategory"
+        <!-- Step 2: Provider Selection -->
+        <div v-if="addStep === 'provider'" class="space-y-4 pt-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <UButton
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                icon="i-lucide-arrow-left"
+                @click="backToCategory"
+              />
+              <span class="text-xs font-semibold text-highlighted truncate">{{ categoryLabel(addCategory) }}</span>
+            </div>
+            <UInput
+              v-model="addSearchQuery"
+              icon="i-lucide-search"
+              size="xs"
+              class="w-full sm:w-56"
+              :placeholder="t('common.search')"
             />
-            <span class="font-medium text-highlighted">{{ categoryLabel(addCategory) }}</span>
           </div>
-          <p class="text-sm text-muted">
-            {{ t('connections.add_provider_hint') }}
-          </p>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
             <div
               v-for="p in categoryProviders"
               :key="p.key"
-              class="rounded-xl border border-default/50 p-3 cursor-pointer hover:border-primary/50 transition-colors flex items-center gap-3"
+              class="group rounded-xl border border-default/60 p-3.5 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-3"
               @click="selectProvider(p)"
             >
-              <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/50 shrink-0">
-                <UIcon :name="p.icon" class="size-5" />
+              <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/70 shrink-0 group-hover:scale-105 transition-transform">
+                <UIcon :name="p.icon" class="size-5 text-highlighted group-hover:text-primary transition-colors" />
               </div>
               <div class="min-w-0 flex-1">
-                <p class="font-medium text-highlighted truncate">
-                  {{ p.name }}
-                </p>
-                <p class="text-xs text-muted truncate">
+                <div class="flex items-center gap-1.5">
+                  <p class="text-xs font-semibold text-highlighted truncate group-hover:text-primary transition-colors">
+                    {{ p.name }}
+                  </p>
+                  <UBadge
+                    v-if="p.connection"
+                    :label="isConnected(p) ? t('connections.connected') : t('common.error')"
+                    :color="isConnected(p) ? 'success' : 'error'"
+                    variant="subtle"
+                    size="xs"
+                  />
+                </div>
+                <p class="text-[11px] text-muted truncate mt-0.5">
                   {{ p.description }}
                 </p>
               </div>
-              <UIcon name="i-lucide-chevron-right" class="size-4 text-muted shrink-0" />
+              <UIcon name="i-lucide-chevron-right" class="size-4 text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
             </div>
-            <p v-if="!categoryProviders.length" class="text-xs text-muted col-span-full py-4 text-center">
-              {{ t('connections.no_providers_in_category') }}
-            </p>
+
+            <div v-if="!categoryProviders.length" class="col-span-full py-12 flex flex-col items-center justify-center text-center gap-2">
+              <UIcon name="i-lucide-inbox" class="size-8 text-muted" />
+              <p class="text-xs text-muted">
+                {{ t('connections.no_providers_in_category') }}
+              </p>
+            </div>
           </div>
         </div>
 
-        <!-- Step 3: Form (credential name + fields) -->
-        <div v-if="addStep === 'form'" class="space-y-4">
-          <div class="flex items-center gap-2">
+        <!-- Step 3: Provider Configuration Form -->
+        <div v-if="addStep === 'form'" class="space-y-4 pt-4">
+          <div class="flex items-center gap-2 pb-2 border-b border-default/40">
             <UButton
               variant="ghost"
-              size="sm"
-              icon="i-lucide-chevron-left"
+              color="neutral"
+              size="xs"
+              icon="i-lucide-arrow-left"
               @click="backToProvider"
             />
-            <span class="font-medium text-highlighted">{{ addProvider?.name }}</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <UIcon :name="addProvider?.icon" class="size-5 shrink-0" />
+              <span class="text-xs font-semibold text-highlighted truncate">{{ addProvider?.name }}</span>
+            </div>
           </div>
-          <UFormField
-            v-if="addProvider?.ai"
-            :label="t('aiProviders.credential_name')"
-            :hint="t('aiProviders.credential_name_hint')"
-            class="mb-3"
-          >
-            <UInput
-              v-model="addCredentialName"
-              :placeholder="t('aiProviders.default_name')"
-              autocomplete="off"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField
-            v-if="addProvider?.ai"
-            :label="t('aiProviders.share')"
-            :hint="t('aiProviders.share_hint')"
-            class="mb-3"
-          >
-            <USwitch v-model="addShared" :aria-label="t('aiProviders.share')" />
-          </UFormField>
-          <UFormField
-            v-for="field in addProvider ? providerFields(addProvider) : []"
-            :key="field.key"
-            :label="field.label"
-            :required="field.required"
-            class="mb-3"
-          >
-            <UInput
-              v-model="addValues[field.key]"
-              :type="field.type === 'password' ? 'password' : 'text'"
-              class="w-full"
-              :placeholder="field.type === 'password' ? '••••••••' : field.label"
-              autocomplete="off"
-            />
-          </UFormField>
+
+          <p v-if="addProvider?.description" class="text-xs text-muted">
+            {{ addProvider.description }}
+          </p>
+
+          <div class="space-y-3">
+            <UFormField
+              v-for="field in addProvider ? providerFields(addProvider) : []"
+              :key="field.key"
+              :label="field.label"
+              :required="field.required"
+            >
+              <UInput
+                v-model="addValues[field.key]"
+                :type="field.type === 'password' ? 'password' : 'text'"
+                class="w-full"
+                :placeholder="field.type === 'password' ? '••••••••' : field.label"
+                autocomplete="off"
+              />
+            </UFormField>
+          </div>
         </div>
       </template>
       <template #footer>
-        <div class="flex justify-end gap-2 pt-2">
+        <div class="flex items-center justify-between w-full pt-2">
           <UButton
             v-if="addStep !== 'category'"
             :label="t('common.back')"
             color="neutral"
             variant="ghost"
+            icon="i-lucide-arrow-left"
+            size="sm"
             :disabled="addSaving"
             @click="addStep === 'provider' ? backToCategory() : backToProvider()"
           />
-          <UButton
-            v-if="addStep === 'form'"
-            type="button"
-            :label="t('common.save')"
-            :loading="addSaving"
-            variant="soft"
-            color="primary"
-            @click="saveAddConnection"
-          />
-          <UButton
-            v-if="addStep !== 'form'"
-            :label="t('common.cancel')"
-            color="neutral"
-            variant="ghost"
-            :disabled="addSaving"
-            @click="isAddOpen = false"
-          />
+          <div v-else />
+
+          <div class="flex items-center gap-2">
+            <UButton
+              :label="t('common.cancel')"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :disabled="addSaving"
+              @click="isAddOpen = false"
+            />
+            <UButton
+              v-if="addStep === 'form'"
+              type="button"
+              :label="t('global.save')"
+              icon="i-lucide-save"
+              :loading="addSaving"
+              variant="soft"
+              color="primary"
+              size="sm"
+              @click="saveAddConnection"
+            />
+          </div>
         </div>
       </template>
     </BaseResponsiveModal>

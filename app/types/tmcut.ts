@@ -129,5 +129,6 @@ export function createEmptyTmcutAssetMeta(): TmcutAssetMeta {
 export type {
   TmcutTemplate,
   TmcutTemplatePlaceholder,
-  TmcutTemplateCategory
+  TmcutTemplateCategory,
+  TmcutTemplateIndustry
 } from '@tmcut-core'

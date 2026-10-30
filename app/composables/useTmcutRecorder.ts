@@ -4,7 +4,8 @@
  * Desktop writes the blob to disk via IPC (`tmcut:saveRecording`, FFmpeg
  * export needs real paths) and reuses the normal import pipeline
  * (analysis, waveform, registry); web wraps the blob in a File and lands
- * in the session-only library (blob: URL, same rule as importWebFiles).
+ * in the durable web library (the File goes through importWebFiles, which
+ * streams it to the local server — same rule as a picked file).
  *
  * Takes shorter than MIN_RECORDING_SEC are discarded BEFORE anything is
  * written — no junk files, no junk assets.

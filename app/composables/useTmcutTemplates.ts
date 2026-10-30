@@ -23,6 +23,9 @@ import {
   MAX_IMPORT_BATCH
 } from '~/utils/tmcut/templateIo'
 
+// Re-export for use in components
+export const ticksToSeconds = (ticks: number) => (ticks / TICKS_PER_SECOND).toFixed(1)
+
 // C16-R3: the storage key is the version stamp (same lesson as the
 // project schema — NEVER guess units from magnitudes). v1 payloads carry
 // flat item geometry in SECONDS; they are scaled to ticks once on load
@@ -51,9 +54,25 @@ function migrateTemplateItems(template: Record<string, unknown>) {
 // Shared reactive state
 const userTemplates = ref<TmcutTemplate[]>([])
 const selectedCategory = ref<string>('all')
+const selectedIndustry = ref<string>('all')
 const selectedAspectRatio = ref<string>('all')
 const searchQuery = ref<string>('')
 const isLoaded = ref<boolean>(false)
+
+function matchesCategory(tpl: TmcutTemplate, category: string): boolean {
+  if (!category || category === 'all') return true
+  // 'custom' is the library's "My Templates" facet: it means OWNED, not
+  // category === 'custom'. A template saved from the AI builder keeps its
+  // brief's category (intro, promo, …) and is badged Custom on its card —
+  // filtering it only under "Intro" would make it unreachable by the label
+  // the user was offered.
+  if (category === 'custom') return !tpl.isBuiltin
+  return tpl.category === category
+}
+
+function matchesIndustry(tpl: TmcutTemplate, industry: string): boolean {
+  return !industry || industry === 'all' || tpl.industry === industry
+}
 
 export function useTmcutTemplates() {
   const { createProject, saveProject, currentProject } = useTmcutProject()
@@ -116,18 +135,52 @@ export function useTmcutTemplates() {
     return [...builtinList.value, ...userTemplates.value]
   })
 
-  const filteredTemplates = computed<TmcutTemplate[]>(() => {
+  /** Facet before the category/industry chips — search + aspect ratio only. */
+  const baseScope = computed<TmcutTemplate[]>(() => {
     return filterTemplates(allTemplates.value, {
-      category: selectedCategory.value,
+      category: 'all',
       aspectRatio: selectedAspectRatio.value,
       search: searchQuery.value
     })
   })
 
+  /**
+   * Templates that pass every facet EXCEPT the category chip. The chip counts
+   * are derived from this set, so a number on a chip is the number of cards
+   * clicking that chip will show — with the old global counts a 9:16 filter
+   * still advertised "Outro & End Cards 1" for a combination that renders an
+   * empty grid.
+   */
+  const facetScope = computed<TmcutTemplate[]>(() => {
+    return baseScope.value.filter(t => matchesIndustry(t, selectedIndustry.value))
+  })
+
+  /**
+   * Templates that pass every facet EXCEPT the industry chip — the same
+   * promise as above for the industry row, so both rows count honestly.
+   */
+  const industryScope = computed<TmcutTemplate[]>(() => {
+    return baseScope.value.filter(t => matchesCategory(t, selectedCategory.value))
+  })
+
+  const filteredTemplates = computed<TmcutTemplate[]>(() => {
+    return facetScope.value.filter(t => matchesCategory(t, selectedCategory.value))
+  })
+
   const categoryCounts = computed<Record<string, number>>(() => {
-    const counts: Record<string, number> = { all: allTemplates.value.length, custom: userTemplates.value.length }
-    for (const t of allTemplates.value) {
+    const counts: Record<string, number> = { all: facetScope.value.length, custom: 0 }
+    for (const t of facetScope.value) {
       counts[t.category] = (counts[t.category] || 0) + 1
+      if (!t.isBuiltin) counts.custom = (counts.custom || 0) + 1
+    }
+    return counts
+  })
+
+  const industryCounts = computed<Record<string, number>>(() => {
+    const counts: Record<string, number> = { all: industryScope.value.length }
+    for (const t of industryScope.value) {
+      const id = t.industry || 'general'
+      counts[id] = (counts[id] || 0) + 1
     }
     return counts
   })
@@ -379,7 +432,9 @@ export function useTmcutTemplates() {
     userTemplates,
     filteredTemplates,
     categoryCounts,
+    industryCounts,
     selectedCategory,
+    selectedIndustry,
     selectedAspectRatio,
     searchQuery,
     createProjectFromTemplate,

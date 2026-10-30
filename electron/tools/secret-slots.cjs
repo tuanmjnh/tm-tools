@@ -7,12 +7,12 @@
 // docs/tests) — drift becomes impossible, not just detected.
 'use strict'
 
-// The AI panel writes exactly KEY / KEY_<TASK>. Matching the FULL slot
-// shape keeps the rule closed: AI_BASE_URL, AI_MODEL and arbitrary keys
-// never qualify for encryption/masking. The bare `AI_API_KEY` global
+// API secrets use the full slot shape; configuration values that are not
+// credentials (such as AI_BASE_URL and AI_MODEL) are never encrypted.
+// The bare `AI_API_KEY` global
 // slot MUST match (the surface suffix is optional — this exact subtlety
 // is what §206.2 audited in the old inline capture).
-const SECRET_SLOT_RE = /^AI_API_KEY(_.+)?$/
+const SECRET_SLOT_RE = /^(AI_API_KEY(_.+)?|TMCUT_GEMINI_API_KEY)$/
 
 /** True when a config key is an API-key slot (encrypted at rest, masked
  *  to the renderer, re-encrypted by the migration). */

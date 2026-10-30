@@ -86,6 +86,7 @@ describe('TMCut AI key vault — channel contract (R140)', () => {
     assert.ok(re.test('AI_API_KEY'), 'global AI_API_KEY must qualify as a secret slot')
     assert.ok(re.test('AI_API_KEY_PLAN'))
     assert.ok(!re.test('AI_BASE_URL'), 'non-key slots stay unencrypted')
+    assert.ok(re.test('TMCUT_GEMINI_API_KEY'), 'Gemini TTS key must use the encrypted secret slot')
   })
 })
 
@@ -106,22 +107,32 @@ describe('TMCut AI key vault — page contract (R140)', () => {
     // per-surface tests must flow through the gateway's saved-slot
     // resolution, whatever the local alias is called.
     assert.ok(page.includes('gatewayListModels(task === \'global\' ? {} : { task })'), 'tests must use saved-slot resolution')
-    assert.ok(!page.includes('AI_API_KEY'), 'the page must not touch raw key slots')
-    assert.ok(!/apiKey\s*[:=]/.test(page), 'the page holds no field that could carry a key')
+    // R148: the R140-era rule "the page holds no field that could carry a
+    // key" is GONE ON PURPOSE — the vault page now edits stored credentials
+    // in place (the user's requirement for this page: the edit form used to
+    // forget the stored name and base URL). The meaningful contract is the
+    // one asserted right above: the saved-slot test path passes no key at
+    // all. Page-level key handling is exercised by the credential-form tests
+    // against the hub endpoint, not by a textual ban on a variable name.
   })
 
   it('the note names only places the AI panel ACTUALLY renders (no invented routes)', () => {
     // Honesty rule (§203 lineage): help text must match the shipped UI.
-    // The panel is mounted in exactly two components — grep-verified
-    // below — so the note may mention AutoCut step 2 and the editor's
-    // AI script dialog, and must NOT promise a settings-page panel.
+    // R148: the panel is mounted on AutoCut step 2 ONLY — the editor's AI
+    // script dialog carries a MODEL CHOOSER instead (the user's requirement:
+    // no connection form there, just the connected models plus a test). The
+    // note may therefore send users to the vault itself and AutoCut, and must
+    // not promise key editing on a surface that no longer has it.
     const autocut = read('app/pages/tmcut/autocut.vue')
     const scriptModal = read('app/components/tmcut/TmcutAiScriptModal.vue')
     assert.ok(autocut.includes('<TmcutAiConnect'), 'panel must stay mounted on AutoCut')
-    assert.ok(scriptModal.includes('<TmcutAiConnect'), 'panel must stay mounted on the AI script dialog')
+    assert.ok(!scriptModal.includes('<TmcutAiConnect'), 'the script dialog must not carry the connection form')
+    assert.ok(scriptModal.includes('<TmcutAiModelPicker'), 'the script dialog must carry the connected-model chooser')
     const en = JSON.parse(read('i18n/locales/en.json'))
     const where = en.settings.aiKeysWhere1 as string
     assert.ok(/AutoCut step 2/.test(where), 'note must name the AutoCut surface')
+    assert.ok(/only chooses among connected models/.test(where), 'the note must describe the dialog as a model chooser')
+    assert.ok(!/or the editor's AI script dialog/.test(where), 'the old send-users-to-the-dialog wording must not come back')
     assert.ok(!/Settings\s*→\s*Connections/.test(where), 'no AI panel exists on any settings page')
   })
 

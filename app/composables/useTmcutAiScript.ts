@@ -24,7 +24,7 @@ export * from '../utils/tmcut/aiTasks'
  * Composable providing AI Scriptwriting & Storyboard generation capabilities.
  */
 export function useTmcutAiScript() {
-  const { complete, status } = useTmcutAi()
+  const { complete, status, tasks } = useTmcutAi()
   const { createProject, addClipToTrack, switchCanvas, currentProject } = useTmcutProject()
 
   const generating = ref(false)
@@ -34,8 +34,12 @@ export function useTmcutAiScript() {
 
   async function checkGatewayStatus() {
     try {
-      const st = await status()
-      hasAiKey.value = !!st?.hasKey
+      const [st, surfaceTasks] = await Promise.all([status(), tasks()])
+      // The hub model picker writes per-surface slots (AI_*_PLAN) only — the
+      // global gateway key stays empty, so the global `hasKey` boolean alone
+      // reports a fully configured surface as "no AI key".
+      const planSurface = surfaceTasks?.plan
+      hasAiKey.value = Boolean(st?.hasKey || (planSurface && planSurface.configured))
       return hasAiKey.value
     } catch {
       hasAiKey.value = false
@@ -86,6 +90,11 @@ export function useTmcutAiScript() {
           { role: 'user', content: planUserMessage(ctx) }
         ],
         jsonMode: true,
+        // Reasoning models (GLM, Nemotron…) spend their first tokens
+        // thinking: 8 tokens would land inside the reasoning block and a
+        // healthy model would report "no message content". 2048 gives the
+        // generated plan room to actually complete.
+        maxTokens: 2048,
         temperature: 0.7
       })
 

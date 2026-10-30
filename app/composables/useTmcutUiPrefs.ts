@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue'
+import { readStoredFlag, writeStored } from '~/utils/tmcut/localStore'
 
 // Session-level TMCut UI preferences, persisted in localStorage so the
 // choice survives reloads (single editor instance — module-level state
@@ -14,16 +15,14 @@ const shortcutsOpen = ref(false)
 const snapOn = ref(true)
 
 if (import.meta.client && typeof window !== 'undefined') {
-  const stored = window.localStorage.getItem(STORAGE_KEY)
-  if (stored !== null) shortcutTips.value = stored === '1'
-  const storedSnap = window.localStorage.getItem(SNAP_STORAGE_KEY)
-  if (storedSnap !== null) snapOn.value = storedSnap === '1'
+  shortcutTips.value = readStoredFlag(STORAGE_KEY, true)
+  snapOn.value = readStoredFlag(SNAP_STORAGE_KEY, true)
 
   watch(shortcutTips, (value) => {
-    window.localStorage.setItem(STORAGE_KEY, value ? '1' : '0')
+    writeStored(STORAGE_KEY, value ? '1' : '0')
   })
   watch(snapOn, (value) => {
-    window.localStorage.setItem(SNAP_STORAGE_KEY, value ? '1' : '0')
+    writeStored(SNAP_STORAGE_KEY, value ? '1' : '0')
   })
 }
 

@@ -264,7 +264,11 @@ export function useMcpRendererBridge() {
   const unsubscribe = shallowRef<() => void>(() => {})
 
   function setup() {
-    if (!window.electronAPI?.mcp?.onToolInvoke) {
+    // The web runtime has no preload bridge at all, so a warning there is noise
+    // on every page load. Only complain when Electron is present but the MCP
+    // channel is missing — that is a real broken install.
+    if (!window.electronAPI) return
+    if (!window.electronAPI.mcp?.onToolInvoke) {
       console.warn('[MCP] electronAPI.mcp.onToolInvoke not available')
       return
     }

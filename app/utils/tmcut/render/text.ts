@@ -1,7 +1,7 @@
 import type { TextOverlayClip } from './types'
 import type { RenderGraph } from './graph'
 import { filterPathArg, opacityAlpha } from './graph'
-import { textStrokeWidth, textShadowOffset } from '../textStyle'
+import { textBoxPadding, textStrokeWidth, textShadowOffset } from '../textStyle'
 import { keyframeExpr, maskAlphaExpr } from '@tmcut-core'
 import type { RenderClip } from './clip'
 
@@ -108,9 +108,15 @@ export function textOverlayFilter(clip: TextOverlayClip): string {
     alphaSuffix = `@${opacityAlpha(opacityPct)}`
   }
   const fontColorArg = `${fontColor}${alphaSuffix}`
+  // Text effects (roadmap đợt 2): colours and the background plate are
+  // optional fields, so an old project keeps the legacy black shadow/outline
+  // and no box — byte-identical filter strings (see the export spec).
   const styleArgs = [
-    clip.shadow ? `shadowx=${textShadowOffset(fontSize)}:shadowy=${textShadowOffset(fontSize)}:shadowcolor=black${alphaSuffix}` : '',
-    clip.stroke ? `borderw=${textStrokeWidth(fontSize)}:bordercolor=black${alphaSuffix}` : ''
+    clip.shadow ? `shadowx=${textShadowOffset(fontSize)}:shadowy=${textShadowOffset(fontSize)}:shadowcolor=${clip.shadowColor || 'black'}${alphaSuffix}` : '',
+    clip.stroke ? `borderw=${textStrokeWidth(fontSize)}:bordercolor=${clip.strokeColor || 'black'}${alphaSuffix}` : '',
+    // drawtext paints the box behind the glyphs; boxborderw is the padding,
+    // the same number textBoxPadding() gives the preview plate.
+    clip.bgColor ? `box=1:boxcolor=${clip.bgColor}${alphaSuffix}:boxborderw=${textBoxPadding(fontSize)}` : ''
   ].filter(Boolean).join(':')
 
   const xArg = animXExpr ? `x='${xExpr}'` : `x=${xExpr}`

@@ -340,7 +340,7 @@ export function useTmcutVoiceCommands() {
     try {
       const intent = await parseIntent(text, language)
       if (!intent) return {
-        ok: false, error: { code: 'no-intent', message: `Could not parse: \"${text}\"`, retryable: true }
+        ok: false, error: { code: 'no-intent', message: `Could not parse: "${text}"`, retryable: true }
       }
       return await executeIntent(intent, autoExecute, confirmCostThresholdUsd)
     } catch (err) {

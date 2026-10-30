@@ -10,13 +10,15 @@ const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
 const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
+const { registerHtmlVideoRenderer } = require('./tools/html-video-renderer.cjs')
 const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
 const { registerAiGateway } = require('./tools/ai-gateway.cjs')
+// Production process artifacts (stage → artifact → gate): real files under
+// userData/tmcut/process, one directory per artifact version.
+const { registerProcessController } = require('./tools/process-store.cjs')
 const { registerVideoGeneration } = require('./tools/video-generation/controller.mjs')
 // MCP server (Phase 2) — spawned child with IPC channel
 const { spawn } = require('child_process')
-const { fileURLToPath } = require('url')
-const { dirname, join } = require('path')
 // R139 (§203): API-key slots are encrypted AT REST with the OS keychain
 // (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
 // tokens, process.env holds plaintext (the gateway stays untouched — its
@@ -53,11 +55,17 @@ try {
 protocol.registerSchemesAsPrivileged([mediaSchemePrivileges()])
 
 const isDev = !app.isPackaged
-const PORT = process.env.APP_PORT || 3456
-// Dev renderer is served by `pnpm dev` (nuxt dev) on the repo's dev port
-// (PORT in .env — 4002 since the fleet port reallocation). Keep in sync
-// with the wait-on URL in the `dev:electron` script.
-const DEV_PORT = Number(process.env.PORT || 4002)
+// R148: both ports come from the ONE resolver in tools/ports.cjs. A bare
+// `process.env.PORT || fallback` treated a truthy-but-unusable ambient value
+// ("0") as a port, and the dev window was sent to http://localhost:0
+// (ERR_UNSAFE_PORT) while the SAME bad port also keyed the IPC sender gate.
+// Only a real TCP port wins now; anything else falls back.
+const { parsePort, resolveDevPort } = require('./tools/ports.cjs')
+const PORT = parsePort(process.env.APP_PORT) ?? 3456
+// Dev renderer is served by `pnpm dev` / `dev:electron` (nuxt dev --port
+// 4002 since the fleet port reallocation). Keep the wait-on URL in the
+// `dev:electron` script in sync with this default.
+const DEV_PORT = resolveDevPort(process.env)
 
 // Origins the renderer legitimately runs from; media-protocol uses this
 // to decide whether a fetch() gets CORS headers (webSecurity:true, R126).
@@ -571,19 +579,21 @@ app.whenReady().then(() => {
   // check as the privileged root handlers (audit residual risk closed).
   registerFileManagerController({ isTrustedSender })
   registerTmcutController()
+  registerHtmlVideoRenderer()
   // Roadmap v3 PART A: on-demand Asset Center. The queue lives renderer-side
   // (core state machine); this controller is the thin download/registry I/O
   // adapter. getWindow() is a getter because `win` is recreated on macOS
   // activate — registering here (not in createWindow) avoids double-handlers.
   registerAssetCenterController(() => win)
   registerAiGateway()
+  registerProcessController()
   registerVideoGeneration()
 
   // MCP server (Phase 2) — spawn child process with IPC channel
   let mcpServerProcess = null
   function spawnMcpServer() {
     if (mcpServerProcess) return mcpServerProcess
-    const serverPath = join(dirname(fileURLToPath(import.meta.url)), 'tools', 'mcp', 'server.mjs')
+    const serverPath = path.join(__dirname, 'tools', 'mcp', 'server.mjs')
     mcpServerProcess = spawn(process.execPath, [serverPath], {
       stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
       env: {

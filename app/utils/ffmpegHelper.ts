@@ -80,11 +80,15 @@ export function parseFilePath(e: string | null) {
 // 3. getFileName and getOutFile
 export function getOutFile(inputFile: string, suffix = '') {
   const parseFile = parseFilePath(inputFile)
+  const extension = parseFile?.extension
   if (suffix) {
-    return `${parseFile?.fileNameNoExt}${suffix}.${parseFile?.extension}` || `${generateId()}.${parseFile?.extension}`
-  } else {
-    return parseFile?.fileName || `${generateId()}.${parseFile?.extension}`
+    // A template literal is always truthy, so the previous
+    // `\`${a}${suffix}.${b}\` || fallback` never reached the fallback: an
+    // unparseable path produced "undefined.1.undefined" as the ffmpeg output.
+    const base = parseFile?.fileNameNoExt || generateId()
+    return extension ? `${base}${suffix}.${extension}` : `${base}${suffix}`
   }
+  return parseFile?.fileName || `${generateId()}.${extension}`
 }
 
 export function suffixOutFile(input: string, output: string, suffix = '_render') {
@@ -132,7 +136,10 @@ export { isImageFile, isVideoFile }
 
 export function toURL(path: string | null | undefined): string {
   if (!path) return ''
-  if (/^(media:|https?:|data:|blob:)/.test(path)) return path
+  // Web uploads live on the local Nitro server under /uploads/ — a relative
+  // URL that works for every port/host (R152). Desktop dirs can never start
+  // with "/uploads/", so the pass-through is web-only by construction.
+  if (/^(media:|https?:|data:|blob:|\/uploads\/)/.test(path)) return path
   if (/^file:\/\//.test(path)) {
     const raw = path.replace(/^file:\/\//, '')
     try {

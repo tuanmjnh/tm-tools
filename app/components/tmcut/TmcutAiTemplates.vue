@@ -21,7 +21,6 @@ const { t } = useI18n()
 const toast = useToast()
 
 const {
-  isDesktop,
   generating,
   draft,
   validationErrors,
@@ -159,6 +158,7 @@ function usePrompt(prompt: string) {
           variant="ghost"
           icon="i-lucide-x"
           size="sm"
+          :aria-label="t('tmcut.hotkeys.close')"
           @click="closeModal"
         />
       </div>
@@ -170,10 +170,11 @@ function usePrompt(prompt: string) {
           <TmcutAiConnect @saved="checkGatewayStatus()" />
 
           <div>
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aitemplates-brief-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.aiTemplates.briefLabel') }}
             </label>
             <UTextarea
+              id="tmcut-aitemplates-brief-label"
               v-model="brief"
               :placeholder="t('tmcut.aiTemplates.briefPlaceholder')"
               :rows="6"
@@ -230,10 +231,6 @@ function usePrompt(prompt: string) {
             >
               {{ t('tmcut.aiTemplates.regenerateButton') }}
             </UButton>
-            <p v-if="!isDesktop" class="text-[11px] text-amber-500 flex items-center gap-1.5">
-              <UIcon name="i-lucide-monitor-off" class="size-3" />
-              {{ t('tmcut.aiTemplates.webOnly') }}
-            </p>
           </div>
         </div>
 

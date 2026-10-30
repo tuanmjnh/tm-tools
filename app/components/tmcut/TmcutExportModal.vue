@@ -16,7 +16,7 @@ import type { ToolTask } from '#shared/types/electron'
 const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
-const { currentProject, totalDuration, timelineTransitionCount } = useTmcutProject()
+const { currentProject, contentDuration, timelineTransitionCount } = useTmcutProject()
 const { formatTimecode, renderRange } = useTmcutPlayback()
 const { findAssetBySrc, mediaUrl } = useTmcutMedia()
 const { pickFile, pickFolder } = useFileSystem()
@@ -29,7 +29,7 @@ const usage = useTmcutUsageTracker()
 // Phase 10: record one export event + usage counter when a render completes.
 // Opt-in only — telemetry.record is a no-op when the user has not enabled it.
 function recordExportCompleted() {
-  const durationSec = Math.round(totalDuration.value || 0)
+  const durationSec = Math.round(contentDuration.value || 0)
   telemetry.trackExport('render-complete', {
     exportFormat: videoFormat.value,
     exportDurationSec: durationSec,
@@ -207,6 +207,13 @@ const previewModalOpen = ref(false)
 const watchFolder = ref(false)
 const lastWatchedPath = ref('')
 
+// Web export (web-parity step 3): the browser posts the compiled ffmpeg args
+// to the Nitro server, which runs ffmpeg and returns a /uploads/ URL. This
+// holds that result so the completed row can offer a plain download.
+const webResultUrl = ref('')
+const isWebRendering = ref(false)
+const webProgress = ref(0)
+
 const isDesktop = computed(() => !!window.electronAPI?.tmcut)
 
 let offRenderDone: (() => void) | null = null
@@ -337,9 +344,11 @@ const rangeLabel = computed(() => {
 })
 
 // ---- Specs (duration / estimated size / audio) ----
+// Full-range must match what the compiler renders: the last frame of content,
+// never the ruler's 5-second padding.
 const outputDuration = computed(() => {
   const range = activeRange.value
-  return range ? range.end - range.start : totalDuration.value
+  return range ? range.end - range.start : contentDuration.value
 })
 
 const estimatedSize = computed<string | null>(() => {
@@ -513,11 +522,9 @@ watch(
 
 function validateExportPreconditions(): boolean {
   if (!currentProject.value) return false
-  if (!isDesktop.value) {
-    toast.add({ title: t('tmcut.export.desktopOnly'), color: 'warning' })
-    return false
-  }
-  if (!outputPath.value || !fileName.value.trim()) {
+  // Web has no destination picker: the server owns the output path. Only the
+  // desktop flow needs a chosen file path.
+  if (isDesktop.value && (!outputPath.value || !fileName.value.trim())) {
     toast.add({ title: t('tmcut.export.specifyPath'), color: 'error' })
     return false
   }
@@ -566,15 +573,82 @@ const specsSummary = computed(() => {
   return `${outputW.value}x${outputH.value} · ${effectiveFps.value}fps · ${effectiveBitrateMbps.value}Mbps · ${activeEncoder.value}`
 })
 
+// Web export: POST the compiled ffmpeg args; the Nitro server starts a job and
+// runs ffmpeg in the background. We then poll the job for REAL progress
+// (ffmpeg's -progress output vs. the timeline span) until it finishes, and keep
+// the resulting /uploads/ URL for the download button.
+const WEB_POLL_MS = 700
+const WEB_POLL_LIMIT = Math.ceil((20 * 60 * 1000) / WEB_POLL_MS)
+
+async function runWebExport(compileResult: ReturnType<typeof buildCompileResult>): Promise<void> {
+  isWebRendering.value = true
+  webProgress.value = 0
+  try {
+    const started = await $fetch<{ ok: boolean, jobId: string }>('/api/v1/media/render', {
+      method: 'POST',
+      body: {
+        args: compileResult.args,
+        outputName: fileName.value || `render.${ext.value}`,
+        duration: compileResult.duration
+      }
+    })
+
+    for (let i = 0; i < WEB_POLL_LIMIT; i++) {
+      await new Promise(resolve => setTimeout(resolve, WEB_POLL_MS))
+      const job = await $fetch<{ status: string, progress: number, url: string | null, error: string | null }>(
+        `/api/v1/media/render/${started.jobId}`
+      )
+      if (job.status === 'running') {
+        webProgress.value = Math.max(0, Math.min(99, job.progress || 0))
+        continue
+      }
+      if (job.status === 'done' && job.url) {
+        webProgress.value = 100
+        webResultUrl.value = job.url
+        exportDone.value = true
+        recordExportCompleted()
+        toast.add({ title: t('tmcut.export.success'), color: 'success' })
+        return
+      }
+      throw new Error(job.error || t('tmcut.export.errorDesc'))
+    }
+    throw new Error(t('tmcut.export.errorDesc'))
+  } catch (err) {
+    exportError.value = err instanceof Error ? err.message : String(err)
+    toast.add({ title: t('tmcut.export.failed'), description: exportError.value, color: 'error' })
+  } finally {
+    isWebRendering.value = false
+    isExporting.value = false
+  }
+}
+
+// Save the rendered file from the server (the browser has no file handle).
+function downloadWebResult(): void {
+  if (!webResultUrl.value) return
+  const link = document.createElement('a')
+  link.href = webResultUrl.value
+  link.download = fileName.value || 'render.mp4'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
 async function startExport() {
   if (!validateExportPreconditions()) return
 
   isExporting.value = true
   exportDone.value = false
   exportError.value = ''
+  webResultUrl.value = ''
 
   try {
     const compileResult = buildCompileResult()
+    // Web runtime: hand the compiled args to the Nitro renderer instead of
+    // the Electron ffmpeg bridge.
+    if (!isDesktop.value) {
+      await runWebExport(compileResult)
+      return
+    }
     const task: ToolTask = {
       args: compileResult.args,
       meta: {
@@ -722,14 +796,22 @@ function previewResultDirectly() {
             <div class="col-span-12 sm:col-span-7 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
               <span class="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{{ t('tmcut.export.fileName') }}:</span>
               <UInput
+                id="tmcut-export-file-name"
                 v-model="fileName"
+                :aria-label="t('tmcut.export.fileName')"
                 size="sm"
                 class="flex-1 min-w-0"
                 :ui="{ base: 'border-0 bg-transparent focus:ring-0' }"
               />
               <span class="font-mono text-[11px] text-neutral-500">.{{ ext }}</span>
             </div>
-            <div class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors">
+            <!-- Destination picker is desktop-only (Electron folder dialog). On
+                 web the server owns the output path, so show that instead of a
+                 dead button. -->
+            <div
+              v-if="isDesktop"
+              class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5 focus-within:border-primary/50 transition-colors"
+            >
               <UIcon name="i-lucide-folder-open" class="size-4 text-neutral-500 shrink-0" />
               <span class="font-mono text-xs text-neutral-500 dark:text-neutral-400 truncate flex-1 min-w-0" :title="dirName">{{ dirName || 'D:/' }}</span>
               <UButton
@@ -743,17 +825,39 @@ function previewResultDirectly() {
                 {{ t('tmcut.export.browseFolder') }}
               </UButton>
             </div>
+            <div
+              v-else
+              class="col-span-12 sm:col-span-5 flex items-center gap-2 bg-neutral-100 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-1.5"
+            >
+              <UIcon name="i-lucide-server" class="size-4 text-primary shrink-0" />
+              <span class="text-xs text-neutral-500 dark:text-neutral-400 truncate flex-1 min-w-0">
+                {{ t('tmcut.export.webDestination') }}
+              </span>
+            </div>
           </div>
 
-          <!-- Watch folder -->
-          <div class="flex items-center justify-between pt-0.5">
-            <label class="flex items-center gap-2.5 cursor-pointer select-none">
-              <UCheckbox v-model="watchFolder" :disabled="isExporting" size="sm" />
-              <UIcon name="i-lucide-folder-eye" class="size-3.5 text-primary" />
+          <!-- Watch folder (desktop only: it watches a local file path) -->
+          <div v-if="isDesktop" class="flex items-center justify-between pt-0.5">
+            <!-- UCheckbox renders role="checkbox" on a button, which <label>
+                 cannot bind; the row is a plain click target instead, and the
+                 checkbox itself stops propagation so a direct click toggles once. -->
+            <div
+              class="flex items-center gap-2.5 select-none"
+              :class="isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+              @click="isExporting || (watchFolder = !watchFolder)"
+            >
+              <UCheckbox
+                v-model="watchFolder"
+                :aria-label="t('tmcut.export.watchFolder')"
+                :disabled="isExporting"
+                size="sm"
+                @click.stop
+              />
+              <UIcon name="i-lucide-folder-search" class="size-3.5 text-primary" />
               <span class="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
                 {{ t('tmcut.export.watchFolder') }} · {{ t('tmcut.export.watchFolderHint') }}
               </span>
-            </label>
+            </div>
             <span class="font-mono text-[10px] text-primary/80 bg-neutral-200 dark:bg-neutral-800 px-2 py-0.5 rounded">media://watch-sync</span>
           </div>
 
@@ -826,10 +930,10 @@ function previewResultDirectly() {
 
             <!-- Export range selector (In/Out zone) -->
             <div class="flex flex-col gap-1.5">
-              <label class="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
+              <span class="text-xs text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
                 <UIcon name="i-lucide-clock" class="size-3.5" />
                 {{ t('tmcut.export.rangeLabel') }}
-              </label>
+              </span>
               <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                 <button
                   type="button"
@@ -863,7 +967,7 @@ function previewResultDirectly() {
             <!-- Hardware status -->
             <div class="mt-auto p-3 rounded-lg bg-neutral-100/70 dark:bg-neutral-900/70 border border-neutral-300 dark:border-neutral-800 flex items-center gap-3">
               <div class="w-8 h-8 rounded bg-primary/15 flex items-center justify-center shrink-0">
-                <UIcon name="i-lucide-memory" class="size-4 text-primary" />
+                <UIcon name="i-lucide-cpu" class="size-4 text-primary" />
               </div>
               <div class="flex flex-col min-w-0">
                 <div class="flex items-center gap-1.5">
@@ -900,7 +1004,7 @@ function previewResultDirectly() {
             <template v-if="mode === 'video'">
               <!-- Social presets -->
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</label>
+                <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.presetsLabel') }}</span>
                 <div class="grid grid-cols-3 gap-1.5">
                   <button
                     v-for="p in socialPresets"
@@ -927,7 +1031,7 @@ function previewResultDirectly() {
               <!-- Output resolution -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
-                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.resLabel') }}</label>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.resLabel') }}</span>
                   <span class="font-mono text-[11px] text-primary">{{ t('tmcut.export.resCurrent', { w: outputW, h: outputH }) }}</span>
                 </div>
                 <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
@@ -950,9 +1054,10 @@ function previewResultDirectly() {
               <!-- Frame rate & Format & Codec side-by-side -->
               <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col gap-1.5">
-                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.fpsLabel') }}</label>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.fpsLabel') }}</span>
                   <USelect
                     :model-value="fpsValue"
+                    :aria-label="t('tmcut.export.fpsLabel')"
                     :items="fpsOptions"
                     size="sm"
                     class="w-full"
@@ -960,9 +1065,10 @@ function previewResultDirectly() {
                   />
                 </div>
                 <div class="flex flex-col gap-1.5">
-                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.formatLabel') }}</label>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.formatLabel') }}</span>
                   <USelect
                     v-model="videoFormat"
+                    :aria-label="t('tmcut.export.formatLabel')"
                     :items="formatOptions"
                     size="sm"
                     class="w-full"
@@ -973,7 +1079,7 @@ function previewResultDirectly() {
               <!-- Bitrate Options -->
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center justify-between">
-                  <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.bitrateLabel') }}</label>
+                  <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.bitrateLabel') }}</span>
                   <span class="font-mono text-[11px] text-primary">{{ effectiveBitrateMbps }} Mbps</span>
                 </div>
                 <div class="grid grid-cols-4 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
@@ -1021,7 +1127,9 @@ function previewResultDirectly() {
                 <div v-if="bitratePreset === 'custom'" class="flex items-center gap-2 pt-1">
                   <span class="text-xs text-neutral-500 dark:text-neutral-400">{{ t('tmcut.export.bitrateCustomLabel') }}:</span>
                   <UInput
+                    id="tmcut-export-bitrate-custom"
                     v-model.number="customBitrate"
+                    :aria-label="t('tmcut.export.bitrateCustomLabel')"
                     type="number"
                     size="xs"
                     min="1"
@@ -1048,11 +1156,15 @@ function previewResultDirectly() {
                       </div>
                     </div>
                   </div>
-                  <USwitch v-model="hwEngineEnabled" size="sm" />
+                  <USwitch
+                    v-model="hwEngineEnabled"
+                    :aria-label="t('tmcut.export.hwToggle')"
+                    size="sm"
+                  />
                 </div>
 
                 <div class="flex flex-col gap-1.5 pt-1">
-                  <label class="text-[11px] text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.hwEncoderProfiles') }}:</label>
+                  <span class="text-[11px] text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.hwEncoderProfiles') }}:</span>
                   <div class="grid grid-cols-2 gap-2">
                     <!-- NVENC Profile -->
                     <div
@@ -1155,16 +1267,24 @@ function previewResultDirectly() {
                 </div>
 
                 <!-- Auto-preview via media:// -->
-                <label class="flex items-center gap-2 pt-1 cursor-pointer select-none">
-                  <UCheckbox v-model="autoPreview" size="xs" />
+                <div
+                  class="flex items-center gap-2 pt-1 cursor-pointer select-none"
+                  @click="autoPreview = !autoPreview"
+                >
+                  <UCheckbox
+                    v-model="autoPreview"
+                    :aria-label="t('tmcut.export.autoPreview')"
+                    size="xs"
+                    @click.stop
+                  />
                   <UIcon name="i-lucide-play-square" class="size-3.5 text-primary shrink-0" />
                   <span class="text-[11px] text-neutral-600 dark:text-neutral-300">{{ t('tmcut.export.autoPreview') }}</span>
-                </label>
+                </div>
               </div>
 
               <!-- Color LUT (roadmap E-4) -->
               <div v-if="isDesktop" class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</label>
+                <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.lutLabel') }}</span>
                 <div class="flex items-center gap-1.5">
                   <UButton
                     size="xs"
@@ -1195,7 +1315,7 @@ function previewResultDirectly() {
             <!-- AUDIO settings -->
             <template v-else-if="mode === 'audio'">
               <div class="flex flex-col gap-1.5">
-                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioFormatLabel') }}</label>
+                <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioFormatLabel') }}</span>
                 <div class="grid grid-cols-2 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     v-for="fmt in ([{ value: 'mp3' }, { value: 'wav' }] as const)"
@@ -1219,7 +1339,7 @@ function previewResultDirectly() {
                 v-if="audioFormat === 'mp3'"
                 class="flex flex-col gap-1.5"
               >
-                <label class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioBitrateLabel') }}</label>
+                <span class="text-xs text-neutral-500 dark:text-neutral-400 font-medium">{{ t('tmcut.export.audioBitrateLabel') }}</span>
                 <div class="grid grid-cols-3 gap-1.5 p-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg border border-neutral-300 dark:border-neutral-800">
                   <button
                     v-for="kbps in [128, 192, 320]"
@@ -1252,13 +1372,24 @@ function previewResultDirectly() {
             </template>
 
             <!-- Noise reduction (roadmap D-3) -->
-            <label v-if="mode !== 'gif'" class="flex items-center gap-2.5 cursor-pointer select-none">
-              <UCheckbox v-model="denoise" :disabled="isExporting" size="sm" />
+            <div
+              v-if="mode !== 'gif'"
+              class="flex items-center gap-2.5 select-none"
+              :class="isExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'"
+              @click="isExporting || (denoise = !denoise)"
+            >
+              <UCheckbox
+                v-model="denoise"
+                :aria-label="t('tmcut.export.denoiseLabel')"
+                :disabled="isExporting"
+                size="sm"
+                @click.stop
+              />
               <UIcon name="i-lucide-waves" class="size-3.5 text-primary" />
               <span class="text-xs text-neutral-600 dark:text-neutral-300 font-medium">
                 {{ t('tmcut.export.denoiseLabel') }} · {{ t('tmcut.export.denoiseNote') }}
               </span>
-            </label>
+            </div>
           </div>
         </div>
 
@@ -1283,11 +1414,20 @@ function previewResultDirectly() {
             <template v-if="isExporting">
               <div class="h-1.5 w-32 sm:w-40 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden shrink-0">
                 <div
+                  v-if="isWebRendering && webProgress === 0"
+                  class="h-full w-1/3 bg-primary rounded-full animate-pulse"
+                />
+                <div
+                  v-else
                   class="h-full bg-primary transition-all duration-200"
-                  :style="{ width: `${progressPercent}%` }"
+                  :style="{ width: `${isWebRendering ? webProgress : progressPercent}%` }"
                 />
               </div>
-              <span class="font-mono text-xs text-primary font-semibold shrink-0">{{ progressPercent }}%</span>
+              <span
+                v-if="isWebRendering && webProgress === 0"
+                class="text-[11px] text-primary font-medium shrink-0"
+              >{{ t('tmcut.export.webRendering') }}</span>
+              <span v-else class="font-mono text-xs text-primary font-semibold shrink-0">{{ isWebRendering ? webProgress : progressPercent }}%</span>
               <span
                 v-if="etaText"
                 class="text-[11px] text-neutral-500 dark:text-neutral-400 shrink-0"
@@ -1306,30 +1446,45 @@ function previewResultDirectly() {
                 <span class="truncate">{{ t('tmcut.export.completed') }}</span>
               </span>
               <div class="flex items-center gap-1.5 shrink-0">
+                <!-- Web: the render lives on the server, so the only action is
+                     a plain download (no file-system handle to open). -->
                 <UButton
-                  icon="i-lucide-play"
+                  v-if="!isDesktop"
+                  icon="i-lucide-download"
                   size="xs"
                   color="primary"
                   variant="soft"
-                  :title="t('tmcut.export.previewNow')"
-                  @click="previewResultDirectly"
-                />
-                <UButton
-                  icon="i-lucide-external-link"
-                  size="xs"
-                  variant="soft"
-                  color="neutral"
-                  :title="t('tmcut.export.openWithApp')"
-                  @click="openResultFile"
-                />
-                <UButton
-                  icon="i-lucide-folder"
-                  size="xs"
-                  variant="soft"
-                  color="neutral"
-                  :title="t('tmcut.export.openFolder')"
-                  @click="openResultFolder"
-                />
+                  :title="t('tmcut.export.download')"
+                  @click="downloadWebResult"
+                >
+                  {{ t('tmcut.export.download') }}
+                </UButton>
+                <template v-else>
+                  <UButton
+                    icon="i-lucide-play"
+                    size="xs"
+                    color="primary"
+                    variant="soft"
+                    :title="t('tmcut.export.previewNow')"
+                    @click="previewResultDirectly"
+                  />
+                  <UButton
+                    icon="i-lucide-external-link"
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    :title="t('tmcut.export.openWithApp')"
+                    @click="openResultFile"
+                  />
+                  <UButton
+                    icon="i-lucide-folder"
+                    size="xs"
+                    variant="soft"
+                    color="neutral"
+                    :title="t('tmcut.export.openFolder')"
+                    @click="openResultFolder"
+                  />
+                </template>
               </div>
             </template>
 
@@ -1358,10 +1513,10 @@ function previewResultDirectly() {
           <!-- Actions -->
           <div class="flex items-center gap-2 shrink-0">
             <p
-              v-if="!isDesktop"
-              class="text-[11px] text-amber-300/80 mr-auto"
+              v-if="!isDesktop && !isExporting && !exportDone"
+              class="text-[11px] text-neutral-400 dark:text-neutral-500 mr-auto"
             >
-              {{ t('tmcut.export.desktopOnly') }}
+              {{ t('tmcut.export.webRenderNote') }}
             </p>
             <UButton
               v-if="!isExporting"
@@ -1383,7 +1538,7 @@ function previewResultDirectly() {
               {{ t('tmcut.export.viewQueue') }}
             </UButton>
             <UButton
-              v-if="isExporting"
+              v-if="isExporting && isDesktop"
               color="error"
               variant="soft"
               size="sm"
@@ -1392,7 +1547,7 @@ function previewResultDirectly() {
               {{ t('tmcut.export.cancelExport') }}
             </UButton>
             <UButton
-              v-if="!isExporting && !exportDone"
+              v-if="!isExporting && !exportDone && isDesktop"
               color="neutral"
               variant="soft"
               icon="i-lucide-list-plus"

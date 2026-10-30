@@ -18,7 +18,6 @@ const { t } = useI18n()
 const toast = useToast()
 
 const {
-  isDesktop,
   generating,
   applying,
   plan,
@@ -120,15 +119,16 @@ function closeModal() {
 
       <!-- Modal Body -->
       <div class="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto">
-        <!-- Left: prompt + provider -->
+        <!-- Left: prompt + model choice (connection management lives elsewhere) -->
         <div class="lg:col-span-5 flex flex-col gap-4">
-          <TmcutAiConnect @saved="checkGatewayStatus()" />
+          <TmcutAiModelPicker task="plan" label-key="tmcut.aiModelPicker.surfaceEdit" @applied="checkGatewayStatus()" />
 
           <div>
-            <label class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+            <label for="tmcut-aieditor-prompt-label" class="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
               {{ t('tmcut.aiEditor.promptLabel') }}
             </label>
             <UTextarea
+              id="tmcut-aieditor-prompt-label"
               v-model="prompt"
               :placeholder="t('tmcut.aiEditor.promptPlaceholder')"
               :rows="5"
@@ -158,10 +158,6 @@ function closeModal() {
             >
               {{ t('tmcut.aiEditor.regenerateButton') }}
             </UButton>
-            <p v-if="!isDesktop" class="text-[11px] text-amber-500 flex items-center gap-1.5">
-              <UIcon name="i-lucide-monitor-off" class="size-3" />
-              {{ t('tmcut.aiEditor.webOnly') }}
-            </p>
           </div>
         </div>
 

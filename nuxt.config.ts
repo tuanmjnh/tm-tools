@@ -37,6 +37,15 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   spaLoadingTemplate: 'spa-loading-template.html',
 
+  // Include TypeScript icon maps so local controls do not depend on runtime API requests.
+  icon: {
+    clientBundle: {
+      scan: {
+        globInclude: ['app/**/*.{vue,ts,jsx,tsx,md,json}', 'shared/**/*.ts']
+      }
+    }
+  },
+
   // PWA: tm-tools has custom service worker (push-sw.js, registered by
   // app/plugins/sw.client.ts - web push/Firebase) -> DO NOT add
   // @vite-pwa/nuxt (generates sw.js at scope '/', conflicting with push-sw.js).
@@ -44,6 +53,10 @@ export default defineNuxtConfig({
   // theme_color; service worker already in place -> full PWA support.
 
   runtimeConfig: {
+    // Private server-only: app secret for the server-to-server TM Hub AI
+    // relay (R151). The browser web runtime never holds it — it calls the
+    // local Nitro proxy (/api/v1/ai/relay/*) which proves itself to the hub.
+    hubAppSecret: process.env.NUXT_HUB_APP_SECRET || '',
     public: {
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
       hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
@@ -106,7 +119,9 @@ export default defineNuxtConfig({
         '@nuxt/ui > prosemirror-gapcursor',
         '@nuxt/ui > @tiptap/core',
         '@nuxt/ui > @tiptap/vue-3',
-        '@nuxt/ui > @tiptap/pm'
+        '@nuxt/ui > @tiptap/pm',
+        'tm-hub-client',
+        'zod'
       ]
     },
     resolve: {

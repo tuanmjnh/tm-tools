@@ -58,11 +58,13 @@ function insertSticker(emoji: string) {
     <!-- Search -->
     <div class="px-2 pt-2">
       <UInput
+        id="tmcut-sticker-library-search"
         v-model="search"
         icon="i-lucide-search"
         size="xs"
         class="w-full"
         :placeholder="t('tmcut.stickers.searchPlaceholder')"
+        :aria-label="t('tmcut.stickers.searchPlaceholder')"
       />
     </div>
 

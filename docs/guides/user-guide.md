@@ -114,11 +114,30 @@ Khi bấm **Thêm Profile**, bạn có thể thiết lập:
 - Hỗ trợ xem trước trực tiếp video chất lượng cao, nghe thử audio và phóng to hình ảnh.
 - Tìm kiếm nhanh bằng tên tệp hoặc lọc theo định dạng (`.mp4`, `.png`, `.jpg`, `.mp3`).
 
-### 4.2. Hộp thư thông báo (`/inbox`)
+### 4.2. Kho tài nguyên Stock Assets miễn phí (Free-for-Commercial Stock Library)
+TMCut tích hợp sẵn trung tâm tìm kiếm tư liệu ảnh, video và âm thanh bản quyền miễn phí phục vụ dựng video thương mại mà không lo vi phạm bản quyền:
+1. **Openverse (Mặc định - Miễn phí 100%)**:
+   - **Tài nguyên**: Hình ảnh (`image`), Âm thanh (`audio`).
+   - **Giấy phép**: CC0, CC BY, CC BY-SA (được phép dùng thương mại và chỉnh sửa).
+   - **Cấu hình**: **Không cần thiết lập gì**, có thể sử dụng ngay lập tức trong tab Stock của TMCut.
+2. **Pexels (Ảnh & Video HD/4K chất lượng cao)**:
+   - **Tài nguyên**: Hình ảnh (`image`), Video HD/4K (`video`).
+   - **Giấy phép**: Giấy phép Pexels (miễn phí thương mại, không bắt buộc ghi công).
+   - **Đăng ký API Key**: Truy cập [https://www.pexels.com/api/new/](https://www.pexels.com/api/new/) đăng ký tài khoản miễn phí để nhận API Key.
+3. **Pixabay (Kho ảnh minh họa & Footage phong phú)**:
+   - **Tài nguyên**: Hình ảnh (`image`), Video (`video`).
+   - **Giấy phép**: Pixabay Content License (miễn phí thương mại).
+   - **Đăng ký API Key**: Truy cập [https://pixabay.com/api/docs/](https://pixabay.com/api/docs/) đăng ký tài khoản và sao chép API Key ở mục *Parameters*.
+
+#### Cấu hình nhanh API Key:
+- **Cách 1 (Trực tiếp trong TMCut Studio)**: Trong TMCut > Chọn tab **Stock** bên trái > Chọn provider (Pexels / Pixabay) > Bấm biểu tượng chìa khóa > Dán API Key và nhấn **Lưu** (lưu an toàn tại LocalStorage).
+- **Cách 2 (Quản trị tập trung qua module Connections)**: Vào menu **Resources > Connections** (`/resources/connections`) > Nhấn **Add Connection** > Chọn nhóm **Media / Storage / CDN** > Chọn **Pexels** hoặc **Pixabay** > Dán API Key > Bấm **Lưu & Kiểm tra kết nối**. Toàn bộ key được mã hóa AES-256-GCM tập trung trên TM Hub.
+
+### 4.3. Hộp thư thông báo (`/inbox`)
 - Nhận thông báo cập nhật hệ thống, cảnh báo hoàn tất render video hoặc tiến trình tải file tự động từ TM Hub.
 - Đánh dấu đã đọc hoặc xóa các thông báo cũ.
 
-### 4.3. Bộ công cụ tiện ích (Utilities)
+### 4.4. Bộ công cụ tiện ích (Utilities)
 - **Văn bản (`/utilities/text`)**: Đổi chữ hoa/chữ thường, loại bỏ dấu tiếng Việt, lọc trùng dòng, đếm ký tự/từ.
 - **Biểu tượng (`/utilities/icons`)**: Tra cứu hàng nghìn icon thuộc bộ Lucide Icons, bấm sao chép tên icon hoặc mã SVG chỉ với 1 click.
 - **Mã hóa & Giải mã (`/utilities/encode`)**: Hỗ trợ chuyển đổi qua lại giữa Base64, URL encode/decode, Hex, HTML Entities, đọc cấu trúc JWT token.

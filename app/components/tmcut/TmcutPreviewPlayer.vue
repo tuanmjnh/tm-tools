@@ -5,12 +5,14 @@ import { useTmcutProject } from '~/composables/useTmcutProject'
 import type { TmcutTrack, TmcutTimelineItem } from '~/composables/useTmcutProject'
 import { useTmcutPlayback } from '~/composables/useTmcutPlayback'
 import { computeFitObjectStyle, CROP_RATIO_PRESETS, clampCropRect, applyCropRatio, canvasFpsValue } from '~/utils/tmcut/canvas'
-import { textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
+import { textBoxPadding, textStrokeWidth, textShadowOffset } from '~/utils/tmcut/textStyle'
+import { effectCssParts } from '~/utils/tmcut/fxPreview'
 import { previewScale, evalKeyframe, gainAt, safeAreaRects, SAFE_AREA_PRESETS, TICKS_PER_SECOND, secToTicks, ticksToSec, maskCssMaskImage } from '@tmcut-core'
 import type { TmcutKeyframe, TmcutTextAnimationType } from '@tmcut-core'
 import { clipDurationTicks, clipStartSec, clipEndSec, clipMediaTimeSec } from '~/utils/tmcut/clipTime'
 import { useTmcutFrames } from '~/composables/useTmcutFrames'
 import { useTmcutMedia } from '~/composables/useTmcutMedia'
+import { isImageFile } from '~/utils/ffmpegHelper'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -20,7 +22,7 @@ const { proxyPreview, findAssetBySrc } = useTmcutMedia()
 // every playable URL and every desktop-only capability question goes
 // through it now (the preview never touches FFmpeg on either runtime).
 const previewEngine = useTmcutPreviewEngine()
-const { currentProject, totalDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
+const { currentProject, contentDuration, hasTimelineClips, selectedClipId, selectClip, updateClip, pushHistory, isCropEditing, toggleCropEditing } = useTmcutProject()
 const {
   playhead,
   isPlaying,
@@ -82,6 +84,29 @@ const qualityFactor = computed(() => {
     default: return 1
   }
 })
+
+// Frame field of every transport readout follows the canvas rate; the old
+// hardcoded 30s counted 0-29 on a 60fps project.
+const previewFps = computed(() => canvasFpsValue(currentProject.value?.canvas) || 30)
+
+const qualityItems = computed(() => [
+  { label: t('tmcut.player.qualityFull'), value: 'full' },
+  { label: t('tmcut.player.qualityHalf'), value: 'half' },
+  { label: t('tmcut.player.qualityQuarter'), value: 'quarter' },
+  { label: t('tmcut.player.qualityProxy'), value: 'proxy' }
+])
+
+function onQualityChange(value: unknown) {
+  if (value === 'full' || value === 'half' || value === 'quarter' || value === 'proxy') {
+    previewQuality.value = value
+  }
+}
+
+// USlider reports number | number[]; the monitor is single-thumb, but the
+// union still has to be narrowed before it reaches the gain ref.
+function onVolumeChange(value: number | number[] | undefined) {
+  previewVolume.value = Array.isArray(value) ? (value[0] ?? 0) : (value ?? 0)
+}
 
 // Safe-area rects (roadmap C13 / core canvas.mjs): action safe 0.90 and
 // title safe 0.80 as centered fractions — replaces the hardcoded
@@ -148,32 +173,35 @@ const aspectLabel = computed(() => {
   return w <= 64 && h <= 64 ? `${w}:${h}` : `${canvas.width}:${canvas.height}`
 })
 
-// Mini scrub bar: click or drag to seek across the whole timeline
-const scrubRef = ref<HTMLDivElement | null>(null)
+// Mini scrub bar (R154): click or drag the track itself to seek. The hit strip
+// is the track only — it used to be the whole row, so clicking a time label
+// seeked to a wrong ratio. The bar spans the content, not the padded ruler, so
+// the full width always maps to real media.
+const scrubTrackRef = ref<HTMLDivElement | null>(null)
 const scrubProgress = computed(() => (
-  totalDuration.value > 0
-    ? Math.min(100, (playhead.value / totalDuration.value) * 100)
+  contentDuration.value > 0
+    ? Math.min(100, (playhead.value / contentDuration.value) * 100)
     : 0
 ))
 
 function seekFromScrub(clientX: number) {
-  const el = scrubRef.value
+  const el = scrubTrackRef.value
   if (!el || !hasTimelineClips.value) return
   const rect = el.getBoundingClientRect()
   const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-  seek(ratio * totalDuration.value)
+  seek(ratio * contentDuration.value)
 }
 
-function onScrubDown(e: MouseEvent) {
+// Pointer events (not mouse) so a drag keeps tracking outside the element and
+// touch/pen work too; pointer capture is released automatically on pointerup.
+function onScrubPointerDown(e: PointerEvent) {
   if (!hasTimelineClips.value) return
+  ; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   seekFromScrub(e.clientX)
-  const move = (ev: MouseEvent) => seekFromScrub(ev.clientX)
-  const up = () => {
-    window.removeEventListener('mousemove', move)
-    window.removeEventListener('mouseup', up)
-  }
-  window.addEventListener('mousemove', move)
-  window.addEventListener('mouseup', up)
+}
+function onScrubPointerMove(e: PointerEvent) {
+  if (e.buttons !== 1) return
+  seekFromScrub(e.clientX)
 }
 
 // Expose video element to playback composable
@@ -311,6 +339,19 @@ const isCurrentClipStabilized = computed(() => {
   return !!(clip?.stabilize && clip?.stabilizedPath)
 })
 
+// Still-image clips (png/jpg/…) cannot decode in the <video> element — pointing
+// a video at an image renders an empty black frame. They get their own <img>
+// layer with the same fit/transform so the canvas shows the actual picture.
+// The asset library is authoritative when the clip src matches one; the file
+// extension is the fallback for clips whose asset entry moved or was replaced.
+const isCurrentClipImage = computed(() => {
+  const src = activeVideoClip.value?.clip?.src
+  if (!src) return false
+  const asset = findAssetBySrc(src)
+  if (asset) return asset.kind === 'image'
+  return isImageFile(src)
+})
+
 // Seek the outgoing layer to its frame once its metadata lands (the rAF
 // loop self-corrects afterwards, but the first paint should be right).
 function onOutgoingLoadedMetadata() {
@@ -335,17 +376,36 @@ function onLoadedMetadata() {
 
 // Load-error overlay (missing file / unsupported codec)
 const mediaLoadError = ref(false)
+
+// Playback buffering: a stalled decode used to look like a frozen frame with
+// no feedback (the playhead keeps running on its own clock). The video
+// element's own events are the only honest source for this state.
+const isBuffering = ref(false)
+function onVideoWaiting() {
+  if (isPlaying.value && activeVideoClip.value) isBuffering.value = true
+}
+function onVideoPlaying() {
+  isBuffering.value = false
+}
+
 watch(currentMediaSrc, () => {
   mediaLoadError.value = false
+  isBuffering.value = false
 })
-function onMediaError() {
+function onMediaError(source: 'video' | 'image' = 'video') {
   // Ignore when there is no media to load (initial state or clip just
   // removed): the empty placeholder owns that state, not the error overlay.
   if (!currentMediaSrc.value) return
+  // An image clip never decodes in <video> — its still src always fires an
+  // error event there, so only the <img> layer is allowed to report failure.
+  if (source === 'video' && isCurrentClipImage.value) return
+  // Symmetric case: a video src can never decode in <img>, so the still layer
+  // must not report that guaranteed failure either.
+  if (source === 'image' && !isCurrentClipImage.value) return
   const el = internalVideoRef.value
   // Ignore stale failures: async error events from a previous src can arrive
   // after the playhead already moved on to another clip.
-  if (el && el.currentSrc && el.currentSrc !== currentMediaSrc.value) return
+  if (source === 'video' && el && el.currentSrc && el.currentSrc !== currentMediaSrc.value) return
   mediaLoadError.value = true
 }
 
@@ -651,38 +711,20 @@ function clipVisual(clip: { offset?: number, scale?: number, x?: number, y?: num
   }
 }
 
-function computeEffectsCssFilter(effects: Array<{ type: string, params: Record<string, unknown> }>): string {
-  if (!effects || effects.length === 0) return ''
-  const parts: string[] = []
-  for (const eff of effects) {
-    if (eff.type === 'blur') {
-      const amt = Number(eff.params.amount) || 0
-      if (amt > 0) parts.push(`blur(${((amt / 100) * 12).toFixed(1)}px)`)
-    } else if (eff.type === 'sharpen') {
-      const amt = Number(eff.params.amount) || 0
-      if (amt > 0) parts.push(`contrast(${1 + (amt / 100) * 0.25}) brightness(${1 + (amt / 100) * 0.05})`)
-    } else if (eff.type === 'eq-grade') {
-      const b = (Number(eff.params.brightness) || 0) / 100
-      const c = (Number(eff.params.contrast) || 100) / 100
-      const s = (Number(eff.params.saturation) || 100) / 100
-      // R117: temp — CSS has no colorbalance; warm ≈ sepia (amber cast).
-      // Cool uses the known sepia+hue-rotate(180deg) trick: sepia pushes
-      // the image toward amber (~25deg hue), rotating +180 lands that
-      // cast on cyan-blue — a recognizable "lạnh" tint.
-      const t = Number(eff.params.temp || 0) / 100
-      let tempFilter = ''
-      if (t > 0) tempFilter = `sepia(${Math.min(0.3, t * 0.3).toFixed(3)})`
-      else if (t < 0) tempFilter = `sepia(${Math.min(0.35, -t * 0.35).toFixed(3)}) hue-rotate(180deg)`
-      parts.push(`brightness(${1 + b * 0.5}) contrast(${c}) saturate(${s})${tempFilter ? ' ' + tempFilter : ''}`)
-    } else if (eff.type === 'lut3d') {
-      const preset = String(eff.params.lut || '')
-      if (preset === 'warm') parts.push('sepia(0.2) saturate(1.15) hue-rotate(-5deg)')
-      else if (preset === 'cool') parts.push('saturate(0.9) hue-rotate(10deg)')
-      else if (preset === 'cinematic') parts.push('contrast(1.2) saturate(1.1)')
-      else if (preset === 'vintage') parts.push('sepia(0.35) contrast(0.9) brightness(0.95)')
-    }
+// The live preview paints the registry face of each effect instance: no local
+// type table here, so a tile, the inspector and this element cannot disagree
+// about what `blur=80` or `lut=warm` looks like. Overlay-only definitions
+// (vignette, grain, letterbox …) need extra layers and report an empty filter;
+// the export still applies them, which is why the tile badges their fidelity.
+function effectsCss(effects: Array<{ type: string, params?: Record<string, unknown> }>): { filter: string, transform: string } {
+  const filter: string[] = []
+  const transform: string[] = []
+  for (const eff of effects || []) {
+    const parts = effectCssParts(eff.type, eff.params || {})
+    if (parts.filter) filter.push(parts.filter)
+    if (parts.transform) transform.push(parts.transform)
   }
-  return parts.join(' ')
+  return { filter: filter.join(' '), transform: transform.join(' ') }
 }
 
 // R124 A3: preview CSS twin of the export mask (core mask.mjs renders the
@@ -726,9 +768,12 @@ const videoTransformStyle = computed(() => {
   // fields are the fallback for props without keyframes.
   const base = clipVisual(clip)
   const style: { transform: string, opacity: number, clipPath?: string, filter?: string, mixBlendMode?: string, maskImage?: string, webkitMaskImage?: string, maskSize?: string, webkitMaskSize?: string, maskRepeat?: string, webkitMaskRepeat?: string } = { ...base, ...maskPreviewStyle(clip.mask) }
-  const effectFilter = computeEffectsCssFilter(clip.effects || [])
-  if (effectFilter) {
-    style.filter = effectFilter
+  const effectStyle = effectsCss(clip.effects || [])
+  if (effectStyle.filter) {
+    style.filter = effectStyle.filter
+  }
+  if (effectStyle.transform) {
+    style.transform = `${style.transform} ${effectStyle.transform}`
   }
   // Blend mode (R116): CSS mix-blend-mode is the preview counterpart of
   // the FFmpeg `blend` filter the export uses — same mode names.
@@ -785,6 +830,10 @@ function textOverlayStyle(textClip: {
   align?: 'left' | 'center' | 'right'
   shadow?: boolean
   stroke?: boolean
+  /** Text effects (optional): undefined keeps the legacy black look. */
+  shadowColor?: string
+  strokeColor?: string
+  bgColor?: string
   offset?: number
   in?: number
   out?: number
@@ -866,12 +915,23 @@ function textOverlayStyle(textClip: {
     // pixel numbers in step (utils/tmcut/textStyle.ts).
     ...(textClip.bold ? { fontWeight: '700' } : {}),
     ...(textClip.italic ? { fontStyle: 'italic' } : {}),
-    ...(textClip.shadow ? { textShadow: `${textShadowOffset(fontSize) * scale}px ${textShadowOffset(fontSize) * scale}px 0 rgba(0, 0, 0, 0.85)` } : {}),
+    // Colours come from the optional effect fields; the legacy black/85%
+    // values stay the default, so an old project previews exactly as before.
+    ...(textClip.shadow ? { textShadow: `${textShadowOffset(fontSize) * scale}px ${textShadowOffset(fontSize) * scale}px 0 ${textClip.shadowColor || 'rgba(0, 0, 0, 0.85)'}` } : {}),
     ...(textClip.stroke
       ? {
-        paintOrder: 'stroke fill',
-        WebkitTextStroke: `${textStrokeWidth(fontSize) * scale}px rgba(0, 0, 0, 0.85)`
-      }
+          paintOrder: 'stroke fill',
+          WebkitTextStroke: `${textStrokeWidth(fontSize) * scale}px ${textClip.strokeColor || 'rgba(0, 0, 0, 0.85)'}`
+        }
+      : {}),
+    // Background plate: the CSS twin of drawtext `box=1:boxborderw=`, using
+    // the SAME padding number the export compiler uses (textBoxPadding).
+    ...(textClip.bgColor
+      ? {
+          backgroundColor: textClip.bgColor,
+          padding: `${textBoxPadding(fontSize) * scale}px`,
+          borderRadius: `${Math.max(2, Math.round(fontSize * 0.08)) * scale}px`
+        }
       : {}),
     color: textClip.color || '#ffffff',
     fontSize: `${fontSize * scale}px`,
@@ -890,6 +950,91 @@ function textOverlayStyle(textClip: {
 // Drag text overlays directly in preview (CapCut-style). Overlay units are
 // canvas pixels, so pointer deltas divide by the preview scale.
 let suppressCanvasClickUntil = 0
+
+// Element refs for the overlays, so a grab-time AABB seeds the resize/rotate
+// math (same contract as the video transform box).
+const textElRefs = new Map<string, HTMLElement>()
+function setTextEl(id: string, el: unknown) {
+  if (el instanceof HTMLElement) textElRefs.set(id, el)
+  else textElRefs.delete(id)
+}
+
+// Keep the handles a constant on-screen size: the overlay's own transform
+// scales everything inside it, so each handle counter-scales by the clip's
+// scale (10–300, the Inspector bound).
+function textHandleInverse(textClip: { scale?: number }): number {
+  return 1 / Math.max(0.1, (textClip.scale ?? 100) / 100)
+}
+
+// Corner drag = uniform scale around the overlay center (the exact math the
+// video transform box uses): rotation-invariant, and it writes the same
+// `scale` field the Inspector exposes, so both stay in step.
+function onTextResizeMouseDown(e: MouseEvent, textClip: { id: string, scale?: number }) {
+  if (e.button !== 0) return
+  e.stopPropagation()
+  const el = textElRefs.get(textClip.id)
+  if (!el) return
+  selectClip(textClip.id)
+  pushHistory()
+  const rect = el.getBoundingClientRect()
+  const centerX = rect.left + rect.width / 2
+  const centerY = rect.top + rect.height / 2
+  const startDist = Math.hypot(e.clientX - centerX, e.clientY - centerY) || 1
+  const initialScale = textClip.scale ?? 100
+  let moved = false
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    if (!moved && Math.abs(moveEvent.clientX - e.clientX) + Math.abs(moveEvent.clientY - e.clientY) < 3) return
+    moved = true
+    suppressCanvasClickUntil = Date.now() + 250
+    const dist = Math.hypot(moveEvent.clientX - centerX, moveEvent.clientY - centerY)
+    const next = Math.min(300, Math.max(10, Math.round(initialScale * (dist / startDist))))
+    updateClip(textClip.id, { scale: next })
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+// Rotate knob above the overlay: pointer angle around the center minus the
+// grab angle, added to the initial rotation (CSS/export agree on direction).
+function onTextRotateMouseDown(e: MouseEvent, textClip: { id: string, rotation?: number }) {
+  if (e.button !== 0) return
+  e.stopPropagation()
+  const el = textElRefs.get(textClip.id)
+  if (!el) return
+  selectClip(textClip.id)
+  pushHistory()
+  const rect = el.getBoundingClientRect()
+  const centerX = rect.left + rect.width / 2
+  const centerY = rect.top + rect.height / 2
+  const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX)
+  const initialRotation = textClip.rotation || 0
+  let moved = false
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    if (!moved && Math.hypot(moveEvent.clientX - e.clientX, moveEvent.clientY - e.clientY) < 3) return
+    moved = true
+    suppressCanvasClickUntil = Date.now() + 250
+    const angle = Math.atan2(moveEvent.clientY - centerY, moveEvent.clientX - centerX)
+    const deg = initialRotation + (angle - startAngle) * 180 / Math.PI
+    const normalized = Math.round(((deg + 180) % 360 + 360) % 360 - 180)
+    updateClip(textClip.id, { rotation: normalized })
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
 
 function onTextMouseDown(e: MouseEvent, textClip: { id: string, x?: number, y?: number }) {
   if (e.button !== 0) return
@@ -1184,8 +1329,14 @@ function onCropHandleMouseDown(e: MouseEvent, handleKey: string) {
   window.addEventListener('mouseup', onMouseUp)
 }
 
-function onCanvasClick() {
+// Clicking the canvas is play/pause, but a click that lands on a draggable
+// overlay (text layer, transform box, error card) is an EDIT gesture. It used
+// to bubble here and start playback, so selecting a text clip also toggled
+// the video — the overlays now tag themselves with data-canvas-hit.
+function onCanvasClick(e: MouseEvent) {
   if (isCropActive.value || Date.now() < suppressCanvasClickUntil) return
+  const target = e.target
+  if (target instanceof Element && target.closest('[data-canvas-hit]')) return
   togglePlayPause()
 }
 
@@ -1272,85 +1423,161 @@ onUnmounted(() => {
          PROXY / STAB status pills right-aligned), row 2 is icon action
          buttons only. Pinned to the top of the viewport so resizing the
          monitor never pushes it off-screen. -->
-    <div class="w-full shrink-0 sticky top-0 z-30 bg-neutral-100/95 dark:bg-neutral-900/95 backdrop-blur-sm flex flex-col gap-1.5 text-[11px] border-b border-neutral-300 dark:border-neutral-800" data-tmcut-hud>
+    <div
+      class="w-full shrink-0 sticky top-0 z-30 bg-neutral-100/95 dark:bg-neutral-900/95 backdrop-blur-sm flex flex-col gap-1.5 text-[11px] border-b border-neutral-300 dark:border-neutral-800"
+      data-tmcut-hud
+    >
       <!-- Row 1: labels -->
-      <div class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap px-3 pt-1.5"
-        data-hud-row="labels">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+      <div
+        class="flex items-center gap-2 min-w-0 text-neutral-500 dark:text-neutral-400 flex-wrap px-3 pt-1.5"
+        data-hud-row="labels"
+      >
+        <span
+          class="w-1.5 h-1.5 rounded-full shrink-0"
+          :class="isPlaying ? 'bg-primary animate-pulse' : 'bg-emerald-400'"
+        />
         <span class="font-medium text-neutral-600 dark:text-neutral-300 truncate">
           {{ t('tmcut.player.hudCanvas') }}
         </span>
-        <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
+        <span v-if="currentProject?.canvas" class="font-mono shrink-0">
           {{ currentProject.canvas.width }}x{{ currentProject.canvas.height }}
         </span>
-        <span v-if="aspectLabel" class="font-mono text-neutral-500 dark:text-neutral-600 shrink-0">
+        <span v-if="aspectLabel" class="font-mono shrink-0">
           ({{ aspectLabel }})
         </span>
-        <span v-if="currentProject?.canvas" class="font-mono text-neutral-500 shrink-0">
+        <span v-if="currentProject?.canvas" class="font-mono shrink-0">
           {{ canvasFpsValue(currentProject.canvas) }} FPS
         </span>
         <span
-          class="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/25 text-primary text-[10px] font-medium shrink-0">
+          class="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/25 text-primary text-[10px] font-medium shrink-0"
+        >
           {{ t('tmcut.player.engineBadge') }}
         </span>
-        <span v-if="isCurrentClipProxy"
+        <span
+          v-if="isCurrentClipProxy"
           class="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-400 font-medium text-[10px] leading-none shrink-0"
-          :title="t('tmcut.proxy.activeDesc')">
+          :title="t('tmcut.proxy.activeDesc')"
+        >
           <UIcon name="i-lucide-zap" class="size-3 text-amber-400" />
           {{ t('tmcut.proxy.active') }}
         </span>
-        <span v-if="isCurrentClipStabilized"
+        <span
+          v-if="isCurrentClipStabilized"
           class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium text-[10px] leading-none shrink-0"
-          :class="isCurrentClipProxy ? '' : 'ml-auto'" :title="t('tmcut.stabilize.activeDesc')">
+          :class="isCurrentClipProxy ? '' : 'ml-auto'"
+          :title="t('tmcut.stabilize.activeDesc')"
+        >
           <UIcon name="i-lucide-activity" class="size-3 text-emerald-400" />
           {{ t('tmcut.stabilize.badge') }}
         </span>
       </div>
-      <!-- Row 2: icon action buttons, pinned to the right -->
-      <div class="flex items-center justify-end gap-1.5 flex-wrap px-3 pb-1.5" data-hud-row="actions">
-        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy 720p -->
-        <div
-          class="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800/60 border border-neutral-700/50 text-[10px] font-mono">
-          <UIcon name="i-lucide-image" class="size-3 text-neutral-400" />
-          <select v-model="previewQuality"
-            class="bg-neutral-800/60 text-neutral-200 text-[10px] focus:outline-none cursor-pointer"
-            :title="t('tmcut.player.quality')">
-            <option value="full">
-              {{ t('tmcut.player.qualityFull') }}
-            </option>
-            <option value="half">
-              {{ t('tmcut.player.qualityHalf') }}
-            </option>
-            <option value="quarter">
-              {{ t('tmcut.player.qualityQuarter') }}
-            </option>
-            <option value="proxy">
-              {{ t('tmcut.player.qualityProxy') }}
-            </option>
-          </select>
+      <!-- Row 2: actions. Each group is its own flex child, so
+           `justify-between` spreads them evenly across the full tray width
+           (it used to be one cluster jammed against the right edge) and the
+           row still wraps cleanly on narrow panels. -->
+      <div
+        class="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 pb-1.5"
+        data-hud-row="actions"
+      >
+        <span class="inline-flex min-w-0 max-w-[45%] items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
+          <UIcon name="i-lucide-film" class="size-3 shrink-0" />
+          <span class="truncate">
+            {{ activeVideoClip?.clip?.name ? t('tmcut.player.hudActiveClip', { name: activeVideoClip.clip.name })
+              : t('tmcut.player.hudNoClip') }}
+          </span>
+        </span>
+
+        <!-- Preview quality (mock #2): Full Res / 1/2 Res / 1/4 Res / Proxy
+             720p. Plain Nuxt UI USelect defaults so the trigger and the menu
+             follow the theme in light and dark exactly like every other
+             control; it resizes the monitor only — the trays never move. -->
+        <USelect
+          id="tmcut-preview-quality"
+          :model-value="previewQuality"
+          :items="qualityItems"
+          value-key="value"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          leading-icon="i-lucide-gauge"
+          class="shrink-0"
+          :title="t('tmcut.player.quality')"
+          :aria-label="t('tmcut.player.quality')"
+          @update:model-value="onQualityChange"
+        />
+
+        <div v-if="activeVideoClip || previewEngine.capabilities.proxyPreview" class="flex items-center gap-1">
+          <UButton
+            v-if="activeVideoClip"
+            icon="i-lucide-crop"
+            size="xs"
+            variant="soft"
+            :color="isCropActive ? 'primary' : 'neutral'"
+            :title="t('tmcut.crop.tool')"
+            @click="triggerCropTool"
+          />
+          <UButton
+            v-if="previewEngine.capabilities.proxyPreview"
+            :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'"
+            size="xs"
+            variant="soft"
+            :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
+            :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
+            @click="proxyPreview = !proxyPreview"
+          />
         </div>
-        <UButton v-if="activeVideoClip" icon="i-lucide-crop" size="xs" variant="soft"
-          :color="isCropActive ? 'primary' : 'neutral'" :title="t('tmcut.crop.tool')" @click="triggerCropTool" />
-        <UButton v-if="previewEngine.capabilities.proxyPreview"
-          :icon="proxyPreview ? 'i-lucide-zap' : 'i-lucide-zap-off'" size="xs" variant="soft"
-          :color="proxyPreview ? (isCurrentClipProxy ? 'warning' : 'primary') : 'neutral'"
-          :title="proxyPreview ? t('tmcut.proxy.disable') : t('tmcut.proxy.enable')"
-          @click="proxyPreview = !proxyPreview" />
-        <UButton v-for="toggle in overlayToggles" :key="toggle.key" :icon="toggle.icon" size="xs" variant="soft"
-          :color="toggle.active ? 'primary' : 'neutral'" :title="toggle.label" @click="toggle.onSelect()" />
-        <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
-          <UButton icon="i-lucide-zoom-in" size="xs" variant="soft"
-            :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'" :title="t('tmcut.player.zoom')" />
-        </UDropdownMenu>
-        <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
-          <UButton icon="i-lucide-rectangle-horizontal" size="xs" variant="soft"
-            :color="ratioGuideId ? 'primary' : 'neutral'" :title="t('tmcut.safeArea.ratioGuide')" />
-        </UDropdownMenu>
-        <UButton v-if="canExtractFrames && activeVideoClip"
-          :icon="snapshotBusy ? 'i-lucide-loader-circle' : 'i-lucide-camera'" size="xs" variant="soft" color="neutral"
-          :loading="snapshotBusy" :title="t('tmcut.player.snapshot')" @click="snapshotFrame" />
-        <UButton icon="i-lucide-maximize" size="xs" variant="soft" color="neutral" :title="t('tmcut.player.fullscreen')"
-          @click="toggleFullscreen" />
+
+        <div class="flex items-center gap-1">
+          <UButton
+            v-for="toggle in overlayToggles"
+            :key="toggle.key"
+            :icon="toggle.icon"
+            size="xs"
+            variant="soft"
+            :color="toggle.active ? 'primary' : 'neutral'"
+            :title="toggle.label"
+            @click="toggle.onSelect()"
+          />
+        </div>
+
+        <div class="flex items-center gap-1">
+          <UDropdownMenu :items="canvasZoomItems" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-zoom-in"
+              size="xs"
+              variant="soft"
+              :color="canvasZoom !== 'fit' ? 'primary' : 'neutral'"
+              :title="t('tmcut.player.zoom')"
+            />
+          </UDropdownMenu>
+          <UDropdownMenu :items="ratioGuideItems" :content="{ align: 'end' }">
+            <UButton
+              icon="i-lucide-rectangle-horizontal"
+              size="xs"
+              variant="soft"
+              :color="ratioGuideId ? 'primary' : 'neutral'"
+              :title="t('tmcut.safeArea.ratioGuide')"
+            />
+          </UDropdownMenu>
+          <UButton
+            v-if="canExtractFrames && activeVideoClip"
+            :icon="snapshotBusy ? 'i-lucide-loader-circle' : 'i-lucide-camera'"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :loading="snapshotBusy"
+            :title="t('tmcut.player.snapshot')"
+            @click="snapshotFrame"
+          />
+          <UButton
+            icon="i-lucide-maximize"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :title="t('tmcut.player.fullscreen')"
+            @click="toggleFullscreen"
+          />
+        </div>
       </div>
     </div>
 
@@ -1361,53 +1588,124 @@ onUnmounted(() => {
          measured box (stageRef) drives the fit, which is why the fit never
          needs window.innerHeight and can no longer push the deck out.
          The stage centers the monitor so an intentionally zoomed frame
-         overflows into its own scroll instead of releasing to the top-left. -->
-    <div ref="stageRef" class="flex-1 min-h-0 w-full overflow-auto flex items-center justify-center">
-      <div ref="monitorRef"
+         overflows into its own scroll instead of releasing to the top-left.
+         `m-3` is the breathing room between the monitor and the two trays:
+         a fully fitted monitor used to sit flush against the HUD border. It
+         is a MARGIN, not padding, so `clientHeight` (the fit budget) stays
+         the real picture area and the monitor cannot grow into the gap. -->
+    <div ref="stageRef" class="flex-1 min-h-0 overflow-auto m-3 flex items-center justify-center">
+      <div
+        ref="monitorRef"
         class="tmcut-monitor relative bg-black rounded-lg border border-neutral-300 dark:border-neutral-800 shadow-2xl overflow-hidden select-none"
-        :style="monitorBoxStyle" :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
-        @click="onCanvasClick">
+        :style="monitorBoxStyle"
+        :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
+        @click="onCanvasClick"
+      >
         <!-- OUTGOING crossfade layer (roadmap B3): the neighbor under the
            incoming clip during a transition window. Muted — preview audio
            follows the incoming clip (documented simplification, §102).
            Tree order puts it below the (positioned) main element above. -->
-        <video v-if="transitionCrossfade && outgoingMediaSrc" v-show="!isTrackHidden" ref="internalOutgoingRef"
-          :src="outgoingMediaSrc" class="absolute inset-0 w-full h-full pointer-events-none"
-          :style="outgoingStyle || undefined" :muted="true" preload="auto" playsinline
-          @loadedmetadata="onOutgoingLoadedMetadata" />
+        <video
+          v-if="transitionCrossfade && outgoingMediaSrc"
+          v-show="!isTrackHidden"
+          ref="internalOutgoingRef"
+          :src="outgoingMediaSrc"
+          class="absolute inset-0 w-full h-full pointer-events-none"
+          :style="outgoingStyle || undefined"
+          :muted="true"
+          preload="auto"
+          playsinline
+          @loadedmetadata="onOutgoingLoadedMetadata"
+        />
 
         <!-- HTML5 Video Element (served via media://local protocol,
            same as ToolsVideoFramePreview in tools/video.vue).
            `relative` keeps it in the stacking tree ABOVE the outgoing
            crossfade layer (both positioned z-auto → tree order wins). -->
-        <video v-show="currentMediaSrc && !isTrackHidden" ref="internalVideoRef" :src="currentMediaSrc"
+        <video
+          v-show="currentMediaSrc && !isTrackHidden && !isCurrentClipImage"
+          ref="internalVideoRef"
+          :src="isCurrentClipImage ? undefined : currentMediaSrc"
           class="relative w-full h-full pointer-events-none transition-transform duration-75"
-          :style="{ ...videoObjectStyle, ...videoTransformStyle }" :muted="isVideoMuted || previewMuted"
-          :volume="videoVolume * previewVolume" preload="auto" playsinline @loadedmetadata="onLoadedMetadata"
-          @error="onMediaError" />
+          :style="{ ...videoObjectStyle, ...videoTransformStyle }"
+          :muted="isVideoMuted || previewMuted"
+          :volume="videoVolume * previewVolume"
+          preload="auto"
+          playsinline
+          @loadedmetadata="onLoadedMetadata"
+          @waiting="onVideoWaiting"
+          @playing="onVideoPlaying"
+          @canplay="onVideoPlaying"
+          @error="onMediaError('video')"
+        />
+
+        <!-- Still-image layer: same fit/transform contract as the video, painted
+             by <img> because a still cannot decode in the video element. -->
+        <img
+          v-show="isCurrentClipImage && currentMediaSrc && !isTrackHidden"
+          :src="isCurrentClipImage ? currentMediaSrc : undefined"
+          class="relative w-full h-full pointer-events-none object-contain select-none"
+          :style="{ ...videoObjectStyle, ...videoTransformStyle }"
+          draggable="false"
+          @error="onMediaError('image')"
+        >
 
         <!-- Audio-track playback layer (roadmap R124): one hidden <audio>
              per clip under the playhead, keyed by clip id so the element
              (and its media clock) survives unrelated re-renders. WebM
              audio and any other audio clip on an audio track now plays in
              the preview — previously these had no engine at all. -->
-        <audio v-for="a in activeAudioSrcs" :key="a.id" :ref="(el) => setAudioEl(a.id, el)" :src="a.src"
-          :muted="a.muted" :volume="a.volume" preload="auto" hidden @loadedmetadata="onAudioLoaded(a)" />
+        <audio
+          v-for="a in activeAudioSrcs"
+          :key="a.id"
+          :ref="(el) => setAudioEl(a.id, el)"
+          :src="a.src"
+          :muted="a.muted"
+          :volume="a.volume"
+          preload="auto"
+          hidden
+          @loadedmetadata="onAudioLoaded(a)"
+        />
 
         <!-- Vignette overlay effect (Roadmap Phase E) -->
-        <div v-if="activeVignetteStyle" class="absolute inset-0 pointer-events-none z-10"
-          :style="activeVignetteStyle" />
+        <div
+          v-if="activeVignetteStyle"
+          class="absolute inset-0 pointer-events-none z-10"
+          :style="activeVignetteStyle"
+        />
+
+        <!-- Buffering indicator: the playhead keeps running on its own clock,
+             so a stalled decoder needs an explicit state or the frame just
+             looks frozen. -->
+        <div
+          v-if="isBuffering && !mediaLoadError"
+          class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+          role="status"
+        >
+          <span
+            class="flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm"
+          >
+            <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+            {{ t('tmcut.player.buffering') }}
+          </span>
+        </div>
 
         <!-- Hidden-track badge (CapCut eye-off state) -->
-        <div v-if="isTrackHidden && currentMediaSrc"
-          class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-neutral-500 select-none">
+        <div
+          v-if="isTrackHidden && currentMediaSrc"
+          class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-neutral-500 select-none"
+          data-canvas-hit
+        >
           <UIcon name="i-lucide-eye-off" class="size-10 opacity-40" />
           <span class="text-xs">{{ t('tmcut.player.trackHidden') }}</span>
         </div>
 
         <!-- Media load error overlay (only when a src was actually attempted) -->
-        <div v-if="mediaLoadError && currentMediaSrc"
-          class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-red-950/70 backdrop-blur-xs p-4 text-center select-none">
+        <div
+          v-if="mediaLoadError && currentMediaSrc"
+          class="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 bg-red-950/70 backdrop-blur-xs p-4 text-center select-none"
+          data-canvas-hit
+        >
           <UIcon name="i-lucide-alert-triangle" class="size-8 text-red-400 animate-pulse" />
           <p class="text-xs font-semibold text-red-200">
             {{ t('tmcut.player.loadError') }}
@@ -1418,40 +1716,56 @@ onUnmounted(() => {
         </div>
 
         <!-- Safe Area / Guides / Grid / Center Overlays (Phase 2) -->
-        <div v-if="showSafeArea" class="absolute pointer-events-none border border-dashed border-emerald-400/60" :style="{
-          left: pct(safeArea.actionSafe.x),
-          top: pct(safeArea.actionSafe.y),
-          width: pct(safeArea.actionSafe.w),
-          height: pct(safeArea.actionSafe.h)
-        }" />
-        <div v-if="showSafeArea" class="absolute pointer-events-none border border-dashed border-amber-400/60" :style="{
-          left: pct(safeArea.titleSafe.x),
-          top: pct(safeArea.titleSafe.y),
-          width: pct(safeArea.titleSafe.w),
-          height: pct(safeArea.titleSafe.h)
-        }" />
+        <div
+          v-if="showSafeArea"
+          class="absolute pointer-events-none border border-dashed border-emerald-400/60"
+          :style="{
+            left: pct(safeArea.actionSafe.x),
+            top: pct(safeArea.actionSafe.y),
+            width: pct(safeArea.actionSafe.w),
+            height: pct(safeArea.actionSafe.h)
+          }"
+        />
+        <div
+          v-if="showSafeArea"
+          class="absolute pointer-events-none border border-dashed border-amber-400/60"
+          :style="{
+            left: pct(safeArea.titleSafe.x),
+            top: pct(safeArea.titleSafe.y),
+            width: pct(safeArea.titleSafe.w),
+            height: pct(safeArea.titleSafe.h)
+          }"
+        />
         <!-- Ratio frame guide (roadmap C13): centered box of the picked
            target ratio — a composition aid, not a crop. -->
-        <div v-if="ratioGuideStyle" class="absolute pointer-events-none border border-dashed border-primary/60"
-          :style="ratioGuideStyle" />
+        <div
+          v-if="ratioGuideStyle"
+          class="absolute pointer-events-none border border-dashed border-primary/60"
+          :style="ratioGuideStyle"
+        />
         <div v-if="showGuides" class="absolute inset-0 pointer-events-none">
           <div class="absolute top-0 bottom-0 left-1/3 w-px bg-primary/40" />
           <div class="absolute top-0 bottom-0 left-2/3 w-px bg-primary/40" />
           <div class="absolute left-0 right-0 top-1/3 h-px bg-primary/40" />
           <div class="absolute left-0 right-0 top-2/3 h-px bg-primary/40" />
         </div>
-        <div v-if="showGrid" class="absolute inset-0 pointer-events-none opacity-30"
-          style="background-image: linear-gradient(to right, rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.35) 1px, transparent 1px); background-size: 10% 10%;" />
+        <div
+          v-if="showGrid"
+          class="absolute inset-0 pointer-events-none opacity-30"
+          style="background-image: linear-gradient(to right, rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.35) 1px, transparent 1px); background-size: 10% 10%;"
+        />
         <div v-if="showCenter" class="absolute inset-0 pointer-events-none flex items-center justify-center">
           <UIcon name="i-lucide-crosshair" class="size-6 text-red-400/70" />
         </div>
 
         <!-- Empty / Standby Canvas Placeholder -->
-        <div v-if="!currentMediaSrc"
-          class="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-600 gap-2 p-6 text-center">
+        <div
+          v-if="!currentMediaSrc"
+          class="absolute inset-0 flex flex-col items-center justify-center text-neutral-500 dark:text-neutral-600 gap-2 p-6 text-center"
+        >
           <UIcon name="i-lucide-clapperboard" class="size-12 opacity-30 text-primary" />
           <span class="text-xs font-medium text-neutral-500">
-            {{ t('tmcut.player.noVideoAtPlayhead', { time: formatTimecode(playhead) }) }}
+            {{ t('tmcut.player.noVideoAtPlayhead', { time: formatTimecode(playhead, previewFps) }) }}
           </span>
           <span class="text-[10px] text-neutral-500 dark:text-neutral-600 font-mono">
             {{ currentProject?.canvas?.width }} x {{ currentProject?.canvas?.height }}
@@ -1461,57 +1775,84 @@ onUnmounted(() => {
         <!-- Selected video transform box (Roadmap A3): drag the body to
            move, drag a corner to scale. Sits BELOW the text overlays so
            text stays clickable on top of it. -->
-        <div v-if="!isCropActive && selectionBoxClip && selectionBoxStyle" ref="selectionBoxRef"
-          class="absolute left-0 top-0 w-full h-full border-primary cursor-move" :style="selectionBoxStyle"
-          @mousedown="onSelectionBodyMouseDown">
-          <span v-for="corner in selectionCorners" :key="corner.key"
+        <div
+          v-if="!isCropActive && selectionBoxClip && selectionBoxStyle"
+          ref="selectionBoxRef"
+          class="absolute left-0 top-0 w-full h-full border-primary cursor-move"
+          :style="selectionBoxStyle"
+          data-canvas-hit
+          @mousedown="onSelectionBodyMouseDown"
+        >
+          <span
+            v-for="corner in selectionCorners"
+            :key="corner.key"
             class="absolute w-2.5 h-2.5 -m-1 bg-white border-2 border-primary rounded-[2px]"
-            :class="[corner.pos, corner.cursor]" :style="{ transform: `scale(${handleInverseScale})` }"
-            @mousedown.stop="onSelectionResizeMouseDown" />
+            :class="[corner.pos, corner.cursor]"
+            :style="{ transform: `scale(${handleInverseScale})` }"
+            @mousedown.stop="onSelectionResizeMouseDown"
+          />
           <!-- Rotate stem + knob (R22): above the top edge, orbits with the
              box rotation; the knob is counter-scaled to stay constant size -->
           <div class="absolute left-1/2 -top-5 w-px h-4 -translate-x-1/2 bg-primary/70 pointer-events-none" />
           <span
             class="absolute left-1/2 -top-6 w-3 h-3 -translate-x-1/2 rounded-full bg-white border-2 border-primary cursor-grab active:cursor-grabbing pointer-events-auto"
-            :style="{ transform: `scale(${handleInverseScale})` }" @mousedown.stop="onSelectionRotateMouseDown" />
+            :style="{ transform: `scale(${handleInverseScale})` }"
+            @mousedown.stop="onSelectionRotateMouseDown"
+          />
         </div>
 
         <!-- Interactive Crop & Mask Overlay (Roadmap F-3) -->
         <template v-if="isCropActive">
           <!-- 4 Darkened Mask regions outside the crop rect -->
-          <div class="absolute bg-black/65 pointer-events-none" :style="{
-            top: 0,
-            left: 0,
-            right: 0,
-            height: `${currentCropRect.y * 100}%`
-          }" />
-          <div class="absolute bg-black/65 pointer-events-none" :style="{
-            bottom: 0,
-            left: 0,
-            right: 0,
-            top: `${(currentCropRect.y + currentCropRect.h) * 100}%`
-          }" />
-          <div class="absolute bg-black/65 pointer-events-none" :style="{
-            left: 0,
-            top: `${currentCropRect.y * 100}%`,
-            width: `${currentCropRect.x * 100}%`,
-            height: `${currentCropRect.h * 100}%`
-          }" />
-          <div class="absolute bg-black/65 pointer-events-none" :style="{
-            right: 0,
-            top: `${currentCropRect.y * 100}%`,
-            left: `${(currentCropRect.x + currentCropRect.w) * 100}%`,
-            height: `${currentCropRect.h * 100}%`
-          }" />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              top: 0,
+              left: 0,
+              right: 0,
+              height: `${currentCropRect.y * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              bottom: 0,
+              left: 0,
+              right: 0,
+              top: `${(currentCropRect.y + currentCropRect.h) * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              left: 0,
+              top: `${currentCropRect.y * 100}%`,
+              width: `${currentCropRect.x * 100}%`,
+              height: `${currentCropRect.h * 100}%`
+            }"
+          />
+          <div
+            class="absolute bg-black/65 pointer-events-none"
+            :style="{
+              right: 0,
+              top: `${currentCropRect.y * 100}%`,
+              left: `${(currentCropRect.x + currentCropRect.w) * 100}%`,
+              height: `${currentCropRect.h * 100}%`
+            }"
+          />
 
           <!-- Interactive Crop Bounding Box -->
-          <div ref="cropBoxRef" class="absolute border-2 border-primary shadow-2xl cursor-move pointer-events-auto"
+          <div
+            ref="cropBoxRef"
+            class="absolute border-2 border-primary shadow-2xl cursor-move pointer-events-auto"
             :style="{
               left: `${currentCropRect.x * 100}%`,
               top: `${currentCropRect.y * 100}%`,
               width: `${currentCropRect.w * 100}%`,
               height: `${currentCropRect.h * 100}%`
-            }" @mousedown="onCropBodyMouseDown">
+            }"
+            @mousedown="onCropBodyMouseDown"
+          >
             <!-- 3x3 Rule-of-Thirds Grid -->
             <div class="absolute inset-0 pointer-events-none">
               <div class="absolute left-1/3 top-0 bottom-0 w-px bg-white/30" />
@@ -1521,30 +1862,53 @@ onUnmounted(() => {
             </div>
 
             <!-- 8 Handles (Corners + Edges) -->
-            <span v-for="h in cropHandles" :key="h.key"
-              class="absolute w-2.5 h-2.5 bg-white border-2 border-primary rounded-[2px]" :class="[h.pos, h.cursor]"
-              @mousedown.stop="onCropHandleMouseDown($event, h.key)" />
+            <span
+              v-for="h in cropHandles"
+              :key="h.key"
+              class="absolute w-2.5 h-2.5 bg-white border-2 border-primary rounded-[2px]"
+              :class="[h.pos, h.cursor]"
+              @mousedown.stop="onCropHandleMouseDown($event, h.key)"
+            />
           </div>
 
           <!-- Crop Mode Floating Controls Banner -->
           <div
             class="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-100/95 dark:bg-neutral-900/95 border border-neutral-400/80 dark:border-neutral-700/80 shadow-2xl backdrop-blur-md select-none max-w-[95%] overflow-x-auto"
-            @click.stop>
+            @click.stop
+          >
             <span class="text-[10px] font-semibold text-primary uppercase tracking-wider pl-1 shrink-0">
               {{ t('tmcut.crop.tool') }}
             </span>
             <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
-            <UButton v-for="preset in cropRatioPresets" :key="preset.id" size="xs"
+            <UButton
+              v-for="preset in cropRatioPresets"
+              :key="preset.id"
+              size="xs"
               :variant="activeCropRatio === preset.id ? 'solid' : 'ghost'"
-              :color="activeCropRatio === preset.id ? 'primary' : 'neutral'" class="shrink-0 text-[10px] px-1.5 py-0.5"
-              @click.stop="setCropRatioPreset(preset.id)">
+              :color="activeCropRatio === preset.id ? 'primary' : 'neutral'"
+              class="shrink-0 text-[10px] px-1.5 py-0.5"
+              @click.stop="setCropRatioPreset(preset.id)"
+            >
               {{ preset.label }}
             </UButton>
             <div class="w-px h-3.5 bg-neutral-300 dark:bg-neutral-700 mx-1 shrink-0" />
-            <UButton icon="i-lucide-rotate-ccw" size="xs" variant="ghost" color="neutral" class="shrink-0"
-              :title="t('tmcut.crop.reset')" @click.stop="resetCropRect" />
-            <UButton icon="i-lucide-check" size="xs" variant="solid" color="primary" class="font-medium shrink-0"
-              @click.stop="toggleCropEditing(false)">
+            <UButton
+              icon="i-lucide-rotate-ccw"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              class="shrink-0"
+              :title="t('tmcut.crop.reset')"
+              @click.stop="resetCropRect"
+            />
+            <UButton
+              icon="i-lucide-check"
+              size="xs"
+              variant="solid"
+              color="primary"
+              class="font-medium shrink-0"
+              @click.stop="toggleCropEditing(false)"
+            >
               {{ t('tmcut.crop.done') }}
             </UButton>
           </div>
@@ -1553,78 +1917,214 @@ onUnmounted(() => {
         <!-- Text Overlays (draggable in preview; anchor + style flags
              mirror the export math — roadmap C-2; whitespace-pre-line
              honors the same \\n line breaks drawtext renders) -->
-        <div v-for="textClip in activeTextClips" :key="textClip.id"
-          class="absolute leading-tight whitespace-pre-line select-none cursor-move hover:ring-1 hover:ring-primary/60 rounded"
-          :style="textOverlayStyle(textClip)" @mousedown="onTextMouseDown($event, textClip)">
+        <div
+          v-for="textClip in activeTextClips"
+          :key="textClip.id"
+          :ref="(el) => setTextEl(textClip.id, el)"
+          class="absolute leading-tight whitespace-pre-line select-none cursor-move rounded"
+          :class="textClip.id === selectedClipId
+            ? 'ring-1 ring-primary/80'
+            : 'hover:ring-1 hover:ring-primary/60'"
+          :style="textOverlayStyle(textClip)"
+          data-canvas-hit
+          @mousedown="onTextMouseDown($event, textClip)"
+        >
           {{ textClip.text }}
+
+          <!-- Transform box for the SELECTED label (CapCut-style): corner
+               handles scale the text (writes `scale`, the field the Inspector
+               owns), the knob rotates it. Handles are counter-scaled so they
+               stay legible at any text size. -->
+          <template v-if="textClip.id === selectedClipId && !isCropActive">
+            <span
+              v-for="corner in selectionCorners"
+              :key="corner.key"
+              class="absolute w-2.5 h-2.5 bg-white border-2 border-primary rounded-[2px]"
+              :class="corner.cursor"
+              :style="{
+                top: corner.key.startsWith('n') ? '0' : '100%',
+                left: corner.key.endsWith('w') ? '0' : '100%',
+                transform: `translate(-50%, -50%) scale(${textHandleInverse(textClip)})`
+              }"
+              @mousedown.stop="onTextResizeMouseDown($event, textClip)"
+            />
+            <div
+              class="absolute left-1/2 w-px h-4 bg-primary/70 pointer-events-none"
+              :style="{
+                top: '0',
+                transform: `translate(-50%, -100%) scale(${textHandleInverse(textClip)})`,
+                transformOrigin: 'bottom center'
+              }"
+            />
+            <span
+              class="absolute left-1/2 w-3 h-3 rounded-full bg-white border-2 border-primary cursor-grab active:cursor-grabbing"
+              :style="{
+                top: '0',
+                transform: `translate(-50%, -50%) translateY(-16px) scale(${textHandleInverse(textClip)})`
+              }"
+              :title="t('tmcut.player.rotateLabel')"
+              @mousedown.stop="onTextRotateMouseDown($event, textClip)"
+            />
+          </template>
         </div>
       </div>
     </div><!-- /monitor stage (F-2) -->
 
     <!-- Scrub bar + Transport deck (design #2): pinned to the bottom of the
-         viewport so resizing the monitor never pushes it off-screen. -->
+         viewport so resizing the monitor never pushes it off-screen. The deck
+         sits on its own elevated surface instead of a 50% tint that vanished
+         into the panel background in both themes. -->
     <div
-      class="w-full shrink-0 mt-3 bg-neutral-100/50 dark:bg-neutral-900/50 border border-neutral-300 dark:border-neutral-800 rounded-lg px-3 py-2 flex flex-col gap-2">
+      class="w-full shrink-0 mt-3 border border-neutral-200 bg-white/80 px-3 py-2.5 shadow-sm backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-900/80"
+    >
       <!-- Mini scrub bar: click/drag to seek -->
-      <div ref="scrubRef" class="flex items-center gap-2 select-none"
-        :class="hasTimelineClips ? 'cursor-pointer' : 'opacity-50 cursor-default'" @mousedown="onScrubDown">
+      <div class="flex items-center gap-3 select-none">
         <span class="font-mono text-[11px] text-primary font-semibold w-20 shrink-0 tabular-nums">
-          {{ formatTimecode(playhead) }}
+          {{ formatTimecode(playhead, previewFps) }}
         </span>
-        <div class="relative flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
-          <div class="h-full bg-linear-to-r from-primary/60 to-primary rounded-full transition-[width] duration-75"
-            :style="{ width: scrubProgress + '%' }" />
+        <!-- Scrubber (R154): taller high-contrast track + a visible handle.
+             Click or drag anywhere on the strip to seek. -->
+        <div
+          class="relative flex-1 h-4 flex items-center select-none touch-none"
+          :class="hasTimelineClips ? 'cursor-pointer' : 'cursor-not-allowed'"
+          :title="t('tmcut.player.scrub')"
+          @pointerdown="onScrubPointerDown"
+          @pointermove="onScrubPointerMove"
+        >
+          <div ref="scrubTrackRef" class="absolute inset-x-0 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-700" />
+          <div
+            class="absolute h-1.5 rounded-full bg-primary pointer-events-none"
+            :style="{ width: scrubProgress + '%' }"
+          />
+          <div
+            class="absolute w-3.5 h-3.5 rounded-full bg-primary ring-2 ring-white dark:ring-neutral-900 shadow-md pointer-events-none"
+            :style="{ left: 'calc(' + scrubProgress + '% - 7px)' }"
+          />
         </div>
         <span
-          class="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 w-20 shrink-0 text-right tabular-nums">
-          {{ formatTimecode(totalDuration) }}
+          class="font-mono text-[11px] text-neutral-500 dark:text-neutral-400 w-20 shrink-0 text-right tabular-nums"
+        >
+          {{ formatTimecode(contentDuration, previewFps) }}
         </span>
       </div>
 
-      <!-- Transport controls -->
-      <div class="flex items-center justify-between">
+      <!-- Transport controls. `minmax(0, 1fr)` side tracks keep the play
+           button dead-centre even when one cluster has a wider min-content. -->
+      <div
+        class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 mt-2.5 pt-2.5 border-t border-neutral-200/80 dark:border-neutral-800"
+      >
         <!-- Left: Loop, In/Out marks, jumps -->
-        <div class="flex items-center gap-1">
-          <UButton icon="i-lucide-repeat" size="xs" :variant="loopPlayback ? 'solid' : 'soft'"
-            :color="loopPlayback ? 'primary' : 'neutral'" :disabled="!hasTimelineClips" :title="t('tmcut.player.loop')"
-            @click="loopPlayback = !loopPlayback" />
-          <UButton size="xs" :variant="renderIn !== null ? 'solid' : 'soft'"
-            :color="renderIn !== null ? 'primary' : 'neutral'" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.markIn')" @click="setRenderMark('in')">
+        <div class="flex items-center gap-1 min-w-0">
+          <UButton
+            icon="i-lucide-repeat"
+            size="xs"
+            :variant="loopPlayback ? 'solid' : 'soft'"
+            :color="loopPlayback ? 'primary' : 'neutral'"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.loop')"
+            @click="loopPlayback = !loopPlayback"
+          />
+          <UButton
+            size="xs"
+            :variant="renderIn !== null ? 'solid' : 'soft'"
+            :color="renderIn !== null ? 'primary' : 'neutral'"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.markIn')"
+            @click="setRenderMark('in')"
+          >
             IN
           </UButton>
-          <UButton size="xs" :variant="renderOut !== null ? 'solid' : 'soft'"
-            :color="renderOut !== null ? 'primary' : 'neutral'" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.markOut')" @click="setRenderMark('out')">
+          <UButton
+            size="xs"
+            :variant="renderOut !== null ? 'solid' : 'soft'"
+            :color="renderOut !== null ? 'primary' : 'neutral'"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.markOut')"
+            @click="setRenderMark('out')"
+          >
             OUT
           </UButton>
-          <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
-          <UButton icon="i-lucide-skip-back" size="xs" variant="soft" color="neutral" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.jumpToStart')" @click="seek(0)" />
-          <UButton icon="i-lucide-chevron-left" size="xs" variant="soft" color="neutral" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.stepBackward')" @click="stepBackward(1)" />
+          <div class="w-px h-4 shrink-0 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+          <UButton
+            icon="i-lucide-skip-back"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.jumpToStart')"
+            @click="seek(0)"
+          />
+          <UButton
+            icon="i-lucide-chevron-left"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.stepBackward')"
+            @click="stepBackward(1)"
+          />
         </div>
 
         <!-- Center: Play/Pause -->
-        <UButton :icon="isPlaying ? 'i-lucide-pause' : 'i-lucide-play'" size="sm" color="primary" variant="solid"
-          class="rounded-full w-9 h-9 p-0 flex items-center justify-center shadow-lg shadow-primary/20"
-          :disabled="!hasTimelineClips" :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
-          @click="togglePlayPause" />
+        <UButton
+          :icon="isPlaying ? 'i-lucide-pause' : 'i-lucide-play'"
+          size="sm"
+          color="primary"
+          variant="solid"
+          class="justify-self-center rounded-full w-9 h-9 p-0 flex items-center justify-center shadow-lg shadow-primary/20"
+          :disabled="!hasTimelineClips"
+          :title="isPlaying ? t('tmcut.player.pause') : t('tmcut.player.play')"
+          @click="togglePlayPause"
+        />
 
         <!-- Right: Steps, jumps & master volume -->
-        <div class="flex items-center gap-1">
-          <UButton icon="i-lucide-chevron-right" size="xs" variant="soft" color="neutral" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.stepForward')" @click="stepForward(1)" />
-          <UButton icon="i-lucide-skip-forward" size="xs" variant="soft" color="neutral" :disabled="!hasTimelineClips"
-            :title="t('tmcut.player.jumpToEnd')" @click="seek(totalDuration)" />
-          <div class="w-px h-4 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
-          <UButton :icon="previewMuted || previewVolume === 0 ? 'i-lucide-volume-x' : 'i-lucide-volume-2'" size="xs"
-            variant="soft" color="neutral" :title="t('tmcut.player.mute')" @click="previewMuted = !previewMuted" />
-          <input v-model.number="previewVolume" type="range" min="0" max="1" step="0.05"
-            class="w-16 accent-primary cursor-pointer" :title="t('tmcut.player.volume')">
+        <div class="flex items-center gap-1 justify-self-end min-w-0">
+          <UButton
+            icon="i-lucide-chevron-right"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.stepForward')"
+            @click="stepForward(1)"
+          />
+          <UButton
+            icon="i-lucide-skip-forward"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :disabled="!hasTimelineClips"
+            :title="t('tmcut.player.jumpToEnd')"
+            @click="seek(contentDuration)"
+          />
+          <div class="w-px h-4 shrink-0 bg-neutral-200 dark:bg-neutral-800 mx-0.5" />
+          <UButton
+            :icon="previewMuted || previewVolume === 0 ? 'i-lucide-volume-x' : 'i-lucide-volume-2'"
+            size="xs"
+            variant="soft"
+            color="neutral"
+            :title="t('tmcut.player.mute')"
+            @click="previewMuted = !previewMuted"
+          />
+          <!-- USlider instead of a native range: same track/thumb language as
+               the rest of Nuxt UI, and it follows the theme in dark mode. -->
+          <USlider
+            :model-value="previewVolume"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            size="xs"
+            color="primary"
+            class="w-20 shrink-0"
+            :title="t('tmcut.player.volume')"
+            :aria-label="t('tmcut.player.volume')"
+            @update:model-value="onVolumeChange"
+          />
           <!-- dB readout (mock transport): gain 1.0 = 0 dB, the slider is
                a linear 0..1 gain so dB = 20·log10(v); silence shows -∞. -->
-          <span class="font-mono text-[10px] text-neutral-500 w-11 text-right shrink-0">
+          <span
+            class="font-mono text-[10px] text-neutral-500 dark:text-neutral-400 w-11 text-right shrink-0 tabular-nums"
+          >
             {{ previewVolume <= 0 ? '-\u221E dB' : `${(20 * Math.log10(previewVolume)).toFixed(1)} dB` }} </span>
         </div>
       </div>

@@ -42,7 +42,12 @@ export function compileVideoPipeline(
   const aStreams: string[] = []
 
   for (const clip of videoClips) {
-    const currentInputIdx = graph.addInput(clip.footagePath!)
+    // Stills decode to a single frame and carry no audio lane: loop the image2
+    // demuxer so the segment has real frames (`-t` bounds it to the clip span
+    // plus transform headroom, both emitted BEFORE -i).
+    const currentInputIdx = graph.addInput(clip.footagePath!, clip.isImage
+      ? ['-loop', '1', '-framerate', String(ctx.fps), '-t', (renderClipDuration(clip) + 0.5).toFixed(3)]
+      : [])
 
     const speed = clip.speed
     // Speed ramping (R124 A4): a curve replaces the constant setpts with
@@ -165,23 +170,34 @@ export function compileVideoPipeline(
     vStreams.push(vOut)
 
     if (ctx.hasAudio) {
-      // R124 A1: track-level audio mirrors the background-audio path.
-      // A muted track silences its EMBEDDED audio with volume=0 rather
-      // than skipping the stream: the concat below expects one audio
-      // stream per video clip, so dropping one would break the graph.
-      // The track dimmer multiplies the clip volume (0..100 each).
-      const trackVol = clip.trackMuted ? 0 : clip.trackVolume
-      const kfVol = keyframeExpr(clip.raw, 'volume', 't')
-      const volFilter = kfVol
-        ? `volume='(${kfVol})*${trackVol}/100':eval=frame`
-        : `volume=${Number(((clip.volumePct * trackVol) / 10000).toFixed(4))}`
-      const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
-      const aReverse = clip.raw.reverse ? 'areverse,' : ''
       const aTrimmed = `[a_trim_${currentInputIdx}]`
-      graph.addFilterChain(
-        `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
-      )
-      aStreams.push(aTrimmed)
+      if (clip.isImage) {
+        // A still has NO audio stream, but the concat below expects exactly one
+        // audio lane per video clip. Synthesise silence for it (previously the
+        // emitted `[i:a]` specifier matched nothing and ffmpeg rejected the
+        // whole graph — an image clip made any export fail).
+        graph.addFilterChain(
+          `anullsrc=r=44100:cl=stereo,atrim=end=${clipDuration.toFixed(3)},asetpts=PTS-STARTPTS${aTrimmed}`
+        )
+        aStreams.push(aTrimmed)
+      } else {
+        // R124 A1: track-level audio mirrors the background-audio path.
+        // A muted track silences its EMBEDDED audio with volume=0 rather
+        // than skipping the stream: the concat below expects one audio
+        // stream per video clip, so dropping one would break the graph.
+        // The track dimmer multiplies the clip volume (0..100 each).
+        const trackVol = clip.trackMuted ? 0 : clip.trackVolume
+        const kfVol = keyframeExpr(clip.raw, 'volume', 't')
+        const volFilter = kfVol
+          ? `volume='(${kfVol})*${trackVol}/100':eval=frame`
+          : `volume=${Number(((clip.volumePct * trackVol) / 10000).toFixed(4))}`
+        const aSetpts = speed !== 1 ? `asetpts=(PTS-STARTPTS)/${speed}` : 'asetpts=PTS-STARTPTS'
+        const aReverse = clip.raw.reverse ? 'areverse,' : ''
+        graph.addFilterChain(
+          `[${currentInputIdx}:a]atrim=start=${clip.inSec}:end=${clip.outSec},${aReverse}${aSetpts},${volFilter}${fadeFilter(clip)}${aTrimmed}`
+        )
+        aStreams.push(aTrimmed)
+      }
     }
   }
 

@@ -13,6 +13,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { compileTimelineToFfmpeg } from '../../app/utils/tmcut/render'
 import { TICKS_PER_SECOND } from '@tmcut-core'
@@ -25,7 +26,8 @@ function tk(sec: number): number {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const FFMPEG = path.join(repoRoot, 'resources', 'ffmpeg.exe')
-const workDir = path.join(repoRoot, '.smoke-render')
+const FFPROBE = path.join(repoRoot, 'resources', 'ffprobe.exe')
+const workDir = fs.mkdtempSync(path.join(tmpdir(), 'tmcut-render-smoke-'))
 
 let passed = 0
 
@@ -43,11 +45,19 @@ function runFFmpeg(args: string[]): { code: number, stderr: string } {
   return { code: res.status ?? -1, stderr: String(res.stderr ?? '') + String(res.stdout ?? '') }
 }
 
+/** Seconds the container actually reports for a rendered file. */
+function probeDurationSec(file: string): number {
+  const res = spawnSync(FFPROBE, [
+    '-v', 'error', '-show_entries', 'format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1', file
+  ], { encoding: 'utf8' })
+  assert.equal(res.status, 0, `ffprobe failed on ${file}: ${res.stderr}`)
+  const sec = Number.parseFloat(String(res.stdout).trim())
+  assert.ok(Number.isFinite(sec), `ffprobe returned no duration for ${file}: ${res.stdout}`)
+  return sec
+}
+
 function mediaInputs(): { clip: string, clip2: string, bg: string } {
-  // Fresh work dir every run — stale 0-byte outputs from failed runs
-  // would confuse the exists() assertions below.
-  fs.rmSync(workDir, { recursive: true, force: true })
-  fs.mkdirSync(workDir, { recursive: true })
   const clip = path.join(workDir, 'clipA.mp4').replace(/\\/g, '/')
   const clip2 = path.join(workDir, 'clipB.mp4').replace(/\\/g, '/')
   const bg = path.join(workDir, 'bg.png').replace(/\\/g, '/')
@@ -188,6 +198,85 @@ function main() {
     const res = runFFmpeg(compiled.args)
     assert.equal(res.code, 0, `ffmpeg rejected the graph: ${res.stderr}`)
     assert.ok(fs.existsSync(out) && fs.statSync(out).size > 1000)
+  })
+
+  check('image clip on the video track renders (looped still + silent lane)', () => {
+    // Regression: a still carries no audio stream, so the audio chain used to
+    // emit `[i:a]` for it and ffmpeg rejected the whole graph.
+    const project = {
+      name: 'Smoke Image Clip',
+      canvas: { width: 320, height: 240, fps: { numerator: 30, denominator: 1 }, background: { type: 'color', value: '#000000' } },
+      timeline: {
+        version: 1,
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [
+              { id: 'i1', src: bg, offset: 0, in: 0, out: tk(1), speed: 1, scale: 80, x: 0, y: 0, opacity: 100 },
+              { id: 'c2', src: clip, offset: tk(1), in: 0, out: tk(1), speed: 1, transitionIn: { type: 'dissolve', duration: tk(0.3) } }
+            ]
+          },
+          { id: 't1', type: 'text', name: 'Text', items: [] },
+          { id: 'a1', type: 'audio', name: 'Audio', items: [] }
+        ],
+        durationMs: 2000,
+        markers: []
+      },
+      settings: { resolution: '320x240', fps: { numerator: 30, denominator: 1 }, format: 'mp4', bitrate: 2000 },
+      source: 'manual',
+      created_at: '',
+      updated_at: ''
+    } as unknown as TmcutProject
+
+    const out = path.join(workDir, 'image_clip.mp4')
+    const compiled = compileTimelineToFfmpeg(project, out)
+    const fc = compiled.args[compiled.args.indexOf('-filter_complex') + 1]!
+    assert.ok(fc.includes('anullsrc'), 'the still must get a synthesised silent lane')
+    assert.ok(!fc.includes('[0:a]'), 'no audio specifier for the still input')
+
+    const res = runFFmpeg(compiled.args)
+    assert.equal(res.code, 0, `ffmpeg rejected the graph: ${res.stderr}`)
+    assert.ok(fs.existsSync(out) && fs.statSync(out).size > 1000, 'output file missing or empty')
+  })
+
+  check('a short project exports exactly its content, not the padded ruler', () => {
+    // The timeline UI keeps a 5-second ruler floor; the render must not inherit
+    // it. This is the end of the chain for the contentDuration split: compile
+    // says 2s, ffmpeg writes 2s, ffprobe agrees.
+    const project = {
+      name: 'Smoke Content Length',
+      canvas: { width: 320, height: 240, fps: { numerator: 30, denominator: 1 }, background: { type: 'color', value: '#000000' } },
+      timeline: {
+        version: 1,
+        tracks: [
+          {
+            id: 'v1',
+            type: 'video',
+            name: 'Video',
+            items: [{ id: 'c1', src: clip, offset: 0, in: 0, out: tk(2), speed: 1 }]
+          },
+          { id: 't1', type: 'text', name: 'Text', items: [] },
+          { id: 'a1', type: 'audio', name: 'Audio', items: [] }
+        ],
+        durationMs: 5000, // what the padded ruler used to persist
+        markers: []
+      },
+      settings: { resolution: '320x240', fps: { numerator: 30, denominator: 1 }, format: 'mp4', bitrate: 2000 },
+      source: 'manual',
+      created_at: '',
+      updated_at: ''
+    } as unknown as TmcutProject
+
+    const out = path.join(workDir, 'content_length.mp4')
+    const compiled = compileTimelineToFfmpeg(project, out)
+    assert.ok(Math.abs(compiled.duration - 2) < 0.11, `compiler padded to ${compiled.duration}s`)
+
+    const res = runFFmpeg(compiled.args)
+    assert.equal(res.code, 0, `ffmpeg rejected the graph: ${res.stderr}`)
+    const rendered = probeDurationSec(out)
+    assert.ok(Math.abs(rendered - 2) < 0.25, `a 2s project rendered ${rendered.toFixed(2)}s`)
   })
 
   console.log(`\n=== SMOKE: all ${passed} real-FFmpeg renders passed ===`)
