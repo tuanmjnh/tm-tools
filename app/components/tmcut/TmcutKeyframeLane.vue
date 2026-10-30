@@ -223,9 +223,8 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
 
 <template>
   <div
-    class="h-[92px] shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/60 px-3 py-1.5 select-none"
-  >
-    <div class="flex items-center gap-2 h-6">
+    class="h-[92px] shrink-0 border-t border-neutral-300 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-900/60 pr-1 py-1.5 select-none">
+    <div class="flex items-center gap-2 h-6 px-2">
       <UIcon name="i-lucide-spline" class="size-3.5 text-primary shrink-0" />
       <span class="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {{ t('tmcut.keyframeLane.title') }}
@@ -237,33 +236,16 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
         </span>
 
         <div class="flex items-center gap-1 ml-1">
-          <USelect
-            :aria-label="t('tmcut.keyframeLane.propertyLabel')"
-            :items="availableProps.map(p => ({ label: propLabel(p), value: p }))"
-            :model-value="activeProp"
-            size="xs"
-            class="w-28"
-            @update:model-value="activeProp = ($event as KfProp)"
-          />
-          <UButton
-            color="primary"
-            variant="soft"
-            size="xs"
-            icon="i-lucide-diamond"
-            :label="hasKeyframes
-              ? t('tmcut.keyframeLane.removeAtPlayhead')
-              : t('tmcut.keyframeLane.addAtPlayhead')"
-            @click="handleToggleKeyframe"
-          />
-          <USelect
-            v-if="activeKf"
-            :aria-label="t('tmcut.keyframeLane.easingLabel')"
+          <USelect :aria-label="t('tmcut.keyframeLane.propertyLabel')"
+            :items="availableProps.map(p => ({ label: propLabel(p), value: p }))" :model-value="activeProp" size="xs"
+            class="w-28" @update:model-value="activeProp = ($event as KfProp)" />
+          <UButton color="primary" variant="soft" size="xs" icon="i-lucide-diamond" :label="hasKeyframes
+            ? t('tmcut.keyframeLane.removeAtPlayhead')
+            : t('tmcut.keyframeLane.addAtPlayhead')" @click="handleToggleKeyframe" />
+          <USelect v-if="activeKf" :aria-label="t('tmcut.keyframeLane.easingLabel')"
             :items="KEYFRAME_EASINGS.map(e => ({ label: easingLabel(e), value: e }))"
-            :model-value="activeKf.easing || 'linear'"
-            size="xs"
-            class="w-32"
-            @update:model-value="handleEasingChange(String($event))"
-          />
+            :model-value="activeKf.easing || 'linear'" size="xs" class="w-32"
+            @update:model-value="handleEasingChange(String($event))" />
           <span class="text-[10px] font-mono text-neutral-500 ml-1">
             {{ formatValue(currentValue(activeProp)) }}
           </span>
@@ -277,43 +259,25 @@ const easingLabel = (e: string) => t(`tmcut.keyframeLane.easing_${e}`)
 
     <!-- Curve band. Fixed viewBox (640x72) scales to any lane width, so
          the curve never distorts with the timeline zoom. -->
-    <div
-      v-if="clip"
-      class="relative h-[58px] mt-1 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-950 overflow-hidden cursor-crosshair"
-      @click="handleLaneClick"
-    >
+    <div v-if="clip" class="relative h-[58px] mt-1 bg-neutral-50 dark:bg-neutral-950 overflow-hidden cursor-crosshair"
+      @click="handleLaneClick">
       <!-- Center gridline (the y=0 / baseline for x-y offsets) -->
-      <div class="absolute inset-x-0 top-1/2 border-t border-dashed border-neutral-300 dark:border-neutral-700 pointer-events-none" />
+      <div
+        class="absolute inset-x-0 top-1/2 border-t border-dashed border-neutral-300 dark:border-neutral-700 pointer-events-none" />
 
-      <svg
-        v-if="curvePoints.length > 1"
-        class="absolute inset-0 w-full h-full"
-        :viewBox="`0 0 ${W} ${H}`"
-        preserveAspectRatio="none"
-      >
-        <path
-          :d="curvePath"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          class="text-primary"
-        />
+      <svg v-if="curvePoints.length > 1" class="absolute inset-0 w-full h-full" :viewBox="`0 0 ${W} ${H}`"
+        preserveAspectRatio="none">
+        <path :d="curvePath" fill="none" stroke="currentColor" stroke-width="1.5" class="text-primary" />
       </svg>
 
       <!-- Keyframe diamonds (prop times, % positions) -->
-      <span
-        v-for="m in kfMarks"
-        :key="`kf-${m.t}`"
+      <span v-for="m in kfMarks" :key="`kf-${m.t}`"
         class="absolute top-1/2 w-2 h-2 -translate-x-1/2 -translate-y-1/2 bg-white/90 rotate-45 border border-primary z-10 pointer-events-none"
-        :style="{ left: `${m.x}%` }"
-      />
+        :style="{ left: `${m.x}%` }" />
 
       <!-- Playhead marker inside the lane -->
-      <div
-        v-if="playheadPct >= 0"
-        class="absolute top-0 bottom-0 w-px bg-primary z-20 pointer-events-none"
-        :style="{ left: `${playheadPct}%` }"
-      />
+      <div v-if="playheadPct >= 0" class="absolute top-0 bottom-0 w-px bg-primary z-20 pointer-events-none"
+        :style="{ left: `${playheadPct}%` }" />
 
       <!-- Empty state: clip selected, prop has no keyframes yet -->
       <div v-if="!clipHasAnyKf" class="absolute inset-0 flex items-center justify-center pointer-events-none">
