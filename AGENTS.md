@@ -54,7 +54,7 @@ electron/            Electron main process & preload scripts (main.cjs, preload.
 i18n/locales/        i18n files (en.json, vi.json)
 server/api/          Local Nitro API endpoints
 server/config/       Local runtime environment config
-types/               Shared types (auth.ts, rbac.ts, etc.)
+shared/types/        Types used by BOTH the Vue app and the Nitro server (import via #shared/types/<file>)
 ```
 
 ## Architecture & Integration Notes
@@ -96,7 +96,7 @@ types/               Shared types (auth.ts, rbac.ts, etc.)
   - One canonical definition per type name across the auto-imported surfaces (`app/types`, `server/types`, `shared/types`) — duplicated interface names across those folders trip the unimport "Duplicated imports" warnings.
   - Values (type guards, status consts) belong in `shared/utils/` or `app/utils/`, not in types folders.
 - **Tailwind CSS Conventions**:
-  - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (	ailwindcss/enforces-shorthand) and canonical class warnings are disabled.
+  - Explicit pixel values using arbitrary brackets (e.g. max-h-[200px], w-[320px]) are acceptable for clarity. Shorthand scale enforcement (@tailwindcss/enforces-shorthand) and canonical class warnings are disabled.
 
 ### i18n & Language Conventions
 - All user-facing text MUST reside in `i18n/locales/en.json` and `i18n/locales/vi.json` and be accessed via `t()`.
