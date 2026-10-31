@@ -1,136 +1,91 @@
-# Electron + Nuxt 4 Desktop Application
+# TM Tools
 
-Desktop application built with **Electron** + **Nuxt 4** + **Nuxt UI v4** (Tailwind CSS v4). Includes authentication (JWT), role-based access control with a dynamic menu system, MongoDB/Supabase database support, and an Electron packaging pipeline.
+Desktop utility app of the TM platform: **Electron + Nuxt 4 + Nuxt UI v4**.
+
+TM Tools manages anti-detect browser profiles, YouTube downloads and FFmpeg
+processing, the media/utility workspace, and a read-only console for the AI
+providers that live in **TM Hub**. The TMCut video editor lives in the separate
+**tm-studio** repository (port 4003).
 
 ## Features
 
-- **Electron shell** with Nuxt 4 frontend (`electron/main.cjs` + `electron/preload.cjs`)
-- **Authentication**: register/login, JWT access token + refresh token rotation, session management, logout
-- **RBAC**: roles with module-level permissions (`read/write/delete/manage`)
-- **Dynamic menu system**:
-  - Route tree stored in the database (`system_routes` collection/table)
-  - Roles hold an `allowedRoutes` list (or `*` for full access) — selectable via a tree component on the Roles page
-  - Sidebar, command palette and client-side route guard are generated from the current user's allowed routes
-  - Hiding a menu in the sidebar only affects navigation; the path stays reachable if the user has permission
-- **Pages**: Dashboard, Inbox, Customers, Admin (Users & Roles), Settings (General, Members, Notifications, Security), System (Config, Seed)
-- **Rich text editor** (Tiptap), image upload (Cloudinary), charts (Unovis), notifications (Web Push), translations (i18n EN/VI)
+- **Electron shell** with Nuxt 4 renderer (`electron/main.cjs` + `electron/preload.cjs`)
+- **Browser Hub**: isolated anti-detect profiles, groups and proxies
+  (`/profiles`, `/profiles/groups`, `/profiles/proxies`)
+- **Downloader**: `yt-dlp` queue with progress, retry and timeouts (`/tools/download`)
+- **FFmpeg tools**: encode/convert/trim/concat with presets (`/tools/video`)
+- **Media workspace**: Cloudinary library, inbox, notifications, connections
+- **AI console**: hub-owned providers, connections and models (`/system/ai-keys`)
+- **Hub satellite**: identity, RBAC routes, configs and AI credentials come from
+  TM Hub (`useHub()` + `X-App-Id`)
+- **Desktop-only capabilities**: keychain-encrypted config, native dialogs,
+  file manager bridge, auto-update through GitHub releases
+- Utilities (text, icons, encode, random, rich-text editor), i18n EN/VI
 
 ## Stack
 
-| Area        | Technology                                |
-| ----------- | ----------------------------------------- |
-| Framework   | Nuxt 4, Vue 3, TypeScript                 |
-| UI          | Nuxt UI v4, Tailwind CSS v4               |
-| Desktop     | Electron, electron-builder                |
-| Database    | MongoDB (default) or Supabase (Postgres)  |
-| Auth        | bcryptjs (password), jose (JWT)           |
-| Misc        | Cloudinary, Firebase Admin, web-push, Tiptap, Unovis |
+| Area | Technology |
+| --- | --- |
+| Framework | Nuxt 4, Vue 3, TypeScript |
+| UI | Nuxt UI v4, Tailwind CSS v4 |
+| Desktop | Electron, electron-builder, electron-updater |
+| Media | FFmpeg/FFprobe, yt-dlp (bundled, git-ignored), Cloudinary |
+| Auth | TM Hub JWT (jose, shared `AUTH_JWT_SECRET`) |
+| Misc | MongoDB/Supabase adapters, Firebase Admin, Tiptap, Unovis, i18n |
 
 ## Project structure
 
 ```
-app/                 Nuxt application (pages, layouts, components, composables)
-electron/            Electron main + preload scripts
+app/                 Nuxt app (pages, layouts, components, composables)
+electron/            Electron main process, preload, platform layer (src/)
 i18n/                Locale files (en, vi)
-scripts/             Seed scripts
-server/
-  api/               Nitro API routes (auth, rbac, users, system, routes...)
-  config/            Environment-driven configuration
-  modules/           Auth, RBAC, routes, database adapters
-supabase/            SQL migrations for the Supabase provider
-types/               Shared TypeScript types (auth, rbac)
+server/              Nitro API routes (hub proxy, health, chat, system)
+shared/              Types and utils shared by app and server
+resources/           Bundled binaries (ffmpeg, ffprobe, ffplay, yt-dlp)
+docs/                Living documentation (v2); TMCut-era docs in docs/archive/
 ```
 
 ## Setup
 
-1. Install dependencies:
+1. Install dependencies (pnpm 12):
 
 ```bash
 pnpm install
 ```
 
-2. Configure environment — copy `.env.example` to `.env` and fill in the values:
+2. Configure `.env`:
 
-```bash
-cp .env.example .env
+```env
+PORT=4002
+APP_PORT=3456
+AUTH_PROVIDER=hub
+NUXT_PUBLIC_HUB_URL=http://localhost:4000
+NUXT_PUBLIC_HUB_APP_ID=tm-tools_bbx58v
+AUTH_JWT_SECRET=<same value as tm-hub/.env>
 ```
 
-Key variables:
-
-- `AUTH_PROVIDER` — `mongodb` or `supabase`
-- `AUTH_ACCESS_TOKEN_SECRET` / `AUTH_REFRESH_TOKEN_SECRET` — JWT secrets (min 32 chars)
-- `MONGODB_URI` / `MONGODB_DB_NAME` — required when using MongoDB
-- `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` — required when using Supabase
-
-### Supabase only: apply migrations
-
-If `AUTH_PROVIDER=supabase`, run the SQL migrations in the Supabase SQL Editor first (e.g. `supabase/migrations/20260731_dynamic_menu.sql`), which creates the `system_routes` table and adds the `allowed_routes` column to `roles`.
-
-### Seed the database
-
-Seed creates the route tree, system roles (`root`, `admin`, `moderator`, `user`) and demo users:
+3. Start TM Hub (`pnpm dev` in `tm-hub`), then this app:
 
 ```bash
-# Create missing data (idempotent)
-pnpm seed
-
-# Wipe and re-seed
-pnpm seed:reset
+pnpm dev            # Nuxt only → http://localhost:4002
+pnpm dev:electron   # Nuxt + Electron
 ```
 
-Demo users:
+Demo accounts and seeding live in TM Hub (`pnpm seed --app=tools`).
 
-| Email             | Password   | Role  |
-| ----------------- | ---------- | ----- |
-| root@example.com  | root123    | root  |
-| admin@example.com | admin123   | admin |
-| test@example.com  | test123    | user  |
-
-## Development
-
-Start the Nuxt dev server at `http://localhost:4002`:
+## Commands
 
 ```bash
-pnpm dev
+pnpm dev             # dev server on 4002
+pnpm dev:electron    # dev server + Electron window
+pnpm build           # Nuxt production build
+pnpm build:electron  # platform layer + Nuxt + Windows installer
+pnpm typecheck       # vue-tsc
+pnpm test:unit       # tests/unit/run-all.mts
+pnpm lint            # ESLint
 ```
 
-Run the app inside Electron (starts Nuxt dev server, waits for port 4002, then launches Electron):
+## Documentation
 
-```bash
-pnpm dev:electron
-```
-
-## Quality checks
-
-```bash
-pnpm typecheck   # nuxt typecheck
-pnpm lint        # eslint
-```
-
-## Production
-
-Build the Nuxt application:
-
-```bash
-pnpm build
-```
-
-Build the Windows desktop application (Nuxt build + electron-builder):
-
-```bash
-pnpm build:electron
-```
-
-Locally preview the production build:
-
-```bash
-pnpm preview
-```
-
-## Generate VAPID keys
-
-For Web Push notifications:
-
-```bash
-pnpm generate:vapid
-```
+Start at [`docs/README.md`](./docs/README.md). The pre-extraction TMCut docs are
+frozen in [`docs/archive/2026-10-31-v1-pre-tmcut-extraction/`](./docs/archive/2026-10-31-v1-pre-tmcut-extraction/).

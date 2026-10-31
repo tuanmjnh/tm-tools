@@ -1,30 +1,66 @@
 # TM Tools Documentation Hub
 
-Chào mừng bạn đến với kho tài liệu hướng dẫn kỹ thuật và vận hành của **TM Tools Desktop & Studio**.
+**TM Tools** is the desktop utility app of the TM platform (Nuxt 4 + Electron,
+port 4002). It manages anti-detect browser profiles, YouTube downloads and FFmpeg
+processing, the media/utility workspace, and a read-only view of the AI
+providers that live in **TM Hub**.
+
+> The TMCut video editor moved to its own repository, **tm-studio** (port 4003),
+> on 2026-10-31. Its documentation is frozen in
+> [`docs/archive/2026-10-31-v1-pre-tmcut-extraction/`](./archive/2026-10-31-v1-pre-tmcut-extraction/).
 
 ---
 
-## 📚 Sổ Tay Hướng Dẫn Nhanh (User & System Guides)
+## Guides
 
-Tất cả các tài liệu hướng dẫn thực hành đã được tổ chức gọn gàng trong thư mục **[`docs/guides/`](./guides/)**:
+1. 📖 **[User Guide](./guides/user-guide.md)** — Browser Hub, downloader,
+   FFmpeg tools, media library, utilities, AI console, settings and
+   troubleshooting.
+2. ⚙️ **[System Setup & Configuration](./guides/system-setup-and-configuration-guide.md)** —
+   ports for the four apps, `.env` wiring between tm-hub / tm-tools / tm-studio,
+   seeding and run commands.
 
-1. 📖 **[Hướng Dẫn Sử Dụng Dành Cho Người Dùng (User Guide)](./guides/user-guide.md)**
-   - Hướng dẫn thao tác giao diện Studio TMCut, cắt ghép video trên Timeline, quản lý Browser Profiles chống phát hiện, quản lý Media và sử dụng các công cụ Utilities.
+## Architecture & contracts
 
-2. ⚙️ **[Hướng Dẫn Cài Đặt & Cấu Hình Hệ Thống (System Setup Guide)](./guides/system-setup-and-configuration-guide.md)**
-   - Thiết lập kết nối giữa TM Hub (Port 4000) và TM Tools (Port 4002), cấu hình biến môi trường `.env`, phân bổ cổng dịch vụ và lệnh seed database.
+- 🔐 **[AI & Hub Connections](./ai-and-hub-connections.md)** — tm-tools holds no
+  AI keys; the hub owns credentials, catalog and relay.
+- 🌐 **[Browser Platform](./browser-platform/)** —
+  [ARCHITECTURE](./browser-platform/ARCHITECTURE.md),
+  [BROWSER_ADAPTER](./browser-platform/BROWSER_ADAPTER.md),
+  [DATABASE_SCHEMA](./browser-platform/DATABASE_SCHEMA.md),
+  [IPC_CONTRACTS](./browser-platform/IPC_CONTRACTS.md),
+  [SECURITY](./browser-platform/SECURITY.md),
+  [DEVELOPMENT_PLAN](./browser-platform/DEVELOPMENT_PLAN.md).
+- 🏛️ **[IAM & Auth Service](./iam-auth-service-architecture.md)** — the shared
+  JWT / refresh / RBAC model used by every satellite.
 
-3. 🚀 **[Hướng Dẫn Cấu Hình Hệ Thống Assets & Tích Hợp RunwayML (https://dev.runwayml.com)](./guides/assets-and-runwayml-setup-guide.md)**
-   - Kiến trúc phân tầng tài nguyên (Local, Cloud, In-memory), cách lấy API Key từ Runway Developer Portal, cấu hình mô hình `gen3a` / `gen3a-turbo` và vòng đời sinh video AI bất đồng bộ.
+## Plans & implementation notes
 
-4. 🏪 **[Hướng Dẫn Cấu Hình & Đẩy Asset Lên Marketplace](./guides/asset-marketplace-guide.md)**
-   - Chuẩn bị file tài nguyên (Music, SFX, Fonts, LUT Presets), cấu trúc manifest `starter-catalog.json`, quy chuẩn License Review bắt buộc, tính mã băm SHA-256 và đóng gói Electron.
+- 🎬 **[Downloader & FFmpeg plan](./PLAN.md)** — the original task-manager and
+  binary design for `/tools/download` and `/tools/video`.
+- 🧰 **[Video tool suite plan](./implementation_plan_20260908.md)** — panel split
+  and preset composables for the video tool.
+- 💬 **[AI chat module plan](./implementation_plan_202608011211.md)** — historic
+  multi-provider chat plan (chat now runs through the hub).
+- 🖼️ **[Media manager port](./plan-port-media-inputs.md)** — Cloudinary media
+  manager and input components.
+- 🔄 **[Auto-update: plan](./AutoUpdate_implementation_plan.md)** and
+  **[walkthrough](./AutoUpdate_walkthrough.md)** — `electron-updater` pipeline.
 
----
+## Rebuild status
 
-## 🏗️ Tài Liệu Kiến Trúc & Thiết Kế Chuyên Sâu (Architecture & Specs)
+| Area | State |
+| --- | --- |
+| TMCut editor / templates / autocut / HTML studio | moved to `tm-studio` |
+| Playlist MCP server & AI gateway | removed from tm-tools |
+| AI keys vault | hub-only (`/system/ai-keys` is read-only) |
+| Browser Hub, downloader, FFmpeg, utilities, media | alive in this repo |
 
-* 🎬 **[TMCut UI Components Reference](./capcut_editor_ui_components_reference.md)**: Đặc tả chi tiết các thành phần giao diện Timeline, Toolbar, Preview Canvas, Track Headers và Inspector theo chuẩn CapCut / Premiere Pro.
-* 🗺️ **[TMCut Roadmap v3](./TMCut%20Roadmap%20v3.md)**: Lộ trình kiến trúc toàn diện của Studio biên tập video TMCut.
-* 🤖 **[TMCut Roadmap v4 MCP & AI Automation](./TMCut_Roadmap_v4_MCP_AI_Automation.md)**: Tích hợp Model Context Protocol (MCP) và tự động hóa video bằng AI.
-* 🌐 **[Browser Platform Architecture](./browser-platform/)**: Kiến trúc quản lý hồ sơ trình duyệt chống phát hiện vân tay (Anti-detect Browser Hub).
+## Verification
+
+```bash
+pnpm typecheck
+pnpm test:unit
+pnpm lint
+pnpm dev            # http://localhost:4002
+```

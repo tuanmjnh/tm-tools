@@ -95,7 +95,7 @@ NUXT_PUBLIC_HUB_URL=${hubUrl}
 NUXT_PUBLIC_HUB_APP_ID=${appId}
 
 # 3. Khóa bí mật JWT dùng chung (phải trùng khớp với AUTH_JWT_SECRET của Hub)
-AUTH_JWT_SECRET=24481429ddef2654285b4906225e7f159e6d08a58105dd1231da4d5d07af90d5`
+AUTH_JWT_SECRET=<copy from tm-hub/.env>`
 
 const codeUseHubSnippet = `import { useHub } from '~/composables/useHub'
 
