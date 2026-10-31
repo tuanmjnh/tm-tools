@@ -25,7 +25,6 @@ const onLanguageChange = (value: unknown) => {
 
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: t('settings.appearance'), icon: 'i-lucide-palette', to: '/system/settings' },
-  { label: t('settings.production'), icon: 'i-lucide-shield-check', to: '/system/settings/production' },
   { label: t('nav.system'), icon: 'i-lucide-cpu', to: '/system/settings/system' }
 ])
 

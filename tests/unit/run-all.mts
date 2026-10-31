@@ -1,10 +1,8 @@
 /**
- * TMCut spec runner — every tests/unit/tmcut_*.spec.ts in one command
- * (`pnpm test:tmcut`). Each spec is a standalone script (they install
- * global shims and import the store as a module-level singleton, so one
- * process per spec keeps them independent), and the runner fails on the
- * first non-zero exit. The FFmpeg smoke spec is opt-in via --smoke
- * because it renders real media.
+ * Unit spec runner — every tests/unit/*.spec.ts in one command
+ * (`pnpm test:unit`). Each spec is a standalone script (some install
+ * global shims and import module-level singletons, so one process per spec
+ * keeps them independent), and the runner fails on the first non-zero exit.
  */
 import { readdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -15,10 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url))
 const root = join(here, '..', '..')
 const unit = join(here)
 
-const includeSmoke = process.argv.includes('--smoke')
 const specs = readdirSync(unit)
-  .filter(f => f.startsWith('tmcut_') && f.endsWith('.spec.ts'))
-  .filter(f => includeSmoke || !f.includes('smoke'))
+  .filter(f => f.endsWith('.spec.ts'))
   .sort()
 
 let failed = 0
@@ -36,5 +32,5 @@ for (const spec of specs) {
   if (!ok) console.log((res.stdout || '') + (res.stderr || ''))
 }
 
-console.log(`\n${specs.length - failed}/${specs.length} specs passed${includeSmoke ? '' : '  (smoke skipped; run with --smoke)'}`)
+console.log(`\n${specs.length - failed}/${specs.length} specs passed`)
 process.exit(failed === 0 ? 0 : 1)

@@ -17,7 +17,7 @@
  *    arrays in electron/ipcPolicy.cjs;
  *  - file-manager refuses untrusted senders when a gate is injected and
  *    stays testable when it is not.
- * Run: pnpm test:tmcut (or tsx --tsconfig tsconfig.test.json directly).
+ * Run: pnpm test:unit (or tsx --tsconfig tsconfig.test.json directly).
  */
 /* eslint-disable @typescript-eslint/no-dynamic-delete */
 import assert from 'node:assert/strict'
@@ -47,7 +47,7 @@ const frame = (url: string | null) => ({ senderFrame: url === null ? undefined :
 
 await check('prod gate: loopback origins pass, everything else refuses', () => {
   const gate = createSenderGate({ isDev: false, port: 3456 })
-  assert.ok(gate(frame('http://127.0.0.1:3456/tmcut/editor')))
+  assert.ok(gate(frame('http://127.0.0.1:3456/tools/video')))
   assert.ok(gate(frame('http://localhost:3456/')))
   // Injected or remote frames are the threat the gate exists for.
   assert.ok(!gate(frame('http://evil.example/')))
@@ -59,7 +59,7 @@ await check('prod gate: loopback origins pass, everything else refuses', () => {
 
 await check('dev gate: Vite origin only; blank/devtools frames always pass', () => {
   const gate = createSenderGate({ isDev: true, port: 3456, devPort: 4002 })
-  assert.ok(gate(frame('http://localhost:4002/tmcut')))
+  assert.ok(gate(frame('http://localhost:4002/tools/video')))
   assert.ok(gate(frame('http://127.0.0.1:4002/')))
   assert.ok(!gate(frame('http://localhost:3100/')))
   assert.ok(!gate(frame('http://localhost:3000/')))
@@ -80,39 +80,29 @@ await check('destroyed frame (senderFrame read throws) refuses, never crashes', 
 
 await check('push allow-list covers every real webContents.send call site', () => {
   // Grep-equivalent: the channels main actually pushes (EventBus,
-  // app-updater, tmcut renderDone, profiles statusChanged, task-manager
-  // event families). If a new push appears in main code without landing
-  // here, this list review is the forcing function.
+  // app-updater, profiles statusChanged, task-manager event families).
+  // If a new push appears in main code without landing here, this list
+  // review is the forcing function.
   assert.ok(isAllowedPushChannel('eventbus:event'))
   assert.ok(isAllowedPushChannel('app-updater:status-changed'))
-  assert.ok(isAllowedPushChannel('tmcut:renderDone'))
-  // Roadmap v3 PART A: Asset Center download progress.
-  assert.ok(isAllowedPushChannel('tmcut:assetCenter:progress'))
   assert.ok(isAllowedPushChannel('tools:profiles:statusChanged'))
   assert.ok(isAllowedPushChannel('tools:ffmpeg:progressTask'))
   assert.ok(isAllowedPushChannel('tools:youtube:allTasksDone'))
   // The allow-list is a CLOSED set: unknown and prefix-spoof channels fail.
   assert.ok(!isAllowedPushChannel('tools:file-manager:read'))
+  // Channels that belonged to the removed TMCut surface must stay refused.
+  assert.ok(!isAllowedPushChannel('tmcut:renderDone'))
+  assert.ok(!isAllowedPushChannel('tmcut:assetCenter:progress'))
   assert.ok(!isAllowedPushChannel('eventbus:event..evil'))
   assert.ok(!isAllowedPushChannel(''))
   assert.ok(!isAllowedPushChannel(undefined as never))
 })
 
-await check('outbound allow-list is the honest set with MCP channels', () => {
-  // MCP channels are the only outbound channels allowed (Phase 3)
-  const expected = [
-    'mcp:server:tool:invoke',
-    'mcp:server:session:init',
-    'mcp:server:session:close',
-    'mcp:server:event:proposal_changed',
-    'mcp:server:event:project_changed',
-    'mcp:server:event:job_status',
-    'mcp:forward',
-    'mcp:forward:respond'
-  ]
-  assert.deepEqual(OUTBOUND_CHANNELS.slice().sort(), expected.slice().sort())
+await check('outbound allow-list is empty (every handler is invoke-based)', () => {
+  assert.deepEqual(OUTBOUND_CHANNELS, [])
   assert.ok(!isAllowedOutboundChannel('anything'))
   assert.ok(!isAllowedOutboundChannel('tools:file-manager:read'))
+  assert.ok(!isAllowedOutboundChannel('mcp:forward'))
 })
 
 await check('preload inline copies equal the canonical policy arrays', () => {
@@ -210,7 +200,7 @@ await check('file-manager still works for trusted senders (no gate = test mode)'
     delete req.cache[fmPath] // fresh module so it binds THIS fake ipcMain
     const { registerFileManagerController } = req(fmPath)
     registerFileManagerController()
-    const dir = await fsp.mkdtemp(join(os.tmpdir(), 'tmcut-fm-'))
+    const dir = await fsp.mkdtemp(join(os.tmpdir(), 'tm-tools-fm-'))
     try {
       const file = join(dir, 'a.txt')
       await handlers.get('tools:file-manager:writeAsync')!({}, { filePath: file, data: 'hello' })

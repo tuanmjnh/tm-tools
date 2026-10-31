@@ -827,14 +827,10 @@ const XFADE_TRANSITIONS = [
 // ---------------------------------------------------------------------------
 // Shared transition resolution (R128).
 //
-// Mirror of the render-side catalog `app/utils/tmcut/fxCatalog.ts`. The
-// packaged app ships only electron/** and .output/** (electron-builder.yml
-// `files:`), so this CommonJS main-process file cannot `require` the
-// Nuxt/TypeScript module — this block is therefore the CJS twin of
-// `xfadeNameFor()`. tests/unit/tmcut_fx_catalog.spec.ts extracts the block
-// between the markers below and asserts it resolves identically — table for
-// table and input for input — to the app catalog, so the app graph and the
-// legacy image2video path can never disagree.
+// Transition-key resolution for the desktop render tasks. The packaged app
+// ships only electron/** and .output/** (electron-builder.yml `files:`), so
+// this CommonJS main-process file keeps its own table instead of requiring a
+// TypeScript app module.
 // FXCATALOG-MIRROR-BEGIN
 const FXCATALOG_LEGACY_ALIASES = [
   ['fade', 'fade'],
@@ -845,8 +841,7 @@ const FXCATALOG_LEGACY_ALIASES = [
   ['zoom-in', 'zoomin']
 ]
 
-// Documented FFmpeg xfade names (`ffmpeg -h filter=xfade`). Kept verbatim in
-// sync with FFMPEG_XFADE_NAMES in app/utils/tmcut/fxCatalog.ts.
+// Documented FFmpeg xfade names (`ffmpeg -h filter=xfade`).
 const FFMPEG_XFADE_NAMES = [
   'circleclose', 'circlecrop', 'circleopen', 'coverdown', 'coverleft', 'coverright',
   'coverup', 'custom', 'diagbl', 'diagbr', 'diagtl', 'diagtr', 'distance', 'dissolve',
@@ -860,8 +855,8 @@ const FFMPEG_XFADE_NAMES = [
 ]
 
 /**
- * Resolves a stored transition key to an FFmpeg xfade name. Legacy TMCut keys
- * resolve through their alias; an unknown key that is already a documented
+ * Resolves a stored transition key to an FFmpeg xfade name. Legacy key
+ * aliases resolve through their table; an unknown key that is already a documented
  * xfade name passes through (except `custom`, which needs an expr); anything
  * else falls back to `fade` so an unknown/garbage key can never produce a
  * broken filter graph.

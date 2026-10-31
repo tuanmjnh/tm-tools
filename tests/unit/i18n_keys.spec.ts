@@ -17,14 +17,13 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const tmcutFiles = [...walk('app/pages/tmcut'), ...walk('app/components/tmcut')]
 // `t('ns.key' + dynamic)` and `t('ns.prefix.' + key, fallback)` are composed at
 // call time, so a literal ending with '.' carries no single key to check.
 const keyRe = /(?:^|[^\w$.])\$?t\(\s*'([a-zA-Z][\w.]*)'/g
 
 function usedKeys(): Map<string, string[]> {
   const map = new Map<string, string[]>()
-  for (const file of tmcutFiles) {
+  for (const file of [...walk('app'), ...walk('shared')]) {
     const source = readFileSync(join(root, file), 'utf8')
     for (const match of source.matchAll(keyRe)) {
       const key = match[1]!
@@ -44,14 +43,13 @@ function lookup(bundle: Record<string, unknown>, key: string): unknown {
 
 const used = usedKeys()
 
-describe('tmcut localization keys', () => {
-  it('scans a meaningful surface of tmcut sources', () => {
-    assert.ok(tmcutFiles.length >= 40, `expected dozens of tmcut files, found ${tmcutFiles.length}`)
-    assert.ok(used.size >= 400, `expected hundreds of literal keys, found ${used.size}`)
+describe('localization keys', () => {
+  it('scans a meaningful surface of app sources', () => {
+    assert.ok(used.size >= 200, `expected hundreds of literal keys, found ${used.size}`)
   })
 
   for (const [locale, bundle] of Object.entries(locales)) {
-    it(`every key used by tmcut exists in ${locale}.json`, () => {
+    it(`every literal key used by the app exists in ${locale}.json`, () => {
       const missing = [...used].filter(([key]) => lookup(bundle, key) === undefined)
         .map(([key, sites]) => `${key} <- ${sites.join(', ')}`)
       assert.deepEqual(missing, [], `missing ${locale} keys:\n${missing.join('\n')}`)

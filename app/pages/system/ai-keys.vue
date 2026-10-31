@@ -5,7 +5,6 @@
 // local Key Vault (OS keychain AT-REST encryption) and per-surface tests.
 // =============================================================================
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { AiTaskStatus, AiGatewayStatus, AiKeyVaultStatus } from '#shared/types/electron'
 import { useHubAi } from '~/composables/useHubAi'
 import type { HubAiConnection, HubAiModel, HubAiProviderItem } from '~/composables/useHubAi'
 import { getErrorMessage } from '~/shared/utils/errors'
@@ -23,7 +22,6 @@ const isRoot = computed(() => {
   return !!u && (u.permissions?.includes('*') === true || u.role === 'root')
 })
 
-const { status: gatewayStatusFn, listModels: gatewayListModels, tasks, probeConnection } = useTmcutAi()
 const {
   listProviders: hubListProviders,
   discoverModels: hubDiscoverModels,
@@ -38,7 +36,7 @@ const {
 } = useHubAi()
 
 // ---- Tabs -------------------------------------------------------------------
-type TabKey = 'providers' | 'models' | 'surfaces'
+type TabKey = 'providers' | 'models'
 const activeTab = ref<TabKey>('providers')
 
 // ---- Hub Providers & Models -------------------------------------------------
@@ -174,63 +172,6 @@ const modelForm = reactive({
 const deleteConnectionTarget = ref<{ providerName: string, connection: HubAiConnection } | null>(null)
 const deleteModelTarget = ref<HubAiModel | null>(null)
 const isDeleting = ref(false)
-
-// ---- Electron Key Vault & Surfaces ------------------------------------------
-const hasElectron = computed(() => typeof window !== 'undefined' && !!window.electronAPI?.tools?.aiGateway)
-const loading = ref(false)
-const testing = ref<Record<string, boolean>>({})
-
-const gatewayStatus = ref<AiGatewayStatus | null>(null)
-const surfaceTasks = ref<Record<string, AiTaskStatus> | null>(null)
-const vault = ref<AiKeyVaultStatus | null>(null)
-const migrating = ref(false)
-const justEncrypted = ref(false)
-
-type TestTarget = 'global' | 'plan' | 'transcribe' | 'triage'
-interface TestResult { state: 'ok' | 'warn' | 'fail', detail: string }
-const testResults = ref<Record<string, TestResult>>({})
-
-const vaultBanner = computed(() => {
-  const v = vault.value
-  if (!v) return { icon: 'i-lucide-loader', color: 'text-neutral-500 dark:text-neutral-400', title: '', desc: '' }
-  if (!v.exists) return {
-    icon: 'i-lucide-file-x',
-    color: 'text-neutral-500 dark:text-neutral-400',
-    title: t('settings.aiKeysVaultEmpty'),
-    desc: t('settings.aiKeysVaultEmptyDesc')
-  }
-  if (v.available) return {
-    icon: 'i-lucide-shield-check',
-    color: 'text-emerald-600 dark:text-emerald-400',
-    title: t('settings.aiKeysVaultOn'),
-    desc: t('settings.aiKeysVaultDesc')
-  }
-  return {
-    icon: 'i-lucide-shield-alert',
-    color: 'text-amber-600 dark:text-amber-400',
-    title: t('settings.aiKeysVaultOff'),
-    desc: t('settings.aiKeysVaultOffDesc')
-  }
-})
-
-const surfaceRows = computed(() => [
-  { key: 'editorScript', task: 'plan' as TestTarget, label: t('tmcut.aiConnect.surfaceEditorScript'), st: surfaceTasks.value?.['plan'] || null },
-  { key: 'captions', task: 'transcribe' as TestTarget, label: t('tmcut.aiConnect.surfaceCaptions'), st: surfaceTasks.value?.['transcribe'] || null },
-  { key: 'autocut', task: 'triage' as TestTarget, label: t('tmcut.aiConnect.surfaceAutocut'), st: surfaceTasks.value?.['triage'] || null }
-])
-
-const testedRows = computed(() => {
-  const rows: Array<{ task: TestTarget, label: string, res: TestResult }> = []
-  for (const row of surfaceRows.value) {
-    const res = testResults.value[row.task]
-    if (res) rows.push({ task: row.task, label: row.label, res })
-  }
-  return rows
-})
-
-const showEncryptButton = computed(() =>
-  !!vault.value && vault.value.available && vault.value.plaintext > 0
-)
 
 // ---- Metrics ----------------------------------------------------------------
 const allConnections = computed(() => hubProviders.value.flatMap(p => p.connections))
@@ -553,45 +494,8 @@ async function runDiscovery(input: {
   const isLocal = isLocalUrl(cleanBase)
   const isRemoteHub = !!hubUrl && (hubUrl.startsWith('https://') || !hubUrl.includes('localhost'))
 
-  // 1. If in Electron and target is localhost/local network, query directly via Electron's local desktop gateway
-  if (hasElectron.value && isLocal && gatewayListModels) {
-    try {
-      const models = await gatewayListModels({ provider: input.provider || p?.definition.key, baseUrl: cleanBase, apiKey: cleanKey })
-      const list = models.map(m => ({ id: m.id, displayName: m.label || m.id }))
-      if (input.persist && input.connectionId) {
-        const provKey = input.provider || p?.definition.key || ''
-        await persistModelsToHub(provKey, input.connectionId, list)
-        try {
-          await hubPatchConnection(appId, input.connectionId, {
-            status: 'connected',
-            lastTestOk: true,
-            lastTestAt: new Date().toISOString()
-          })
-        } catch { }
-      }
-      if (input.connectionId) {
-        localConnectionHealth.value[input.connectionId] = {
-          status: 'connected',
-          lastTestOk: true,
-          lastTestAt: new Date().toISOString()
-        }
-      }
-      return { ok: true, count: list.length, models: list }
-    } catch (err) {
-      console.warn('[Discovery] Local electron discovery error:', err)
-      if (input.connectionId) {
-        localConnectionHealth.value[input.connectionId] = {
-          status: 'error',
-          lastTestOk: false,
-          lastTestAt: new Date().toISOString()
-        }
-      }
-      if (isRemoteHub) throw err
-    }
-  }
-
-  // 2. If in Web mode (browser) and target is localhost/local network, query via local Nitro server API
-  if (!hasElectron.value && isLocal) {
+  // 1. Local target (localhost/LAN): query via the local Nitro discover API
+  if (isLocal) {
     try {
       const res = await $fetch<{ ok: boolean, count?: number, models?: Array<{ id: string, displayName?: string }>, message?: string }>('/api/v1/ai/discover', {
         method: 'POST',
@@ -653,27 +557,9 @@ async function runDiscovery(input: {
       models: list.map(m => ({ id: m.id, displayName: m.displayName || m.id }))
     }
   } catch (hubErr) {
-    // 4. Fallback: try local electron or local nitro
-    if (hasElectron.value && gatewayListModels && cleanBase) {
-      try {
-        const models = await gatewayListModels({ provider: input.provider || p?.definition.key, baseUrl: cleanBase, apiKey: cleanKey })
-        const list = models.map(m => ({ id: m.id, displayName: m.label || m.id }))
-        if (input.persist && input.connectionId) {
-          const provKey = input.provider || p?.definition.key || ''
-          await persistModelsToHub(provKey, input.connectionId, list)
-          try {
-            await hubPatchConnection(appId, input.connectionId, {
-              status: 'connected',
-              lastTestOk: true,
-              lastTestAt: new Date().toISOString()
-            })
-          } catch { }
-        }
-        return { ok: true, count: list.length, models: list }
-      } catch (electronErr: any) {
-        throw new Error(electronErr?.message || getErrorMessage(hubErr, k => t(k)))
-      }
-    } else if (!hasElectron.value && cleanBase) {
+    // 4. Fallback: the hub relay refused (app secret / network), so ask this
+    //    Nitro server directly. tm-tools no longer ships a local AI vault.
+    if (cleanBase) {
       try {
         const res = await $fetch<{ ok: boolean, count?: number, models?: Array<{ id: string, displayName?: string }>, message?: string }>('/api/v1/ai/discover', {
           method: 'POST',
@@ -798,7 +684,7 @@ const headerMenu = computed<DropdownMenuItem[][]>(() => [
     {
       label: t('common.refresh'),
       icon: 'i-lucide-refresh-cw',
-      disabled: hubLoading.value || loading.value,
+      disabled: hubLoading.value,
       onSelect: () => refresh()
     }
   ]
@@ -888,28 +774,12 @@ function providerHealth(c: HubAiConnection): { label: string, color: 'success' |
   return { label: t('aiProviders.unknown'), color: 'warning' }
 }
 
-const testStateColor = (r: TestResult | undefined) =>
-  r?.state === 'ok' ? 'success' : r?.state === 'warn' ? 'warning' : 'error'
-
 // ---- Lifecycle & Hub Operations ---------------------------------------------
 onMounted(() => {
   void refresh()
 })
 
 async function refresh() {
-  if (hasElectron.value) {
-    loading.value = true
-    try {
-      gatewayStatus.value = await gatewayStatusFn()
-      surfaceTasks.value = await tasks()
-      const res = await window.electronAPI?.aiKeyStatus?.()
-      vault.value = res?.ok && res.data ? res.data : null
-    } catch {
-      // keep previous
-    } finally {
-      loading.value = false
-    }
-  }
   await refreshHub()
 }
 
@@ -1014,16 +884,8 @@ async function hubTest(c: HubAiConnection, provItem?: HubAiProviderItem) {
       baseUrl: effectiveBase,
       persist: false
     })
-    // Discovery only proves GET {base}/models answers. A listing can be
-    // perfectly healthy while chat fails (an NVIDIA account with no active
-    // endpoint returns 404 per model) or hangs (AMD), so a green badge has to
-    // mean "this connection actually completed a message". Desktop is skipped:
-    // there chat runs on the gateway's saved config, not on this hub row.
-    let probedModel = ''
-    if (!hasElectron.value) {
-      const probe = await probeConnection(c.id)
-      probedModel = probe.model
-    }
+    // Discovery only proves GET {base}/models answers. Keep the green badge
+    // scoped to that: the hub relay is the only chat path tm-tools owns now.
     c.lastTestOk = true
     c.status = 'connected'
     c.lastTestAt = new Date().toISOString()
@@ -1041,10 +903,7 @@ async function hubTest(c: HubAiConnection, provItem?: HubAiProviderItem) {
     } catch { }
     notify.success(
       t('aiProviders.test_ok'),
-      [
-        res.count ? t('aiProviders.models_fetched', [String(res.count)]) : '',
-        probedModel ? t('aiProviders.test_chat_ok', [probedModel]) : ''
-      ].filter(Boolean).join(' · ')
+      res.count ? t('aiProviders.models_fetched', [String(res.count)]) : ''
     )
   } catch (err) {
     c.lastTestOk = false
@@ -1401,46 +1260,6 @@ async function saveModelSubmit() {
   }
 }
 
-// ---- Electron Desktop Key Vault Operations ----------------------------------
-async function handleTest(task: TestTarget) {
-  if (testing.value[task]) return
-  testing.value = { ...testing.value, [task]: true }
-  try {
-    const list = await gatewayListModels(task === 'global' ? {} : { task })
-    testResults.value = {
-      ...testResults.value,
-      [task]: { state: 'ok', detail: t('tmcut.aiConnect.testOk', { count: list.length }) }
-    }
-  } catch (err) {
-    const message = String((err as Error)?.message || err)
-    const reachable = /no model ids|has no model/i.test(message)
-    testResults.value = {
-      ...testResults.value,
-      [task]: { state: reachable ? 'warn' : 'fail', detail: message.slice(0, 180) }
-    }
-  } finally {
-    testing.value = { ...testing.value, [task]: false }
-  }
-}
-
-async function handleEncrypt() {
-  if (migrating.value) return
-  migrating.value = true
-  justEncrypted.value = false
-  try {
-    const res = await window.electronAPI?.aiMigrateKeys?.()
-    if (res?.ok && res.data) {
-      vault.value = res.data
-      justEncrypted.value = res.data.plaintext === 0
-      notify.success(t('settings.aiKeysEncryptedNow'))
-    }
-  } catch {
-    // keep as is
-  } finally {
-    migrating.value = false
-  }
-}
-
 // ---- Page Header Actions ----------------------------------------------------
 mobileBar.registerActions(computed(() => [
   {
@@ -1494,7 +1313,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
     <div class="flex flex-col gap-5 w-full pb-20">
       <!-- ============ Metric Cards ======================================== -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="grid grid-cols-3 gap-3">
         <div
           class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
           <div>
@@ -1541,21 +1360,6 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             <UIcon name="i-lucide-cpu" class="size-5" />
           </div>
         </div>
-
-        <div
-          class="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between">
-          <div class="min-w-0 flex-1 pr-2">
-            <p class="text-xs text-muted truncate">
-              {{ t('settings.aiKeysTitle') }}
-            </p>
-            <p class="text-sm font-semibold truncate mt-0.5" :class="vaultBanner.color">
-              {{ vault?.available ? t('settings.aiKeysVaultOn') : t('settings.aiKeysVaultOff') }}
-            </p>
-          </div>
-          <div class="size-9 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
-            <UIcon :name="vaultBanner.icon" class="size-5" :class="vaultBanner.color" />
-          </div>
-        </div>
       </div>
 
       <!-- ============ Tab Switcher ======================================== -->
@@ -1582,15 +1386,6 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <UBadge size="xs" color="neutral" variant="subtle">
             {{ totalModels }}
           </UBadge>
-        </button>
-
-        <button type="button"
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors" :class="activeTab === 'surfaces'
-            ? 'bg-primary/10 text-primary font-semibold'
-            : 'text-muted hover:text-highlighted hover:bg-neutral-100 dark:hover:bg-neutral-800/50'"
-          @click="activeTab = 'surfaces'">
-          <UIcon name="i-lucide-shield-check" class="size-4" />
-          <span>{{ t('aiProviders.tab_surfaces') }}</span>
         </button>
       </div>
 
@@ -1917,134 +1712,6 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- ================================================================== -->
-      <!-- TAB 3: KEY VAULT & LOCAL DESKTOP SURFACES                          -->
-      <!-- ================================================================== -->
-      <div v-if="activeTab === 'surfaces'" class="space-y-4 max-w-3xl">
-        <p v-if="!hasElectron" class="text-xs text-amber-600 dark:text-amber-400">
-          {{ t('tmcut.aiConnect.desktopOnly') }}
-        </p>
-
-        <template v-else>
-          <!-- At-rest encryption banner -->
-          <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 bg-white dark:bg-neutral-900 shadow-xs">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <div class="flex items-center gap-2.5 min-w-0">
-                <UIcon :name="vaultBanner.icon" class="size-5 shrink-0" :class="vaultBanner.color" />
-                <div class="min-w-0">
-                  <p class="text-sm font-medium text-highlighted">
-                    {{ vaultBanner.title }}
-                  </p>
-                  <p class="text-[11px] text-muted leading-snug">
-                    {{ vaultBanner.desc }}
-                  </p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <UBadge color="success" variant="subtle" size="xs">
-                  <UIcon name="i-lucide-lock" class="w-3 h-3 mr-1" />
-                  {{ t('settings.aiKeysEncryptedCount', { count: vault?.encrypted ?? 0 }) }}
-                </UBadge>
-                <UBadge v-if="(vault?.plaintext ?? 0) > 0" color="warning" variant="subtle" size="xs">
-                  <UIcon name="i-lucide-eye" class="w-3 h-3 mr-1" />
-                  {{ t('settings.aiKeysPlaintextCount', { count: vault?.plaintext ?? 0 }) }}
-                </UBadge>
-                <UButton v-if="showEncryptButton" color="primary" variant="soft" size="xs"
-                  icon="i-lucide-lock-keyhole-open" :loading="migrating" :label="t('settings.aiKeysEncryptNow')"
-                  :title="t('settings.aiKeysEncryptNowTitle')" @click="handleEncrypt" />
-              </div>
-            </div>
-            <p v-if="justEncrypted" class="text-[11px] mt-2 text-emerald-600 dark:text-emerald-400">
-              {{ t('settings.aiKeysEncryptedNow') }}
-            </p>
-          </div>
-
-          <!-- Global connection -->
-          <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-800 shadow-xs overflow-hidden">
-            <div class="flex items-center justify-between gap-2 px-3 py-2.5 bg-neutral-50/70 dark:bg-neutral-800/30">
-              <span class="text-xs font-semibold text-highlighted uppercase tracking-wide">
-                {{ t('tmcut.aiConnect.globalLabel') }}
-              </span>
-              <span class="flex items-center gap-1.5 min-w-0">
-                <span class="text-[11px] font-mono text-muted truncate max-w-[60%]"
-                  :class="gatewayStatus?.configured ? '' : 'text-amber-600 dark:text-amber-400'">
-                  {{ gatewayStatus ? `${gatewayStatus.providerLabel}${gatewayStatus.model ? ' · ' + gatewayStatus.model
-                    : ''}` : '—' }}
-                </span>
-                <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-plug-zap" :loading="testing['global']"
-                  :aria-label="t('tmcut.aiConnect.testTitle')" @click="handleTest('global')" />
-              </span>
-            </div>
-            <div class="flex items-center justify-between gap-2 px-3 py-2">
-              <span class="text-[11px] text-muted">{{ t('tmcut.aiConnect.apiKeyLabel') }}</span>
-              <UBadge :color="gatewayStatus?.hasKey ? 'success' : 'neutral'" variant="subtle" size="xs">
-                {{ gatewayStatus?.keyless
-                  ? t('settings.aiKeysKeyless')
-                  : gatewayStatus?.hasKey
-                    ? t('settings.aiKeysStored')
-                    : t('settings.aiKeysMissing') }}
-              </UBadge>
-            </div>
-            <p v-if="testResults['global']" class="px-3 py-1.5 text-[10px]" :class="testResults['global'].state === 'ok'
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : testResults['global'].state === 'warn'
-                ? 'text-amber-600 dark:text-amber-400'
-                : 'text-red-600 dark:text-red-400'">
-              {{ testResults['global'].detail }}
-            </p>
-          </div>
-
-          <!-- Per-surface rows -->
-          <div
-            class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-800 shadow-xs overflow-hidden">
-            <div v-for="row in surfaceRows" :key="row.key" class="flex items-center justify-between gap-2 px-3 py-2.5">
-              <span class="text-[11px] text-highlighted">{{ row.label }}</span>
-              <span class="flex items-center gap-1.5 min-w-0">
-                <UBadge v-if="row.st && !row.st.hasKey && !row.st.provider?.includes('ollama')" color="warning"
-                  variant="subtle" size="xs">
-                  {{ t('settings.aiKeysMissing') }}
-                </UBadge>
-                <span class="text-[10px] font-mono text-muted truncate max-w-[55%]"
-                  :class="row.st?.configured ? '' : 'text-amber-600 dark:text-amber-400'">
-                  {{ row.st ? `${row.st.providerLabel}${row.st.overridden ? ' •' : ''}${row.st.model ? ' · '
-                    + row.st.model : ''}` : '—' }}
-                </span>
-                <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-plug-zap" :loading="testing[row.task]"
-                  :title="t('tmcut.aiConnect.testTitle')" :aria-label="t('tmcut.aiConnect.testTitle')"
-                  @click="handleTest(row.task)" />
-              </span>
-            </div>
-            <!-- Last test verdict per surface -->
-            <div v-for="tested in testedRows" :key="`res-${tested.task}`"
-              class="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-50/50 dark:bg-neutral-800/20">
-              <UBadge :color="testStateColor(tested.res)" variant="subtle" size="xs">
-                {{ tested.label }}
-              </UBadge>
-              <span class="text-[10px] text-muted truncate">
-                {{ tested.res.detail }}
-              </span>
-            </div>
-          </div>
-          <p class="text-[10px] text-muted">
-            {{ t('tmcut.aiConnect.surfaceHint') }}
-          </p>
-
-          <!-- How-to note -->
-          <div
-            class="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30 text-xs space-y-1.5 text-muted">
-            <div class="flex items-center gap-2 font-medium text-highlighted">
-              <UIcon name="i-lucide-info" class="w-4 h-4 text-primary" />
-              <span>{{ t('settings.aiKeysWhereTitle') }}</span>
-            </div>
-            <p>{{ t('settings.aiKeysWhere1') }}</p>
-            <p>{{ t('settings.aiKeysWhere2') }}</p>
-            <p>{{ t('settings.aiKeysWhere3') }}</p>
-          </div>
-        </template>
       </div>
     </div>
 

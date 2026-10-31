@@ -16,7 +16,6 @@ Guidance for AI coding agents working in this repository.
   - Filtered by `isVisible !== false` at root and children.
   - Route labels are resolved via i18n keys (`nav.*`).
 - **Core Modules**:
-  - **TMCut Video Studio**: Timeline editor (`/tmcut/editor`), template library (`/tmcut/templates`), and automated video splitter/generator (`/tmcut/autocut`).
   - **Profiles / Browser Hub**: Anti-detect browser profiles (`/profiles`), group tagging (`/profiles/groups`), and proxy manager (`/profiles/proxies`).
   - **Tools & Automation**: Bulk downloader (`/tools/download`), video processing tools (`/tools/video`).
   - **Utilities**: Text utilities (`/utilities/text`), Icon finder (`/utilities/icons`), Encoder/Decoder (`/utilities/encode`), Randomizer (`/utilities/random`), Markdown/Rich editor (`/utilities/editor`).
@@ -46,7 +45,7 @@ pnpm build:electron # Electron production build (Windows installer)
 
 ```
 app/                 Nuxt 4 app (pages, layouts, components, composables, middleware)
-app/pages/           Route pages (/index, /chat, /tmcut/*, /profiles/*, /tools/*, /utilities/*, /administration/*, /settings/*)
+app/pages/           Route pages (/index, /chat, /profiles/*, /tools/*, /utilities/*, /administration/*, /system/*)
 app/composables/     Client composables (useAuth, useHub, useWebPush, useNavMenu)
 app/layouts/         Layouts (default.vue with sidebar navigation)
 app/middleware/      Client route guards (auth.global.ts)
@@ -72,7 +71,7 @@ shared/types/        Types used by BOTH the Vue app and the Nitro server (import
   - Right slot: Secondary action buttons belong in `template #right`. Overflow options should be grouped in `UDropdownMenu` with `i-lucide-ellipsis-vertical`.
 - **Page Padding**:
   - Standard dashboard pages keep default padding.
-  - Studio & editor pages (such as `/tmcut/editor`) MUST pass the `flush` prop (`<BasePage flush ...>`) to remove padding and gap, giving 100% of the viewport to canvas, timelines, and inspectors.
+  - Full-bleed surfaces (canvas editors, live previews) pass the `flush` prop (`<BasePage flush ...>`) to hand the whole viewport to their own layout.
 - **Button Variants**:
   - Primary action buttons (save, create, run, confirm, launch, export, …) use `color="primary" variant="soft"` — exactly one per surface.
   - Dismissal / secondary buttons (cancel, back, close, skip, dismiss, …) use `variant="ghost"` (usually `color="neutral"`) — they must never compete visually with the primary action.

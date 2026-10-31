@@ -1,5 +1,3 @@
-import { fileURLToPath } from 'node:url'
-
 export default defineNuxtConfig({
 
   modules: [
@@ -53,20 +51,13 @@ export default defineNuxtConfig({
   // theme_color; service worker already in place -> full PWA support.
 
   runtimeConfig: {
-    // Private server-only: app secret for the server-to-server TM Hub AI
-    // relay (R151). The browser web runtime never holds it — it calls the
-    // local Nitro proxy (/api/v1/ai/relay/*) which proves itself to the hub.
-    hubAppSecret: process.env.NUXT_HUB_APP_SECRET || '',
     public: {
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
       hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
     }
   },
 
-  alias: {
-    '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
-    '@tmcut-core': fileURLToPath(new URL('../tmcut-core/src/index.mjs', import.meta.url))
-  },
+  alias: {},
 
   build: {
     transpile: [
@@ -92,13 +83,6 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-06-30',
 
   vite: {
-    server: {
-      // @tmcut-core lives outside the project root (sibling package);
-      // allow Vite dev to serve it. Bundled at build time, so prod is unaffected.
-      fs: {
-        allow: [fileURLToPath(new URL('../tmcut-core', import.meta.url))]
-      }
-    },
     ssr: {
       external: [
         'mongoose',
@@ -126,8 +110,6 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        '@tm/hub-client': fileURLToPath(new URL('./packages/hub-client/src/index.ts', import.meta.url)),
-        '@tmcut-core': fileURLToPath(new URL('../tmcut-core/src/index.mjs', import.meta.url)),
         'striptags': 'striptags/src/striptags.js'
       },
       dedupe: [

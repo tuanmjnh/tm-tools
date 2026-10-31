@@ -15,14 +15,14 @@
 //    bridge's generic send()/on() pass-through. The sandboxed preload
 //    (Electron >= 20 defaults sandbox:true) cannot require local files,
 //    so it keeps INLINE copies of these arrays; the unit spec
-//    tmcut_ipc_policy pins the copies against these originals so the two
+//    ipc_policy spec pins the copies against these originals so the two
 //    can never drift apart silently.
 
 // Channels main may PUSH to the renderer via the generic electronAPI.on.
 // Derived from the actual webContents.send() call sites: EventBus
-// (eventbus:event), app-updater (status-changed), tmcut renderDone,
-// profiles statusChanged, and the two task-manager controllers' event
-// families (youtube/ffmpeg share the TaskProcessManager event names).
+// (eventbus:event), app-updater (status-changed), profiles statusChanged,
+// and the two task-manager controllers' event families (youtube/ffmpeg
+// share the TaskProcessManager event names).
 const TASK_EVENT_NAMES = [
   'managerInitialized', 'beforeRunTask', 'progressTask', 'allTasksDone',
   'stoppedTask', 'stoppedTasks', 'errorTask', 'taskRetry', 'taskTimeout', 'updateProgress'
@@ -31,21 +31,7 @@ const TASK_EVENT_NAMES = [
 const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
-  'tmcut:renderDone',
-  'tmcut:htmlVideoProgress',
-  // Roadmap v3 PART A: asset download progress pushes (jobId/entryId/
-  // loaded/total) — the Asset Center queue's only main->renderer channel.
-  'tmcut:assetCenter:progress',
-  // Generated-media download progress (bytes loaded of the declared total).
-  'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
-  // MCP server channels (Phase 2)
-  'mcp:server:tool:invoke',
-  'mcp:server:session:init',
-  'mcp:server:session:close',
-  'mcp:server:event:proposal_changed',
-  'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
   ...TASK_EVENT_NAMES.map(n => `tools:youtube:${n}`),
   ...TASK_EVENT_NAMES.map(n => `tools:ffmpeg:${n}`)
 ]
@@ -55,18 +41,7 @@ const PUSH_CHANNELS = [
 // handler in the app is ipcMain.handle/invoke; grep ipcMain.on = 0 hits),
 // so the honest allowlist is EMPTY. A future fire-and-forget channel must
 // be added here deliberately, not discovered implicitly.
-const OUTBOUND_CHANNELS = [
-  // MCP server channels (Phase 3)
-  'mcp:server:tool:invoke',
-  'mcp:server:session:init',
-  'mcp:server:session:close',
-  'mcp:server:event:proposal_changed',
-  'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
-  // MCP server response channels (Phase 3): renderer -> main
-  'mcp:forward',
-  'mcp:forward:respond'
-]
+const OUTBOUND_CHANNELS = []
 
 const PUSH_SET = new Set(PUSH_CHANNELS)
 const OUTBOUND_SET = new Set(OUTBOUND_CHANNELS)
@@ -110,7 +85,7 @@ function createSenderGate({ isDev, port, devPort = 4002 }) {
  * R134 — ONE choke-point for every privileged invoke channel in the
  * app. Replaces ipcMain.handle with a gated version at startup, so ALL
  * controllers (youtube/ffmpeg/dialog/file-manager/app-updater/profiles/
- * tmcut/ai-gateway), the platform layer's ipcHelper registrations, and
+ * file-manager), the platform layer's ipcHelper registrations, and
  * any handler added in the future are gated by default — instead of
  * relying on each of ~150 registration sites remembering to check.
  *

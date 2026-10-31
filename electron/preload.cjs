@@ -3,23 +3,12 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 // R133 (§197) — generic send()/on() are a narrow, EXPLICIT bridge, not a
 // raw ipcRenderer pass-through. The sandboxed preload cannot require local
 // files, so these arrays are inline copies of electron/ipcPolicy.cjs; the
-// tmcut_ipc_policy unit spec pins the copies against the originals so
-// neither side can drift silently.
+// ipc_policy unit spec pins the copies against the originals so neither
+// side can drift silently.
 const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
-  'tmcut:renderDone',
-  'tmcut:htmlVideoProgress',
-  'tmcut:assetCenter:progress',
-  'tmcut:downloadProgress',
   'tools:profiles:statusChanged',
-  // MCP server channels (Phase 2)
-  'mcp:server:tool:invoke',
-  'mcp:server:session:init',
-  'mcp:server:session:close',
-  'mcp:server:event:proposal_changed',
-  'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
   'tools:ffmpeg:managerInitialized', 'tools:ffmpeg:beforeRunTask', 'tools:ffmpeg:progressTask', 'tools:ffmpeg:allTasksDone',
@@ -28,18 +17,7 @@ const PUSH_CHANNELS = [
 // Nothing legitimately uses ipcRenderer.send today (all handlers are
 // invoke-based; grep ipcMain.on = 0 hits). Adding a channel here is a
 // deliberate act, reviewed like any other IPC surface change.
-const OUTBOUND_CHANNELS = [
-  // MCP server channels (Phase 3)
-  'mcp:server:tool:invoke',
-  'mcp:server:session:init',
-  'mcp:server:session:close',
-  'mcp:server:event:proposal_changed',
-  'mcp:server:event:project_changed',
-  'mcp:server:event:job_status',
-  // MCP server response channels (Phase 3): renderer -> main
-  'mcp:forward',
-  'mcp:forward:respond'
-]
+const OUTBOUND_CHANNELS = []
 const PUSH_SET = new Set(PUSH_CHANNELS)
 const OUTBOUND_SET = new Set(OUTBOUND_CHANNELS)
 
@@ -103,76 +81,8 @@ const profiles = exposeNamespace('tools:profiles', {
   ]
 })
 
-const aiGateway = exposeNamespace('tools:ai-gateway', {
-  invoke: ['complete', 'transcribe', 'getStatus', 'models', 'presets', 'tasks'],
-  on: []
-})
-
-const videoGeneration = exposeNamespace('tools:video-generation', {
-  invoke: [
-    'providers',
-    'provider:capabilities',
-    'estimate',
-    'submit',
-    'poll',
-    'cancel',
-    'download',
-    'jobs:list',
-    'jobs:get',
-    'jobs:retry',
-    'jobs:delete',
-    'usage-ledger',
-    'provider:health',
-    // Phase 7: Video Factory
-    'factory:estimate',
-    'factory:create',
-    'factory:get',
-    'factory:pause',
-    'factory:resume',
-    'factory:cancel',
-    'factory:job:get',
-    'factory:job:retry',
-    'factory:assemble'
-  ],
-  on: []
-})
-
 const dialog = exposeNamespace('tools:dialog', {
   invoke: ['openFile', 'openFolder', 'saveFile'],
-  on: []
-})
-
-const tmcut = exposeNamespace('tmcut', {
-  invoke: [
-    'renderHtmlVideo', 'getPaths', 'readAssetsFile', 'writeAssetsFile',
-    'readProject', 'writeProject', 'listProjectFiles', 'readProjectMeta',
-    'writeRecovery', 'readRecovery', 'deleteRecovery', 'deleteProject',
-    'listSnapshots', 'saveSnapshot', 'readSnapshot', 'deleteSnapshot',
-    'statFiles', 'extractThumbnail', 'extractFrame', 'extractAudio', 'saveRecording', 'extractWaveform', 'generateProxy', 'stabilizeVideo', 'analyzeAsset', 'downloadMedia', 'cancelDownload', 'stockSearch',
-    'voiceStatus', 'enrollVoice', 'listManagedVoices', 'addManagedVoice', 'deleteManagedVoice', 'syncManagedVoice', 'synthesizeVoice', 'synthesizeGeminiVoice',
-    'analyzeScenes', 'analyzeSilence', 'listFonts',
-    'watchOutput', 'unwatchOutput'
-  ],
-  on: ['renderDone', 'downloadProgress', 'htmlVideoProgress']
-})
-
-// Roadmap v3 PART A: on-demand Asset Center I/O (registry + verified
-// downloads). The queue/state machine lives renderer-side in @tmcut/core;
-// these channels are thin path-pinned primitives (see asset-center.controller).
-const tmcutAssetCenter = exposeNamespace('tmcut:assetCenter', {
-  invoke: [
-    'getDirs', 'readRegistry', 'writeRegistry',
-    'readCatalogCache', 'writeCatalogCache', 'readStarterCatalog', 'getSamplePath',
-    'downloadPackage', 'cancelDownload', 'installLocal', 'removePackageDir', 'verifyFile'
-  ],
-  on: ['progress']
-})
-
-// Production process artifacts: thin, path-pinned read/write I/O. The stage
-// machine itself lives renderer-side (utils/process/stageMachine.ts), so this
-// namespace only stores bytes and run records.
-const processStore = exposeNamespace('process', {
-  invoke: ['root', 'openRoot', 'list', 'read', 'save', 'writeArtifact', 'readArtifact'],
   on: []
 })
 
@@ -217,10 +127,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPathForFile: file => webUtils.getPathForFile(file),
   getConfig: () => ipcRenderer.invoke('get-config'),
   setConfig: values => ipcRenderer.invoke('set-config', values),
-  // R140: at-rest key vault status (counts only — never tokens/values).
-  aiKeyStatus: () => ipcRenderer.invoke('ai-key-status'),
-  // R143: re-run the idempotent at-rest migration ("Encrypt now").
-  aiMigrateKeys: () => ipcRenderer.invoke('ai-migrate-keys'),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
   openExternal: url => ipcRenderer.invoke('open-external', url),
@@ -244,11 +150,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
-  tools: { youtube, ffmpeg, profiles, aiGateway, videoGeneration },
+  tools: { youtube, ffmpeg, profiles },
   dialog,
   fileManager,
-  tmcut: { ...tmcut, assetCenter: tmcutAssetCenter },
-  process: processStore,
   appUpdater,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),
@@ -273,13 +177,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('eventbus:event', listener)
       return () => ipcRenderer.removeListener('eventbus:event', listener)
     }
-  },
-  mcp: {
-    onToolInvoke: (callback) => {
-      const listener = (_event, { tool, params, requestId, projectId }) => callback({ tool, params, requestId, projectId })
-      ipcRenderer.on('mcp:forward', listener)
-      return () => ipcRenderer.removeListener('mcp:forward', listener)
-    },
-    respond: (requestId, result) => ipcRenderer.send('mcp:forward:respond', { requestId, result })
   }
 })

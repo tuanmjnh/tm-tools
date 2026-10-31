@@ -10,9 +10,6 @@ publish:
   releaseType: release
 files:
   - electron/**/*
-  # The main process requires shared/utils/detection-args.cjs (the AutoCut
-  # ffmpeg argv, also used by server/api/v1/media/analyze.post.ts); without it
-  # the packaged app throws MODULE_NOT_FOUND on the first AutoCut analysis.
   - shared/**/*
   - .output/**/*
   - public/icon.ico
@@ -27,9 +24,6 @@ extraResources:
       - "**/*.exe"
       - "**/*.json"
       - "**/*.node"
-      # Asset Center starter catalog sample media (roadmap v3 PART A):
-      # bundled starter files install offline with checksum verification.
-      - "tmcut-catalog/**"
 win:
   icon: public/icon.ico
   executableName: TM Tools

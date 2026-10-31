@@ -9,39 +9,16 @@ const { registerDialogController } = require('./tools/dialog.cjs')
 const { registerFileManagerController } = require('./tools/file-manager.cjs')
 const { registerAppUpdaterController } = require('./tools/app-updater.cjs')
 const { registerProfilesController } = require('./tools/profiles.controller.cjs')
-const { registerTmcutController } = require('./tools/tmcut.controller.cjs')
-const { registerHtmlVideoRenderer } = require('./tools/html-video-renderer.cjs')
-const { registerAssetCenterController } = require('./tools/asset-center.controller.cjs')
-const { registerAiGateway } = require('./tools/ai-gateway.cjs')
-// Production process artifacts (stage → artifact → gate): real files under
-// userData/tmcut/process, one directory per artifact version.
-const { registerProcessController } = require('./tools/process-store.cjs')
-const { registerVideoGeneration } = require('./tools/video-generation/controller.mjs')
-// MCP server (Phase 2) — spawned child with IPC channel
-const { spawn } = require('child_process')
-// R139 (§203): API-key slots are encrypted AT REST with the OS keychain
-// (safeStorage: DPAPI/Keychain/libsecret). Boundary rule: the FILE holds
-// tokens, process.env holds plaintext (the gateway stays untouched — its
-// rate limiter/audit/abort behavior is battle-tested, don't touch it).
-// decrypt() passes plaintext through, so pre-encryption files keep working.
-const { encrypt, decrypt, isEncryptionAvailable, magicPrefix } = require('./tools/ai-secure.cjs')
-// R143 (§206): the line transform behind the startup migration AND the
-// vault page's "Encrypt now" button is pure (key-migrate.cjs) so the
-// Electron probe can prove the real behavior (real keychain, plaintext
-// -> token, idempotent second pass) instead of only pinning a contract.
-const { migrateKeyContent } = require('./tools/key-migrate.cjs')
-// R141 (§205): the config.env parser is shared by get-config, ai-key-status
-// and set-config — one implementation, so "file missing" can never be
-// read differently by two handlers. Shape: { exists, values }.
+// API-key slots are encrypted AT REST with the OS keychain (safeStorage:
+// DPAPI/Keychain/libsecret). decrypt() passes plaintext through, so files
+// written before encryption existed keep working.
+const { encrypt, decrypt, isEncryptionAvailable } = require('./tools/ai-secure.cjs')
+// One config.env parser for startup, get-config and set-config: "file
+// missing" can never be read differently by two handlers.
 const { readConfigFile } = require('./tools/config-file.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
-
-// Secret config slots: ONE definition (secret-slots.cjs) shared by the
-// masking/decryption paths here and the at-rest migration. The AI panel
-// writes exactly KEY / KEY_<TASK>; the full-slot shape keeps the rule
-// closed so no arbitrary key name qualifies. R145 (§207): this line used
-// to be a second literal copy with a grep-pin spec; now drift is
-// structurally impossible.
+// Secret config slots: ONE definition shared by the masking and encryption
+// paths below, so no arbitrary key name qualifies for at-rest encryption.
 const { SECRET_SLOT_RE } = require('./tools/secret-slots.cjs')
 
 let initializePlatform
@@ -61,6 +38,7 @@ const isDev = !app.isPackaged
 // (ERR_UNSAFE_PORT) while the SAME bad port also keyed the IPC sender gate.
 // Only a real TCP port wins now; anything else falls back.
 const { parsePort, resolveDevPort } = require('./tools/ports.cjs')
+
 const PORT = parsePort(process.env.APP_PORT) ?? 3456
 // Dev renderer is served by `pnpm dev` / `dev:electron` (nuxt dev --port
 // 4002 since the fleet port reallocation). Keep the wait-on URL in the
@@ -77,17 +55,12 @@ function appOrigins() {
 let win = null
 
 function loadUserConfig() {
-  // R141 (§205): parse through the SAME module every config reader uses —
-  // startup, get-config, ai-key-status and set-config can no longer
-  // disagree about what a line means (each private copy had drifted on
-  // error handling and quote stripping).
+  // The file holds keychain TOKENS for secret slots; env carries plaintext
+  // so the tool controllers keep reading env. decrypt() passes plaintext
+  // through (legacy files) and yields null for a corrupt token — dropped
+  // here rather than exported as garbage.
   const { values } = readConfigFile(path.join(app.getPath('userData'), 'config.env'))
   for (const [key, raw] of Object.entries(values)) {
-    // R139: the file holds keychain TOKENS; env carries plaintext so the
-    // gateway and every existing consumer stay untouched. decrypt()
-    // passes plaintext through (pre-R139 files) and yields null for a
-    // corrupt token — dropped here, which the gateway reports honestly
-    // as ai.no-key (re-enter the key) instead of sending garbage.
     const value = SECRET_SLOT_RE.test(key) ? decrypt(raw) : raw
     if (!process.env[key] && value !== null) {
       process.env[key] = value
@@ -265,32 +238,6 @@ async function createWindow() {
 
 const userConfigPath = () => path.join(app.getPath('userData'), 'config.env')
 
-// R139 migration: keys written before encryption existed sit plaintext in
-// config.env. Re-encrypt once on startup (file + live env) so the window
-// between "old version wrote a key" and "new version protects it" is a
-// single launch. Skips anything already encrypted; no-ops when the OS
-// keychain is unavailable (plaintext keeps working — decrypt is tolerant).
-// R143: the transform itself lives in key-migrate.cjs (pure, probe-tested
-// against the REAL keychain); this wrapper owns file + availability.
-function migrateStoredKeysToSecureStorage() {
-  if (!isEncryptionAvailable()) return
-  const configFile = userConfigPath()
-  let content
-  try {
-    content = fs.readFileSync(configFile, 'utf8')
-  } catch {
-    return
-  }
-  const { content: migrated, changed } = migrateKeyContent(content)
-  if (changed) {
-    try {
-      fs.writeFileSync(configFile, migrated, 'utf8')
-    } catch {
-      // unwritable file: live env still migrated, file follows next save
-    }
-  }
-}
-
 // IPC sender validation (audit MEDIUM, R133 §197): every privileged
 // handler refuses calls whose frame is not the app's own origin. Dev
 // loads from the Vite server URL, prod from the loopback nitro server;
@@ -303,32 +250,20 @@ const { createSenderGate, gateIpcMainHandle } = require('./ipcPolicy.cjs')
 const isTrustedSender = createSenderGate({ isDev, port: PORT, devPort: DEV_PORT })
 
 // R134 (§198): install the choke-point BEFORE any controller registers.
-// Every ipcMain.handle call from now on — all six controllers, the
-// platform layer's ipcHelper, and any future handler — is automatically
-// wrapped so a non-app-origin frame's invoke resolves to undefined.
-// This is what the R133 audit follow-up promised as "mechanical":
-// instead of gating ~150 registration sites one by one, the registration
-// FUNCTION ITSELF is gated once.
+// Every ipcMain.handle call from now on is automatically wrapped so a
+// non-app-origin frame's invoke resolves to undefined — instead of gating
+// ~150 registration sites one by one, the registration FUNCTION ITSELF is
+// gated once.
 gateIpcMainHandle(ipcMain, isTrustedSender)
-
-// R141 (§205): the config.env parser is shared by get-config,
-// ai-key-status and set-config via `electron/tools/config-file.cjs`.
-// One implementation means "file missing" can never be read
-// differently by two handlers — the old inline copy here returned a
-// bare {} on every read failure, so a fresh install (no config.env
-// yet) looked identical to a parsed file with zero secret slots and
-// the vault banner lied about the OS keychain.
 
 ipcMain.handle('get-config', (event) => {
   if (!isTrustedSender(event)) return {}
   const parsed = readConfigFile(userConfigPath())
   const result = {}
   for (const [key, raw] of Object.entries(parsed.values)) {
-    // R139: the file holds keychain TOKENS for secret slots; a renderer
-    // must never see either form. The panel only needs to know whether a
-    // key EXISTS (hasKey badges come from the gateway status), so secret
-    // values are masked out entirely. A corrupt token maps to '' (also
-    // "unset") instead of leaking base64 noise into the UI.
+    // Secret slots are masked out entirely: the renderer only needs to
+    // know whether a value exists, never the key itself. A corrupt token
+    // maps to '' ("unset") instead of leaking base64 noise into the UI.
     if (SECRET_SLOT_RE.test(key)) {
       const plain = decrypt(raw)
       result[key] = plain ? '********' : ''
@@ -339,48 +274,6 @@ ipcMain.handle('get-config', (event) => {
   return result
 })
 
-// Shared vault-status read for ai-key-status AND ai-migrate-keys. One
-// counting rule, so the "Encrypt now" button's answer and the banner's
-// question can never disagree (§205: closed to SECRET_SLOT_RE — counts,
-// never values; a stray non-secret value with the magic prefix must
-// never be counted as an encrypted key).
-function keyVaultStatus() {
-  const parsed = readConfigFile(userConfigPath())
-  let encrypted = 0
-  let plaintext = 0
-  for (const [key, raw] of Object.entries(parsed.values)) {
-    if (!SECRET_SLOT_RE.test(key) || !raw) continue
-    if (raw.startsWith(magicPrefix())) encrypted++
-    else plaintext++
-  }
-  return { available: isEncryptionAvailable(), exists: parsed.exists, encrypted, plaintext }
-}
-
-ipcMain.handle('ai-key-status', (event) => {
-  if (!isTrustedSender(event)) return { ok: false }
-  // R140 + R141: the vault dashboard asks "how many keys are protected?" —
-  // counts only, never tokens or values (the renderer never sees them).
-  // `exists` distinguishes a fresh install (no config file yet) from a
-  // parsed file with zero secret slots — without it both look like
-  // "0 encrypted / 0 plaintext" and the banner lies about the keychain.
-  return { ok: true, data: keyVaultStatus() }
-})
-
-ipcMain.handle('ai-migrate-keys', (event) => {
-  if (!isTrustedSender(event)) return { ok: false }
-  // R143 (§206): "Encrypt now" on the vault page. The startup migration
-  // runs ONCE; if the keychain was flaky at boot (or the file momentarily
-  // unwritable) plaintext keys would sit until the NEXT launch with no way
-  // to act on the amber banner. This re-runs the SAME idempotent
-  // migration and returns fresh counts — already-encrypted tokens are
-  // skipped, double-clicking changes nothing, and the write is atomic
-  // with the file's own line format. Storage FORM only: no config value
-  // changes, live env keeps plaintext (§203 boundary untouched).
-  if (!isEncryptionAvailable()) return { ok: false, data: keyVaultStatus() }
-  migrateStoredKeysToSecureStorage()
-  return { ok: true, data: keyVaultStatus() }
-})
-
 ipcMain.handle('set-config', (event, values) => {
   if (!isTrustedSender(event)) return { success: false }
   const configFile = userConfigPath()
@@ -388,19 +281,17 @@ ipcMain.handle('set-config', (event, values) => {
   const incoming = values && typeof values === 'object' ? values : {}
   const merged = { ...existing.values, ...incoming }
   const lines = Object.entries(merged)
-    // R139: a masked value coming BACK from get-config ('********')
-    // means the UI echoed the placeholder — keep the stored token.
+    // A masked value coming BACK from get-config ('********') means the UI
+    // echoed the placeholder — keep the stored token.
     .filter(([k, v]) => !(SECRET_SLOT_RE.test(k) && String(v) === '********'))
     .map(([k, v]) => {
-      // Secret slots go to the file as keychain tokens; every other
-      // value is written verbatim, exactly as before.
-      const stored = SECRET_SLOT_RE.test(k) ? encrypt(String(v)) : String(v)
+      // Secret slots go to the file as keychain tokens; every other value
+      // is written verbatim.
+      const stored = SECRET_SLOT_RE.test(k) && isEncryptionAvailable() ? encrypt(String(v)) : String(v)
       return `${k}=${stored}`
     })
   fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
   for (const [key, value] of Object.entries(incoming)) {
-    // Live env keeps PLAINTEXT (the gateway reads env, untouched by R139);
-    // a masked echo skips the env write so it never clobbers the real key.
     if (SECRET_SLOT_RE.test(key) && String(value) === '********') continue
     process.env[key] = String(value)
   }
@@ -443,109 +334,6 @@ ipcMain.handle('show-item-in-folder', async (event, fullPath) => {
   return true
 })
 
-// Watch-folder for render outputs (TMCut export, docs section 65.4).
-// Watches the output directory and notifies the renderer once the file
-// appears and stays stable (2s idle), so the export modal can toast +
-// offer instant preview without polling.
-const outputWatchers = new Map()
-
-function stopOutputWatcher(key) {
-  const entry = outputWatchers.get(key)
-  if (!entry) return
-  outputWatchers.delete(key)
-  try {
-    if (entry.timer) clearTimeout(entry.timer)
-  } catch {
-    // ignore
-  }
-  try {
-    entry.watcher.close()
-  } catch {
-    // ignore
-  }
-}
-
-function notifyRenderDone(filePath) {
-  let size = 0
-  try {
-    size = fs.statSync(filePath).size
-  } catch {
-    // ignore
-  }
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('tmcut:renderDone', { filePath, size })
-  }
-}
-
-function readOutputStat(key) {
-  try {
-    const stat = fs.statSync(key)
-    return { mtimeMs: stat.mtimeMs, size: stat.size }
-  } catch {
-    return null
-  }
-}
-
-function scheduleRenderNotify(key) {
-  const entry = outputWatchers.get(key)
-  if (!entry) return
-  const current = readOutputStat(key)
-  if (!current || current.size === 0) return
-  // Ignore the stale file that already existed when watching started.
-  if (current.mtimeMs === entry.baseMtime && current.size === entry.baseSize) return
-  try {
-    if (entry.timer) clearTimeout(entry.timer)
-  } catch {
-    // ignore
-  }
-  entry.timer = setTimeout(() => {
-    const latest = readOutputStat(key)
-    stopOutputWatcher(key)
-    if (latest && latest.size > 0) notifyRenderDone(key)
-  }, 2000)
-}
-
-ipcMain.handle('tmcut:watch-output', (_event, { filePath }) => {
-  if (typeof filePath !== 'string' || !filePath) return false
-  // Path traversal protection: resolve and check against allowed roots
-  try {
-    const resolved = path.resolve(filePath)
-    const userDataRoot = path.resolve(app.getPath('userData'))
-    if (!resolved.startsWith(userDataRoot + path.sep) && resolved !== userDataRoot) {
-      return false
-    }
-  } catch {
-    return false
-  }
-  const key = path.normalize(filePath)
-  stopOutputWatcher(key)
-  const dir = path.dirname(key)
-  const base = path.basename(key)
-  try {
-    if (!fs.existsSync(dir)) return false
-    const baseline = readOutputStat(key)
-    const watcher = fs.watch(dir, (eventType, filename) => {
-      if (filename && filename !== base) return
-      scheduleRenderNotify(key)
-    })
-    watcher.on('error', () => stopOutputWatcher(key))
-    outputWatchers.set(key, {
-      watcher,
-      timer: null,
-      baseMtime: baseline ? baseline.mtimeMs : -1,
-      baseSize: baseline ? baseline.size : -1
-    })
-    return true
-  } catch {
-    return false
-  }
-})
-
-ipcMain.handle('tmcut:unwatch-output', (_event, { filePath }) => {
-  stopOutputWatcher(typeof filePath === 'string' ? path.normalize(filePath) : '')
-  return true
-})
-
 ipcMain.handle('verify-path', async (_event, { filePath, type }) => {
   const { verifyExecutable } = require('./tools/paths.cjs')
   try {
@@ -564,12 +352,11 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId(process.execPath)
   }
-  // R139: user config used to be read only by startServer() (packaged
-  // path). Load it for every session so dev and prod see the same env
-  // (set-if-unset semantics), then migrate any pre-R139 plaintext keys
-  // to keychain tokens before anything else touches the file (§203).
+  // User config is read for every session so dev and prod see the same env
+  // (set-if-unset semantics): the profile controller resolves its browser
+  // executables from CHROME_PATH / CAMOUFOX_PATH / ... written by the
+  // settings pages.
   loadUserConfig()
-  migrateStoredKeysToSecureStorage()
   protocol.handle('media', createMediaHandler(appOrigins))
 
   registerYoutubeController()
@@ -578,233 +365,6 @@ app.whenReady().then(() => {
   // R133 §197: the filesystem surface now requires the same app-origin
   // check as the privileged root handlers (audit residual risk closed).
   registerFileManagerController({ isTrustedSender })
-  registerTmcutController()
-  registerHtmlVideoRenderer()
-  // Roadmap v3 PART A: on-demand Asset Center. The queue lives renderer-side
-  // (core state machine); this controller is the thin download/registry I/O
-  // adapter. getWindow() is a getter because `win` is recreated on macOS
-  // activate — registering here (not in createWindow) avoids double-handlers.
-  registerAssetCenterController(() => win)
-  registerAiGateway()
-  registerProcessController()
-  registerVideoGeneration()
-
-  // MCP server (Phase 2) — spawn child process with IPC channel
-  let mcpServerProcess = null
-  function spawnMcpServer() {
-    if (mcpServerProcess) return mcpServerProcess
-    const serverPath = path.join(__dirname, 'tools', 'mcp', 'server.mjs')
-    mcpServerProcess = spawn(process.execPath, [serverPath], {
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-      env: {
-        ...process.env,
-        MCP_IDLE_TIMEOUT_MS: '300000'
-      }
-    })
-    mcpServerProcess.on('error', (err) => {
-      console.error('[MCP] Server spawn error:', err)
-      mcpServerProcess = null
-    })
-    mcpServerProcess.on('exit', (code, signal) => {
-      console.log(`[MCP] Server exited: code=${code}, signal=${signal}`)
-      mcpServerProcess = null
-    })
-    // Forward MCP server stderr to our logs
-    if (mcpServerProcess.stderr) {
-      mcpServerProcess.stderr.on('data', (data) => {
-        const text = data.toString().trim()
-        if (text) console.error('[MCP Server]', text)
-      })
-    }
-    return mcpServerProcess
-  }
-
-  // IPC handlers for MCP server -> main communication
-  // All gated by isTrustedSender via gateIpcMainHandle (R134)
-  ipcMain.handle('mcp:server:tool:invoke', async (event, { tool, params, requestId, projectId }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    try {
-      if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-      return new Promise((resolve) => {
-        // Listen for response from renderer via the preload bridge
-        const responseChannel = `mcp:forward:respond`
-        const handler = (_evt, { requestId: respId, result }) => {
-          if (respId === requestId) {
-            ipcMain.removeHandler(responseChannel, handler)
-            resolve(result)
-          }
-        }
-        ipcMain.on(responseChannel, handler)
-        win.webContents.send('mcp:forward', { tool, params, requestId, projectId })
-        // Timeout after 10s
-        setTimeout(() => {
-          ipcMain.removeHandler(responseChannel, handler)
-          resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } })
-        }, 10000)
-      })
-    } catch (err) {
-      return { ok: false, error: { code: 'INTERNAL_ERROR', message: String(err), retryable: true } }
-    }
-  })
-
-  ipcMain.handle('mcp:server:session:init', async (event, { projectId }) => {
-    if (!isTrustedSender(event)) return { ok: false }
-    return { ok: true, projectId }
-  })
-
-  ipcMain.handle('mcp:server:session:close', async (event) => {
-    if (!isTrustedSender(event)) return { ok: false }
-    return { ok: true }
-  })
-
-  // Renderer -> main: proposal changed / project changed events from MCP server
-  // These are pushed via the PUSH_CHANNELS allowlist
-  ipcMain.handle('mcp:server:event:proposal_changed', (event, proposal) => {
-    if (!isTrustedSender(event)) return
-    // Forward to host via stdio (server logs it)
-    console.error(JSON.stringify({ type: 'event:proposal_changed', payload: proposal }))
-  })
-
-  ipcMain.handle('mcp:server:event:project_changed', (event, summary) => {
-    if (!isTrustedSender(event)) return
-    console.error(JSON.stringify({ type: 'event:project_changed', payload: summary }))
-  })
-
-  ipcMain.handle('mcp:server:event:job_status', (event, job) => {
-    if (!isTrustedSender(event)) return
-    console.error(JSON.stringify({ type: 'event:job_status', payload: job }))
-  })
-
-  // Phase 4: Asset Center, Templates, Export Queue handlers
-  // All forward to renderer via mcp:forward channel
-  // ============================================================
-
-  // Asset Center
-  ipcMain.handle('mcp:asset:list_catalog', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.list_catalog', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:asset:install', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.install', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:asset:uninstall', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.uninstall', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:asset:install_status', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('asset.install_status', { params, projectId }, event)
-  })
-
-  // Templates
-  ipcMain.handle('mcp:template:list', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.list', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:template:apply', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.apply', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:template:save_as', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.save_as', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:template:delete', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.delete', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:template:import', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.import', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:template:export', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('template.export', { params, projectId }, event)
-  })
-
-  // Export Queue
-  ipcMain.handle('mcp:export:list_jobs', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.list_jobs', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:add_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.add_job', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:pause_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.pause_job', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:resume_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.resume_job', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:cancel_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.cancel_job', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:retry_job', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.retry_job', { params, projectId }, event)
-  })
-
-  ipcMain.handle('mcp:export:clear_history', async (event, { projectId, params }) => {
-    if (!isTrustedSender(event)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Untrusted sender', retryable: false } }
-    if (!win || win.isDestroyed()) return { ok: false, error: { code: 'NO_PROJECT', message: 'No window available', retryable: true } }
-    return forwardToRenderer('export.clear_history', { params, projectId }, event)
-  })
-
-  // Forward helper: sends mcp:forward to renderer, waits for mcp:forward:respond
-  function forwardToRenderer(tool, payload, event) {
-    return new Promise((resolve) => {
-      const requestId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const responseChannel = 'mcp:forward:respond'
-      const handler = (_evt, { requestId: respId, result }) => {
-        if (respId === requestId) {
-          ipcMain.removeHandler(responseChannel, handler)
-          resolve(result)
-        }
-      }
-      ipcMain.on(responseChannel, handler)
-      win.webContents.send('mcp:forward', { tool, params: payload, requestId, projectId: payload.projectId })
-      setTimeout(() => {
-        ipcMain.removeHandler(responseChannel, handler)
-        resolve({ ok: false, error: { code: 'INTERNAL_ERROR', message: 'Timeout', retryable: true } })
-      }, 30000)
-    })
-  }
-
-  // Start MCP server on demand when renderer requests it
 
   if (typeof initializePlatform === 'function') {
     initializePlatform()
