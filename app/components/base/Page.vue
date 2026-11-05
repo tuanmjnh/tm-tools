@@ -27,6 +27,7 @@ useHead(() => ({
       <div class="shrink-0">
         <UDashboardNavbar
           :title="title"
+          class="tm-chrome-overlay border-b border-default/70"
           :ui="{
             title: description ? 'flex flex-col items-start justify-center gap-px h-full truncate' : undefined,
             ...navbarUi
@@ -74,7 +75,7 @@ useHead(() => ({
     <template #footer>
       <div
         v-if="$slots.footer"
-        class="hidden sm:block shrink-0 border-t border-default bg-elevated/50 backdrop-blur-md px-4 sm:px-6 py-2 z-10 empty:hidden"
+        class="hidden sm:block shrink-0 border-t border-default/70 tm-chrome-overlay px-4 sm:px-6 py-2 z-10 empty:hidden"
       >
         <slot name="footer" />
       </div>

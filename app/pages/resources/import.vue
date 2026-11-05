@@ -250,19 +250,12 @@ function clearAll() {
   <BasePage id="admin-import" :title="$t('import.title')" :description="$t('import.description')">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton
-          v-if="rows.length"
-          icon="i-lucide-x"
-          :label="t('import.clear')"
-          variant="soft"
-          size="sm"
-          :ui="{ label: 'hidden md:block' }"
-          @click="clearAll"
-        />
+        <UButton v-if="rows.length" icon="i-lucide-x" :label="t('import.clear')" variant="soft" size="sm"
+          :ui="{ label: 'hidden md:block' }" @click="clearAll" />
       </div>
     </template>
 
-    <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6 gap-4 max-w-5xl">
+    <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6 gap-4">
       <p class="text-sm text-muted">
         {{ $t('import.description') }}
       </p>
@@ -273,39 +266,20 @@ function clearAll() {
             <UIcon name="i-lucide-database" class="size-4 text-muted" />
             {{ t('import.sourceTitle') }}
           </h2>
-          <USelect
-            v-model="source"
-            :items="sourceItems"
-            value-key="value"
-            size="sm"
-            class="w-44"
-            :aria-label="t('import.sourceType')"
-          />
+          <USelect v-model="source" :items="sourceItems" value-key="value" size="sm" class="w-44"
+            :aria-label="t('import.sourceType')" />
         </div>
 
         <div v-if="source === 'csv' || source === 'json'">
-          <input
-            type="file"
-            :accept="source === 'csv' ? '.csv,text/csv' : '.json,application/json'"
+          <input type="file" :accept="source === 'csv' ? '.csv,text/csv' : '.json,application/json'"
             class="block text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-elevated file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-highlighted hover:file:bg-elevated/70"
-            :disabled="parsing"
-            @change="e => handleFile(e, source as 'csv' | 'json')"
-          >
+            :disabled="parsing" @change="e => handleFile(e, source as 'csv' | 'json')">
         </div>
 
         <div v-else-if="source === 'paste'" class="space-y-2">
-          <UTextarea
-            v-model="pasteText"
-            :placeholder="t('import.pastePlaceholder')"
-            :rows="6"
-            class="w-full font-mono text-xs"
-          />
-          <UButton
-            :label="t('common.confirm')"
-            size="sm"
-            variant="soft"
-            @click="parsePaste"
-          />
+          <UTextarea v-model="pasteText" :placeholder="t('import.pastePlaceholder')" :rows="6"
+            class="w-full font-mono text-xs" />
+          <UButton :label="t('common.confirm')" size="sm" variant="soft" @click="parsePaste" />
         </div>
 
         <div v-else class="space-y-2">
@@ -313,45 +287,21 @@ function clearAll() {
             {{ t('import.needGoogle') }}
           </p>
           <div class="flex flex-col sm:flex-row gap-2">
-            <UInput
-              v-model="sheetId"
-              :placeholder="t('import.sheetIdPlaceholder')"
-              class="flex-1 font-mono text-xs"
-              size="sm"
-            />
-            <UInput
-              v-model="sheetRange"
-              :placeholder="t('import.sheetRangePlaceholder')"
-              class="flex-1 font-mono text-xs"
-              size="sm"
-            />
-            <UButton
-              :label="t('import.fetchSheet')"
-              icon="i-lucide-cloud-download"
-              size="sm"
-              :loading="fetchingSheet"
-              @click="fetchSheet"
-            />
+            <UInput v-model="sheetId" :placeholder="t('import.sheetIdPlaceholder')" class="flex-1 font-mono text-xs"
+              size="sm" />
+            <UInput v-model="sheetRange" :placeholder="t('import.sheetRangePlaceholder')"
+              class="flex-1 font-mono text-xs" size="sm" />
+            <UButton :label="t('import.fetchSheet')" icon="i-lucide-cloud-download" size="sm" :loading="fetchingSheet"
+              @click="fetchSheet" />
           </div>
         </div>
 
         <div v-if="rows.length" class="flex items-center gap-2 flex-wrap text-xs">
-          <UBadge
-            :label="t('import.parsed', [rows.length])"
-            color="success"
-            variant="subtle"
-            size="sm"
-          />
+          <UBadge :label="t('import.parsed', [rows.length])" color="success" variant="subtle" size="sm" />
           <span v-if="sourceLabel" class="text-muted truncate max-w-60">{{ sourceLabel }}</span>
           <div class="flex items-center gap-1 flex-wrap">
             <span class="text-toned">{{ t('import.columns') }}:</span>
-            <UBadge
-              v-for="col in Object.keys(rows[0] || {})"
-              :key="col"
-              :label="col"
-              variant="subtle"
-              size="xs"
-            />
+            <UBadge v-for="col in Object.keys(rows[0] || {})" :key="col" :label="col" variant="subtle" size="xs" />
           </div>
         </div>
       </section>
@@ -362,38 +312,20 @@ function clearAll() {
             <UIcon name="i-lucide-crosshair" class="size-4 text-muted" />
             {{ t('import.target') }}
           </h2>
-          <USelect
-            v-model="target"
-            :items="targetItems"
-            value-key="value"
-            size="sm"
-            class="w-44"
-            :aria-label="t('import.target')"
-          />
+          <USelect v-model="target" :items="targetItems" value-key="value" size="sm" class="w-44"
+            :aria-label="t('import.target')" />
         </div>
         <div v-if="targetDef" class="text-xs text-muted space-y-1.5">
           <p class="flex items-center gap-1 flex-wrap">
             <span class="text-toned">ID:</span>
             <UBadge :label="targetDef.identifierField" variant="outline" size="xs" />
             <span class="text-toned ml-2">Required:</span>
-            <UBadge
-              v-for="f in targetDef.requiredFields"
-              :key="f"
-              :label="f"
-              color="warning"
-              variant="subtle"
-              size="xs"
-            />
+            <UBadge v-for="f in targetDef.requiredFields" :key="f" :label="f" color="warning" variant="subtle"
+              size="xs" />
           </p>
           <p class="flex items-center gap-1 flex-wrap">
             <span class="text-toned">Optional:</span>
-            <UBadge
-              v-for="f in targetDef.optionalFields"
-              :key="f"
-              :label="f"
-              variant="subtle"
-              size="xs"
-            />
+            <UBadge v-for="f in targetDef.optionalFields" :key="f" :label="f" variant="subtle" size="xs" />
           </p>
         </div>
       </section>
@@ -405,24 +337,10 @@ function clearAll() {
             {{ t('import.preview') }}
           </h2>
           <div class="flex items-center gap-2">
-            <UButton
-              :label="t('import.preview')"
-              icon="i-lucide-scan-search"
-              size="sm"
-              variant="soft"
-              :loading="previewing"
-              :disabled="!rows.length"
-              @click="runPreview"
-            />
-            <UButton
-              :label="t('import.importNow')"
-              icon="i-lucide-file-up"
-              size="sm"
-              color="primary"
-              :loading="running"
-              :disabled="!rows.length"
-              @click="isRunOpen = true"
-            />
+            <UButton :label="t('import.preview')" icon="i-lucide-scan-search" size="sm" variant="soft" color="secondary"
+              :loading="previewing" :disabled="!rows.length" @click="runPreview" />
+            <UButton :label="t('import.importNow')" icon="i-lucide-file-up" size="sm" variant="soft" color="primary"
+              :loading="running" :disabled="!rows.length" @click="isRunOpen = true" />
           </div>
         </div>
 
@@ -457,13 +375,8 @@ function clearAll() {
                   {{ r.identifier || '—' }}
                 </td>
                 <td class="py-1.5 pr-2">
-                  <UBadge
-                    v-if="actionBadge(r)"
-                    :label="actionBadge(r)!.label"
-                    :color="actionBadge(r)!.color"
-                    variant="subtle"
-                    size="xs"
-                  />
+                  <UBadge v-if="actionBadge(r)" :label="actionBadge(r)!.label" :color="actionBadge(r)!.color"
+                    variant="subtle" size="xs" />
                 </td>
                 <td class="py-1.5 text-error">
                   {{ r.error || '' }}
@@ -487,11 +400,8 @@ function clearAll() {
           </div>
         </div>
 
-        <div
-          v-if="runResult"
-          class="rounded-lg border p-3 text-sm space-y-2"
-          :class="runResult.failed ? 'border-error/40 bg-error/5' : 'border-success/40 bg-success/5'"
-        >
+        <div v-if="runResult" class="rounded-lg border p-3 text-sm space-y-2"
+          :class="runResult.failed ? 'border-error/40 bg-error/5' : 'border-success/40 bg-success/5'">
           <p class="font-medium text-highlighted">
             {{ t('import.result') }} —
             {{ t('import.resultSummary', [runResult.created, runResult.updated, runResult.failed]) }}
@@ -505,16 +415,9 @@ function clearAll() {
       </section>
     </div>
 
-    <LazyBaseConfirmModal
-      v-model:open="isRunOpen"
-      :title="t('import.confirmTitle')"
-      :description="t('import.confirmDesc', [rows.length, target])"
-      :confirm-label="t('import.importNow')"
-      :cancel-label="t('common.cancel')"
-      :loading="running"
-      color="primary"
-      icon="i-lucide-file-up"
-      @confirm="executeImport"
-    />
+    <LazyBaseConfirmModal v-model:open="isRunOpen" :title="t('import.confirmTitle')"
+      :description="t('import.confirmDesc', [rows.length, target])" :confirm-label="t('import.importNow')"
+      :cancel-label="t('common.cancel')" :loading="running" color="primary" icon="i-lucide-file-up"
+      @confirm="executeImport" />
   </BasePage>
 </template>

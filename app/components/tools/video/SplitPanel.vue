@@ -39,7 +39,7 @@ const partsCount = ref(3)
 const customStart = ref(0)
 const customDuration = ref(30)
 
-const threads = useLocalStorage('tools:video:threads', 2)
+const threads = useLocalStorage(STORAGE_KEYS.videoThreads, 2)
 
 const modeOptions = computed(() => [
   { label: t('tools.splitModeDuration'), value: 'duration', icon: 'i-lucide-clock' },
@@ -224,7 +224,7 @@ function onSubmit() {
         placeholder="D:/Videos/sample.mp4"
         :title="t('tools.splitInputFile')"
         :disabled="disabled"
-        :filters="[{ name: 'Video', extensions: ['mp4', 'mkv', 'mov', 'avi', 'flv', 'wmv', 'webm', 'ts'] }]"
+        :filters="[{ name: 'Video', extensions: FILE_EXTENSIONS.videoExtended }]"
         @select="onInputSelected"
       />
 

@@ -105,7 +105,7 @@ function onSubmit() {
         mode="file"
         placeholder="D:/videos/input.mp4"
         :disabled="disabled"
-        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]"
+        :filters="[{ name: 'Videos', extensions: FILE_EXTENSIONS.videoExtended }]"
       />
     </UFormField>
 

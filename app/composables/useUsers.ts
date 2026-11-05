@@ -29,7 +29,7 @@ export const useUsers = () => {
     try {
       const res = await usersApi.list({
         cursor: cursor.value || undefined,
-        limit: 10
+        limit: PAGE_SIZE.users
       })
 
       if (res.success && res.data) {

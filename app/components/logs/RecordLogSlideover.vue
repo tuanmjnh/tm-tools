@@ -51,7 +51,7 @@ async function fetchLogs(reset = true) {
 
   isLoading.value = true
   try {
-    const query: Record<string, unknown> = { limit: 20, docId: props.docId }
+    const query: Record<string, unknown> = { limit: PAGE_SIZE.compact, docId: props.docId }
     if (!reset && nextCursor.value) query.cursor = nextCursor.value
 
     const res = await hubFetch<LogsResponse>(

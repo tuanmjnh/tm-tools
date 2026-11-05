@@ -1,0 +1,180 @@
+/* ============================================================================
+   TM Tools — ambient decor layer ("workbench")
+   Flavour: a diagonal aurora band sweeping the page, one large orb low-right
+   and a small bright one high-left, a vertical cone of light, and an isometric
+   floor grid instead of a ceiling grid.
+   Static by design: no animation, no will-change, pointer-events: none.
+   Colours are mixed from the app palette so the decor follows --ui-primary.
+   ========================================================================= */
+
+:root {
+  --tm-decor-opacity: 0.95;
+
+  /* Aurora band */
+  --tm-aurora-1: color-mix(in oklab, var(--ui-primary) 13%, transparent);
+  --tm-aurora-2: color-mix(in oklab, var(--ui-secondary) 10%, transparent);
+  --tm-aurora-3: color-mix(in oklab, var(--ui-info) 8%, transparent);
+
+  /* Orbs */
+  --tm-orb-1: color-mix(in oklab, var(--ui-primary) 20%, transparent);
+  --tm-orb-2: color-mix(in oklab, var(--ui-secondary) 15%, transparent);
+  --tm-orb-specular: rgba(255, 255, 255, 0.62);
+
+  /* Floor grid */
+  --tm-grid-line: rgba(15, 23, 42, 0.055);
+  --tm-grid-cell: 40px;
+}
+
+.dark {
+  --tm-decor-opacity: 1;
+
+  --tm-aurora-1: color-mix(in oklab, var(--ui-primary) 26%, transparent);
+  --tm-aurora-2: color-mix(in oklab, var(--ui-secondary) 20%, transparent);
+  --tm-aurora-3: color-mix(in oklab, var(--ui-info) 13%, transparent);
+
+  --tm-orb-1: color-mix(in oklab, var(--ui-primary) 30%, transparent);
+  --tm-orb-2: color-mix(in oklab, var(--ui-secondary) 22%, transparent);
+  --tm-orb-specular: rgba(255, 255, 255, 0.26);
+
+  --tm-grid-line: rgba(148, 163, 184, 0.09);
+}
+
+/* ------------------------------------------------------------------ layer */
+
+.tm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: var(--tm-decor-opacity);
+}
+
+/* A diagonal band instead of the usual corner blobs: one linear sweep plus
+   three soft radials that anchor it in the corners. */
+.tm-aurora {
+  position: absolute;
+  inset: -15%;
+  background-image:
+    linear-gradient(
+      116deg,
+      transparent 20%,
+      var(--tm-aurora-2) 44%,
+      var(--tm-aurora-1) 56%,
+      transparent 74%
+    ),
+    radial-gradient(36% 30% at 6% 2%, var(--tm-aurora-1) 0%, transparent 66%),
+    radial-gradient(40% 32% at 98% 72%, var(--tm-aurora-3) 0%, transparent 70%),
+    radial-gradient(32% 28% at 58% 100%, var(--tm-aurora-2) 0%, transparent 72%);
+  background-repeat: no-repeat;
+  background-size: 160% 160%;
+  background-position: center;
+}
+
+/* --------------------------------------------------------- glowing 3D orbs */
+
+.tm-orb {
+  position: absolute;
+  border-radius: 50%;
+}
+
+/* Large, low-right. */
+.tm-orb-1 {
+  right: -20vmin;
+  bottom: -26vmin;
+  width: min(56rem, 78vw);
+  aspect-ratio: 1;
+  background-image:
+    radial-gradient(circle at 40% 36%, var(--tm-orb-specular) 0%, transparent 32%),
+    radial-gradient(circle at 50% 50%, var(--tm-orb-1) 0%, transparent 68%);
+}
+
+/* Small and bright, high-left — reads as a specular highlight. */
+.tm-orb-2 {
+  top: -14vmin;
+  left: -10vmin;
+  width: min(30rem, 52vw);
+  aspect-ratio: 1;
+  background-image:
+    radial-gradient(circle at 44% 40%, var(--tm-orb-specular) 0%, transparent 26%),
+    radial-gradient(circle at 52% 52%, var(--tm-orb-2) 0%, transparent 66%);
+}
+
+/* A cone of light falling from the top edge. */
+.tm-beam {
+  position: absolute;
+  top: -12%;
+  left: 18%;
+  width: min(26rem, 46vw);
+  height: 78%;
+  pointer-events: none;
+  background-image: linear-gradient(
+    180deg,
+    var(--tm-aurora-1) 0%,
+    color-mix(in oklab, var(--tm-aurora-1) 45%, transparent) 46%,
+    transparent 82%
+  );
+  clip-path: polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%);
+  /* Feather the cone on both axes so its diagonals do not read as a band. */
+  -webkit-mask-image:
+    linear-gradient(180deg, black 0%, rgba(0, 0, 0, 0.5) 54%, transparent 90%),
+    linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(180deg, black 0%, rgba(0, 0, 0, 0.5) 54%, transparent 90%),
+    linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%);
+  mask-composite: intersect;
+  opacity: 0.5;
+}
+
+/* Small in-panel accent orb (bento cards). */
+.tm-orb-soft {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  background-image: radial-gradient(
+    circle at 34% 30%,
+    var(--tm-orb-1) 0%,
+    transparent 68%
+  );
+  opacity: 0.8;
+}
+
+:root:not(.dark) .tm-orb-soft {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------ isometric floor perspective
+   The grid lies down like a workbench surface: it recedes upward from the
+   bottom edge and fades before it reaches the content. */
+.tm-iso-grid {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 460px;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      var(--tm-grid-line) 0 1px,
+      transparent 1px var(--tm-grid-cell)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--tm-grid-line) 0 1px,
+      transparent 1px var(--tm-grid-cell)
+    );
+  transform: perspective(760px) rotateX(-62deg) scale(1.35);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, black 0%, transparent 64%);
+  mask-image: linear-gradient(to top, black 0%, transparent 64%);
+}
+
+/* In-page region wrapper for the floor grid (clips the transformed layer). */
+.tm-iso-region {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 360px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}

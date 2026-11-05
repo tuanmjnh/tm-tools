@@ -20,6 +20,11 @@ interface HubNotificationItem {
   created_at: string
 }
 
+const NOTIFY_FETCH_INTERVAL_MS = 30_000
+
+let fetchInFlight: Promise<NotificationItem[]> | null = null
+let lastFetchAt = 0
+
 export const useNotify = () => {
   const auth = useAuth()
   const { notifications } = useHub()
@@ -47,32 +52,45 @@ export const useNotify = () => {
     return colors[priority] || 'primary'
   }
 
-  const notify = ref<NotificationItem[]>([])
+  const notify = useState<NotificationItem[]>('notify:items', () => [])
+  const isLoading = useState<boolean>('notify:loading', () => false)
   const unreadCount = computed(() => notify.value.filter(n => n.unread).length)
-  const isLoading = ref(false)
 
-  const fetchNotify = async () => {
+  const fetchNotify = async (force = false): Promise<NotificationItem[]> => {
     if (!auth.user.value) return []
-    isLoading.value = true
-    try {
-      const res = await notifications.list()
-      const list = (res.data || []) as unknown as HubNotificationItem[]
-      notify.value = list.map(n => ({
-        id: n.id,
-        unread: !n.is_read,
-        body: n.body,
-        date: n.created_at,
-        priority: 'normal',
-        type: 'system',
-        sender: { name: n.title, avatar: n.icon }
-      }))
+    if (fetchInFlight) return fetchInFlight
+
+    if (!force && import.meta.client && lastFetchAt && Date.now() - lastFetchAt < NOTIFY_FETCH_INTERVAL_MS) {
       return notify.value
-    } catch (error) {
-      console.error('Error fetching notifications:', error)
-      return []
-    } finally {
-      isLoading.value = false
     }
+
+    isLoading.value = true
+    const request = (async () => {
+      try {
+        const res = await notifications.list()
+        const list = (res.data || []) as unknown as HubNotificationItem[]
+        notify.value = list.map(n => ({
+          id: n.id,
+          unread: !n.is_read,
+          body: n.body,
+          date: n.created_at,
+          priority: 'normal',
+          type: 'system',
+          sender: { name: n.title, avatar: n.icon }
+        }))
+        return notify.value
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+        return notify.value
+      } finally {
+        isLoading.value = false
+        lastFetchAt = Date.now()
+        fetchInFlight = null
+      }
+    })()
+
+    fetchInFlight = request
+    return request
   }
 
   const markAsRead = async (notifyId: string) => {
@@ -149,25 +167,13 @@ export const useNotify = () => {
   }
 
   const refresh = async () => {
-    await fetchNotify()
+    await fetchNotify(true)
   }
 
-  // Setup auto-fetch if mounted
-  if (import.meta.client) {
-    onMounted(() => {
-      if (auth.user.value) {
-        fetchNotify()
-      }
-    })
+  const clear = () => {
+    notify.value = []
+    lastFetchAt = 0
   }
-
-  watch(() => auth.user.value, (newUser) => {
-    if (newUser) {
-      refresh()
-    } else {
-      notify.value = []
-    }
-  })
 
   return {
     notify,
@@ -178,6 +184,7 @@ export const useNotify = () => {
     markAllAsRead,
     deleteNotify,
     refresh,
+    clear,
     showToast,
     getNotifyIcon,
     getNotifyColor,

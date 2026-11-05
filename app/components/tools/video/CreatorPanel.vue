@@ -28,7 +28,7 @@ watch(() => props.mode, () => {
 
 const subfolderInput = ref('')
 const subfolderOutput = ref('')
-const subfolderThreads = useLocalStorage('tools:video:threads', 3)
+const subfolderThreads = useLocalStorage(STORAGE_KEYS.videoThreads, 3)
 const subfoldersList = ref<Array<{ name: string, path: string, count: number, images: string[] }>>([])
 const scanningSubfolders = ref(false)
 const subfolderResolution = ref('1080x1920')
@@ -541,7 +541,7 @@ function onSubmit() {
             mode="file"
             placeholder="D:/music/bg.mp3"
             :disabled="disabled"
-            :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
+            :filters="[{ name: 'Audio', extensions: FILE_EXTENSIONS.audio }]"
           />
         </UFormField>
       </div>

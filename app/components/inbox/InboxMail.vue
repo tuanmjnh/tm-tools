@@ -32,7 +32,9 @@ function onReply() {
   sending.value = true
   emit('reply', body)
   reply.value = ''
-  setTimeout(() => { sending.value = false }, 1500)
+  setTimeout(() => {
+    sending.value = false
+  }, POLLING.uiResetMs)
 }
 
 function onTextareaKeydown(e: KeyboardEvent) {

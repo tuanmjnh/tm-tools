@@ -41,7 +41,7 @@ export function useAdminList<T>(options: {
       const res = await options.fetchPage({
         appId: targetAppId.value,
         cursor: reset ? null : nextCursor.value,
-        limit: options.limit ?? 20,
+        limit: options.limit ?? PAGE_SIZE.compact,
         q: searchQuery.value.trim() || undefined
       })
       const itemKey = (i: T) => {

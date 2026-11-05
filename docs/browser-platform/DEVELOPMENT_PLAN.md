@@ -128,7 +128,7 @@ Mỗi milestone khi thực hiện BẮT BUỘC tuân thủ 11 bước sau:
   - `shared/contracts/profile.ipc.ts`
   - `electron/src/presentation/ipc/profile.ipc.ts`
   - `app/stores/profile.ts`
-  - `app/pages/profiles/index.vue` (refactor kết nối IPC typed)
+  - `app/pages/browser-hub/index.vue` (refactor kết nối IPC typed)
 - **Tiêu chí nghiệm thu**:
   - Tạo 2 profile khác nhau, khởi chạy đồng thời: Mỗi profile mở một cửa sổ trình duyệt riêng, lưu cookies và session độc lập 100% (đăng nhập 2 tài khoản khác nhau trên cùng 1 web không bị xung đột).
   - Khi tắt cửa sổ trình duyệt vật lý, UI tự động cập nhật trạng thái về `idle`.

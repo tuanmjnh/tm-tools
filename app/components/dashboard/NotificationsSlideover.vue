@@ -3,7 +3,11 @@ import { formatTimeAgo } from '@vueuse/core'
 
 const { t } = useI18n()
 const { isNotificationsSlideoverOpen } = useDashboard()
-const { notify, unreadCount, markAsRead, markAllAsRead } = useNotify()
+const { notify, unreadCount, markAsRead, markAllAsRead, fetchNotify } = useNotify()
+
+watch(isNotificationsSlideoverOpen, (isOpen) => {
+  if (isOpen) void fetchNotify()
+})
 
 const onNotificationClick = (notificationId: string) => {
   markAsRead(notificationId)
@@ -15,10 +19,10 @@ const onMarkAll = async () => {
 }
 
 const getAvatarSrc = (sender?: { avatar?: string | { src: string } } | null): string => {
-  if (!sender) return 'https://api.dicebear.com/7.x/bottts/svg'
+  if (!sender) return FALLBACK_AVATAR
   if (typeof sender.avatar === 'string') return sender.avatar
-  if (sender.avatar && typeof sender.avatar === 'object') return sender.avatar.src || 'https://api.dicebear.com/7.x/bottts/svg'
-  return 'https://api.dicebear.com/7.x/bottts/svg'
+  if (sender.avatar && typeof sender.avatar === 'object') return sender.avatar.src || FALLBACK_AVATAR
+  return FALLBACK_AVATAR
 }
 </script>
 

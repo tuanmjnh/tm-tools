@@ -83,7 +83,7 @@ const handleUpload = async () => {
   fileList.value.forEach((f) => {
     uploadStatus.value[f.name] = 'pending'
   })
-  const CONCURRENCY = 3
+  const CONCURRENCY = UPLOAD_CONCURRENCY
   const queue = [...fileList.value]
   const processing = new Set<Promise<void>>()
   const processFile = async (file: File) => {

@@ -5,7 +5,7 @@ const route = useRoute()
 const { t } = useI18n()
 const auth = useAuth()
 const nav = useNavMenu()
-const appConfig = useAppConfig()
+const notifier = useNotify()
 const appUpdater = useAppUpdater()
 const open = ref(false)
 
@@ -24,6 +24,14 @@ watch(() => auth.isAuthenticated.value, async (val) => {
       const redirect = route.fullPath !== '/' ? route.fullPath : undefined
       await navigateTo(redirect ? { path: '/login', query: { redirect } } : '/login')
     }
+  }
+}, { immediate: true })
+
+watch(() => auth.user.value?.id, (id) => {
+  if (id) {
+    void notifier.refresh()
+  } else {
+    notifier.clear()
   }
 }, { immediate: true })
 
@@ -48,13 +56,15 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
 <template>
   <UDashboardGroup unit="rem">
+    <BaseAppBackdrop />
+
     <UDashboardSidebar
       id="default"
       v-model:open="open"
       collapsible
       resizable
-      class="bg-elevated/25"
-      :ui="{ footer: 'lg:border-t lg:border-default' }"
+      class="border-e border-default/70 tm-chrome"
+      :ui="{ footer: 'lg:border-t lg:border-default/70' }"
     >
       <template #header="{ collapsed }">
         <LazyDashboardTeamsMenu :collapsed="collapsed" />
@@ -74,6 +84,10 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
           orientation="vertical"
           tooltip
           popover
+          :ui="{
+            link: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25 data-[state=open]:text-highlighted! data-[state=open]:before:bg-primary/10 data-[state=open]:before:ring-1 data-[state=open]:before:ring-inset data-[state=open]:before:ring-primary/25',
+            childLink: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25'
+          }"
         />
       </template>
 

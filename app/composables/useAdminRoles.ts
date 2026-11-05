@@ -2,7 +2,7 @@ import type { Role, ModulePermission, RouteTreeNode } from '#shared/types/rbac'
 
 export const useAdminRoles = () => {
   const list = useAdminList<Role>({
-    limit: 50,
+    limit: PAGE_SIZE.admin,
     stateKey: 'admin:roles',
     fetchPage: async ({ appId, cursor, limit }) => {
       const res = await adminFetch<{ success: boolean, data: Role[], nextCursor: string | null }>(

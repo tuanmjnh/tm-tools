@@ -128,16 +128,16 @@ const canCancel = (job: QueueJob) => !['active'].includes(job.state)
 const rowActions = (item: QueueJob) => buildRowActions(
   canCancel(item)
     ? [
-        {
-          type: 'custom' as const,
-          label: t('queues.cancelJob'),
-          icon: 'i-lucide-x-circle',
-          onSelect: () => {
-            cancellingJob.value = item
-            isCancelOpen.value = true
-          }
+      {
+        type: 'custom' as const,
+        label: t('queues.cancelJob'),
+        icon: 'i-lucide-x-circle',
+        onSelect: () => {
+          cancellingJob.value = item
+          isCancelOpen.value = true
         }
-      ]
+      }
+    ]
     : []
 )
 
@@ -246,21 +246,11 @@ useHead({ title })
   <BasePage id="queues" :title="title" :description="description">
     <template #right>
       <div class="flex items-center gap-2">
-        <UBadge
-          :label="enabled ? t('queues.enabled') : t('queues.disabled')"
-          :color="enabled ? 'success' : 'neutral'"
-          variant="subtle"
-          size="sm"
-        />
+        <UBadge :label="enabled ? t('queues.enabled') : t('queues.disabled')" :color="enabled ? 'success' : 'neutral'"
+          variant="subtle" size="sm" />
         <BaseHeaderActions :actions="headerActions" />
-        <UButton
-          icon="i-lucide-refresh-cw"
-          variant="soft"
-          color="neutral"
-          size="sm"
-          :loading="loading"
-          @click="load()"
-        />
+        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :loading="loading"
+          @click="load()" />
       </div>
     </template>
 
@@ -268,38 +258,21 @@ useHead({ title })
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-1 rounded-lg bg-default ring ring-default p-1">
-            <UButton
-              v-for="tab in tabs"
-              :key="tab.key"
-              :icon="tab.icon"
-              :label="t(tab.label)"
-              size="xs"
-              color="neutral"
-              :variant="activeTab === tab.key ? 'soft' : 'ghost'"
-              @click="activeTab = tab.key"
-            />
+            <UButton v-for="tab in tabs" :key="tab.key" :icon="tab.icon" :label="t(tab.label)" size="xs" color="neutral"
+              :variant="activeTab === tab.key ? 'soft' : 'ghost'" @click="activeTab = tab.key" />
           </div>
         </template>
       </UDashboardToolbar>
     </template>
 
     <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6 gap-4">
-      <UAlert
-        v-if="!enabled && !loading"
-        color="warning"
-        variant="subtle"
-        icon="i-lucide-alert-triangle"
-        :title="t('queues.disabledTitle')"
-        :description="t('queues.disabledDesc')"
-      />
+      <UAlert v-if="!enabled && !loading" color="warning" variant="subtle" icon="i-lucide-alert-triangle"
+        :title="t('queues.disabledTitle')" :description="t('queues.disabledDesc')" />
 
       <template v-if="enabled">
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div
-            v-for="card in statCards"
-            :key="card.key"
-            class="rounded-lg bg-default ring ring-default p-3 flex flex-col gap-1"
-          >
+          <div v-for="card in statCards" :key="card.key"
+            class="rounded-lg bg-default ring ring-default p-3 flex flex-col gap-1">
             <div class="flex items-center gap-1.5 text-muted">
               <UIcon :name="card.icon" class="size-3.5" />
               <span class="text-[11px] font-medium uppercase tracking-wide">{{ card.label }}</span>
@@ -357,31 +330,14 @@ useHead({ title })
           </table>
         </div>
 
-        <LazyGridList
-          :items="jobs"
-          :columns="columns"
-          :loading="loading"
-          :can-load-more="false"
-          :action-options="rowActions"
-          item-key="id"
-          storage-key="queues-view-mode"
-          flat
-          @refresh="load()"
-        >
+        <LazyGridList :items="jobs" :columns="columns" :loading="loading" :can-load-more="false"
+          :action-options="rowActions" item-key="id" storage-key="queues-view-mode" flat @refresh="load()">
           <template #queue="{ item }">
-            <UBadge
-              :label="item.queue"
-              color="neutral"
-              variant="subtle"
-              size="xs"
-            />
+            <UBadge :label="item.queue" color="neutral" variant="subtle" size="xs" />
           </template>
 
           <template #state="{ item }">
-            <AdminStatusBadge
-              :label="t(`queues.state.${item.state}`)"
-              :color="stateColor(item.state)"
-            />
+            <AdminStatusBadge :label="t(`queues.state.${item.state}`)" :color="stateColor(item.state)" />
           </template>
 
           <template #summary="{ item }">
@@ -400,7 +356,8 @@ useHead({ title })
           </template>
 
           <template #time="{ item }">
-            <time v-if="item.timestamp" :datetime="new Date(item.timestamp).toISOString()" class="text-[11px] text-muted">
+            <time v-if="item.timestamp" :datetime="new Date(item.timestamp).toISOString()"
+              class="text-[11px] text-muted">
               {{ formatTimeAgo(new Date(item.timestamp)) }}
             </time>
             <span v-else class="text-[11px] text-dimmed">—</span>
@@ -413,26 +370,13 @@ useHead({ title })
       </template>
     </div>
 
-    <BaseConfirmModal
-      v-model:open="isCancelOpen"
-      :title="t('queues.cancelTitle')"
+    <BaseConfirmModal v-model:open="isCancelOpen" :title="t('queues.cancelTitle')"
       :description="t('queues.cancelDesc', [cancellingJob?.summary || cancellingJob?.id || ''])"
-      :confirm-label="t('queues.cancelJob')"
-      :cancel-label="t('common.cancel')"
-      color="error"
-      icon="i-lucide-x-circle"
-      @confirm="confirmCancel"
-    />
+      :confirm-label="t('queues.cancelJob')" :cancel-label="t('common.cancel')" color="error" icon="i-lucide-x-circle"
+      @confirm="confirmCancel" />
 
-    <BaseConfirmModal
-      v-model:open="isCleanOpen"
-      :title="t('queues.cleanTitle')"
-      :description="t('queues.cleanDesc')"
-      :confirm-label="t('queues.clean')"
-      :cancel-label="t('common.cancel')"
-      color="warning"
-      icon="i-lucide-eraser"
-      @confirm="confirmClean"
-    />
+    <BaseConfirmModal v-model:open="isCleanOpen" :title="t('queues.cleanTitle')" :description="t('queues.cleanDesc')"
+      :confirm-label="t('queues.clean')" :cancel-label="t('common.cancel')" color="warning" icon="i-lucide-eraser"
+      @confirm="confirmClean" />
   </BasePage>
 </template>

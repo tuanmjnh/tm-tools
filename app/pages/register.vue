@@ -12,39 +12,22 @@
         </div>
       </template>
 
-      <UForm
-        :schema="schema"
-        :state="state"
-        class="space-y-4"
-        @submit="onSubmit"
-      >
+      <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
         <UFormField :label="$t('auth.name')" name="name">
           <UInput v-model="state.name" :placeholder="$t('auth.namePlaceholder')" class="w-full" />
         </UFormField>
 
         <UFormField :label="$t('auth.email')" name="email">
-          <UInput
-            v-model="state.email"
-            type="email"
-            :placeholder="$t('auth.emailRegisterPlaceholder')"
-            class="w-full"
-          />
+          <UInput v-model="state.email" type="email" :placeholder="$t('auth.emailRegisterPlaceholder')"
+            class="w-full" />
         </UFormField>
 
         <UFormField :label="$t('auth.password')" name="password">
-          <BasePasswordInput
-            v-model="state.password"
-            :placeholder="$t('auth.passwordCreatePlaceholder')"
-            class="w-full"
-          />
+          <BasePasswordInput v-model="state.password" :placeholder="$t('auth.passwordCreatePlaceholder')"
+            class="w-full" />
         </UFormField>
 
-        <UButton
-          type="submit"
-          block
-          :loading="auth.loading.value"
-          :disabled="auth.loading.value"
-        >
+        <UButton type="submit" block :loading="auth.loading.value" :disabled="auth.loading.value">
           {{ $t('auth.createAccount') }}
         </UButton>
       </UForm>
@@ -74,9 +57,9 @@ useHead(() => ({
 }))
 
 const schema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: z.string().min(NAME_MIN_LENGTH, `Name must be at least ${NAME_MIN_LENGTH} characters`),
   email: z.string().email('Invalid email'),
-  password: z.string().min(6, 'Password must be at least 6 characters')
+  password: z.string().min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
 })
 
 const state = reactive({

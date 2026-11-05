@@ -22,7 +22,7 @@ const taskManager = useToolTaskManager('ffmpeg')
 const DEFAULT_BATCH_OUTPUT_PATTERN = '{dirname}/{name}_rendered.{ext}'
 const BATCH_OUTPUT_PATTERN_STORAGE_KEY = 'video_batch_output_pattern'
 const BATCH_OUTPUT_DIR_STORAGE_KEY = 'tools:video:batch_output_dir'
-const BATCH_THREADS_STORAGE_KEY = 'tools:video:threads'
+const BATCH_THREADS_STORAGE_KEY = STORAGE_KEYS.videoThreads
 
 const batchPattern = ref('')
 const batchOutputDir = useLocalStorage(BATCH_OUTPUT_DIR_STORAGE_KEY, '')

@@ -15,7 +15,7 @@ export const useAdminConfigs = () => {
   const categoryFilter = ref('all')
 
   const list = useAdminList<ConfigItem>({
-    limit: 50,
+    limit: PAGE_SIZE.admin,
     fetchPage: async ({ appId, cursor, limit }) => {
       const res = await adminFetch<{ success: boolean, data: Record<string, unknown>, meta?: ConfigMeta[], nextCursor: string | null }>(
         `/api/v1/apps/${encodeURIComponent(appId)}/configs`,

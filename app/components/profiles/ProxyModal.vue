@@ -25,7 +25,7 @@ const form = ref<Partial<ProfileProxy>>({
   name: '',
   type: 'http',
   host: '',
-  port: 8080,
+  port: PROFILE_DEFAULTS.proxyPort,
   username: '',
   password: ''
 })
@@ -35,7 +35,7 @@ function openAdd() {
     name: `Proxy ${props.proxies.length + 1}`,
     type: 'http',
     host: '',
-    port: 8080,
+    port: PROFILE_DEFAULTS.proxyPort,
     username: '',
     password: ''
   }

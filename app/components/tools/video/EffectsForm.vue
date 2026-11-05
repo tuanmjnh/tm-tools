@@ -141,7 +141,7 @@ const aspectRatiosOptions = computed(() => {
             v-model="backgroundFileModel"
             mode="file"
             placeholder="D:/backgrounds/bg.png"
-            :filters="[{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }, { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }]"
+            :filters="[{ name: 'Image', extensions: FILE_EXTENSIONS.image }, { name: 'Video', extensions: FILE_EXTENSIONS.video }]"
           />
         </UFormField>
       </div>
@@ -362,7 +362,7 @@ const aspectRatiosOptions = computed(() => {
             v-model="subtitleModel"
             mode="file"
             placeholder="D:/subs/subtitle.srt"
-            :filters="[{ name: 'Subtitles', extensions: ['srt', 'vtt', 'ass', 'ssa'] }]"
+            :filters="[{ name: 'Subtitles', extensions: FILE_EXTENSIONS.subtitle }]"
           />
         </UFormField>
       </div>

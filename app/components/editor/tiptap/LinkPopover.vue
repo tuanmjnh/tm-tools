@@ -33,7 +33,7 @@ watch(() => props.editor?.options?.element, (el, _, onCleanup) => {
       const { href } = editor.getAttributes('link')
       url.value = href || ''
     }
-  }, 200)
+  }, POLLING.debounceMs.link)
 
   updateUrl()
   editor.on('selectionUpdate', updateUrl)

@@ -28,7 +28,7 @@ export function useCursorPagination<T>(options: {
     if (!reset && !hasMore.value) return
     loading.value = true
     try {
-      const rs = await options.fetch(reset ? null : nextCursor.value, options.limit ?? 30)
+      const rs = await options.fetch(reset ? null : nextCursor.value, options.limit ?? PAGE_SIZE.default)
       if (!rs) return null
       items.value = reset ? rs.items : [...items.value, ...rs.items]
       nextCursor.value = rs.nextCursor

@@ -1,9 +1,10 @@
 # TM Tools Documentation Hub
 
 **TM Tools** is the desktop utility app of the TM platform (Nuxt 4 + Electron,
-port 4002). It manages anti-detect browser profiles, YouTube downloads and FFmpeg
-processing, the media/utility workspace, and a read-only view of the AI
-providers that live in **TM Hub**.
+port 4002). It manages anti-detect browser profiles (under Settings), a PDF
+price-list extraction workspace, YouTube downloads and FFmpeg processing, the
+media/utility workspace, and a read-only view of the AI providers that live in
+**TM Hub**.
 
 > The TMCut video editor moved to its own repository, **tm-studio** (port 4003),
 > on 2026-10-31. Its documentation is frozen in
@@ -13,9 +14,9 @@ providers that live in **TM Hub**.
 
 ## Guides
 
-1. 📖 **[User Guide](./guides/user-guide.md)** — Browser Hub, downloader,
-   FFmpeg tools, media library, utilities, AI console, settings and
-   troubleshooting.
+1. 📖 **[User Guide](./guides/user-guide.md)** — Browser Hub (under Settings),
+   PDF workspace, downloader, FFmpeg tools, media library, utilities, AI
+   console, settings and troubleshooting.
 2. ⚙️ **[System Setup & Configuration](./guides/system-setup-and-configuration-guide.md)** —
    ports for the four apps, `.env` wiring between tm-hub / tm-tools / tm-studio,
    seeding and run commands.
@@ -33,6 +34,14 @@ providers that live in **TM Hub**.
   [DEVELOPMENT_PLAN](./browser-platform/DEVELOPMENT_PLAN.md).
 - 🏛️ **[IAM & Auth Service](./iam-auth-service-architecture.md)** — the shared
   JWT / refresh / RBAC model used by every satellite.
+- 📄 **[PDF workspace](./pdf/VERIFICATION.md)** — gate evidence per phase.
+- 🗂️ **[Document Workspace spec](./pdf/TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md)** —
+  the managed workspace / universal explorer specification (v2).
+  Paired with **[WORKSPACE-AUDIT.md](./pdf/WORKSPACE-AUDIT.md)** (repo vs spec)
+  and **[WORKSPACE-UPGRADE-PLAN.md](./pdf/WORKSPACE-UPGRADE-PLAN.md)** (what
+  shipped, what is still open). The v1 spec is archived in
+  [`docs/archive/2026-11-05-workspace-spec-v1/`](./archive/2026-11-05-workspace-spec-v1/README.md).
+  The Hoa Phat / THE ONE extraction spec lives in [`docs/pdf/`](./pdf/).
 
 ## Plans & implementation notes
 
@@ -55,6 +64,8 @@ providers that live in **TM Hub**.
 | Playlist MCP server & AI gateway | removed from tm-tools |
 | AI keys vault | hub-only (`/system/ai-keys` is read-only) |
 | Browser Hub, downloader, FFmpeg, utilities, media | alive in this repo |
+| PDF workspace (`/pdf/*`, `server/modules/pdf`) | new in this repo |
+| Profiles | Browser Hub at `/browser-hub/*`; the account profile is a Settings tab |
 
 ## Verification
 

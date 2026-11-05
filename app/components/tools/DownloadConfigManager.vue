@@ -36,11 +36,11 @@ function defaultRow(): ConfigRow {
     title: '',
     format_id: formats.value[0]?.id || '',
     out_path: '',
-    file_name: '%(title)s.%(ext)s',
-    threads: 4,
+    file_name: TOOL_DEFAULTS.download.outputPattern,
+    threads: TOOL_DEFAULTS.download.threads,
     restrict: false,
     overwrite: true,
-    encoding: 'utf-8',
+    encoding: TOOL_DEFAULTS.download.encoding,
     open: false,
     saving: false,
     isNew: true
@@ -73,11 +73,11 @@ async function loadConfigs() {
       title: c.title,
       format_id: c.format_id,
       out_path: c.out_path,
-      file_name: c.file_name || '%(title)s.%(ext)s',
-      threads: c.threads ?? 4,
+      file_name: c.file_name || TOOL_DEFAULTS.download.outputPattern,
+      threads: c.threads ?? TOOL_DEFAULTS.download.threads,
       restrict: c.restrict === 1,
       overwrite: c.overwrite === undefined ? true : c.overwrite === 1,
-      encoding: c.encoding || 'utf-8',
+      encoding: c.encoding || TOOL_DEFAULTS.download.encoding,
       open: false,
       saving: false,
       isNew: false
@@ -104,11 +104,11 @@ async function onCreate(row: ConfigRow) {
       title: row.title,
       format_id: row.format_id,
       out_path: row.out_path,
-      file_name: row.file_name || '%(title)s.%(ext)s',
+      file_name: row.file_name || TOOL_DEFAULTS.download.outputPattern,
       threads: row.threads,
       restrict: row.restrict ? 1 : 0,
       overwrite: row.overwrite ? 1 : 0,
-      encoding: row.encoding || 'utf-8',
+      encoding: row.encoding || TOOL_DEFAULTS.download.encoding,
       flag: 1
     })
     if (rs?.status) {
@@ -132,11 +132,11 @@ async function onUpdate(row: ConfigRow) {
         title: row.title,
         format_id: row.format_id,
         out_path: row.out_path,
-        file_name: row.file_name || '%(title)s.%(ext)s',
+        file_name: row.file_name || TOOL_DEFAULTS.download.outputPattern,
         threads: row.threads,
         restrict: row.restrict ? 1 : 0,
         overwrite: row.overwrite ? 1 : 0,
-        encoding: row.encoding || 'utf-8'
+        encoding: row.encoding || TOOL_DEFAULTS.download.encoding
       }
     })
     if (rs?.status) {
@@ -286,7 +286,7 @@ defineExpose({ reload: loadConfigs })
                   </UFormField>
 
                   <UFormField name="file_name" :label="t('tools.fileName')">
-                    <UInput v-model="row.file_name" placeholder="%(title)s.%(ext)s" class="w-full" />
+                    <UInput v-model="row.file_name" :placeholder="TOOL_DEFAULTS.download.outputPattern" class="w-full" />
                   </UFormField>
 
                   <UFormField name="threads" :label="t('tools.threads')">
@@ -294,7 +294,7 @@ defineExpose({ reload: loadConfigs })
                       v-model.number="row.threads"
                       type="number"
                       min="1"
-                      max="8"
+                      :max="TOOL_DEFAULTS.download.maxThreads"
                       class="w-full"
                     />
                   </UFormField>
@@ -302,7 +302,7 @@ defineExpose({ reload: loadConfigs })
                   <UFormField name="encoding" :label="t('tools.encoding')">
                     <USelectMenu
                       v-model="row.encoding"
-                      :items="['utf-8', 'ascii', 'latin-1']"
+                      :items="[...TOOL_DEFAULTS.encodings]"
                       :placeholder="t('tools.encoding')"
                       :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
                       class="w-full"

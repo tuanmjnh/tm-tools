@@ -12,8 +12,8 @@ providers that live in **TM Hub**. The TMCut video editor lives in the separate
 - **Electron shell** with Nuxt 4 renderer (`electron/main.cjs` + `electron/preload.cjs`)
 - **Browser Hub**: isolated anti-detect profiles, groups and proxies
   (`/profiles`, `/profiles/groups`, `/profiles/proxies`)
-- **Downloader**: `yt-dlp` queue with progress, retry and timeouts (`/tools/download`)
-- **FFmpeg tools**: encode/convert/trim/concat with presets (`/tools/video`)
+- **Media Studio — downloader**: `yt-dlp` queue with progress, retry and timeouts (`/media/download`)
+- **Media Studio — FFmpeg tools**: encode/convert/trim/concat with presets (`/media/video`)
 - **Media workspace**: Cloudinary library, inbox, notifications, connections
 - **AI console**: hub-owned providers, connections and models (`/system/ai-keys`)
 - **Hub satellite**: identity, RBAC routes, configs and AI credentials come from

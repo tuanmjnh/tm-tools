@@ -24,7 +24,7 @@ const { title, description } = useAdminPageChrome({
 })
 const { buildRowActions } = useAdminRowActions()
 const { exporting: exportingRoutes, exportModule: exportRoutes } = useModuleExport()
-const { hubFetch, appId } = useHub()
+const { appId } = useHub()
 
 const targetApp = ref(appId || '')
 const isCreateOpen = ref(false)
@@ -60,7 +60,7 @@ watch(targetApp, async (v) => {
   try {
     const res = await adminFetch<{ success: boolean, data: Role[] }>(
       `/api/v1/apps/${encodeURIComponent(v)}/roles`,
-      { query: { limit: 100 } }
+      { query: { limit: PAGE_SIZE.lookup } }
     )
     allRoles.value = res.data || []
   } catch {
@@ -246,6 +246,7 @@ useHead({ title })
           <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <UInput
               v-model="searchQuery"
+              name="search"
               icon="i-lucide-search"
               :placeholder="t('common.search')"
               class="w-full sm:w-64"

@@ -20,6 +20,7 @@ const {
   unreadCount,
   isLoading,
   fetchNotify,
+  refresh,
   markAsRead,
   markAllAsRead,
   deleteNotify
@@ -120,7 +121,7 @@ mobileBar.registerActions(computed(() => [
   {
     icon: 'i-lucide-refresh-cw',
     label: t('common.refresh'),
-    onSelect: () => fetchNotify()
+    onSelect: () => refresh()
   }
 ]))
 mobileBar.registerInfo(computed(() => ({
@@ -136,14 +137,8 @@ useHead({ title })
     <template #right>
       <div class="flex items-center gap-2">
         <BaseHeaderActions :actions="headerActions" />
-        <UButton
-          icon="i-lucide-refresh-cw"
-          variant="soft"
-          color="neutral"
-          size="sm"
-          :loading="isLoading"
-          @click="fetchNotify()"
-        />
+        <UButton icon="i-lucide-refresh-cw" variant="soft" color="neutral" size="sm" :loading="isLoading"
+          @click="refresh()" />
       </div>
     </template>
 
@@ -151,12 +146,7 @@ useHead({ title })
       <UDashboardToolbar>
         <template #left>
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
-            <UBadge
-              :label="`${unreadCount} ${t('common.unread')}`"
-              color="warning"
-              variant="subtle"
-              size="sm"
-            />
+            <UBadge :label="`${unreadCount} ${t('common.unread')}`" color="warning" variant="subtle" size="sm" />
           </div>
         </template>
         <template #right>
@@ -170,36 +160,17 @@ useHead({ title })
     </template>
 
     <div class="flex flex-col w-full h-full min-h-0 pb-24 lg:pb-6">
-      <UAlert
-        v-if="!auth.user.value"
-        color="info"
-        variant="subtle"
-        icon="i-lucide-info"
-        :title="t('notifications.signInTitle')"
-        :description="t('notifications.signInDesc')"
-      />
+      <UAlert v-if="!auth.user.value" color="info" variant="subtle" icon="i-lucide-info"
+        :title="t('notifications.signInTitle')" :description="t('notifications.signInDesc')" />
 
-      <LazyGridList
-        v-else
-        v-model:view-mode="viewMode"
-        :items="notify"
-        :columns="columns"
-        :loading="isLoading"
-        :can-load-more="false"
-        :action-options="rowActions"
-        item-key="id"
-        storage-key="notifications-view-mode"
-        @refresh="fetchNotify()"
-        @click="onNotificationClick"
-      >
+      <LazyGridList v-else v-model:view-mode="viewMode" :items="notify" :columns="columns" :loading="isLoading"
+        :can-load-more="false" :action-options="rowActions" item-key="id" storage-key="notifications-view-mode"
+        @refresh="refresh()" @click="onNotificationClick">
         <template #sender="{ item }">
           <div class="flex items-center gap-2 min-w-0">
             <UChip color="error" :show="item.unread" inset>
-              <UAvatar
-                :src="typeof item.sender?.avatar === 'string' ? item.sender.avatar : undefined"
-                :alt="item.sender?.name || 'System'"
-                size="xs"
-              />
+              <UAvatar :src="typeof item.sender?.avatar === 'string' ? item.sender.avatar : undefined"
+                :alt="item.sender?.name || 'System'" size="xs" />
             </UChip>
             <span class="font-medium text-xs truncate" :class="item.unread ? 'text-highlighted' : 'text-muted'">
               {{ item.sender?.name || t('notifications.system') }}
@@ -220,20 +191,15 @@ useHead({ title })
         </template>
 
         <template #unread="{ item }">
-          <AdminStatusBadge
-            :label="item.unread ? t('common.unread') : t('common.read')"
-            :color="item.unread ? 'warning' : 'neutral'"
-          />
+          <AdminStatusBadge :label="item.unread ? t('common.unread') : t('common.read')"
+            :color="item.unread ? 'warning' : 'neutral'" />
         </template>
 
         <template #mobile-content="{ item }">
           <div class="flex items-start gap-3">
             <UChip color="error" :show="item.unread" inset>
-              <UAvatar
-                :src="typeof item.sender?.avatar === 'string' ? item.sender.avatar : undefined"
-                :alt="item.sender?.name || 'System'"
-                size="md"
-              />
+              <UAvatar :src="typeof item.sender?.avatar === 'string' ? item.sender.avatar : undefined"
+                :alt="item.sender?.name || 'System'" size="md" />
             </UChip>
             <div class="flex-1 min-w-0">
               <div class="flex items-center justify-between gap-2">
@@ -260,15 +226,8 @@ useHead({ title })
 
     <NotificationsSendSlideover v-if="isRoot" v-model:open="isSendOpen" />
 
-    <BaseConfirmModal
-      v-model:open="isDeleteOpen"
-      :title="t('confirm.delete_title')"
-      :description="t('confirm.delete_desc')"
-      :confirm-label="t('common.delete')"
-      :cancel-label="t('common.cancel')"
-      color="error"
-      icon="i-lucide-trash-2"
-      @confirm="handleDelete"
-    />
+    <BaseConfirmModal v-model:open="isDeleteOpen" :title="t('confirm.delete_title')"
+      :description="t('confirm.delete_desc')" :confirm-label="t('common.delete')" :cancel-label="t('common.cancel')"
+      color="error" icon="i-lucide-trash-2" @confirm="handleDelete" />
   </BasePage>
 </template>

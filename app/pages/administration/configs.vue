@@ -236,7 +236,7 @@ async function load(reset = false) {
   if (reset) initialLoading.value = true
   try {
     const res = await hubFetch<ConfigsPage>(`/api/v1/apps/${encodeURIComponent(appId)}/configs`, {
-      query: { limit: 50, cursor: !reset && nextCursor.value ? nextCursor.value : undefined }
+      query: { limit: PAGE_SIZE.admin, cursor: !reset && nextCursor.value ? nextCursor.value : undefined }
     })
     mergePage(res, reset)
   } catch (err: unknown) {

@@ -28,7 +28,6 @@ const { pickFile } = useFileSystem()
 
 const labelEditorOpen = ref(false)
 const editingLabelId = ref<string>()
-
 const aspectRatioOptions = computed(() => [
   { label: t('tools.aspectOriginal'), value: 0 },
   { label: t('tools.aspect169'), value: 1 },
@@ -36,14 +35,6 @@ const aspectRatioOptions = computed(() => [
   { label: t('tools.aspect11'), value: 3 },
   { label: t('tools.aspect43'), value: 4 }
 ])
-
-const aspectSizes: Record<number, { w: number, h: number }> = {
-  0: { w: 1080, h: 1920 },
-  1: { w: 1920, h: 1080 },
-  2: { w: 1080, h: 1920 },
-  3: { w: 1080, h: 1080 },
-  4: { w: 1440, h: 1080 }
-}
 
 const form = reactive({
   title: '',
@@ -223,7 +214,7 @@ const baseSize = computed(() => {
   if (ar === 0) {
     return { w: inputMediaSize.value.w, h: inputMediaSize.value.h }
   }
-  const size = aspectSizes[ar] ?? { w: 1080, h: 1920 }
+  const size = VIDEO_ASPECT_SIZES[ar] ?? VIDEO_DEFAULT_SIZE
   return { w: size.w, h: size.h }
 })
 
@@ -332,9 +323,9 @@ async function pickSubFile() {
   const file = await pickFile({
     title: t('tools.inputSubFile'),
     filters: [
-      { name: 'Media (Image & Video)', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'mp4', 'mkv', 'webm', 'avi', 'mov'] },
-      { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] },
-      { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }
+      { name: 'Media (Image & Video)', extensions: [...FILE_EXTENSIONS.image, ...FILE_EXTENSIONS.video] },
+      { name: 'Image', extensions: FILE_EXTENSIONS.image },
+      { name: 'Video', extensions: FILE_EXTENSIONS.video }
     ]
   })
   if (typeof file === 'string' && file) {
@@ -355,9 +346,9 @@ async function onEditSubFile(sub: FfmpegSubFile) {
   const file = await pickFile({
     title: t('tools.inputSubFile'),
     filters: [
-      { name: 'Media (Image & Video)', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'mp4', 'mkv', 'webm', 'avi', 'mov'] },
-      { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] },
-      { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }
+      { name: 'Media (Image & Video)', extensions: [...FILE_EXTENSIONS.image, ...FILE_EXTENSIONS.video] },
+      { name: 'Image', extensions: FILE_EXTENSIONS.image },
+      { name: 'Video', extensions: FILE_EXTENSIONS.video }
     ]
   })
   if (typeof file === 'string' && file) {
@@ -748,9 +739,9 @@ onUnmounted(() => {
                     mode="file"
                     placeholder="D:/backgrounds/bg.png"
                     :filters="[
-                      { name: 'Media (Image & Video)', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'mp4', 'mkv', 'webm', 'avi', 'mov'] },
-                      { name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] },
-                      { name: 'Video', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov'] }
+                      { name: 'Media (Image & Video)', extensions: [...FILE_EXTENSIONS.image, ...FILE_EXTENSIONS.video] },
+                      { name: 'Image', extensions: FILE_EXTENSIONS.image },
+                      { name: 'Video', extensions: FILE_EXTENSIONS.video }
                     ]"
                     class="flex-1"
                     :disabled="form.background_type !== 'file'"
@@ -1114,7 +1105,7 @@ onUnmounted(() => {
                   v-model="form.subtitle"
                   mode="file"
                   placeholder="D:/subs/subtitle.srt"
-                  :filters="[{ name: 'Subtitles', extensions: ['srt', 'vtt', 'ass', 'ssa'] }]"
+                  :filters="[{ name: 'Subtitles', extensions: FILE_EXTENSIONS.subtitle }]"
                   class="flex-1"
                 />
                 <UButton

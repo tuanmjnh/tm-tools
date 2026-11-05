@@ -34,7 +34,7 @@ const selectedFiles = ref<string[]>([])
 const rootFolder = ref('')
 const outputPath = ref('')
 const outputDir = ref('')
-const threads = useLocalStorage('tools:video:threads', 3)
+const threads = useLocalStorage(STORAGE_KEYS.videoThreads, 3)
 
 const availableExtensions = [
   '.mp4', '.mkv', '.mov', '.avi', '.webm', '.ts', '.flv',

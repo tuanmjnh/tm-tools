@@ -3,7 +3,7 @@ import { getErrorMessage } from '~/shared/utils/errors'
 
 const { t } = useI18n()
 const { hubFetch, appId } = useHub()
-const { fetchNotify, success: notifySuccess, error: notifyError, warning: notifyWarning } = useNotify()
+const { refresh: refreshNotify, success: notifySuccess, error: notifyError, warning: notifyWarning } = useNotify()
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -41,7 +41,7 @@ async function handleSend() {
     notifySuccess(t('notifications.sendSuccess'), t('notifications.sendSuccessDesc', { count: res.sentCount || 0 }))
     Object.assign(sendForm, { title: '', body: '', icon: '', url: '', userId: '' })
     open.value = false
-    await fetchNotify()
+    await refreshNotify()
   } catch (err: any) {
     notifyError(t('notifications.sendFailed'), getErrorMessage(err, key => t(key)))
   } finally {

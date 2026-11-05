@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { FfmpegHistory, ToolsNamespace } from '#shared/types/electron'
+import type { RowActionConfig } from '~/composables/useAdminRowActions'
 
 defineOptions({ name: 'ToolsVideoHistorySlideover' })
 
@@ -130,6 +132,40 @@ async function doDelete() {
   }
 }
 
+// Row actions: one dropdown per row (desktop column and mobile card).
+const { buildRowActions } = useAdminRowActions()
+
+function historyActions(item: FfmpegHistory): DropdownMenuItem[][] {
+  const configs: RowActionConfig[] = []
+
+  if (item.status === 'completed' && item.output_file) {
+    configs.push({
+      type: 'custom',
+      label: t('tools.openFile'),
+      icon: 'i-lucide-play',
+      onSelect: () => openFile(item.output_file)
+    })
+  }
+
+  if (item.output_file) {
+    configs.push({
+      type: 'custom',
+      label: t('tools.showInFolder'),
+      icon: 'i-lucide-folder-search',
+      group: 1,
+      onSelect: () => showInFolder(item.output_file)
+    })
+  }
+
+  configs.push({
+    type: 'delete',
+    label: t('global.delete'),
+    onSelect: () => confirmDelete(item)
+  })
+
+  return buildRowActions(configs)
+}
+
 // File opening helpers
 function openFile(filePath: string | null) {
   if (!filePath) return
@@ -191,7 +227,9 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           selectable
           :loading="loading"
           :can-load-more="false"
-          storage-key="tools-video-history"
+          storage-key="media-video-history"
+          mobile-action-mode="dropdown"
+          :action-options="historyActions"
           @refresh="loadHistory"
         >
           <template #empty>
@@ -199,7 +237,7 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
           </template>
 
           <template #mobile-content="{ item: h }">
-            <div class="flex items-start justify-between gap-2 min-w-0">
+            <div class="flex items-start justify-between gap-2 min-w-0 pr-9">
               <div class="flex items-center gap-2 flex-1 min-w-0">
                 <UCheckbox
                   :model-value="isSelected(h)"
@@ -219,44 +257,14 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
                 {{ t('tools.' + h.status) }}
               </UBadge>
             </div>
-            <div class="flex items-center justify-between gap-2 min-w-0 pl-6">
-              <div class="flex flex-col">
-                <p v-if="h.output_file" class="mt-1 text-xs text-muted truncate min-w-0 font-mono">
-                  {{ h.output_file.split('/').pop() }}
-                </p>
-                <div class="mt-2 flex items-center gap-3 text-xs text-muted">
-                  <span>{{ h.config_title || '-' }}</span>
-                  <span>{{ formatBytes(h.file_size) }}</span>
-                  <span>{{ formatDuration(h.duration) }}</span>
-                </div>
-              </div>
-              <div class="flex items-center justify-center gap-1">
-                <UButton
-                  v-if="h.status === 'completed' && h.output_file"
-                  icon="i-lucide-play"
-                  size="xs"
-                  variant="ghost"
-                  color="primary"
-                  :title="t('tools.openFile')"
-                  @click="openFile(h.output_file)"
-                />
-                <UButton
-                  v-if="h.output_file"
-                  icon="i-lucide-folder"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  :title="t('tools.openFolder')"
-                  @click="showInFolder(h.output_file)"
-                />
-                <UButton
-                  icon="i-lucide-trash"
-                  size="xs"
-                  variant="ghost"
-                  color="error"
-                  :title="t('global.delete')"
-                  @click="confirmDelete(h)"
-                />
+            <div class="flex flex-col pl-6">
+              <p v-if="h.output_file" class="mt-1 text-xs text-muted truncate min-w-0 font-mono">
+                {{ h.output_file.split('/').pop() }}
+              </p>
+              <div class="mt-2 flex items-center gap-3 text-xs text-muted">
+                <span>{{ h.config_title || '-' }}</span>
+                <span>{{ formatBytes(h.file_size) }}</span>
+                <span>{{ formatDuration(h.duration) }}</span>
               </div>
             </div>
           </template>
@@ -293,37 +301,6 @@ function statusColor(h: FfmpegHistory): 'success' | 'error' | 'warning' {
             <UBadge :color="statusColor(h)" variant="soft" size="xs">
               {{ t('tools.' + h.status) }}
             </UBadge>
-          </template>
-
-          <template #actions="{ item: h }">
-            <div class="flex items-center justify-end gap-1 shrink-0">
-              <UButton
-                v-if="h.status === 'completed' && h.output_file"
-                icon="i-lucide-play"
-                size="xs"
-                variant="ghost"
-                color="primary"
-                :title="t('tools.openFile')"
-                @click="openFile(h.output_file)"
-              />
-              <UButton
-                v-if="h.output_file"
-                icon="i-lucide-folder"
-                size="xs"
-                variant="ghost"
-                color="neutral"
-                :title="t('tools.openFolder')"
-                @click="showInFolder(h.output_file)"
-              />
-              <UButton
-                icon="i-lucide-trash"
-                size="xs"
-                variant="ghost"
-                color="error"
-                :title="t('global.delete')"
-                @click="confirmDelete(h)"
-              />
-            </div>
           </template>
         </LazyGridList>
       </div>

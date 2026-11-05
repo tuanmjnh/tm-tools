@@ -2,7 +2,11 @@
 const { t } = useI18n()
 const auth = useAuth()
 const { isNotificationsSlideoverOpen } = useDashboard()
-const { unreadCount } = useNotify()
+const { unreadCount, fetchNotify } = useNotify()
+
+onMounted(() => {
+  void fetchNotify()
+})
 </script>
 
 <template>

@@ -58,6 +58,26 @@ export interface AppConfig {
     baseUrl: string
     model: string
   }
+  // PDF workspace: split/merge/rasterize/extract. Files live outside the app
+  // bundle under .data/pdf so they survive rebuilds and are never served raw.
+  pdf: {
+    dir: string
+    maxUploadMb: number
+    maxPages: number
+    imageScale: number
+    pagePrefix: string
+    padLength: number
+    /** TrueType font used by Word→PDF; empty means auto-detect on the host. */
+    fontPath: string
+    extract: {
+      /** Suggested model; the picker offers every model of every connection. */
+      model: string
+      temperature: number
+      maxRetries: number
+      retryDelayMs: number
+      pageDelayMs: number
+    }
+  }
   modules: ModuleDefinition[]
 }
 
@@ -140,10 +160,29 @@ export function loadConfig(): AppConfig {
       baseUrl: readEnv('AI_BASE_URL', ''),
       model: readEnv('AI_MODEL', '')
     },
+    pdf: {
+      dir: readEnv('PDF_DATA_DIR', join(process.cwd(), '.data', 'pdf')),
+      maxUploadMb: parseInt(readEnv('PDF_MAX_UPLOAD_MB', '200')),
+      maxPages: parseInt(readEnv('PDF_MAX_PAGES', '400')),
+      imageScale: parseFloat(readEnv('PDF_IMAGE_SCALE', '2')),
+      pagePrefix: readEnv('PDF_PAGE_PREFIX', 'page_'),
+      padLength: parseInt(readEnv('PDF_PAD_LENGTH', '4')),
+      fontPath: readEnv('PDF_FONT_PATH', ''),
+      extract: {
+        // Only the starting suggestion: extraction always runs through the AI
+        // connection + model chosen in the picker, not through a local key.
+        model: readEnv('PDF_EXTRACT_MODEL', 'gemini-3.5-flash'),
+        temperature: parseFloat(readEnv('PDF_EXTRACT_TEMPERATURE', '0.1')),
+        maxRetries: parseInt(readEnv('PDF_EXTRACT_MAX_RETRIES', '3')),
+        retryDelayMs: parseInt(readEnv('PDF_EXTRACT_RETRY_DELAY_MS', '3000')),
+        pageDelayMs: parseInt(readEnv('PDF_EXTRACT_PAGE_DELAY_MS', '1500'))
+      }
+    },
     modules: [
       { key: 'dashboard', label: 'Dashboard', description: 'Dashboard module', icon: 'i-lucide-layout-dashboard' },
       { key: 'chat', label: 'AI Chat', description: 'AI chat module', icon: 'i-lucide-message-square' },
       { key: 'browser_hub', label: 'Browser Hub', description: 'Browser profiles & proxies management', icon: 'i-lucide-globe' },
+      { key: 'pdf', label: 'PDF Studio', description: 'PDF split, merge, convert and price-list extraction', icon: 'i-lucide-file-text' },
       { key: 'settings', label: 'Settings', description: 'Settings module', icon: 'i-lucide-settings' },
       { key: 'users', label: 'Users', description: 'User management', icon: 'i-lucide-user-cog' },
       { key: 'rbac', label: 'RBAC', description: 'Role & permission management', icon: 'i-lucide-shield' }

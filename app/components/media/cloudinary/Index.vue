@@ -136,7 +136,7 @@ const loadFiles = async (folder: string = 'root', loadMore = false) => {
       nextCursor.value = null
     }
     const response = await listFiles(folder, {
-      max_results: 32,
+      max_results: PAGE_SIZE.mediaLibrary,
       next_cursor: loadMore && nextCursor.value ? nextCursor.value : undefined
     })
     if (loadMore) {

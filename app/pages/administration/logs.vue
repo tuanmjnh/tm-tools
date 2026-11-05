@@ -44,7 +44,7 @@ const headerActions = computed<HeaderAction[]>(() => [
 ])
 
 const logsList = useCursorPagination<HubAuditLog>({
-  limit: 50,
+  limit: PAGE_SIZE.admin,
   fetch: async (cursor, limit) => {
     const res = await logsApi.list({ limit, cursor: cursor ? cursor.rowid : undefined })
     const items = res.data ?? []
@@ -150,6 +150,7 @@ onMounted(onRefresh)
           <div class="flex items-center gap-2 w-full min-w-0 sm:w-auto">
             <UInput
               v-model="search"
+              name="search"
               icon="i-lucide-search"
               :placeholder="t('common.search')"
               size="sm"

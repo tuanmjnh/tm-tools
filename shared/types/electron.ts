@@ -163,6 +163,39 @@ export interface YoutubeConfig {
   updated_at: string | null
 }
 
+export type DownloadMode = 'single' | 'multiple'
+
+export interface DownloadFormState {
+  downloadMode: DownloadMode
+  singleUrl: string
+  urlText: string
+  outputPath: string
+  threads: number
+  selectedFormatId: string
+  selectedConfigId: string
+  advancedOpen: boolean
+  fileName: string
+  restrict: boolean
+  overwrite: boolean
+  encoding: string
+  autoFetchFormat: boolean
+}
+
+export interface SavedDownloadSettings {
+  downloadMode?: DownloadMode
+  singleUrl?: string
+  urlText?: string
+  outputPath?: string
+  threads?: number
+  selectedFormatId?: string
+  selectedConfigId?: string
+  fileName?: string
+  restrict?: boolean
+  overwrite?: boolean
+  encoding?: string
+  autoFetchFormat?: boolean
+}
+
 export interface CursorPage<T> {
   items: T[]
   nextCursor: { ts: string, rowid: number } | null

@@ -19,6 +19,11 @@ function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {
   }
 }
 
+const ROUTES_RETRY_BACKOFF_MS = 30_000
+
+let routesInFlight: Promise<RouteTreeNode[]> | null = null
+let routesRetryAfter = 0
+
 export const useNavMenu = () => {
   const { t } = useI18n()
   const auth = useAuth()
@@ -29,14 +34,24 @@ export const useNavMenu = () => {
   async function fetchRoutes(force = false) {
     if (allowedRoutes.value.length > 0 && !force) return allowedRoutes.value
     if (!auth.isAuthenticated.value) return []
+    if (routesInFlight) return routesInFlight
+    if (!force && import.meta.client && Date.now() < routesRetryAfter) return allowedRoutes.value
 
-    try {
-      const res = await routes.list()
-      allowedRoutes.value = (res.data || []).map(mapHubRouteToRouteTreeNode)
-    } catch {
-      allowedRoutes.value = []
-    }
-    return allowedRoutes.value
+    const request = (async () => {
+      try {
+        const res = await routes.list()
+        allowedRoutes.value = (res.data || []).map(mapHubRouteToRouteTreeNode)
+        routesRetryAfter = 0
+      } catch {
+        routesRetryAfter = Date.now() + ROUTES_RETRY_BACKOFF_MS
+      } finally {
+        routesInFlight = null
+      }
+      return allowedRoutes.value
+    })()
+
+    routesInFlight = request
+    return request
   }
 
   function clearRoutes() {
@@ -56,18 +71,42 @@ export const useNavMenu = () => {
 
   const translateLabel = (node: RouteTreeNode): string => translateRouteLabel(node.label, node.name)
 
-  function mapRouteToNav(node: RouteTreeNode, open: Ref<boolean>): NavigationMenuItem {
-    const label = translateLabel(node)
+  function normalizePath(path?: string | null): string {
+    return (path || '').replace(/\/+$/, '') || '/'
+  }
 
-    if (node.children?.length) {
+  function visibleChildren(node: RouteTreeNode): RouteTreeNode[] {
+    return (node.children ?? []).filter((child: RouteTreeNode) => child.isVisible !== false)
+  }
+
+  function leafPaths(nodes: RouteTreeNode[]): string[] {
+    return nodes.flatMap(node => (visibleChildren(node).length
+      ? leafPaths(visibleChildren(node))
+      : [normalizePath(node.path)]))
+  }
+
+  /**
+   * A section index link (`/pdf`) is a prefix of its sibling leaves
+   * (`/pdf/library`), so router links keep it highlighted on every child page
+   * and two sidebar entries look active at once. Those links are marked exact
+   * so only a real visit to the section root highlights them.
+   */
+  function shadowedPaths(nodes: RouteTreeNode[]): Set<string> {
+    const paths = leafPaths(nodes).filter(path => path !== '/')
+    return new Set(paths.filter(path => paths.some(other => other !== path && other.startsWith(`${path}/`))))
+  }
+
+  function mapRouteToNav(node: RouteTreeNode, open: Ref<boolean>, shadowed: Set<string>): NavigationMenuItem {
+    const label = translateLabel(node)
+    const children = visibleChildren(node)
+
+    if (children.length) {
       return {
         label,
         icon: node.icon || 'i-lucide-folder',
         defaultOpen: false,
         type: 'trigger',
-        children: node.children
-          .filter((child: RouteTreeNode) => child.isVisible !== false)
-          .map((child: RouteTreeNode) => mapRouteToNav(child, open))
+        children: children.map((child: RouteTreeNode) => mapRouteToNav(child, open, shadowed))
       }
     }
 
@@ -75,15 +114,17 @@ export const useNavMenu = () => {
       label,
       icon: node.icon || 'i-lucide-circle',
       to: node.path,
+      exact: shadowed.has(normalizePath(node.path)),
       onSelect: () => { open.value = false }
     }
   }
 
   function buildNavItems(open: Ref<boolean>): NavigationMenuItem[] {
     const hidden = new Set(['settings'])
-    return allowedRoutes.value
+    const items = allowedRoutes.value
       .filter((node: RouteTreeNode) => !hidden.has(node.name) && node.isVisible !== false)
-      .map((node: RouteTreeNode) => mapRouteToNav(node, open))
+    const shadowed = shadowedPaths(items)
+    return items.map(node => mapRouteToNav(node, open, shadowed))
   }
 
   return {

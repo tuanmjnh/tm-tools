@@ -1,0 +1,207 @@
+/* ============================================================================
+   TM Tools — Linear-flat glass surfaces
+   Tokens + utilities shared by every panel. Decor lives in decor.css.
+   Accent colours are derived from the app palette (--ui-primary / --ui-info),
+   so switching the primary colour re-tints the whole surface system.
+   Guardrails:
+   - No backdrop-filter on scrolling containers (only .glass-blur, used on
+     ~1-2 hero panels per viewport).
+   - Dense data surfaces use .surface-solid so text contrast never depends on
+     the decor behind them.
+   ========================================================================= */
+
+:root {
+  /* Radius scale: deliberately tiny (Linear). Keep in sync with @theme radius
+     overrides in main.css so Tailwind utilities and Nuxt UI line up. */
+  --ui-radius: 4px;
+  --tm-radius-panel: 6px;
+  --tm-radius-tile: 4px;
+
+  /* Glass surface */
+  --tm-surface: rgba(255, 255, 255, 0.72);
+  --tm-surface-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.16) 44%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  --tm-hairline: rgba(15, 23, 42, 0.08);
+  --tm-inset-highlight: rgba(255, 255, 255, 0.9);
+  --tm-panel-shadow:
+    0 1px 1px rgba(15, 23, 42, 0.03),
+    0 18px 40px -30px rgba(15, 23, 42, 0.35);
+  --tm-tile-bg: rgba(15, 23, 42, 0.03);
+  --tm-tile-bg-hover: rgba(15, 23, 42, 0.055);
+  --tm-refract-sheen: rgba(255, 255, 255, 0.45);
+  --tm-chrome: rgba(255, 255, 255, 0.55);
+  --tm-chrome-overlay: rgba(255, 255, 255, 0.98);
+}
+
+.dark {
+  --tm-surface: rgba(30, 41, 59, 0.55);
+  --tm-surface-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.02) 42%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  --tm-hairline: rgba(148, 163, 184, 0.14);
+  --tm-inset-highlight: rgba(255, 255, 255, 0.1);
+  --tm-panel-shadow:
+    0 1px 1px rgba(2, 6, 23, 0.3),
+    0 24px 50px -32px rgba(2, 6, 23, 0.8);
+  --tm-tile-bg: rgba(255, 255, 255, 0.035);
+  --tm-tile-bg-hover: rgba(255, 255, 255, 0.065);
+  --tm-refract-sheen: rgba(255, 255, 255, 0.14);
+  --tm-chrome: rgba(15, 23, 42, 0.55);
+  --tm-chrome-overlay: rgba(15, 23, 42, 0.98);
+}
+
+/* Light mode: Nuxt UI resolves --ui-<color> at the 500 shade, which is too
+   bright on white and on its own 10% tint (primary 3.7:1, success 2.1:1).
+   Pin the light theme a step darker so links, soft buttons and badges clear
+   AA. Dark mode keeps the 400 shades, which already pass. */
+:root:not(.dark) {
+  --ui-primary: var(--color-primary-600);
+  --ui-secondary: var(--color-secondary-600);
+  --ui-info: var(--color-info-700);
+  --ui-success: var(--color-success-700);
+  --ui-warning: var(--color-warning-800);
+  --ui-error: var(--color-error-700);
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.glass-panel {
+  position: relative;
+  border-radius: var(--tm-radius-panel);
+  border: 1px solid var(--tm-hairline);
+  background-color: var(--tm-surface);
+  background-image: var(--tm-surface-sheen);
+  box-shadow:
+    inset 0 1px 0 var(--tm-inset-highlight),
+    var(--tm-panel-shadow);
+}
+
+/* Opaque variant for dense data regions (tables, grids, long forms). */
+.glass-panel.surface-solid,
+.surface-solid {
+  background-color: var(--ui-bg);
+  background-image: none;
+}
+
+/* Real backdrop blur — reserve for hero/bento panels, never for rows or
+   scrolling containers. */
+.glass-blur {
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-blur {
+    background-color: var(--ui-bg);
+  }
+}
+
+/* Refracted edge light: a single hairline sheen across the top-left corner. */
+.refract::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(
+    118deg,
+    var(--tm-refract-sheen) 0%,
+    rgba(255, 255, 255, 0.03) 30%,
+    transparent 42%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.7;
+}
+
+:root:not(.dark) .refract::after {
+  mix-blend-mode: overlay;
+  opacity: 0.9;
+}
+
+/* Keep panel content above the refraction layer. */
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------- small tiles */
+
+.tm-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--tm-hairline);
+  border-radius: var(--tm-radius-tile);
+  background-color: var(--tm-tile-bg);
+  color: var(--ui-text);
+  text-align: start;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.tm-tile:hover {
+  border-color: color-mix(in oklab, var(--ui-primary) 42%, transparent);
+  background-color: var(--tm-tile-bg-hover);
+}
+
+.tm-tile:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- chrome */
+
+/* Persistent app chrome (sidebar) — translucent, no backdrop-filter because it
+   sits next to a scrolling region. */
+.tm-chrome {
+  background-color: var(--tm-chrome);
+}
+
+/* Chrome that has content scrolling underneath (sticky headers). Near-opaque
+   because we deliberately avoid backdrop-filter outside hero panels. */
+.tm-chrome-overlay {
+  background-color: var(--tm-chrome-overlay);
+}
+
+/* ------------------------------------------------- legacy PDF-page helpers
+   `.panel` predates the design system and is used by the PDF workspace. It now
+   maps onto the same glass surface so those pages match without edits. */
+
+.panel {
+  position: relative;
+  background-color: var(--tm-surface);
+  background-image: var(--tm-surface-sheen);
+  border: 1px solid var(--tm-hairline);
+  border-radius: var(--tm-radius-panel);
+  box-shadow:
+    inset 0 1px 0 var(--tm-inset-highlight),
+    var(--tm-panel-shadow);
+}
+
+.panel-flat {
+  position: relative;
+  background-color: var(--tm-tile-bg);
+  border: 1px solid var(--tm-hairline);
+  border-radius: var(--tm-radius-tile);
+  backdrop-filter: none;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-accented) transparent;
+}

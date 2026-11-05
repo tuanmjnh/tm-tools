@@ -35,12 +35,13 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   spaLoadingTemplate: 'spa-loading-template.html',
 
-  // Include TypeScript icon maps so local controls do not depend on runtime API requests.
-  icon: {
-    clientBundle: {
-      scan: {
-        globInclude: ['app/**/*.{vue,ts,jsx,tsx,md,json}', 'shared/**/*.ts']
-      }
+  runtimeConfig: {
+    // Server-only: proves tm-tools to the hub AI relay (X-App-Secret). The
+    // renderer never holds it — chat goes through local /api/v1/chat routes.
+    hubAppSecret: process.env.NUXT_HUB_APP_SECRET || '',
+    public: {
+      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
+      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
     }
   },
 
@@ -49,13 +50,6 @@ export default defineNuxtConfig({
   // @vite-pwa/nuxt (generates sw.js at scope '/', conflicting with push-sw.js).
   // manifest.webmanifest (public/) provides PWA metadata: name, icons,
   // theme_color; service worker already in place -> full PWA support.
-
-  runtimeConfig: {
-    public: {
-      hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
-      hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
-    }
-  },
 
   alias: {},
 
@@ -110,7 +104,7 @@ export default defineNuxtConfig({
     },
     resolve: {
       alias: {
-        'striptags': 'striptags/src/striptags.js'
+        striptags: 'striptags/src/striptags.js'
       },
       dedupe: [
         'vue'
@@ -149,6 +143,15 @@ export default defineNuxtConfig({
       useCookie: true,
       cookieKey: 'i18n_locale',
       redirectOn: 'root'
+    }
+  },
+
+  // Include TypeScript icon maps so local controls do not depend on runtime API requests.
+  icon: {
+    clientBundle: {
+      scan: {
+        globInclude: ['app/**/*.{vue,ts,jsx,tsx,md,json}', 'shared/**/*.ts']
+      }
     }
   },
 

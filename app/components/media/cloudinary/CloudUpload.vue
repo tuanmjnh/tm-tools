@@ -94,7 +94,7 @@ const uploadFiles = async () => {
   uploading.value = true
   let successCount = 0
   let errorCount = 0
-  const CONCURRENCY = 3
+  const CONCURRENCY = UPLOAD_CONCURRENCY
   const queue = [...files.value]
   const processing = new Set<Promise<void>>()
   const uploadedFiles: Cloudinary.UploadedResponse[] = []

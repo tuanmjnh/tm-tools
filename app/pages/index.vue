@@ -10,6 +10,7 @@ const { listProviders } = useHubAi()
 const { profiles, total: totalProfiles, fetchProfiles } = useProfiles()
 const { proxies, fetchProxies } = useProfileProxies()
 const { linkHistory } = useMediaStore()
+const { library, refreshLibrary } = usePdfStudio()
 
 const aiProviders = ref<HubAiProviderItem[]>([])
 const aiLoading = ref(false)
@@ -18,7 +19,8 @@ onMounted(async () => {
   await Promise.allSettled([
     fetchProfiles(),
     fetchProxies(),
-    loadAiProviders()
+    loadAiProviders(),
+    refreshLibrary()
   ])
 })
 
@@ -47,12 +49,12 @@ const moreActions = computed(() => [
     {
       label: t('nav.profiles_list'),
       icon: 'i-lucide-id-card',
-      onSelect: () => router.push('/profiles')
+      onSelect: () => router.push('/browser-hub')
     },
     {
       label: t('nav.profile_proxies'),
       icon: 'i-lucide-globe',
-      onSelect: () => router.push('/profiles/proxies')
+      onSelect: () => router.push('/browser-hub/proxies')
     },
     {
       label: t('nav.connections'),
@@ -83,566 +85,345 @@ const moreActions = computed(() => [
 <template>
   <BasePage id="home" :title="t('dashboard.title')" :description="t('dashboard.description')">
     <template #right>
-      <UButton
-        to="/tools/download"
-        icon="i-lucide-download"
-        color="primary"
-        variant="solid"
-        size="sm"
-      >
+      <UButton to="/media/download" icon="i-lucide-download" color="primary" variant="soft" size="sm">
         <span class="hidden sm:inline">{{ t('dashboard.actions.openDownloader') }}</span>
       </UButton>
-      <UButton
-        to="/tools/video"
-        icon="i-lucide-film"
-        color="neutral"
-        variant="soft"
-        size="sm"
-      >
+      <UButton to="/media/video" icon="i-lucide-film" color="secondary" variant="soft" size="sm">
         <span class="hidden md:inline">{{ t('dashboard.actions.videoTools') }}</span>
       </UButton>
       <UDropdownMenu :items="moreActions" :content="{ side: 'bottom', align: 'end' }">
-        <UButton
-          icon="i-lucide-ellipsis-vertical"
-          color="neutral"
-          variant="soft"
-          size="sm"
-          :aria-label="t('common.more')"
-        />
+        <UButton icon="i-lucide-ellipsis-vertical" color="neutral" variant="soft" size="sm"
+          :aria-label="t('common.more')" />
       </UDropdownMenu>
     </template>
 
-    <div class="space-y-6">
-      <!-- Quick Stats KPI Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div
-          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex items-center justify-between shadow-xs transition hover:border-sky-500/40"
-        >
-          <div class="space-y-1">
-            <span class="text-xs font-medium text-neutral-500">{{ t('dashboard.stats.profiles') }}</span>
-            <div class="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              {{ totalProfiles || profiles.length }}
-            </div>
-            <UButton
-              to="/profiles"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              class="mt-1"
-            >
-              {{ t('dashboard.actions.manageProfiles') }}
-            </UButton>
-          </div>
-          <div class="size-12 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
-            <UIcon name="i-lucide-id-card" class="size-6" />
-          </div>
-        </div>
-
-        <div
-          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex items-center justify-between shadow-xs transition hover:border-indigo-500/40"
-        >
-          <div class="space-y-1">
-            <span class="text-xs font-medium text-neutral-500">{{ t('dashboard.stats.proxies') }}</span>
-            <div class="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              {{ proxies.length }}
-            </div>
-            <UButton
-              to="/profiles/proxies"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              class="mt-1"
-            >
-              {{ t('dashboard.actions.manageProxies') }}
-            </UButton>
-          </div>
-          <div class="size-12 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-            <UIcon name="i-lucide-globe" class="size-6" />
-          </div>
-        </div>
-
-        <div
-          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex items-center justify-between shadow-xs transition hover:border-amber-500/40"
-        >
-          <div class="space-y-1">
-            <span class="text-xs font-medium text-neutral-500">{{ t('dashboard.stats.aiConnections') }}</span>
-            <div class="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              {{ aiLoading ? '—' : aiConnectionCount }}
-            </div>
-            <UButton
-              to="/system/ai-keys"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              class="mt-1"
-            >
-              {{ t('nav.ai_keys') }}
-            </UButton>
-          </div>
-          <div class="size-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-            <UIcon name="i-lucide-brain" class="size-6" />
-          </div>
-        </div>
-
-        <div
-          class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-neutral-900 flex items-center justify-between shadow-xs transition hover:border-emerald-500/40"
-        >
-          <div class="space-y-1">
-            <span class="text-xs font-medium text-neutral-500">{{ t('dashboard.stats.media') }}</span>
-            <div class="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-              {{ linkHistory.length }}
-            </div>
-            <UButton
-              to="/resources/media"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              class="mt-1"
-            >
-              {{ t('dashboard.actions.openMedia') }}
-            </UButton>
-          </div>
-          <div class="size-12 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-            <UIcon name="i-lucide-images" class="size-6" />
-          </div>
-        </div>
+    <div class="relative">
+      <div class="tm-iso-region" aria-hidden="true">
+        <div class="tm-iso-grid" />
       </div>
 
-      <!-- Quick Shortcuts Action Bar -->
-      <div class="p-4 rounded-2xl bg-neutral-900/5 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-sparkles" class="size-5 text-primary shrink-0" />
-          <span class="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{{ t('dashboard.quickActions') }}</span>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <UButton
-            icon="i-lucide-arrow-down-to-line"
-            size="xs"
-            color="primary"
-            variant="soft"
-            to="/tools/download"
-          >
-            {{ t('dashboard.actions.openDownloader') }}
-          </UButton>
-          <UButton
-            icon="i-lucide-film"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            to="/tools/video"
-          >
-            {{ t('dashboard.actions.videoTools') }}
-          </UButton>
-          <UButton
-            icon="i-lucide-id-card"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            to="/profiles"
-          >
-            {{ t('nav.profiles_list') }}
-          </UButton>
-          <UButton
-            icon="i-lucide-key"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            to="/system/ai-keys"
-          >
-            {{ t('nav.ai_keys') }}
-          </UButton>
-          <UButton
-            icon="i-lucide-bot"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            to="/chat"
-          >
-            {{ t('dashboard.actions.openChat') }}
-          </UButton>
-          <UButton
-            icon="i-lucide-folder-cog"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            to="/utilities"
-          >
-            {{ t('nav.utilities') }}
-          </UButton>
-        </div>
-      </div>
-
-      <!-- Core Modules Grid (3 modules) -->
-      <div class="space-y-4">
-        <h2 class="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          {{ t('dashboard.coreModules') }}
-        </h2>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <!-- Module 1: Tools -->
-          <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 bg-white dark:bg-neutral-900/90 flex flex-col justify-between shadow-xs hover:border-rose-500/40 transition"
-          >
-            <div class="space-y-3">
-              <div class="flex items-center gap-3">
-                <div class="size-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-                  <UIcon name="i-lucide-film" class="size-5" />
-                </div>
-                <div>
-                  <h3 class="font-semibold text-base text-neutral-900 dark:text-neutral-100">
-                    {{ t('dashboard.modules.toolsTitle') }}
-                  </h3>
-                  <p class="text-xs text-neutral-500">
-                    {{ t('dashboard.modules.toolsDesc') }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-2 pt-2">
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-rose-500/50 cursor-pointer transition"
-                  @click="router.push('/tools/download')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-arrow-down-to-line" class="size-4 text-rose-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.download') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    YouTube, TikTok, HLS M3U8, Playlists
-                  </p>
-                </div>
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-rose-500/50 cursor-pointer transition"
-                  @click="router.push('/tools/video')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-file-cog" class="size-4 text-rose-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.video') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Convert, Join, Split, Image2Video, Audio
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2 mt-5 pt-3 border-t border-neutral-100 dark:border-neutral-800">
-              <UButton
-                to="/tools/download"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-download"
-              >
-                {{ t('dashboard.actions.openDownloader') }}
-              </UButton>
-              <UButton
-                to="/tools/video"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-film"
-              >
-                {{ t('dashboard.actions.videoTools') }}
-              </UButton>
-            </div>
-          </div>
-
-          <!-- Module 2: Anti-Detect Profiles & Proxies -->
-          <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 bg-white dark:bg-neutral-900/90 flex flex-col justify-between shadow-xs hover:border-sky-500/40 transition"
-          >
-            <div class="space-y-3">
-              <div class="flex items-center gap-3">
-                <div class="size-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
-                  <UIcon name="i-lucide-fingerprint" class="size-5" />
-                </div>
-                <div>
-                  <h3 class="font-semibold text-base text-neutral-900 dark:text-neutral-100">
-                    {{ t('dashboard.modules.profilesTitle') }}
-                  </h3>
-                  <p class="text-xs text-neutral-500">
-                    {{ t('dashboard.modules.profilesDesc') }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-2 pt-2">
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-sky-500/50 cursor-pointer transition"
-                  @click="router.push('/profiles')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-id-card" class="size-4 text-sky-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.profiles_list') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Chromium, Firefox, Camoufox, Fingerprint
-                  </p>
-                </div>
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-sky-500/50 cursor-pointer transition"
-                  @click="router.push('/profiles/proxies')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-globe" class="size-4 text-sky-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.profile_proxies') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    HTTP, SOCKS5, Geo & Latency Check
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2 mt-5 pt-3 border-t border-neutral-100 dark:border-neutral-800">
-              <UButton
-                to="/profiles"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-id-card"
-              >
+      <BaseBentoGrid>
+        <!-- KPI tiles -->
+        <BaseBentoCard :span="3" :span-sm="3">
+          <div class="flex h-full items-start justify-between gap-3 p-3.5">
+            <div class="flex min-w-0 flex-col">
+              <p class="stat-label">{{ t('dashboard.stats.profiles') }}</p>
+              <p class="stat-value">{{ totalProfiles || profiles.length }}</p>
+              <UButton to="/browser-hub" size="xs" variant="soft" color="neutral" class="mt-auto w-fit">
                 {{ t('dashboard.actions.manageProfiles') }}
               </UButton>
-              <UButton
-                to="/profiles/proxies"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-globe"
-              >
+            </div>
+            <span class="stat-icon">
+              <UIcon name="i-lucide-id-card" class="size-4" />
+            </span>
+          </div>
+        </BaseBentoCard>
+
+        <BaseBentoCard :span="3" :span-sm="3">
+          <div class="flex h-full items-start justify-between gap-3 p-3.5">
+            <div class="flex min-w-0 flex-col">
+              <p class="stat-label">{{ t('dashboard.stats.proxies') }}</p>
+              <p class="stat-value">{{ proxies.length }}</p>
+              <UButton to="/browser-hub/proxies" size="xs" variant="soft" color="neutral" class="mt-auto w-fit">
                 {{ t('dashboard.actions.manageProxies') }}
               </UButton>
             </div>
+            <span class="stat-icon">
+              <UIcon name="i-lucide-globe" class="size-4" />
+            </span>
           </div>
+        </BaseBentoCard>
 
-          <!-- Module 3: AI Control Plane & Utilities -->
-          <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 bg-white dark:bg-neutral-900/90 flex flex-col justify-between shadow-xs hover:border-amber-500/40 transition"
-          >
-            <div class="space-y-3">
-              <div class="flex items-center gap-3">
-                <div class="size-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                  <UIcon name="i-lucide-sparkles" class="size-5" />
-                </div>
-                <div>
-                  <h3 class="font-semibold text-base text-neutral-900 dark:text-neutral-100">
-                    {{ t('dashboard.modules.utilitiesTitle') }}
-                  </h3>
-                  <p class="text-xs text-neutral-500">
-                    {{ t('dashboard.modules.utilitiesDesc') }}
-                  </p>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-2 pt-2">
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-amber-500/50 cursor-pointer transition"
-                  @click="router.push('/system/ai-keys')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-key" class="size-4 text-amber-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.ai_keys') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Providers, models, credentials
-                  </p>
-                </div>
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-amber-500/50 cursor-pointer transition"
-                  @click="router.push('/resources/connections')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-cable" class="size-4 text-amber-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.connections') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Shared hub credentials
-                  </p>
-                </div>
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-amber-500/50 cursor-pointer transition"
-                  @click="router.push('/chat')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-bot" class="size-4 text-amber-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">AI Chat</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Hub-routed assistant
-                  </p>
-                </div>
-                <div
-                  class="border border-neutral-100 dark:border-neutral-800 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 hover:border-amber-500/50 cursor-pointer transition"
-                  @click="router.push('/utilities')"
-                >
-                  <div class="flex items-center gap-2">
-                    <UIcon name="i-lucide-wrench" class="size-4 text-amber-500" />
-                    <span class="text-xs font-medium text-neutral-900 dark:text-neutral-200">{{ t('nav.utilities') }}</span>
-                  </div>
-                  <p class="text-[10px] text-neutral-500 mt-1">
-                    Text, icons, encode, random
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-2 mt-5 pt-3 border-t border-neutral-100 dark:border-neutral-800">
-              <UButton
-                to="/system/ai-keys"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-key"
-              >
+        <BaseBentoCard :span="3" :span-sm="3">
+          <div class="flex h-full items-start justify-between gap-3 p-3.5">
+            <div class="flex min-w-0 flex-col">
+              <p class="stat-label">{{ t('dashboard.stats.aiConnections') }}</p>
+              <p class="stat-value">{{ aiLoading ? '—' : aiConnectionCount }}</p>
+              <UButton to="/system/ai-keys" size="xs" variant="soft" color="neutral" class="mt-auto w-fit">
                 {{ t('nav.ai_keys') }}
               </UButton>
-              <UButton
-                to="/chat"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-bot"
-              >
-                {{ t('dashboard.actions.openChat') }}
-              </UButton>
-              <UButton
-                to="/utilities"
-                size="sm"
-                color="neutral"
-                variant="soft"
-                icon="i-lucide-folder-cog"
-              >
-                {{ t('nav.utilities') }}
+            </div>
+            <span class="stat-icon">
+              <UIcon name="i-lucide-brain" class="size-4" />
+            </span>
+          </div>
+        </BaseBentoCard>
+
+        <BaseBentoCard :span="3" :span-sm="3">
+          <div class="flex h-full items-start justify-between gap-3 p-3.5">
+            <div class="flex min-w-0 flex-col">
+              <p class="stat-label">{{ t('dashboard.stats.media') }}</p>
+              <p class="stat-value">{{ linkHistory.length }}</p>
+              <UButton to="/resources/media" size="xs" variant="soft" color="neutral" class="mt-auto w-fit">
+                {{ t('dashboard.actions.openMedia') }}
               </UButton>
             </div>
+            <span class="stat-icon">
+              <UIcon name="i-lucide-images" class="size-4" />
+            </span>
           </div>
-        </div>
-      </div>
+        </BaseBentoCard>
 
-      <!-- AI Providers & System Status -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2 space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-              {{ t('dashboard.aiProviders') }}
-            </h3>
-            <UButton
-              to="/system/ai-keys"
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-arrow-right"
-            >
+        <!-- Quick actions -->
+        <BaseBentoCard :span="12" :span-sm="6" :title="t('dashboard.quickActions')" icon="i-lucide-sparkles">
+          <div class="flex flex-wrap items-center gap-2 pb-0.5">
+            <UButton icon="i-lucide-arrow-down-to-line" size="xs" color="primary" variant="soft" to="/media/download">
+              {{ t('dashboard.actions.openDownloader') }}
+            </UButton>
+            <UButton icon="i-lucide-film" size="xs" color="neutral" variant="soft" to="/media/video">
+              {{ t('dashboard.actions.videoTools') }}
+            </UButton>
+            <UButton icon="i-lucide-id-card" size="xs" color="neutral" variant="soft" to="/browser-hub">
+              {{ t('nav.profiles_list') }}
+            </UButton>
+            <UButton icon="i-lucide-key" size="xs" color="neutral" variant="soft" to="/system/ai-keys">
               {{ t('nav.ai_keys') }}
             </UButton>
-          </div>
-
-          <div
-            v-if="!aiLoading && topAiProviders.length === 0"
-            class="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-xl p-8 text-center bg-white dark:bg-neutral-900"
-          >
-            <UIcon name="i-lucide-brain-circuit" class="size-10 text-neutral-400 mx-auto mb-2" />
-            <p class="text-sm font-medium text-neutral-900 dark:text-neutral-200">
-              {{ t('dashboard.noAiProviders') }}
-            </p>
-            <p class="text-xs text-neutral-500 mt-1 mb-4">
-              {{ t('dashboard.noAiProvidersDesc') }}
-            </p>
-            <UButton
-              color="primary"
-              variant="soft"
-              icon="i-lucide-plus"
-              to="/system/ai-keys"
-            >
-              {{ t('aiProviders.connect_provider') }}
+            <UButton icon="i-lucide-bot" size="xs" color="neutral" variant="soft" to="/chat">
+              {{ t('dashboard.actions.openChat') }}
+            </UButton>
+            <UButton icon="i-lucide-folder-cog" size="xs" color="neutral" variant="soft" to="/utilities">
+              {{ t('nav.utilities') }}
             </UButton>
           </div>
+        </BaseBentoCard>
 
-          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div
-              v-for="provider in topAiProviders"
-              :key="provider.definition.id"
-              class="border border-neutral-200 dark:border-neutral-800 rounded-xl p-3.5 bg-white dark:bg-neutral-900 hover:border-amber-500/50 transition cursor-pointer flex items-center gap-3 group"
-              @click="router.push('/system/ai-keys')"
-            >
-              <div class="size-9 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                <UIcon name="i-lucide-brain" class="size-4" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <h4 class="font-medium text-sm text-neutral-900 dark:text-neutral-100 truncate group-hover:text-amber-600 transition-colors">
-                  {{ provider.definition.name }}
-                </h4>
-                <p class="text-[11px] text-neutral-500 truncate">
-                  {{ provider.definition.key }}
-                </p>
-              </div>
-              <UBadge color="neutral" variant="subtle" size="xs">
-                {{ provider.connections.length }}
-              </UBadge>
-            </div>
+        <!-- Core modules -->
+        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.toolsTitle')" icon="i-lucide-film">
+          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.toolsDesc') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="tm-tile text-start" @click="router.push('/media/download')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-arrow-down-to-line" class="size-3.5 text-rose-500" />
+                {{ t('nav.download') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">YouTube, TikTok, HLS M3U8, Playlists</span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/media/video')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-file-cog" class="size-3.5 text-rose-500" />
+                {{ t('nav.video') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Convert, Join, Split, Image2Video, Audio</span>
+            </button>
           </div>
-        </div>
-
-        <div class="space-y-4">
-          <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-            {{ t('dashboard.systemStatus') }}
-          </h3>
-
-          <div
-            class="border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 bg-white dark:bg-neutral-900 divide-y divide-neutral-100 dark:divide-neutral-800 space-y-3"
-          >
-            <div class="flex items-start gap-3 pb-3">
-              <UIcon name="i-lucide-cpu" class="size-5 text-emerald-500 shrink-0 mt-0.5" />
-              <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                  {{ t('dashboard.system.desktopEngine') }}
-                </p>
-                <p class="text-[11px] text-neutral-500">
-                  {{ t('dashboard.system.desktopDesc') }}
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-start gap-3 pt-3 pb-3">
-              <UIcon name="i-lucide-film" class="size-5 text-primary shrink-0 mt-0.5" />
-              <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                  {{ t('dashboard.system.ffmpegEngine') }}
-                </p>
-                <p class="text-[11px] text-neutral-500">
-                  {{ t('dashboard.system.ffmpegDesc') }}
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-start gap-3 pt-3 pb-3">
-              <UIcon name="i-lucide-hard-drive" class="size-5 text-sky-500 shrink-0 mt-0.5" />
-              <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                  {{ t('dashboard.system.mediaStorage') }}
-                </p>
-                <p class="text-[11px] text-neutral-500">
-                  {{ t('dashboard.system.mediaDesc') }}
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-start gap-3 pt-3">
-              <UIcon name="i-lucide-shield-check" class="size-5 text-indigo-500 shrink-0 mt-0.5" />
-              <div class="min-w-0 flex-1">
-                <p class="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
-                  {{ t('dashboard.system.authProvider') }}
-                </p>
-                <p class="text-[11px] text-neutral-500">
-                  {{ t('dashboard.system.authDesc') }}
-                </p>
-              </div>
-            </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default/60 pt-3">
+            <UButton to="/media/download" size="xs" color="neutral" variant="ghost" icon="i-lucide-download">
+              {{ t('dashboard.actions.openDownloader') }}
+            </UButton>
+            <UButton to="/media/video" size="xs" color="neutral" variant="ghost" icon="i-lucide-film">
+              {{ t('dashboard.actions.videoTools') }}
+            </UButton>
           </div>
-        </div>
-      </div>
+        </BaseBentoCard>
+
+        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.profilesTitle')" icon="i-lucide-fingerprint">
+          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.profilesDesc') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="tm-tile text-start" @click="router.push('/browser-hub')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-id-card" class="size-3.5 text-sky-500" />
+                {{ t('nav.profiles_list') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Chromium, Firefox, Camoufox, Fingerprint</span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/browser-hub/proxies')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-globe" class="size-3.5 text-sky-500" />
+                {{ t('nav.profile_proxies') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">HTTP, SOCKS5, Geo & Latency Check</span>
+            </button>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default/60 pt-3">
+            <UButton to="/browser-hub" size="xs" color="neutral" variant="ghost" icon="i-lucide-id-card">
+              {{ t('dashboard.actions.manageProfiles') }}
+            </UButton>
+            <UButton to="/browser-hub/proxies" size="xs" color="neutral" variant="ghost" icon="i-lucide-globe">
+              {{ t('dashboard.actions.manageProxies') }}
+            </UButton>
+          </div>
+        </BaseBentoCard>
+
+        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.utilitiesTitle')" icon="i-lucide-sparkles">
+          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.utilitiesDesc') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="tm-tile text-start" @click="router.push('/system/ai-keys')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-key" class="size-3.5 text-amber-500" />
+                {{ t('nav.ai_keys') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Providers, models, credentials</span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/resources/connections')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-cable" class="size-3.5 text-amber-500" />
+                {{ t('nav.connections') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Shared hub credentials</span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/chat')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-bot" class="size-3.5 text-amber-500" />
+                AI Chat
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Hub-routed assistant</span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/utilities')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-wrench" class="size-3.5 text-amber-500" />
+                {{ t('nav.utilities') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">Text, icons, encode, random</span>
+            </button>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default/60 pt-3">
+            <UButton to="/system/ai-keys" size="xs" color="neutral" variant="ghost" icon="i-lucide-key">
+              {{ t('nav.ai_keys') }}
+            </UButton>
+            <UButton to="/chat" size="xs" color="neutral" variant="ghost" icon="i-lucide-bot">
+              {{ t('dashboard.actions.openChat') }}
+            </UButton>
+            <UButton to="/utilities" size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-cog">
+              {{ t('nav.utilities') }}
+            </UButton>
+          </div>
+        </BaseBentoCard>
+
+        <!-- PDF Studio -->
+        <BaseBentoCard :span="8" :span-sm="6" :title="t('pdf.title')" icon="i-lucide-file-text">
+          <template #action>
+            <UButton to="/pdf" size="xs" color="neutral" variant="ghost" trailing-icon="i-lucide-arrow-right">
+              {{ t('common.open') }}
+            </UButton>
+          </template>
+
+          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('pdf.description') }}</p>
+
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/library')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-folder-open" class="size-3.5 text-primary" />
+                {{ t('pdf.workspaces.library.title') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">
+                {{ library?.sources?.length ?? 0 }} {{ t('pdf.kpi.sources') }}
+              </span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/import')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-file-input" class="size-3.5 text-amber-500" />
+                {{ t('pdf.workspaces.import.title') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">
+                {{ library?.inputs?.length ?? 0 }} file (Word, Excel, ảnh)
+              </span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/split')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-scissors" class="size-3.5 text-blue-500" />
+                {{ t('pdf.workspaces.split.title') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">
+                {{ library?.split?.length ?? 0 }} {{ t('pdf.kpi.split') }}
+              </span>
+            </button>
+            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/export')">
+              <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
+                <UIcon name="i-lucide-share-2" class="size-3.5 text-emerald-500" />
+                {{ t('pdf.workspaces.export.title') }}
+              </span>
+              <span class="text-[10px] leading-snug text-muted">
+                {{ (library?.products?.length ?? 0) + (library?.office?.length ?? 0) }} {{ t('pdf.kpi.products') }}
+              </span>
+            </button>
+          </div>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default/60 pt-3">
+            <UButton to="/pdf/import" size="xs" color="neutral" variant="ghost" icon="i-lucide-upload">
+              {{ t('pdf.workspaces.import.title') }}
+            </UButton>
+            <UButton to="/pdf/library" size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-open">
+              {{ t('pdf.workspaces.library.title') }}
+            </UButton>
+            <UButton to="/pdf/split" size="xs" color="neutral" variant="ghost" icon="i-lucide-scissors">
+              {{ t('pdf.workspaces.split.title') }}
+            </UButton>
+            <UButton to="/pdf/export" size="xs" color="neutral" variant="ghost" icon="i-lucide-share-2">
+              {{ t('pdf.workspaces.export.title') }}
+            </UButton>
+            <UButton to="/pdf/extract" size="xs" color="neutral" variant="ghost" icon="i-lucide-scan-text">
+              {{ t('pdf.workspaces.extract.title') }}
+            </UButton>
+          </div>
+        </BaseBentoCard>
+
+        <!-- System status -->
+        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.systemStatus')" icon="i-lucide-activity">
+          <ul class="divide-y divide-default/60">
+            <li class="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
+              <UIcon name="i-lucide-cpu" class="mt-0.5 size-4 shrink-0 text-emerald-500" />
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium text-highlighted">{{ t('dashboard.system.desktopEngine') }}</p>
+                <p class="text-[10px] leading-snug text-muted">{{ t('dashboard.system.desktopDesc') }}</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-2.5 py-2">
+              <UIcon name="i-lucide-film" class="mt-0.5 size-4 shrink-0 text-primary" />
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium text-highlighted">{{ t('dashboard.system.ffmpegEngine') }}</p>
+                <p class="text-[10px] leading-snug text-muted">{{ t('dashboard.system.ffmpegDesc') }}</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-2.5 py-2">
+              <UIcon name="i-lucide-hard-drive" class="mt-0.5 size-4 shrink-0 text-sky-500" />
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium text-highlighted">{{ t('dashboard.system.mediaStorage') }}</p>
+                <p class="text-[10px] leading-snug text-muted">{{ t('dashboard.system.mediaDesc') }}</p>
+              </div>
+            </li>
+            <li class="flex items-start gap-2.5 py-2 last:pb-0">
+              <UIcon name="i-lucide-shield-check" class="mt-0.5 size-4 shrink-0 text-indigo-500" />
+              <div class="min-w-0">
+                <p class="text-[11px] font-medium text-highlighted">{{ t('dashboard.system.authProvider') }}</p>
+                <p class="text-[10px] leading-snug text-muted">{{ t('dashboard.system.authDesc') }}</p>
+              </div>
+            </li>
+          </ul>
+        </BaseBentoCard>
+      </BaseBentoGrid>
     </div>
   </BasePage>
 </template>
+
+<style scoped>
+.stat-label {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ui-text-dimmed);
+}
+
+.stat-value {
+  margin: 0.125rem 0 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--ui-text-highlighted);
+}
+
+.stat-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 4px;
+  border: 1px solid var(--tm-hairline);
+  background-color: color-mix(in oklab, var(--ui-primary) 10%, transparent);
+  color: var(--ui-primary);
+}
+</style>

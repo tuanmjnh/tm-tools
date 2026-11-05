@@ -5,7 +5,7 @@ export const useAdminRoutes = () => {
   const tree = useState<RouteTreeNode[]>('admin:routes:tree', () => [])
 
   const list = useAdminList<SystemRoute>({
-    limit: 50,
+    limit: PAGE_SIZE.admin,
     stateKey: 'admin:routes',
     fetchPage: async ({ appId, cursor, limit }) => {
       const res = await adminFetch<{ success: boolean, data: { routes: SystemRoute[], tree: RouteTreeNode[] }, nextCursor: string | null }>(

@@ -1,7 +1,25 @@
 import type { RouteTreeNode } from '#shared/types/rbac'
 
+const legacyRedirects: Record<string, string> = {
+  '/system/settings/profiles': '/browser-hub',
+  '/system/settings/profiles/groups': '/browser-hub/groups',
+  '/system/settings/profiles/proxies': '/browser-hub/proxies',
+  '/profiles': '/browser-hub',
+  '/profiles/groups': '/browser-hub/groups',
+  '/profiles/proxies': '/browser-hub/proxies',
+  '/system/profile': '/system/settings/profile',
+  '/system/profile/security': '/system/settings/profile/security',
+  '/system/profile/sessions': '/system/settings/profile/sessions',
+  '/system/profile/push': '/system/settings/profile/push'
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (import.meta.server) return
+
+  const legacyTarget = legacyRedirects[to.path.replace(/\/+$/, '')]
+  if (legacyTarget) {
+    return navigateTo({ path: legacyTarget, query: to.query }, { redirectCode: 301 })
+  }
 
   const publicPages = ['/login', '/register']
   if (publicPages.includes(to.path)) return

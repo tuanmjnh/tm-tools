@@ -24,7 +24,7 @@ export function useExport() {
   const starting = ref(false)
   const downloadingId = ref<string | null>(null)
   const page = ref(1)
-  const pageSize = 10
+  const pageSize = PAGE_SIZE.exportPreview
 
   const templates = ref<HubExportTemplate[]>([])
   const loadingTemplates = ref(false)
@@ -36,7 +36,7 @@ export function useExport() {
     module: 'users',
     format: 'csv' as HubExportFormat,
     scope: 'all' as HubExportScope,
-    limit: 100
+    limit: PAGE_SIZE.lookup as number
   })
 
   async function loadJobs(p = 1): Promise<void> {

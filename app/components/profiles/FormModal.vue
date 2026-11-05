@@ -89,7 +89,7 @@ const form = ref<FormState>({
   audio_mode: 'noise',
   client_rects_mode: 'noise',
   fonts_mode: 'system',
-  start_url: 'https://whoer.net',
+  start_url: PROFILE_DEFAULTS.startUrl,
   notes: '',
   tags: []
 })
@@ -261,7 +261,7 @@ watch(() => props.modelValue, (open) => {
         audio_mode: props.profile.audio_mode || 'noise',
         client_rects_mode: props.profile.client_rects_mode || 'noise',
         fonts_mode: props.profile.fonts_mode || 'system',
-        start_url: props.profile.start_url || 'https://whoer.net',
+        start_url: props.profile.start_url || PROFILE_DEFAULTS.startUrl,
         notes: props.profile.notes || '',
         tags: props.profile.tags ? [...props.profile.tags] : []
       }
@@ -290,7 +290,7 @@ watch(() => props.modelValue, (open) => {
         custom_exe: '',
         stealth_mode: true,
         stealth_engine: 'playwright_stealth',
-        start_url: 'https://whoer.net',
+        start_url: PROFILE_DEFAULTS.startUrl,
         notes: '',
         tags: []
       }
@@ -628,7 +628,7 @@ async function onSave() {
               v-model="form.start_url"
               class="w-full"
               icon="i-lucide-globe"
-              placeholder="https://whoer.net"
+              :placeholder="PROFILE_DEFAULTS.startUrl"
             />
           </UFormField>
 

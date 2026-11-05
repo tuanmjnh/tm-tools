@@ -114,7 +114,7 @@ async function connectOAuth(p: ConnectionProvider) {
 
   let isFinished = false
   let pollAttempts = 0
-  const maxAttempts = 120
+  const maxAttempts = POLLING.oauth.maxAttempts
 
   const cleanup = () => {
     isFinished = true
@@ -142,7 +142,7 @@ async function connectOAuth(p: ConnectionProvider) {
       cleanup()
       refresh()
     }
-  }, 1500)
+  }, POLLING.oauth.intervalMs)
 }
 
 function onOAuthMessage(event: MessageEvent) {
@@ -374,21 +374,10 @@ useHead({ title: t('connections.title') })
   <BasePage id="system-connections" :title="t('connections.title')" :description="t('connections.description')">
     <template #right>
       <div class="flex items-center gap-2">
-        <UButton
-          icon="i-lucide-plus"
-          variant="soft"
-          size="sm"
-          @click="openAddWizard"
-        >
+        <UButton icon="i-lucide-plus" variant="soft" size="sm" @click="openAddWizard">
           {{ t('connections.add') }}
         </UButton>
-        <UButton
-          icon="i-lucide-refresh-cw"
-          variant="soft"
-          size="sm"
-          :loading="loading"
-          @click="refresh"
-        />
+        <UButton icon="i-lucide-refresh-cw" variant="soft" size="sm" :loading="loading" @click="refresh" />
       </div>
     </template>
 
@@ -402,22 +391,14 @@ useHead({ title: t('connections.title') })
         <p class="text-sm text-muted">
           {{ t('connections.empty') }}
         </p>
-        <UButton
-          icon="i-lucide-plus"
-          variant="soft"
-          size="sm"
-          @click="openAddWizard"
-        >
+        <UButton icon="i-lucide-plus" variant="soft" size="sm" @click="openAddWizard">
           {{ t('connections.add_first') }}
         </UButton>
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <div
-          v-for="p in providers"
-          :key="p.key"
-          class="rounded-xl border border-primary/30 p-4 flex flex-col gap-3 shadow-xs"
-        >
+        <div v-for="p in providers" :key="p.key"
+          class="rounded-xl border border-primary/30 p-4 flex flex-col gap-3 shadow-xs">
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-center gap-3 min-w-0">
               <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/50 shrink-0">
@@ -426,20 +407,16 @@ useHead({ title: t('connections.title') })
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="font-semibold text-highlighted truncate">{{ p.name }}</span>
-                  <UBadge :label="p.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')" variant="subtle" size="xs" />
+                  <UBadge :label="p.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')"
+                    variant="subtle" size="xs" />
                 </div>
                 <p class="text-xs text-muted truncate">
                   {{ p.description }}
                 </p>
               </div>
             </div>
-            <UBadge
-              :label="statusLabel(p)"
-              :color="p.connection ? (isConnected(p) ? 'success' : 'error') : 'neutral'"
-              variant="subtle"
-              size="sm"
-              class="shrink-0"
-            />
+            <UBadge :label="statusLabel(p)" :color="p.connection ? (isConnected(p) ? 'success' : 'error') : 'neutral'"
+              variant="subtle" size="sm" class="shrink-0" />
           </div>
 
           <div v-if="hasRow(p)" class="text-xs text-muted space-y-1">
@@ -447,10 +424,11 @@ useHead({ title: t('connections.title') })
               <span class="text-toned">{{ t('connections.account') }}: </span>
               <span class="text-highlighted">{{ accountOf(p) }}</span>
             </p>
-                        <p>
+            <p>
               <span class="text-toned">{{ t('connections.last_test') }}: </span>
               <span :class="p.connection?.lastTestOk === false ? 'text-error' : 'text-highlighted'">
-                {{ p.connection?.lastTestAt ? new Date(p.connection.lastTestAt).toLocaleString() : t('connections.never') }}
+                {{ p.connection?.lastTestAt ? new Date(p.connection.lastTestAt).toLocaleString() :
+                  t('connections.never') }}
                 <template v-if="p.connection?.lastTestOk === false"> ({{ t('connections.test_fail') }})</template>
               </span>
             </p>
@@ -459,13 +437,8 @@ useHead({ title: t('connections.title') })
           <p v-if="p.mode === 'oauth' && p.scopes?.length" class="text-xs text-muted flex items-center gap-1 flex-wrap">
             <span class="text-toned">{{ t('connections.scopes') }}:</span>
             <UPopover :content="{ align: 'start', side: 'bottom', sideOffset: 8 }">
-              <UButton
-                color="neutral"
-                variant="subtle"
-                size="xs"
-                icon="i-lucide-shield-check"
-                :label="String(p.scopes.length)"
-              />
+              <UButton color="neutral" variant="subtle" size="xs" icon="i-lucide-shield-check"
+                :label="String(p.scopes.length)" />
               <template #content>
                 <div class="p-3 max-w-80 space-y-2">
                   <p class="text-xs font-semibold text-highlighted">
@@ -483,149 +456,78 @@ useHead({ title: t('connections.title') })
           </p>
 
           <div class="flex items-center gap-2 mt-auto pt-1 flex-wrap">
-            <UButton
-              v-if="p.mode === 'oauth' && !isConnected(p)"
-              :label="t('connections.connect')"
-              icon="i-lucide-external-link"
-              color="primary"
-              variant="soft"
-              size="sm"
-              @click="connectOAuth(p)"
-            />
-            <UButton
-              v-if="p.mode === 'oauth' && isConnected(p)"
-              :label="t('connections.reconnect')"
-              icon="i-lucide-refresh-cw"
-              color="warning"
-              variant="soft"
-              size="sm"
-              @click="connectOAuth(p)"
-            />
-            <UButton
-              v-if="p.quick && !isConnected(p)"
-              :label="t('connections.quick_connect')"
-              icon="i-lucide-zap"
-              color="primary"
-              variant="soft"
-              size="sm"
-              :loading="quickingKey === p.key"
-              @click="quickConnect(p)"
-            />
-            <UButton
-              v-if="p.mode === 'manual'"
-              :label="hasRow(p) ? t('connections.configure') : t('connections.connect')"
-              icon="i-lucide-key-round"
-              color="primary"
-              variant="soft"
-              size="sm"
-              @click="openManual(p)"
-            />
-                        <UButton
-              v-if="hasRow(p)"
-              :label="t('connections.test')"
-              icon="i-lucide-activity"
-              :loading="testingKey === p.key"
-              color="success"
-              variant="soft"
-              size="sm"
-              @click="testConnection(p)"
-            />
-            <UButton
-              v-if="hasRow(p)"
-              :label="t('connections.disconnect')"
-              icon="i-lucide-unplug"
-              color="error"
-              variant="soft"
-              size="sm"
-              @click="askDisconnect(p)"
-            />
+            <UButton v-if="p.mode === 'oauth' && !isConnected(p)" :label="t('connections.connect')"
+              icon="i-lucide-external-link" color="primary" variant="soft" size="sm" @click="connectOAuth(p)" />
+            <UButton v-if="p.mode === 'oauth' && isConnected(p)" :label="t('connections.reconnect')"
+              icon="i-lucide-refresh-cw" color="warning" variant="soft" size="sm" @click="connectOAuth(p)" />
+            <UButton v-if="p.quick && !isConnected(p)" :label="t('connections.quick_connect')" icon="i-lucide-zap"
+              color="primary" variant="soft" size="sm" :loading="quickingKey === p.key" @click="quickConnect(p)" />
+            <UButton v-if="p.mode === 'manual'"
+              :label="hasRow(p) ? t('connections.configure') : t('connections.connect')" icon="i-lucide-key-round"
+              color="primary" variant="soft" size="sm" @click="openManual(p)" />
+            <UButton v-if="hasRow(p)" :label="t('connections.test')" icon="i-lucide-activity"
+              :loading="testingKey === p.key" color="success" variant="soft" size="sm" @click="testConnection(p)" />
+            <UButton v-if="hasRow(p)" :label="t('connections.disconnect')" icon="i-lucide-unplug" color="error"
+              variant="soft" size="sm" @click="askDisconnect(p)" />
           </div>
         </div>
       </div>
     </div>
 
     <!-- Manual Configure Modal (legacy single-credential) -->
-    <BaseFormModal
-      v-model:open="isManualOpen"
-      :title="`${t('connections.configure')} - ${manualProvider?.name || ''}`"
-      :state="manualValues"
-      :loading="manualSaving"
-      :submit-label="t('global.save')"
-      @submit="saveManual"
-    >
-      <UFormField
-        v-for="field in manualProvider?.fields"
-        :key="field.key"
-        :label="field.label"
-        :required="field.required"
-        class="mb-3"
-      >
-        <UInput
-          v-model="manualValues[field.key]"
-          :type="field.type === 'password' ? 'password' : 'text'"
-          class="w-full"
-          :placeholder="field.type === 'password' ? '••••••••' : field.label"
-          autocomplete="off"
-        />
+    <BaseFormModal v-model:open="isManualOpen" :title="`${t('connections.configure')} - ${manualProvider?.name || ''}`"
+      :state="manualValues" :loading="manualSaving" :submit-label="t('global.save')" @submit="saveManual">
+      <UFormField v-for="field in manualProvider?.fields" :key="field.key" :label="field.label"
+        :required="field.required" class="mb-3">
+        <UInput v-model="manualValues[field.key]" :type="field.type === 'password' ? 'password' : 'text'" class="w-full"
+          :placeholder="field.type === 'password' ? '••••••••' : field.label" autocomplete="off" />
       </UFormField>
     </BaseFormModal>
 
     <!-- Add Connection Wizard Modal -->
-    <BaseResponsiveModal
-      v-model:open="isAddOpen"
-      :title="wizardTitle"
-      :close="!addSaving"
-      :dismissible="!addSaving"
-    >
+    <BaseResponsiveModal v-model:open="isAddOpen" :title="wizardTitle" :close="!addSaving" :dismissible="!addSaving">
       <template #body>
         <!-- Step Indicator -->
         <div class="flex items-center justify-between pb-4 border-b border-default/40">
           <div class="flex items-center gap-2">
-            <span
-              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
+            <span class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
               :class="addStep === 'category'
                 ? 'bg-primary text-white'
-                : 'bg-primary/20 text-primary cursor-pointer'"
-              @click="!addSaving && (addStep = 'category')"
-            >
+                : 'bg-primary/20 text-primary cursor-pointer'" @click="!addSaving && (addStep = 'category')">
               1
             </span>
-            <span class="text-xs font-medium" :class="addStep === 'category' ? 'text-highlighted font-semibold' : 'text-muted'">
+            <span class="text-xs font-medium"
+              :class="addStep === 'category' ? 'text-highlighted font-semibold' : 'text-muted'">
               {{ t('connections.wizard.category_step', 'Category') }}
             </span>
             <UIcon name="i-lucide-chevron-right" class="size-3.5 text-muted/60" />
 
-            <span
-              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
+            <span class="flex items-center justify-center size-6 rounded-full text-xs font-semibold transition-colors"
               :class="addStep === 'provider'
                 ? 'bg-primary text-white'
                 : (addStep === 'form' ? 'bg-primary/20 text-primary cursor-pointer' : 'bg-elevated text-muted')"
-              @click="!addSaving && addCategory && (addStep = 'provider')"
-            >
+              @click="!addSaving && addCategory && (addStep = 'provider')">
               2
             </span>
-            <span class="text-xs font-medium" :class="addStep === 'provider' ? 'text-highlighted font-semibold' : 'text-muted'">
+            <span class="text-xs font-medium"
+              :class="addStep === 'provider' ? 'text-highlighted font-semibold' : 'text-muted'">
               {{ t('connections.wizard.provider_step', 'Provider') }}
             </span>
             <UIcon name="i-lucide-chevron-right" class="size-3.5 text-muted/60" />
 
-            <span
-              class="flex items-center justify-center size-6 rounded-full text-xs font-semibold"
-              :class="addStep === 'form' ? 'bg-primary text-white' : 'bg-elevated text-muted'"
-            >
+            <span class="flex items-center justify-center size-6 rounded-full text-xs font-semibold"
+              :class="addStep === 'form' ? 'bg-primary text-white' : 'bg-elevated text-muted'">
               3
             </span>
-            <span class="text-xs font-medium" :class="addStep === 'form' ? 'text-highlighted font-semibold' : 'text-muted'">
+            <span class="text-xs font-medium"
+              :class="addStep === 'form' ? 'text-highlighted font-semibold' : 'text-muted'">
               {{ t('connections.wizard.configure_step', 'Configure') }}
             </span>
           </div>
 
-          <UBadge
-            v-if="addStep === 'form' && addProvider"
+          <UBadge v-if="addStep === 'form' && addProvider"
             :label="addProvider.mode === 'oauth' ? t('connections.mode_oauth') : t('connections.mode_manual')"
-            variant="subtle"
-            size="xs"
-          />
+            variant="subtle" size="xs" />
         </div>
 
         <!-- Step 1: Category Selection -->
@@ -634,13 +536,11 @@ useHead({ title: t('connections.title') })
             {{ t('connections.add_category_hint') }}
           </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            <div
-              v-for="cat in CATEGORIES"
-              :key="cat.key"
+            <div v-for="cat in CATEGORIES" :key="cat.key"
               class="group relative rounded-xl border border-default/60 p-4 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center text-center gap-2"
-              @click="selectCategory(cat)"
-            >
-              <div class="flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform">
+              @click="selectCategory(cat)">
+              <div
+                class="flex items-center justify-center size-12 rounded-xl bg-primary/10 text-primary group-hover:scale-105 transition-transform">
                 <UIcon :name="cat.icon" class="size-6" />
               </div>
               <div class="min-w-0">
@@ -659,32 +559,19 @@ useHead({ title: t('connections.title') })
         <div v-if="addStep === 'provider'" class="space-y-4 pt-4">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-2 min-w-0">
-              <UButton
-                variant="ghost"
-                color="neutral"
-                size="xs"
-                icon="i-lucide-arrow-left"
-                @click="backToCategory"
-              />
+              <UButton variant="ghost" color="neutral" size="xs" icon="i-lucide-arrow-left" @click="backToCategory" />
               <span class="text-xs font-semibold text-highlighted truncate">{{ categoryLabel(addCategory) }}</span>
             </div>
-            <UInput
-              v-model="addSearchQuery"
-              icon="i-lucide-search"
-              size="xs"
-              class="w-full sm:w-56"
-              :placeholder="t('common.search')"
-            />
+            <UInput v-model="addSearchQuery" icon="i-lucide-search" size="xs" class="w-full sm:w-56"
+              :placeholder="t('common.search')" />
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
-            <div
-              v-for="p in categoryProviders"
-              :key="p.key"
+            <div v-for="p in categoryProviders" :key="p.key"
               class="group rounded-xl border border-default/60 p-3.5 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-3"
-              @click="selectProvider(p)"
-            >
-              <div class="flex items-center justify-center size-10 rounded-lg bg-elevated/70 shrink-0 group-hover:scale-105 transition-transform">
+              @click="selectProvider(p)">
+              <div
+                class="flex items-center justify-center size-10 rounded-lg bg-elevated/70 shrink-0 group-hover:scale-105 transition-transform">
                 <UIcon :name="p.icon" class="size-5 text-highlighted group-hover:text-primary transition-colors" />
               </div>
               <div class="min-w-0 flex-1">
@@ -692,22 +579,19 @@ useHead({ title: t('connections.title') })
                   <p class="text-xs font-semibold text-highlighted truncate group-hover:text-primary transition-colors">
                     {{ p.name }}
                   </p>
-                  <UBadge
-                    v-if="p.connection"
-                    :label="isConnected(p) ? t('connections.connected') : t('common.error')"
-                    :color="isConnected(p) ? 'success' : 'error'"
-                    variant="subtle"
-                    size="xs"
-                  />
+                  <UBadge v-if="p.connection" :label="isConnected(p) ? t('connections.connected') : t('common.error')"
+                    :color="isConnected(p) ? 'success' : 'error'" variant="subtle" size="xs" />
                 </div>
                 <p class="text-[11px] text-muted truncate mt-0.5">
                   {{ p.description }}
                 </p>
               </div>
-              <UIcon name="i-lucide-chevron-right" class="size-4 text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+              <UIcon name="i-lucide-chevron-right"
+                class="size-4 text-muted group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
             </div>
 
-            <div v-if="!categoryProviders.length" class="col-span-full py-12 flex flex-col items-center justify-center text-center gap-2">
+            <div v-if="!categoryProviders.length"
+              class="col-span-full py-12 flex flex-col items-center justify-center text-center gap-2">
               <UIcon name="i-lucide-inbox" class="size-8 text-muted" />
               <p class="text-xs text-muted">
                 {{ t('connections.no_providers_in_category') }}
@@ -719,13 +603,7 @@ useHead({ title: t('connections.title') })
         <!-- Step 3: Provider Configuration Form -->
         <div v-if="addStep === 'form'" class="space-y-4 pt-4">
           <div class="flex items-center gap-2 pb-2 border-b border-default/40">
-            <UButton
-              variant="ghost"
-              color="neutral"
-              size="xs"
-              icon="i-lucide-arrow-left"
-              @click="backToProvider"
-            />
+            <UButton variant="ghost" color="neutral" size="xs" icon="i-lucide-arrow-left" @click="backToProvider" />
             <div class="flex items-center gap-2 min-w-0">
               <UIcon :name="addProvider?.icon" class="size-5 shrink-0" />
               <span class="text-xs font-semibold text-highlighted truncate">{{ addProvider?.name }}</span>
@@ -737,71 +615,34 @@ useHead({ title: t('connections.title') })
           </p>
 
           <div class="space-y-3">
-            <UFormField
-              v-for="field in addProvider ? providerFields(addProvider) : []"
-              :key="field.key"
-              :label="field.label"
-              :required="field.required"
-            >
-              <UInput
-                v-model="addValues[field.key]"
-                :type="field.type === 'password' ? 'password' : 'text'"
-                class="w-full"
-                :placeholder="field.type === 'password' ? '••••••••' : field.label"
-                autocomplete="off"
-              />
+            <UFormField v-for="field in addProvider ? providerFields(addProvider) : []" :key="field.key"
+              :label="field.label" :required="field.required">
+              <UInput v-model="addValues[field.key]" :type="field.type === 'password' ? 'password' : 'text'"
+                class="w-full" :placeholder="field.type === 'password' ? '••••••••' : field.label" autocomplete="off" />
             </UFormField>
           </div>
         </div>
       </template>
       <template #footer>
         <div class="flex items-center justify-between w-full pt-2">
-          <UButton
-            v-if="addStep !== 'category'"
-            :label="t('common.back')"
-            color="neutral"
-            variant="ghost"
-            icon="i-lucide-arrow-left"
-            size="sm"
-            :disabled="addSaving"
-            @click="addStep === 'provider' ? backToCategory() : backToProvider()"
-          />
+          <UButton v-if="addStep !== 'category'" :label="t('common.back')" color="neutral" variant="ghost"
+            icon="i-lucide-arrow-left" size="sm" :disabled="addSaving"
+            @click="addStep === 'provider' ? backToCategory() : backToProvider()" />
           <div v-else />
 
           <div class="flex items-center gap-2">
-            <UButton
-              :label="t('common.cancel')"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              :disabled="addSaving"
-              @click="isAddOpen = false"
-            />
-            <UButton
-              v-if="addStep === 'form'"
-              type="button"
-              :label="t('global.save')"
-              icon="i-lucide-save"
-              :loading="addSaving"
-              variant="soft"
-              color="primary"
-              size="sm"
-              @click="saveAddConnection"
-            />
+            <UButton :label="t('common.cancel')" color="neutral" variant="ghost" size="sm" :disabled="addSaving"
+              @click="isAddOpen = false" />
+            <UButton v-if="addStep === 'form'" type="button" :label="t('global.save')" icon="i-lucide-save"
+              :loading="addSaving" variant="soft" color="primary" size="sm" @click="saveAddConnection" />
           </div>
         </div>
       </template>
     </BaseResponsiveModal>
 
-    <LazyBaseConfirmModal
-      v-model:open="isDisconnectOpen"
-      :title="t('connections.disconnect_title')"
+    <LazyBaseConfirmModal v-model:open="isDisconnectOpen" :title="t('connections.disconnect_title')"
       :description="t('connections.disconnect_desc', [disconnectProvider?.name || ''])"
-      :confirm-label="t('connections.disconnect')"
-      :cancel-label="t('common.cancel')"
-      color="error"
-      icon="i-lucide-unplug"
-      @confirm="doDisconnect"
-    />
+      :confirm-label="t('connections.disconnect')" :cancel-label="t('common.cancel')" color="error"
+      icon="i-lucide-unplug" @confirm="doDisconnect" />
   </BasePage>
 </template>

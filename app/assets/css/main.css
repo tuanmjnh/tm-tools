@@ -1,10 +1,22 @@
 @import "tailwindcss" theme(static);
 @import "@nuxt/ui";
+@import "./glass.css";
+@import "./decor.css";
 @import "./self.css";
 @import "./scroll-bar.css";
 
 @theme static {
   --font-sans: 'Public Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Tiny radius scale (Linear flat) — overrides Nuxt UI's default scale. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 5px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+  --radius-3xl: 10px;
 
   --color-green-50: #EFFDF5;
   --color-green-100: #D9FBE8;
@@ -16,6 +28,16 @@
   --color-green-700: #007F45;
   --color-green-800: #016538;
   --color-green-900: #0A5331;
+}
+
+/* The decor layer is a fixed, negative-z element behind the app. Body stays
+   transparent so it can show through; the base colour lives on <html>. */
+html {
+  background-color: var(--ui-bg);
+}
+
+html body {
+  background-color: transparent;
 }
 
 @keyframes slide-in-right {

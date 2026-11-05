@@ -73,6 +73,9 @@ async function startServer() {
 
   process.env.NITRO_PORT = String(PORT)
   process.env.NITRO_HOST = '127.0.0.1'
+  // Nitro runs in-process here, so cwd-relative data (.data/) would land
+  // inside the installed app dir. Point the local chat store at userData.
+  process.env.TOOLS_DATA_DIR = app.getPath('userData')
 
   const serverPath = path.join(__dirname, '..', '.output', 'server', 'index.mjs')
   await import(pathToFileURL(serverPath).href)
@@ -135,7 +138,8 @@ async function createWindow() {
       // appOrigins() only (media-protocol.cjs). Media tags load
       // cross-origin by design; only fetch()/canvas readback need CORS,
       // and those come from the app origin.
-      webSecurity: true
+      webSecurity: true,
+      devTools: isDev
     }
   })
 
@@ -166,7 +170,7 @@ async function createWindow() {
   })
 
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+    if (isDev && input.control && input.shift && input.key.toLowerCase() === 'i') {
       win.webContents.toggleDevTools()
       return
     }
@@ -214,12 +218,23 @@ async function createWindow() {
         return { action: 'deny' }
       }
     } catch { /* ignore URL parse errors */ }
-    // Internal URLs → new window
+
+    // Same-origin API links are downloads (PDF exports). Run them in this
+    // window instead of opening a popup that is left open doing nothing.
+    try {
+      const parsed = new URL(url)
+      const current = win && !win.isDestroyed() ? new URL(win.webContents.getURL()) : null
+      if (current && parsed.origin === current.origin && parsed.pathname.startsWith('/api/')) {
+        win.webContents.downloadURL(url)
+        return { action: 'deny' }
+      }
+    } catch { /* ignore URL parse errors */ }
+
+    // Internal URLs (e.g. the PDF preview window) → new window sized by the
+    // window.open features, so the preview keeps its requested dimensions.
     return {
       action: 'allow',
       overrideBrowserWindowOptions: {
-        width: 540,
-        height: 680,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true

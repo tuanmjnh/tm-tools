@@ -150,7 +150,7 @@ function onSubmit() {
         mode="file"
         placeholder="D:/videos/input.mp4"
         :disabled="disabled"
-        :filters="[{ name: 'Videos', extensions: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'flv', 'ts'] }]"
+        :filters="[{ name: 'Videos', extensions: FILE_EXTENSIONS.videoExtended }]"
       />
     </UFormField>
 
@@ -181,7 +181,7 @@ function onSubmit() {
           mode="file"
           placeholder="D:/music/new_audio.mp3"
           :disabled="disabled"
-          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
+          :filters="[{ name: 'Audio', extensions: FILE_EXTENSIONS.audio }]"
         />
       </UFormField>
       <UFormField :label="t('tools.volume')">
@@ -211,7 +211,7 @@ function onSubmit() {
           mode="file"
           placeholder="D:/music/background_music.mp3"
           :disabled="disabled"
-          :filters="[{ name: 'Audio', extensions: ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac'] }]"
+          :filters="[{ name: 'Audio', extensions: FILE_EXTENSIONS.audio }]"
         />
       </UFormField>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

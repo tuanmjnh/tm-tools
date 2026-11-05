@@ -29,11 +29,11 @@ const form = reactive({
   title: '',
   format_id: '',
   out_path: '',
-  file_name: '%(title)s.%(ext)s',
-  threads: 4,
+  file_name: TOOL_DEFAULTS.download.outputPattern,
+  threads: TOOL_DEFAULTS.download.threads,
   restrict: false,
   overwrite: true,
-  encoding: 'utf-8'
+  encoding: TOOL_DEFAULTS.download.encoding
 })
 
 watch(() => props.open, (open) => {
@@ -41,11 +41,11 @@ watch(() => props.open, (open) => {
     form.title = props.config?.title || ''
     form.format_id = props.config?.format_id || props.formats[0]?.id || ''
     form.out_path = props.config?.out_path || ''
-    form.file_name = props.config?.file_name || '%(title)s.%(ext)s'
-    form.threads = props.config?.threads || 4
+    form.file_name = props.config?.file_name || TOOL_DEFAULTS.download.outputPattern
+    form.threads = props.config?.threads || TOOL_DEFAULTS.download.threads
     form.restrict = props.config?.restrict === 1
     form.overwrite = props.config?.overwrite === undefined ? true : props.config?.overwrite === 1
-    form.encoding = props.config?.encoding || 'utf-8'
+    form.encoding = props.config?.encoding || TOOL_DEFAULTS.download.encoding
   }
 })
 
@@ -120,7 +120,7 @@ async function pickConfigFolder() {
         </UFormField>
 
         <UFormField :label="t('tools.fileName')">
-          <UInput v-model="form.file_name" placeholder="%(title)s.%(ext)s" class="w-full" />
+          <UInput v-model="form.file_name" :placeholder="TOOL_DEFAULTS.download.outputPattern" class="w-full" />
         </UFormField>
 
         <UFormField :label="t('tools.threads')">
@@ -128,7 +128,7 @@ async function pickConfigFolder() {
             v-model.number="form.threads"
             type="number"
             min="1"
-            max="8"
+            :max="TOOL_DEFAULTS.download.maxThreads"
             class="w-full"
           />
         </UFormField>
@@ -141,7 +141,7 @@ async function pickConfigFolder() {
         <UFormField :label="t('tools.encoding')">
           <USelectMenu
             v-model="form.encoding"
-            :items="['utf-8', 'ascii', 'latin-1']"
+            :items="[...TOOL_DEFAULTS.encodings]"
             :placeholder="t('tools.encoding')"
             :search-input="{ icon: 'i-lucide-search', placeholder: t('global.search') }"
             class="w-full"

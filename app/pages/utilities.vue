@@ -1,15 +1,7 @@
 <template>
-  <BasePage
-    id="utilities"
-    :title="t('utilities.title')"
-    :description="t('utilities.subtitle')"
-  >
+  <BasePage id="utilities" :title="t('utilities.title')" :description="t('utilities.subtitle')">
     <div class="space-y-4">
-      <UtilitiesToolTabs
-        v-if="route.path !== '/utilities/editor'"
-        :active="activeTab"
-        @select="onSelect"
-      />
+      <UtilitiesToolTabs v-if="route.path !== '/utilities/editor'" :active="activeTab" @select="onSelect" />
       <NuxtPage />
     </div>
   </BasePage>

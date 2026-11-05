@@ -27,7 +27,7 @@ const filters = reactive({
   search: '',
   collection: 'lucide',
   cursor: '',
-  limit: 100
+  limit: PAGE_SIZE.lookup
 })
 
 // Other States
@@ -76,7 +76,7 @@ async function fetchIcons(isLoadMore = false) {
 // 3. Debounce fetch when the user enters a filter
 const debouncedFetch = useDebounceFn(() => {
   fetchIcons(false)
-}, 500)
+}, POLLING.debounceMs.search)
 
 // 4. Infinite Scroll with VueUse
 useInfiniteScroll(

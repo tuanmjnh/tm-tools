@@ -73,7 +73,7 @@ function navigateAndClose(to: string) {
               variant="outline"
               color="neutral"
               block
-              class="justify-start text-xs rounded-xl"
+              class="justify-start text-xs"
               @click="navigateAndClose('/system/browsers')"
             >
               {{ $t('settings.openBrowserSettings') }}
@@ -83,7 +83,7 @@ function navigateAndClose(to: string) {
               variant="outline"
               color="neutral"
               block
-              class="justify-start text-xs rounded-xl"
+              class="justify-start text-xs"
               @click="navigateAndClose('/system/tools')"
             >
               {{ $t('settings.openToolsSettings') }}
@@ -97,7 +97,7 @@ function navigateAndClose(to: string) {
               variant="outline"
               color="neutral"
               block
-              class="justify-start text-xs rounded-xl"
+              class="justify-start text-xs"
               @click="navigateAndClose('/system/ai-keys')"
             >
               {{ $t('settings.openAiKeyVault') }}
@@ -115,7 +115,7 @@ function navigateAndClose(to: string) {
             variant="outline"
             color="neutral"
             block
-            class="justify-start text-xs rounded-xl"
+            class="justify-start text-xs"
             @click="isStorageModalOpen = true"
           >
             {{ $t('settings.storage.storage_management') }}
@@ -123,13 +123,13 @@ function navigateAndClose(to: string) {
         </div>
 
         <!-- Full Settings Link -->
-        <div class="pt-2 border-t border-gray-200 dark:border-gray-800">
+        <div class="pt-2 border-t border-default/70">
           <UButton
             icon="i-lucide-external-link"
             variant="subtle"
             color="primary"
             block
-            class="justify-start text-xs rounded-xl"
+            class="justify-start text-xs"
             @click="navigateAndClose('/system')"
           >
             {{ $t('settings.openFullSettings') }}

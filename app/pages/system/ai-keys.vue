@@ -73,21 +73,21 @@ const discoveringInForm = ref(false)
 const testingInForm = ref(false)
 const revealedKey = ref('')
 const revealingKey = ref(false)
-const LOCAL_HEALTH_STORAGE_KEY = 'tm_tools_ai_local_health'
+const LOCAL_HEALTH_STORAGE_KEY = STORAGE_KEYS.aiLocalHealth
 const localConnectionHealth = ref<Record<string, { status: string, lastTestOk: boolean, lastTestAt: string }>>({})
 
 if (import.meta.client) {
   try {
     const raw = localStorage.getItem(LOCAL_HEALTH_STORAGE_KEY)
     if (raw) localConnectionHealth.value = JSON.parse(raw)
-  } catch {}
+  } catch { }
 }
 
 watch(localConnectionHealth, (val) => {
   if (import.meta.client) {
     try {
       localStorage.setItem(LOCAL_HEALTH_STORAGE_KEY, JSON.stringify(val))
-    } catch {}
+    } catch { }
   }
 }, { deep: true })
 const modelPersistProgress = ref<{ current: number, total: number } | null>(null)
@@ -117,6 +117,8 @@ watch(() => credentialValues.value['AI_BASE_URL'], (newBase) => {
 // ---- Custom Provider Modal --------------------------------------------------
 const isProviderOpen = ref(false)
 const providerSaving = ref(false)
+const localBaseUrlPlaceholder = 'http://localhost:11434/v1'
+const cloudBaseUrlPlaceholder = 'https://api.example.com/v1'
 const providerForm = reactive({
   name: '',
   baseUrl: '',
@@ -1395,15 +1397,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       <div v-if="activeTab === 'providers'" class="space-y-4">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div class="w-full sm:w-72">
-            <UInput
-              id="ai-keys-search-provider"
-              v-model="searchProvider"
-              icon="i-lucide-search"
-              size="sm"
-              :placeholder="t('common.search')"
-              :ui="{ trailing: 'pe-0.5' }"
-              class="w-full"
-            >
+            <UInput id="ai-keys-search-provider" v-model="searchProvider" icon="i-lucide-search" size="sm"
+              :placeholder="t('common.search')" :ui="{ trailing: 'pe-0.5' }" class="w-full">
               <template v-if="searchProvider?.length" #trailing>
                 <UButton color="neutral" variant="link" size="sm" icon="i-lucide-circle-x" aria-label="Clear input"
                   @click="searchProvider = ''" />
@@ -1486,7 +1481,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-sm font-semibold text-highlighted truncate">{{ c.name
                       || t('aiProviders.default_name')
-                    }}</span>
+                      }}</span>
                     <UBadge v-if="hubBusyKey === c.id" color="info" variant="subtle" size="sm" class="animate-pulse">
                       <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin mr-1" />
                       {{ t('aiProviders.testing_connection') }}
@@ -1522,7 +1517,10 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
                   <!-- Last test info (like tm-trading) -->
                   <p class="mt-0.5 text-xs text-muted">
                     {{ t('aiProviders.last_test') }}:
-                    {{ (localConnectionHealth[c.id]?.lastTestAt || c.lastTestAt) ? new Date(localConnectionHealth[c.id]?.lastTestAt || c.lastTestAt!).toLocaleString() : t('aiProviders.never') }}
+                    {{ (localConnectionHealth[c.id]?.lastTestAt || c.lastTestAt) ? new
+                      Date(localConnectionHealth[c.id]?.lastTestAt || c.lastTestAt!).toLocaleString() :
+                    t('aiProviders.never')
+                    }}
                   </p>
                 </div>
 
@@ -1553,13 +1551,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
         <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           <div class="flex flex-wrap items-center gap-2 flex-1">
             <div class="w-full sm:w-64">
-              <UInput
-                id="ai-keys-search-model"
-                v-model="searchModel"
-                icon="i-lucide-search"
-                size="sm"
-                :placeholder="t('aiProviders.search_models_placeholder')"
-              />
+              <UInput id="ai-keys-search-model" v-model="searchModel" icon="i-lucide-search" size="sm"
+                :placeholder="t('aiProviders.search_models_placeholder')" />
             </div>
             <USelect v-model="filterModelProvider" :items="providerOptions" size="sm" class="w-40" />
             <USelect v-model="filterModelConnection" :items="connectionOptions" size="sm" class="w-44" />
@@ -1701,7 +1694,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           </div>
           <div
             class="px-3 py-2 bg-neutral-50/50 dark:bg-neutral-800/30 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-muted flex items-center justify-between flex-wrap gap-2">
-            <span>{{ t('global.showingCount', { count: displayedModels.length, total: filteredModels.length }) }} ({{ hubAllModels.length }} total)</span>
+            <span>{{ t('global.showingCount', { count: displayedModels.length, total: filteredModels.length }) }} ({{
+              hubAllModels.length }} total)</span>
             <div v-if="filteredModels.length > displayedModels.length" class="flex items-center gap-2">
               <UButton size="xs" variant="soft" color="neutral"
                 :label="t('aiProviders.load_more_models', { current: displayedModels.length, total: filteredModels.length })"
@@ -1726,13 +1720,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <!-- Toolbar with search & re-discover -->
           <div class="flex items-center justify-between gap-2">
             <div class="flex-1">
-              <UInput
-                id="ai-keys-search-connection-model"
-                v-model="searchConnectionModel"
-                icon="i-lucide-search"
-                size="sm"
-                :placeholder="t('aiProviders.search_models_placeholder')"
-              />
+              <UInput id="ai-keys-search-connection-model" v-model="searchConnectionModel" icon="i-lucide-search"
+                size="sm" :placeholder="t('aiProviders.search_models_placeholder')" />
             </div>
             <UButton v-if="connectionModelsTarget" icon="i-lucide-sparkles" color="neutral" variant="soft" size="sm"
               :loading="isDiscoveringConnectionModels" :label="t('aiProviders.fetch_models')"
@@ -1828,7 +1817,9 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <!-- Load more pagination for Connection Models -->
           <div v-if="filteredConnectionModels.length > displayedConnectionModels.length"
             class="flex items-center justify-between p-2.5 mt-2 bg-neutral-50 dark:bg-neutral-800/40 rounded-lg text-xs text-muted flex-wrap gap-2">
-            <span>{{ t('global.showingCount', { count: displayedConnectionModels.length, total: filteredConnectionModels.length }) }}</span>
+            <span>{{ t('global.showingCount', {
+              count: displayedConnectionModels.length, total:
+                filteredConnectionModels.length }) }}</span>
             <div class="flex items-center gap-2">
               <UButton size="xs" variant="soft" color="neutral"
                 :label="t('aiProviders.load_more_models', { current: displayedConnectionModels.length, total: filteredConnectionModels.length })"
@@ -1841,22 +1832,11 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
 
           <!-- Bottom: Add Manual Model input row (like tm-trading) -->
           <div class="flex flex-wrap items-center gap-2 border-t border-neutral-200 dark:border-neutral-800 pt-3">
-            <UInput
-              id="ai-keys-inline-model-id"
-              v-model="inlineNewModelId"
-              size="sm"
-              class="min-w-[180px] flex-1"
-              :placeholder="t('aiProviders.model_id_hint')"
-              @keyup.enter="addInlineModelSubmit"
-            />
-            <UInput
-              id="ai-keys-inline-model-name"
-              v-model="inlineNewModelDisplayName"
-              size="sm"
-              class="min-w-[140px] flex-1"
-              :placeholder="t('aiProviders.display_name')"
-              @keyup.enter="addInlineModelSubmit"
-            />
+            <UInput id="ai-keys-inline-model-id" v-model="inlineNewModelId" size="sm" class="min-w-[180px] flex-1"
+              :placeholder="t('aiProviders.model_id_hint')" @keyup.enter="addInlineModelSubmit" />
+            <UInput id="ai-keys-inline-model-name" v-model="inlineNewModelDisplayName" size="sm"
+              class="min-w-[140px] flex-1" :placeholder="t('aiProviders.display_name')"
+              @keyup.enter="addInlineModelSubmit" />
             <UButton size="sm" icon="i-lucide-plus" :loading="inlineModelAdding" variant="soft" color="primary"
               :disabled="!inlineNewModelId.trim()" :label="t('aiProviders.add_model')" @click="addInlineModelSubmit" />
           </div>
@@ -1894,14 +1874,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       :description="t('aiProviders.connect_provider_hint')" :ui="{ content: 'sm:max-w-xl' }">
       <template #body>
         <div class="space-y-3">
-          <UInput
-            id="ai-keys-connect-search"
-            v-model="connectSearch"
-            icon="i-lucide-search"
-            :placeholder="t('common.search')"
-            class="w-full"
-            autocomplete="off"
-          />
+          <UInput id="ai-keys-connect-search" v-model="connectSearch" icon="i-lucide-search"
+            :placeholder="t('common.search')" class="w-full" autocomplete="off" />
           <div v-if="!connectableProviders.length" class="py-6 text-center text-xs text-muted">
             {{ t('aiProviders.connect_all_connected') }}
           </div>
@@ -1935,8 +1909,8 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
     <!-- MODAL: ADD CUSTOM PROVIDER                                           -->
     <!-- ==================================================================== -->
     <LazyBaseFormModal v-model:open="isProviderOpen" :title="t('aiProviders.add_provider_title')"
-      :state="{ name: providerForm.name, baseUrl: providerForm.baseUrl, type: providerForm.type }" :loading="providerSaving"
-      :submit-label="t('common.save')" @submit="saveProvider">
+      :state="{ name: providerForm.name, baseUrl: providerForm.baseUrl, type: providerForm.type }"
+      :loading="providerSaving" :submit-label="t('common.save')" @submit="saveProvider">
       <UFormField :label="t('aiProviders.provider_type')" class="mb-3">
         <div class="grid grid-cols-2 gap-2">
           <button type="button"
@@ -1962,8 +1936,9 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
       </UFormField>
       <UFormField :label="t('aiProviders.field_base_url')" required
         :description="t('aiProviders.provider_base_url_hint')">
-        <UInput v-model="providerForm.baseUrl" type="url" :placeholder="providerForm.type === 'local' ? 'http://localhost:11434/v1' : 'https://api.example.com/v1'" autocomplete="off"
-          class="w-full" />
+        <UInput v-model="providerForm.baseUrl" type="url"
+          :placeholder="providerForm.type === 'local' ? localBaseUrlPlaceholder : cloudBaseUrlPlaceholder"
+          autocomplete="off" class="w-full" />
       </UFormField>
     </LazyBaseFormModal>
 
@@ -1997,7 +1972,7 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
               </div>
             </template>
             <UInput v-model="credentialValues['AI_BASE_URL']"
-              :placeholder="credentialProvider?.base_url_default || 'https://api.example.com/v1'" autocomplete="off"
+              :placeholder="credentialProvider?.base_url_default || cloudBaseUrlPlaceholder" autocomplete="off"
               class="w-full" />
           </UFormField>
 
@@ -2062,9 +2037,13 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
             class="rounded-lg bg-primary/10 border border-primary/20 p-2.5 flex items-center justify-between text-xs text-primary">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-loader-2" class="size-4 animate-spin shrink-0" />
-              <span>{{ t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) }}</span>
+              <span>{{ t('aiProviders.saving_models_progress', {
+                current: modelPersistProgress.current, total:
+                modelPersistProgress.total }) }}</span>
             </div>
-            <span class="font-mono font-medium">{{ Math.round((modelPersistProgress.current / modelPersistProgress.total) * 100) }}%</span>
+            <span class="font-mono font-medium">{{ Math.round((modelPersistProgress.current /
+              modelPersistProgress.total) * 100)
+              }}%</span>
           </div>
         </div>
       </template>
@@ -2074,11 +2053,12 @@ useHead({ title: computed(() => t('settings.aiKeysTitle')) })
           <UButton icon="i-lucide-activity" color="success" variant="soft" size="sm" :loading="testingInForm"
             :label="t('aiProviders.test_in_modal')" @click="testInForm" />
           <div class="flex items-center gap-2">
-            <UButton :label="t('common.cancel')" color="neutral" variant="ghost" size="sm"
-              :disabled="credentialSaving" @click="isCredentialOpen = false" />
-            <UButton :label="modelPersistProgress ? t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) : t('common.save')"
-              color="primary" variant="soft" size="sm" :loading="credentialSaving"
-              :disabled="credentialSaving" @click="saveCredential" />
+            <UButton :label="t('common.cancel')" color="neutral" variant="ghost" size="sm" :disabled="credentialSaving"
+              @click="isCredentialOpen = false" />
+            <UButton
+              :label="modelPersistProgress ? t('aiProviders.saving_models_progress', { current: modelPersistProgress.current, total: modelPersistProgress.total }) : t('common.save')"
+              color="primary" variant="soft" size="sm" :loading="credentialSaving" :disabled="credentialSaving"
+              @click="saveCredential" />
           </div>
         </div>
       </template>

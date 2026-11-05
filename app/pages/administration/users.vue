@@ -56,8 +56,8 @@ const saving = ref(false)
 const schema = computed(() => z.object({
   email: z.string().min(1, t('auth.emailRequired')).email(t('auth.emailInvalid')),
   username: z.string().optional(),
-  name: z.string().min(2, t('auth.nameMin')),
-  password: editingUser.value ? z.string().optional() : z.string().min(6, t('auth.passwordMin')),
+  name: z.string().min(NAME_MIN_LENGTH, t('auth.nameMin')),
+  password: editingUser.value ? z.string().optional() : z.string().min(PASSWORD_MIN_LENGTH, t('auth.passwordMin')),
   role: z.string().min(1, t('admin.roleRequired'))
 }))
 

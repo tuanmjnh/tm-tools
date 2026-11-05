@@ -16,12 +16,13 @@ Guidance for AI coding agents working in this repository.
   - Filtered by `isVisible !== false` at root and children.
   - Route labels are resolved via i18n keys (`nav.*`).
 - **Core Modules**:
-  - **Profiles / Browser Hub**: Anti-detect browser profiles (`/profiles`), group tagging (`/profiles/groups`), and proxy manager (`/profiles/proxies`).
-  - **Tools & Automation**: Bulk downloader (`/tools/download`), video processing tools (`/tools/video`).
+  - **Browser Hub**: Anti-detect browser profiles at `/browser-hub`, group tagging (`/browser-hub/groups`), and proxy manager (`/browser-hub/proxies`); pages live in `app/pages/browser-hub/`.
+  - **PDF Workspace**: Library explorer, split/merge, page-image rasterize/image→PDF, format export, input import and AI price-list extraction (`/pdf`, `/pdf/library`, `/pdf/split`, `/pdf/images`, `/pdf/export`, `/pdf/import`, `/pdf/extract`) backed by `server/modules/pdf/*` and `server/api/v1/pdf/*`.
+  - **Media Studio**: Bulk downloader (`/media/download`) and video processing (`/media/video`); pages live in `app/pages/media/`.
   - **Utilities**: Text utilities (`/utilities/text`), Icon finder (`/utilities/icons`), Encoder/Decoder (`/utilities/encode`), Randomizer (`/utilities/random`), Markdown/Rich editor (`/utilities/editor`).
   - **Resources**: Media library (`/media`), Inbox (`/inbox`).
   - **Administration**: Centrally-governed admin views for Users (`/administration/users`), Roles (`/administration/roles`), Configs (`/administration/configs`), Audit Logs (`/administration/logs`), Import (`/administration/import`), Export (`/administration/export`).
-  - **Settings & System**: Settings (`/settings/tools`, `/settings/browsers`, `/settings/connections`, `/settings/security`, `/settings/notifications`), System (`/system/config`, `/system/seed`).
+  - **Settings & System**: One Settings shell (`/system/settings`) with section tabs for Appearance, System (`/system/settings/system`) and the account profile (`/system/settings/profile`, `…/security`, `…/sessions`, `…/push`); plus AI key vault (`/system/ai-keys`), Tool binaries (`/system/tools`), Hub integration (`/system/hub-integration`), Docs (`/system/docs`).
 - **Push Notifications**:
   - Unified Firebase FCM & VAPID Web Push via `app/composables/useWebPush.ts` synchronized with Service Worker (`public/push-sw.js`).
 
@@ -45,7 +46,7 @@ pnpm build:electron # Electron production build (Windows installer)
 
 ```
 app/                 Nuxt 4 app (pages, layouts, components, composables, middleware)
-app/pages/           Route pages (/index, /chat, /profiles/*, /tools/*, /utilities/*, /administration/*, /system/*)
+app/pages/           Route pages (/index, /chat, /pdf/*, /tools/*, /utilities/*, /administration/*, /resources/*, /system/*)
 app/composables/     Client composables (useAuth, useHub, useWebPush, useNavMenu)
 app/layouts/         Layouts (default.vue with sidebar navigation)
 app/middleware/      Client route guards (auth.global.ts)
@@ -78,6 +79,14 @@ shared/types/        Types used by BOTH the Vue app and the Nitro server (import
   - Destructive confirmations use `color="error"`; their cancel counterpart stays `variant="ghost"`.
 - **Form Controls & Inputs**:
   - Always add class `w-full` for inputs (`UInput`, `USelect`, `USelectMenu`, `UTextarea`, etc.) to ensure consistent responsive layout across all forms.
+- **Admin Page Toolbar & Responsive Filters (AdminFilterPopover)**:
+  - **Slot Placement Discipline**: Primary search `UInput` MUST ALWAYS be placed on `#left` of `UDashboardToolbar`. `<AdminFilterPopover>` MUST ALWAYS be placed on `#right` (alongside `AdminViewModeToggle` or other right-aligned toolbar tools).
+  - **Multi-Filter Popover Rule (`popover` prop)**: When a page has **more than 1 secondary filter** alongside search: ALWAYS use `<AdminFilterPopover popover>` (`app/components/admin/FilterPopover.vue`) on `#right` to tuck all dropdown filters into a popover button across ALL screen sizes (desktop, tablet, mobile). This prevents filter controls from overflowing and clashing with search when resizing the window.
+  - **Single Filter Rule**: When a page has only 1 simple secondary filter, standard `<AdminFilterPopover>` (without `popover`) can be placed on `#right` to display inline on desktop (`md:flex`) and collapse on mobile.
+  - **Controls Inside Popover**: Every input/select inside `<AdminFilterPopover>` MUST use responsive width `class="w-full"` and carry an explicit `:aria-label="t('...')"` matching its label. Group with small header labels (`<span class="text-xs font-medium text-muted">...</span>`).
+- **List & Grid Footer Standard (SharedListFooter)**:
+  - **No Count Badges in Toolbar**: Do NOT place count badges (e.g. "5 tài liệu") on top toolbar `#right`. Such summaries belong in `#footer`, placed in the `#left` slot of `<SharedListFooter>`.
+  - **Loading & Finished State**: In `<SharedListFooter>`, the loading spinner only displays while actively loading (`loading = true`). Once loading finishes, the loading state and "Đã tải hết" icon MUST be hidden (`showNoMore` defaults to `false`) to avoid permanent visual noise next to the record count.
 - **GridList & Batch Operations**:
   - Prefer `LazyGridList` over `BaseTable`. Always provide `#mobile-content` slot.
 - **Animation, Status & Icons (optimized surfaces)**:
@@ -89,6 +98,19 @@ shared/types/        Types used by BOTH the Vue app and the Nitro server (import
 - **Lazy components (code splitting)**:
   - Any component that mounts on demand (modals, slidesovers, drawers, heavy panels, tab content) MUST be referenced with the Nuxt `Lazy` prefix (e.g. `<LazyBaseResponsiveModal>`, `<LazyBaseConfirmModal>`). The Lazy prefix puts the component in its own chunk and defers loading until it is actually rendered.
   - Direct (non-lazy) references are reserved for always-visible, above-the-fold chrome (BasePage, nav, grid list).
+- **Nuxt 4 Directory Structure & Path Aliases Standard**:
+  - According to official Nuxt 4 documentation, frontend code is separated into the `app/` directory (`srcDir`).
+  - `~/` or `@/`: Points to `<rootDir>/app` (`srcDir`). Internal frontend application files (components, composables, pages, layouts, assets, app-only utils/types).
+  - `~~/` or `@@/`: Points to `<rootDir>` (Root Project). Files located at project root outside `app/` (e.g. `~~/config/...`, `~~/scripts/...`, `~~/layers/...`). Never use `~~/app/...`.
+  - `#shared/`: Points to `<rootDir>/shared`. Code, utilities, constants, and TypeScript types shared across BOTH App (Frontend) and Nitro Server (Backend) (e.g. `#shared/types/...`, `#shared/utils/...`). Never use relative traversal like `../../shared` or `~/../shared`.
+  - `#server/`: Points to `<rootDir>/server`. Internal Nitro Server files (services, modules, database, server-only utils/types). Used strictly within `server/`. ALWAYS prefer `#server/...` over fragile deep relative imports like `../../../../modules/...` or `../../../../utils/...` inside `server/api/` or `server/modules/`.
+  - `#imports`, `#app`, `#build`: Points to `<rootDir>/.nuxt/...`. Virtual modules and build artifacts generated by Nuxt.
+  - **Strict Architectural Boundaries**:
+    1. NEVER use `~/server/...` or `@/server/...` (since `~/` points to `app/`, this looks in `app/server`).
+    2. Frontend (`app/`) MUST NEVER import from `server/` (no `~~/server/...`, `#server/...`, or relative paths into `server/`).
+    3. Server (`server/`) MUST NEVER import from `app/` (no `~~/app/...` or `~/...`).
+    4. Server API routes and modules MUST use `#server/...` (e.g. `#server/modules/...`, `#server/utils/...`, `#server/config`) instead of multi-level relative traversals (`../../../../`).
+    5. Any shared type, contract, validation schema, or utility MUST live in `shared/` and be imported via `#shared/...`.
 - **Type placement (Nuxt 4 standard)**:
   - Types used by BOTH the Vue app and the Nitro server live in `shared/types/` (import via the built-in `#shared/types/<file>` alias).
   - App-only types live in `app/types/`; server-only types live in `server/types/`. There is NO root-level `types/` folder.

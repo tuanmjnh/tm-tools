@@ -22,7 +22,7 @@ const hasMore = ref(false)
 const cursor = ref('')
 const scrollParent = ref<HTMLElement | null>(null)
 
-const FAVORITES_KEY = 'tm-tools:icon-favorites'
+const FAVORITES_KEY = STORAGE_KEYS.iconFavorites
 const favorites = ref<string[]>([])
 try {
   favorites.value = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]')
@@ -62,7 +62,7 @@ async function fetchIcons(isLoadMore = false) {
         search: search.value,
         collection: collection.value,
         cursor: cursor.value,
-        limit: 100
+        limit: PAGE_SIZE.lookup
       }
     })
     if (isLoadMore) icons.value.push(...(data.icons || []))
@@ -76,7 +76,7 @@ async function fetchIcons(isLoadMore = false) {
   }
 }
 
-const debouncedFetch = useDebounceFn(() => fetchIcons(false), 500)
+const debouncedFetch = useDebounceFn(() => fetchIcons(false), POLLING.debounceMs.search)
 
 useInfiniteScroll(
   scrollParent,

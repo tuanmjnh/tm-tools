@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DropdownMenuItem } from '@nuxt/ui'
 import type { ToolTaskItem } from '~/composables/useToolTaskManager'
 
 const props = withDefaults(defineProps<{
@@ -35,6 +36,10 @@ const { t } = useI18n()
 
 const allDone = computed(() => props.total > 0 && props.done >= props.total)
 
+// Destructive per-task action goes through the shared confirm modal.
+const pendingStopKey = ref<number | null>(null)
+const showStopConfirm = ref(false)
+
 function itemPath(item: ToolTaskItem): string {
   const meta = item.task.meta || {}
   if (meta.output) return meta.output
@@ -54,6 +59,46 @@ function statusLabel(status: string): string {
     retrying: t('tools.retrying')
   }
   return map[status] || status
+}
+
+function itemActions(item: ToolTaskItem): DropdownMenuItem[][] {
+  const path = itemPath(item)
+  const primary: DropdownMenuItem[] = []
+
+  if (item.status === 'done' && path) {
+    primary.push({
+      label: t('tools.openFile'),
+      icon: 'i-lucide-play',
+      onSelect: () => emit('openFile', path)
+    })
+    primary.push({
+      label: t('tools.showInFolder'),
+      icon: 'i-lucide-folder-search',
+      onSelect: () => emit('openItem', path)
+    })
+  }
+
+  const danger: DropdownMenuItem[] = [{
+    label: t('tools.stop'),
+    icon: 'i-lucide-square',
+    color: 'error',
+    disabled: !props.processing,
+    onSelect: () => confirmStopTask(item.key)
+  }]
+
+  return [primary, danger].filter(group => group.length > 0)
+}
+
+function confirmStopTask(key: number) {
+  pendingStopKey.value = key
+  showStopConfirm.value = true
+}
+
+function doStopTask() {
+  const key = pendingStopKey.value
+  showStopConfirm.value = false
+  pendingStopKey.value = null
+  if (key !== null) emit('stopTask', key)
 }
 
 function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' | 'neutral' {
@@ -187,35 +232,15 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
               size="sm"
             />
             <span v-if="item.retry > 0" class="text-xs text-warning">{{ item.retry }}</span>
-            <UButton
-              v-if="item.status === 'done' && itemPath(item)"
-              icon="i-lucide-play"
-              color="primary"
-              variant="ghost"
-              size="xs"
-              :aria-label="t('tools.openFile')"
-              :title="t('tools.openFile')"
-              @click="emit('openFile', itemPath(item))"
-            />
-            <UButton
-              v-if="item.status === 'done' && itemPath(item)"
-              icon="i-lucide-folder-search"
-              color="primary"
-              variant="ghost"
-              size="xs"
-              :aria-label="t('tools.showInFolder')"
-              :title="t('tools.showInFolder')"
-              @click="emit('openItem', itemPath(item))"
-            />
-            <UButton
-              icon="i-lucide-x"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :aria-label="t('tools.stop')"
-              :disabled="!processing"
-              @click="emit('stopTask', item.key)"
-            />
+            <UDropdownMenu :items="itemActions(item)" :content="{ align: 'end' }">
+              <UButton
+                icon="i-lucide-ellipsis-vertical"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="t('common.actions')"
+              />
+            </UDropdownMenu>
           </div>
         </div>
 
@@ -241,5 +266,14 @@ function statusColor(status: string): 'success' | 'error' | 'info' | 'warning' |
         </p>
       </div>
     </div>
+
+    <LazyBaseConfirmModal
+      v-model:open="showStopConfirm"
+      :title="t('tools.confirmStopTaskTitle')"
+      :description="t('tools.confirmStopTaskDesc')"
+      icon="i-lucide-square"
+      confirm-icon="i-lucide-square"
+      @confirm="doStopTask"
+    />
   </UCard>
 </template>
