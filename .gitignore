@@ -20,6 +20,9 @@ dist
 release
 dist-electron
 
+# Gate logs written by the verification commands
+.gate-*.txt
+
 # Node dependencies
 node_modules
 
