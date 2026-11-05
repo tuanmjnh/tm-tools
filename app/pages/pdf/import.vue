@@ -134,7 +134,7 @@ const deleteDescription = computed(() => {
         <PdfFileBrowser
           :area="explorer.activeArea.value"
           :title="t(`pdf.areas.${explorer.activeArea.value}`)"
-          :description="t('pdf.import.inputsDesc')"
+          :description="explorer.areaDescription.value"
           :current-folder="explorer.currentFolder.value"
           :folders="explorer.folders.value"
           :files="explorer.files.value"

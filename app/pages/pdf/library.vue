@@ -28,19 +28,6 @@ const maxUploadMb = computed(() => library.value?.maxUploadMb ?? 0)
 const trashCount = computed(() => library.value?.trashCount ?? 0)
 const canUpload = computed(() => explorer.activeArea.value === 'sources')
 
-const descriptionKeys: Record<PdfFileArea, string> = {
-  sources: 'pdf.library.description',
-  inputs: 'pdf.import.inputsDesc',
-  word: 'pdf.library.wordDesc',
-  split: 'pdf.split.foldersDesc',
-  images: 'pdf.images.foldersDesc',
-  merged: 'pdf.split.mergedDesc',
-  products: 'pdf.extract.resultsDesc',
-  office: 'pdf.export.officeDesc'
-}
-
-const areaDescription = computed(() => t(descriptionKeys[explorer.activeArea.value]))
-
 const pageMenu = computed<DropdownMenuItem[][]>(() => [
   [refreshItem(reloadAll)],
   workspaceItems('library'),
@@ -129,7 +116,7 @@ async function confirmDelete() {
           :area="explorer.activeArea.value"
           fill
           :title="t(`pdf.areas.${explorer.activeArea.value}`)"
-          :description="areaDescription"
+          :description="explorer.areaDescription.value"
           :current-folder="explorer.currentFolder.value"
           :folders="explorer.folders.value"
           :files="explorer.files.value"

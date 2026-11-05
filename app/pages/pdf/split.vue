@@ -185,7 +185,7 @@ async function openOutput(tool: string) {
         <PdfFileBrowser
           :area="explorer.activeArea.value"
           :title="t(`pdf.areas.${explorer.activeArea.value}`)"
-          :description="t('pdf.split.sourcesDesc')"
+          :description="explorer.areaDescription.value"
           :current-folder="explorer.currentFolder.value"
           :folders="explorer.folders.value"
           :files="explorer.files.value"

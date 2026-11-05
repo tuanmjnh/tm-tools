@@ -27,6 +27,38 @@ function segment(name: string): string {
   return encodeURIComponent(name)
 }
 
+/** Action ids double as `busy` markers, so the toast title needs its own key map. */
+export const PDF_ACTION_LABELS = {
+  refresh: 'pdf.actions.refresh',
+  upload: 'pdf.actions.upload',
+  uploadInput: 'pdf.actions.uploadInput',
+  removeInput: 'pdf.actions.removeInput',
+  convertInput: 'pdf.actions.convertInput',
+  exportSource: 'pdf.actions.exportSource',
+  uploadWord: 'pdf.actions.uploadWord',
+  wordToPdf: 'pdf.actions.wordToPdf',
+  removeWord: 'pdf.actions.removeWord',
+  removeOffice: 'pdf.actions.removeOffice',
+  split: 'pdf.actions.split',
+  rasterize: 'pdf.actions.rasterize',
+  removeSource: 'pdf.actions.removeSource',
+  merge: 'pdf.actions.merge',
+  removeFolder: 'pdf.actions.removeFolder',
+  imagesToPdf: 'pdf.actions.imagesToPdf',
+  removeOutput: 'pdf.actions.removeOutput',
+  extract: 'pdf.actions.extract',
+  cancel: 'pdf.actions.cancel',
+  restoreTrash: 'pdf.actions.restore',
+  deleteTrashPermanent: 'pdf.actions.deletePermanent',
+  emptyTrash: 'pdf.actions.emptyTrash',
+  repairWorkspace: 'pdf.actions.repairWorkspace',
+  createFolder: 'pdf.actions.createFolder',
+  renameItem: 'pdf.actions.rename',
+  deleteItem: 'pdf.actions.delete'
+} as const satisfies Record<string, string>
+
+export type PdfActionId = keyof typeof PDF_ACTION_LABELS
+
 export function usePdfStudio() {
   const { t } = useI18n()
   const notify = useNotify()
@@ -35,7 +67,7 @@ export function usePdfStudio() {
   const jobs = ref<PdfExtractJobState[]>([])
   const trashItems = ref<PdfTrashItem[]>([])
   const loading = ref(false)
-  const busy = ref<string | null>(null)
+  const busy = ref<PdfActionId | null>(null)
 
   function errorText(error: unknown): string {
     const code = typeof error === 'string'
@@ -47,11 +79,11 @@ export function usePdfStudio() {
     return key ? t(key) : t('pdf.errors.generic')
   }
 
-  function fail(action: string, error: unknown) {
-    notify.error(t(`pdf.actions.${action}`), errorText(error))
+  function fail(action: PdfActionId, error: unknown) {
+    notify.error(t(PDF_ACTION_LABELS[action]), errorText(error))
   }
 
-  async function run<T>(action: string, task: () => Promise<T>): Promise<T | null> {
+  async function run<T>(action: PdfActionId, task: () => Promise<T>): Promise<T | null> {
     busy.value = action
     try {
       return await task()
@@ -64,14 +96,14 @@ export function usePdfStudio() {
   }
 
   /** Upload replies carry an `overwritten` flag so a replaced file is not silent. */
-  function notifySaved(action: string, notice: string, saved: PdfFileInfo[]): void {
+  function notifySaved(action: PdfActionId, notice: string, saved: PdfFileInfo[]): void {
     const replaced = saved.filter(file => file.overwritten)
     if (!replaced.length) {
-      notify.success(t(`pdf.actions.${action}`), t(notice, { count: saved.length }))
+      notify.success(t(PDF_ACTION_LABELS[action]), t(notice, { count: saved.length }))
       return
     }
     const names = replaced.slice(0, 3).map(file => file.name).join(', ')
-    notify.warning(t(`pdf.actions.${action}`), t('pdf.notices.overwritten', {
+    notify.warning(t(PDF_ACTION_LABELS[action]), t('pdf.notices.overwritten', {
       count: saved.length,
       replaced: replaced.length,
       names: replaced.length > 3 ? `${names}…` : names

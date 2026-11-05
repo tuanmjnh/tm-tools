@@ -4,6 +4,18 @@ import type { PdfDirectoryListing, PdfFileArea, PdfFileInfo, PdfFolderInfo, PdfF
 /** The seven areas the explorer shows; `word` stays served by the API only. */
 export const PDF_EXPLORER_AREAS: PdfFileArea[] = ['sources', 'inputs', 'split', 'images', 'merged', 'products', 'office']
 
+/** What the list holds while that area is active, so no page captions a foreign area. */
+const AREA_DESCRIPTION_KEYS: Record<PdfFileArea, string> = {
+  sources: 'pdf.library.description',
+  inputs: 'pdf.import.inputsDesc',
+  word: 'pdf.library.wordDesc',
+  split: 'pdf.split.foldersDesc',
+  images: 'pdf.images.foldersDesc',
+  merged: 'pdf.split.mergedDesc',
+  products: 'pdf.extract.resultsDesc',
+  office: 'pdf.export.officeDesc'
+}
+
 interface AreaRule {
   files: boolean
   folders: boolean
@@ -49,6 +61,7 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   const fileDeletable = computed(() => rules(activeArea.value).files)
   const selectedKey = computed(() => `${activeArea.value}:${currentFolder.value}`)
   const folderTargetParent = computed(() => folderTarget.value.parent)
+  const areaDescription = computed(() => t(AREA_DESCRIPTION_KEYS[activeArea.value]))
 
   function withArea(nodes: PdfFolderTreeNode[], area: PdfFileArea): PdfFolderTreeNode[] {
     return nodes.map((node) => {
@@ -229,6 +242,7 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
     parentFolder,
     tree,
     selectedKey,
+    areaDescription,
     foldersWritable,
     fileDeletable,
     folderModalOpen,

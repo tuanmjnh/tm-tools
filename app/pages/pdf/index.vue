@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { PdfFileArea, PdfLibrary } from '#shared/types/pdf'
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { PdfOperationId, PdfOperationMeta } from '~/utils/pdfOperations'
+import type { PdfOperationMeta } from '~/utils/pdfOperations'
 import { PDF_OPERATIONS, PDF_OPERATION_GROUPS } from '~/utils/pdfOperations'
 import { pdfParentPath } from '~/utils/pdfStudio'
 
@@ -53,18 +54,25 @@ async function repair() {
   }
 }
 
-function operationCount(id: PdfOperationId): number | null {
+/** Every card counts what the operation consumes, so the numbers stay comparable. */
+const AREA_COUNTS: Record<PdfFileArea, (library: PdfLibrary) => number> = {
+  sources: current => current.sources.length,
+  inputs: current => current.inputs.length,
+  word: current => current.word.length,
+  split: current => current.split.length,
+  images: current => current.images.length,
+  merged: current => current.merged.length,
+  products: current => current.products.length,
+  office: current => current.office.length
+}
+
+function operationArea(operation: PdfOperationMeta): PdfFileArea {
+  return operation.input.areas[0] ?? 'sources'
+}
+
+function operationCount(operation: PdfOperationMeta): number | null {
   const current = library.value
-  if (!current) return null
-  switch (id) {
-    case 'split':
-    case 'merge': return current.split.length
-    case 'rasterize':
-    case 'imagesToPdf': return current.images.length
-    case 'convertInput': return current.inputs.length
-    case 'extract': return current.products.length
-    default: return current.sources.length
-  }
+  return current ? AREA_COUNTS[operationArea(operation)](current) : null
 }
 
 const searchTerm = computed(() => searchInput.value.trim().toLowerCase())
@@ -199,8 +207,11 @@ function routeMenu(route: string): DropdownMenuItem[] {
                   <div class="grid size-8 place-items-center rounded-(--ui-radius) border border-default text-muted">
                     <UIcon :name="operation.icon" class="size-4" />
                   </div>
-                  <span class="mono text-lg font-semibold tabular-nums">
-                    {{ operationCount(operation.id) ?? '—' }}
+                  <span class="flex items-baseline gap-1.5">
+                    <span class="text-[11px] text-muted">{{ t(`pdf.areas.${operationArea(operation)}`) }}</span>
+                    <span class="mono text-lg font-semibold tabular-nums">
+                      {{ operationCount(operation) ?? '—' }}
+                    </span>
                   </span>
                 </div>
                 <div class="space-y-0.5">

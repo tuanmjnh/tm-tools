@@ -175,7 +175,7 @@ async function confirmDelete() {
         <PdfFileBrowser
           :area="explorer.activeArea.value"
           :title="t('pdf.export.source')"
-          :description="t('pdf.export.description')"
+          :description="explorer.areaDescription.value"
           :current-folder="explorer.currentFolder.value"
           :folders="explorer.folders.value"
           :files="explorer.files.value"

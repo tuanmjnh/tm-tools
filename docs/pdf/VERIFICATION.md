@@ -888,3 +888,32 @@ and the `PDF_NO_ROWS` error message carry that information instead.
   workspace through the API.
 - No signed-in browser pass over the new modals; the auth gate returns 401
   without a session, so the visual check was not performed.
+
+## Phase 23 — post-commit audit: dynamic keys, area captions, counts (2026-11-06)
+
+A second pass over the rebuilt surface, looking for places where the UI shows
+something it cannot actually know.
+
+| Finding | Fix | Where |
+|---|---|---|
+| Four toast titles rendered the literal string `pdf.actions.deleteItem` (and `renameItem`, `restoreTrash`, `deleteTrashPermanent`): the composable built `pdf.actions.${action}` from a `busy` marker, and those four ids are not key names | `PDF_ACTION_LABELS` maps every action id to its real key; `run()`/`fail()`/`notifySaved()` take `PdfActionId`, so an unmapped id is now a type error | `app/composables/usePdfStudio.ts` |
+| Every tool page captioned the list with one fixed area's description, so browsing `products` on the extract page still read "Each file becomes one PDF in the merged folder" | one `AREA_DESCRIPTION_KEYS` map in the explorer; all six pages bind `explorer.areaDescription` | `app/composables/usePdfExplorer.ts`, 6 pages |
+| Home mixed counting bases: `extract` showed the products count (an output) while `convertInput` showed its inputs, and no card said which area the number belonged to | every card counts its declared `input.areas[0]` and prints the area name beside the number | `app/pages/pdf/index.vue` |
+
+`tests/unit/pdf_action_labels.spec.ts` pins both halves of the toast fix: every
+mapped key exists in `en.json` and `vi.json`, and every id passed to `run()` is
+in the map.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24603 bytes at 06:28 |
+| 2 Lint | `npx eslint` over the touched PDF surface, `usePdfStudio`, both specs | PASS | exit 0 |
+| 3 Tests | `pnpm test` | PASS | 27/27 specs |
+| 4 SFC compile | 7 pages + 3 new/edited pdf components through Vite | PASS | HTTP 200, non-empty; dev log has no warnings |
+| 5 Dynamic keys | script check of `pdf.status.*`, `pdf.overview.groups.*`, `config.*`, `mapping.tools.*`, `pdf.areas.*` | PASS | all present in both locales (`pdf.areas.word` intentionally absent — `word` is never in the explorer tree) |
+
+### Not proven
+
+- Still no signed-in browser pass: `/api/v1/pdf/*` answers 401 without a
+  session, so the counts, captions and toasts were verified statically and by
+  compile only.
