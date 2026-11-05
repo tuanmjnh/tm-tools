@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PdfExtractPreset } from '#shared/types/pdf'
-import { ensureDir, pdfDirs } from '../paths'
+import { ensureDir, pdfDirs, writeFileAtomic } from '../paths'
 
 /**
  * Guidance a run can carry besides the chosen model. Only the descriptive
@@ -49,7 +49,7 @@ function readAll(): PdfExtractPreset[] {
 
 function writeAll(presets: PdfExtractPreset[]): void {
   ensureDir(pdfDirs.root)
-  writeFileSync(presetsFile(), `${JSON.stringify(presets, null, 2)}\n`, 'utf8')
+  writeFileAtomic(presetsFile(), `${JSON.stringify(presets, null, 2)}\n`, 'utf8')
 }
 
 export function listPresets(): PdfExtractPreset[] {

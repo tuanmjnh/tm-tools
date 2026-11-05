@@ -78,6 +78,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
       </div>
 
       <div class="flex shrink-0 items-center gap-1.5">
+        <slot name="actions" />
         <UButton
           icon="i-lucide-folder-open"
           :label="t('common.open')"

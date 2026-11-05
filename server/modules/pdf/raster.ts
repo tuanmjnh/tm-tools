@@ -1,7 +1,7 @@
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { pdf } from 'pdf-to-img'
-import { ensureDir } from './paths'
+import { recordAudit } from './audit'
+import { ensureDir, writeFileAtomic } from './paths'
 import { pageFileName } from './document'
 
 export async function rasterizePdf(
@@ -16,8 +16,10 @@ export async function rasterizePdf(
 
   for await (const image of document) {
     pages++
-    writeFileSync(join(outputDir, `${pageFileName(pages)}.png`), image)
+    writeFileAtomic(join(outputDir, `${pageFileName(pages)}.png`), image)
   }
+
+  recordAudit({ action: 'output', area: 'images', target: basename(outputDir), tool: 'rasterize' })
 
   return { pages, dir: outputDir }
 }

@@ -1,10 +1,12 @@
-import { statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { statSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
 import type { PdfFileInfo } from '#shared/types/pdf'
+import { recordAudit } from './audit'
 import { dataBufferToPdf } from './data/to-pdf'
 import { readInput } from './inputs'
 import { docxToPdf } from './office/docxToPdf'
+import { writeFileAtomic } from './paths'
 import { safeFileName, safeStem } from './security'
 import { outputDir } from './workspace'
 
@@ -39,7 +41,8 @@ export async function inputToPdf(rawName: string): Promise<PdfFileInfo> {
 
   const outputName = `${safeStem(name)}.pdf`
   const target = join(outputDir('convertInput'), outputName)
-  writeFileSync(target, bytes)
+  writeFileAtomic(target, bytes)
+  recordAudit({ action: 'output', area: 'merged', target: basename(target), tool: 'convert' })
 
   return {
     name: outputName,

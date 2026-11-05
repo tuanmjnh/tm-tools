@@ -1,0 +1,3 @@
+[36mℹ[39m Nuxt Icon server bundle mode is set to [36mlocal[39m
+[36mℹ[39m Nuxt Icon client bundle consist of [36m306[39m icons with [36m94.69KB[39m(uncompressed) in size
+[90m[[90mnuxt[90m][39m [36mℹ[39m Compiled [36m#build/nuxt.config.mjs[39m in 510.78ms

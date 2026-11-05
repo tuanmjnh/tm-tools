@@ -11,6 +11,8 @@ process.env.PDF_DATA_DIR = dataRoot
 const { createAreaFolder, deleteAreaItem, getAreaFolderTree, listAreaDirectory, renameAreaItem } = await import('../../server/modules/pdf/directory')
 const { moveToTrash, restoreTrashItem } = await import('../../server/modules/pdf/trash')
 const { saveWord, removeWord } = await import('../../server/modules/pdf/library')
+const { readAudit } = await import('../../server/modules/pdf/audit')
+
 before(() => {
   for (const area of ['sources', 'inputs', 'word', 'split', 'images', 'merged', 'products', 'office']) {
     mkdirSync(join(dataRoot, area), { recursive: true })
@@ -134,5 +136,26 @@ describe('legacy word area is read-only end to end', () => {
 
     assert.throws(() => removeWord('keep-me.docx'), /PDF_FILE_IMMUTABLE/)
     assert.equal(existsSync(join(dataRoot, 'word', 'keep-me.docx')), true)
+  })
+})
+
+describe('mutations are audited', () => {
+  it('records a folder create, a rename and a delete', () => {
+    createAreaFolder('office', '', 'audit-src')
+    renameAreaItem('office', 'audit-src', 'audit-dst')
+    deleteAreaItem('office', 'audit-dst')
+
+    const actions = readAudit().map(event => event.action)
+    assert.ok(actions.includes('folder-create'), 'expected folder-create')
+    assert.ok(actions.includes('rename'), 'expected rename')
+    assert.ok(actions.includes('delete'), 'expected delete')
+  })
+
+  it('records a denied mutation with its code and area', () => {
+    assert.throws(() => saveWord('denied.docx', Buffer.from('docx')), /PDF_FILE_IMMUTABLE/)
+
+    const denied = readAudit().filter(event => event.action === 'denied').at(-1)
+    assert.equal(denied?.area, 'word')
+    assert.equal(denied?.code, 'PDF_FILE_IMMUTABLE')
   })
 })

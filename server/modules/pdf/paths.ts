@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, realpathSync } from 'node:fs'
-import { dirname, join, relative, sep } from 'node:path'
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, relative, sep } from 'node:path'
 import { config } from '#server/config'
 
 export const pdfRoot = config.pdf.dir
@@ -31,6 +31,26 @@ export function ensureDir(dir: string): string {
 
 export function ensurePdfDirs(): void {
   Object.values(pdfDirs).forEach(ensureDir)
+}
+
+/**
+ * Writes through a hidden temp file in the same directory and renames it into
+ * place. A crash mid-write can otherwise leave a truncated output that still
+ * looks like a valid file to the listing.
+ */
+export function writeFileAtomic(
+  target: string,
+  data: string | Uint8Array,
+  encoding?: BufferEncoding
+): void {
+  const temp = join(dirname(target), `.${basename(target)}.tmp`)
+  try {
+    writeFileSync(temp, data, encoding)
+    renameSync(temp, target)
+  } catch (error) {
+    rmSync(temp, { force: true })
+    throw error
+  }
 }
 
 function realpathOrSelf(path: string): string {

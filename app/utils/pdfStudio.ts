@@ -1,7 +1,6 @@
 import type { PdfJobStatus, PdfSourceExportFormat } from '#shared/types/pdf'
 
 export const PDF_STUDIO_POLL_MS = 2500
-export const PDF_PAGE_SIZE = 25
 export const PDF_UPLOAD_ACCEPT = 'application/pdf'
 export const PDF_IMAGE_ACCEPT = '.png,.jpg,.jpeg'
 export const PDF_WORD_ACCEPT = '.docx'

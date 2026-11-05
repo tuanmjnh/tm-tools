@@ -5,6 +5,8 @@ import { AREA_DIRS, type PdfFileArea } from './inspect'
 import { ensureDir, assertInsideRoot, pdfDirs } from './paths'
 import { naturalCompare, safeFileName, safeRelativePath } from './security'
 import { moveToTrash } from './trash'
+import { removeDerivedOutputs } from './library'
+import { recordAudit } from './audit'
 import { assertFileWritable, assertFolderWritable } from './workspace'
 
 /**
@@ -111,7 +113,7 @@ export function listAreaDirectory(
     breadcrumbs,
     folders,
     files,
-    tree: getAreaFolderTree(area)
+    tree: getAreaFolderTree(area, 1)
   }
 }
 
@@ -140,6 +142,8 @@ export function createAreaFolder(area: PdfFileArea, rawParentFolder: string, raw
   mkdirSync(targetAbs, { recursive: true })
   const stats = statSync(targetAbs)
   const relativePath = parentFolder ? `${parentFolder}/${name}` : name
+
+  recordAudit({ action: 'folder-create', area, target: relativePath })
 
   return {
     name,
@@ -195,6 +199,8 @@ export function renameAreaItem(
   const parentRelative = relativePath.includes('/') ? dirname(relativePath).replace(/\\/g, '/') : ''
   const newRelativePath = parentRelative ? `${parentRelative}/${newName}` : newName
 
+  recordAudit({ action: 'rename', area, target: relativePath, to: newRelativePath })
+
   return {
     oldPath: targetAbs,
     newPath: newAbs,
@@ -204,51 +210,84 @@ export function renameAreaItem(
 }
 
 /**
- * Recursively builds a folder tree for the given area.
+ * Builds folder nodes under `currentDir`. `depth` counts the levels already
+ * walked from the requested root; once it reaches `maxDepth`, children are
+ * reported through `hasChildren` instead of being read.
  */
-export function getAreaFolderTree(area: PdfFileArea): PdfFolderTreeNode[] {
-  const areaRoot = AREA_DIRS[area]
-  if (!areaRoot || !existsSync(areaRoot)) return []
-
-  function buildTree(currentDir: string, currentRelative: string): PdfFolderTreeNode[] {
-    const subfolders: PdfFolderTreeNode[] = []
-    try {
-      const entries = readdirSync(currentDir, { withFileTypes: true, encoding: 'utf8' })
-      for (const entry of entries) {
-        const entryName = String(entry.name)
-        if (entryName.startsWith('.')) continue
-        if (entry.isSymbolicLink()) continue
-        if (entry.isDirectory()) {
-          const subAbs = join(currentDir, entryName)
-          const subRelative = currentRelative ? `${currentRelative}/${entryName}` : entryName
-          let fileCount = 0
-          try {
-            fileCount = readdirSync(subAbs, { withFileTypes: true })
-              .filter(item => item.isFile() && !item.name.startsWith('.')).length
-          } catch {
-            fileCount = 0
-          }
-
-          const children = buildTree(subAbs, subRelative)
-          subfolders.push({
-            id: subRelative,
-            label: entryName,
-            path: subAbs,
-            relativePath: subRelative,
-            fileCount,
-            children: children.length ? children : undefined
-          })
+function buildFolderNodes(
+  currentDir: string,
+  currentRelative: string,
+  depth: number,
+  maxDepth: number
+): PdfFolderTreeNode[] {
+  const subfolders: PdfFolderTreeNode[] = []
+  try {
+    const entries = readdirSync(currentDir, { withFileTypes: true, encoding: 'utf8' })
+    for (const entry of entries) {
+      const entryName = String(entry.name)
+      if (entryName.startsWith('.')) continue
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory()) {
+        const subAbs = join(currentDir, entryName)
+        const subRelative = currentRelative ? `${currentRelative}/${entryName}` : entryName
+        let fileCount = 0
+        let hasSubfolders = false
+        try {
+          const children = readdirSync(subAbs, { withFileTypes: true })
+          fileCount = children.filter(item => item.isFile() && !item.name.startsWith('.')).length
+          hasSubfolders = children.some(item => item.isDirectory() && !item.name.startsWith('.') && !item.isSymbolicLink())
+        } catch {
+          fileCount = 0
         }
-      }
-    } catch {
-      return []
-    }
 
-    subfolders.sort((a, b) => naturalCompare(a.label, b.label))
-    return subfolders
+        const truncated = depth + 1 >= maxDepth
+        const descendants = truncated ? [] : buildFolderNodes(subAbs, subRelative, depth + 1, maxDepth)
+        subfolders.push({
+          id: subRelative,
+          label: entryName,
+          path: subAbs,
+          relativePath: subRelative,
+          fileCount,
+          children: descendants.length ? descendants : undefined,
+          hasChildren: truncated && hasSubfolders ? true : undefined
+        })
+      }
+    }
+  } catch {
+    return []
   }
 
-  return buildTree(areaRoot, '')
+  subfolders.sort((a, b) => naturalCompare(a.label, b.label))
+  return subfolders
+}
+
+/**
+ * Recursively builds a folder tree for the given area. `maxDepth` bounds the walk
+ * so the explorer can load the first level only and fetch the rest per node.
+ */
+export function getAreaFolderTree(area: PdfFileArea, maxDepth = Number.POSITIVE_INFINITY): PdfFolderTreeNode[] {
+  const areaRoot = AREA_DIRS[area]
+  if (!areaRoot || !existsSync(areaRoot)) return []
+  return buildFolderNodes(areaRoot, '', 0, maxDepth)
+}
+
+/** Subfolders of one folder inside an area, for expanding a lazy tree node. */
+export function getAreaFolderChildren(
+  area: PdfFileArea,
+  rawRelativeFolder: string,
+  maxDepth = 1
+): PdfFolderTreeNode[] {
+  const areaRoot = AREA_DIRS[area]
+  if (!areaRoot) throw new Error('PDF_FILE_NOT_FOUND')
+
+  const relative = safeRelativePath(rawRelativeFolder)
+  const abs = relative ? join(areaRoot, relative) : areaRoot
+  if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+    throw new Error('PDF_FOLDER_NOT_FOUND')
+  }
+  assertInsideRoot(areaRoot, abs)
+
+  return buildFolderNodes(abs, relative, 0, maxDepth)
 }
 
 /**
@@ -282,5 +321,8 @@ export function deleteAreaItem(area: PdfFileArea, rawRelativePath: string) {
 
   assertInsideRoot(areaRoot, targetAbs)
 
-  return moveToTrash(area, targetAbs, relativePath)
+  const item = moveToTrash(area, targetAbs, relativePath)
+  if (area === 'sources') removeDerivedOutputs(relativePath)
+  recordAudit({ action: 'delete', area, target: relativePath, bytes: item.size })
+  return item
 }

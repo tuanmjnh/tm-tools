@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { PdfFileArea, PdfTrashItem } from '#shared/types/pdf'
-import { ensureDir, pdfDirs } from './paths'
+import { recordAudit } from './audit'
+import { ensureDir, pdfDirs, writeFileAtomic } from './paths'
 import { safeFileName } from './security'
 import { assertFileWritable } from './workspace'
 
@@ -24,7 +25,7 @@ function readTrashMetadata(): Record<string, PdfTrashItem> {
 
 function writeTrashMetadata(meta: Record<string, PdfTrashItem>): void {
   ensureDir(pdfDirs.trash)
-  writeFileSync(getTrashMetadataPath(), JSON.stringify(meta, null, 2), 'utf8')
+  writeFileAtomic(getTrashMetadataPath(), JSON.stringify(meta, null, 2), 'utf8')
 }
 
 function withoutKey(meta: Record<string, PdfTrashItem>, key: string): Record<string, PdfTrashItem> {
@@ -142,6 +143,7 @@ export function restoreTrashItem(id: string): PdfTrashItem {
 
   renameSync(trashPath, finalDestination)
   writeTrashMetadata(withoutKey(meta, cleanId))
+  recordAudit({ action: 'restore', area: item.area, target: item.originalRelativePath })
 
   return item
 }
@@ -153,6 +155,7 @@ export function deleteTrashItemPermanently(id: string): void {
 
   if (existsSync(trashPath)) {
     rmSync(trashPath, { recursive: true, force: true })
+    recordAudit({ action: 'purge', area: meta[cleanId]?.area, target: meta[cleanId]?.originalRelativePath })
   }
 
   writeTrashMetadata(withoutKey(meta, cleanId))
@@ -165,5 +168,6 @@ export function emptyTrash(): void {
     const full = join(pdfDirs.trash, entry)
     rmSync(full, { recursive: true, force: true })
   }
+  if (entries.length) recordAudit({ action: 'purge', target: `empty-trash:${entries.length}` })
   writeTrashMetadata({})
 }

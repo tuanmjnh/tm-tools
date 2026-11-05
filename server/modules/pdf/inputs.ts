@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PdfFileInfo } from '#shared/types/pdf'
 import { config } from '#server/config'
 import { inputKind, isDataName, type PdfInputKind } from './data/parse'
 import { listFiles } from './library'
-import { ensureDir, pdfDirs } from './paths'
+import { ensureDir, pdfDirs, writeFileAtomic } from './paths'
+import { recordAudit } from './audit'
 import { isImageName, isWordName, safeFileName, safeRelativePath } from './security'
 import { moveToTrash } from './trash'
 
@@ -33,8 +34,9 @@ export function saveInput(rawName: string, data: Buffer, rawFolder = ''): PdfFil
 
   const target = join(targetDir, name)
   const overwritten = existsSync(target)
-  writeFileSync(target, data)
+  writeFileAtomic(target, data)
   const relativePath = folder ? `${folder}/${name}` : name
+  recordAudit({ action: 'upload', area: 'inputs', target: relativePath, bytes: data.length })
 
   return {
     name,

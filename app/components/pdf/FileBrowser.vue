@@ -2,7 +2,6 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { useDebounceFn } from '@vueuse/core'
 import type { PdfFileArea, PdfFileInfo, PdfFolderInfo } from '#shared/types/pdf'
-import { formatPdfBytes, openPdfPreview, pdfFileMeta } from '~/utils/pdfStudio'
 
 const props = withDefaults(defineProps<{
   area: PdfFileArea
@@ -21,7 +20,8 @@ const props = withDefaults(defineProps<{
   trashCount?: number
   listClass?: string
   selectedPath?: string
-  selectable?: boolean
+  /** Shows the "use as input" control on every file row. */
+  pickable?: boolean
   fill?: boolean
   deletable?: boolean
   /** No uploads and no trash for this area (files still open and delete). */
@@ -37,7 +37,7 @@ const props = withDefaults(defineProps<{
   trashCount: 0,
   listClass: 'max-h-[440px]',
   selectedPath: undefined,
-  selectable: false,
+  pickable: false,
   fill: false,
   deletable: true,
   readonly: false,
@@ -60,8 +60,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { formatDateTime } = useDateTime()
-const { fileItems } = usePdfMenus()
 
 const selected = ref<File[]>([])
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -119,29 +117,6 @@ function relativePath(folder: PdfFolderInfo) {
 
 function isSelected(file: PdfFileInfo) {
   return props.selectedPath === (file.relativePath || file.name)
-}
-
-function openFile(file: PdfFileInfo) {
-  if (props.selectable) {
-    emit('pick', file)
-    return
-  }
-  openPdfPreview(props.area, file.relativePath || file.name, file.path)
-}
-
-function selectionMenu(file: PdfFileInfo): DropdownMenuItem[][] {
-  return fileItems({
-    area: props.area,
-    name: file.name,
-    relativePath: file.relativePath,
-    path: file.path,
-    deletable: false,
-    extra: [{
-      label: t('pdf.browser.useSource'),
-      icon: 'i-lucide-check',
-      onSelect: () => emit('pick', file)
-    }]
-  })
 }
 
 function triggerUpload() {
@@ -282,6 +257,10 @@ watch(selected, (files) => {
       </template>
     </div>
 
+    <div v-if="$slots['flow-note']" class="border-b border-default px-3 py-2">
+      <slot name="flow-note" />
+    </div>
+
     <div
       v-if="!isEmpty || isFiltered"
       class="flex flex-wrap items-center gap-2 border-b border-default px-3 py-1.5"
@@ -389,68 +368,51 @@ watch(selected, (files) => {
         @open="emit('openFolder', folder)"
         @rename="emit('renameFolder', folder)"
         @delete="emit('deleteFolder', folder)"
-      />
+      >
+        <template #actions>
+          <slot name="folder-actions" :folder="folder" />
+        </template>
+      </PdfFolderRow>
 
-      <template v-for="file in visibleFiles" :key="file.path">
-        <PdfFileRow
-          v-if="!selectable"
-          :area="area"
-          :name="file.name"
-          :relative-path="file.relativePath"
-          :path="file.path"
-          :size="file.size"
-          :modified-at="file.modifiedAt"
-          :deletable="deletable"
-          :compact="compact"
-          :menu="fileMenu?.(file)"
-          @rename="emit('renameFile', file)"
-          @delete="emit('deleteFile', file)"
-        >
-          <template #actions>
-            <slot name="file-actions" :file="file" />
-          </template>
-        </PdfFileRow>
-
-        <PdfContextMenu v-else :items="selectionMenu(file)">
-          <div
-            class="flex items-center justify-between gap-3 px-4 transition-colors hover:bg-muted/10"
-            :class="[compact ? 'py-1.5' : 'py-3', isSelected(file) ? 'bg-primary-50/40 dark:bg-primary-950/20' : '']"
+      <PdfFileRow
+        v-for="file in visibleFiles"
+        :key="file.path"
+        :area="area"
+        :name="file.name"
+        :relative-path="file.relativePath"
+        :path="file.path"
+        :size="file.size"
+        :modified-at="file.modifiedAt"
+        :deletable="deletable"
+        :compact="compact"
+        :selected="isSelected(file)"
+        :menu="fileMenu?.(file)"
+        @rename="emit('renameFile', file)"
+        @delete="emit('deleteFile', file)"
+      >
+        <template #actions>
+          <UBadge
+            v-if="isSelected(file)"
+            color="primary"
+            variant="subtle"
+            size="xs"
           >
-            <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-start" @click="openFile(file)">
-              <UIcon :name="pdfFileMeta(file.name).icon" class="size-4 shrink-0" :class="pdfFileMeta(file.name).tone" />
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-medium" :title="file.name">{{ file.name }}</span>
-                <span class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                  <span class="mono">{{ formatPdfBytes(file.size) }}</span>
-                  <span>{{ formatDateTime(file.modifiedAt) }}</span>
-                </span>
-              </span>
-            </button>
-
-            <div class="flex shrink-0 items-center gap-1.5">
-              <UBadge
-                v-if="isSelected(file)"
-                color="primary"
-                variant="subtle"
-                size="xs"
-              >
-                {{ t('pdf.browser.selected') }}
-              </UBadge>
-              <UButton
-                v-else
-                icon="i-lucide-check"
-                color="primary"
-                variant="ghost"
-                size="xs"
-                square
-                :aria-label="t('pdf.browser.useSource')"
-                :title="t('pdf.browser.useSource')"
-                @click="emit('pick', file)"
-              />
-            </div>
-          </div>
-        </PdfContextMenu>
-      </template>
+            {{ t('pdf.browser.selected') }}
+          </UBadge>
+          <UButton
+            v-else-if="pickable"
+            icon="i-lucide-check"
+            color="primary"
+            variant="ghost"
+            size="xs"
+            square
+            :aria-label="t('pdf.browser.useSource')"
+            :title="t('pdf.browser.useSource')"
+            @click="emit('pick', file)"
+          />
+          <slot name="file-actions" :file="file" />
+        </template>
+      </PdfFileRow>
     </div>
 
     <footer

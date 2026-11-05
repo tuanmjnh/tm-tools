@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { extname, join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { basename, extname, join } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
-import { ensureDir } from './paths'
+import { recordAudit } from './audit'
+import { ensureDir, writeFileAtomic } from './paths'
 import { isImageName, naturalCompare, safeFileName } from './security'
 
 export async function imagesToPdf(
@@ -35,7 +36,8 @@ export async function imagesToPdf(
 
   ensureDir(outputDir)
   const output = join(outputDir, safeFileName(outputName))
-  writeFileSync(output, await doc.save())
+  writeFileAtomic(output, await doc.save())
+  recordAudit({ action: 'output', area: 'merged', target: basename(output), tool: 'images-to-pdf' })
 
   return { output, pages: doc.getPageCount() }
 }

@@ -1,16 +1,17 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import {
   PDF_SOURCE_EXPORT_FORMATS,
   type PdfExportFormatResult,
   type PdfSourceExportFormat
 } from '#shared/types/pdf'
 import { config } from '#server/config'
+import { recordAudit } from './audit'
 import { hasProductFiles, writeProducts } from './extract/export'
 import { readCachedRows } from './extract/jobs'
 import { sourcePath, splitDirName } from './library'
 import { pdfToDocx } from './office/pdfToDocx'
-import { ensureDir } from './paths'
+import { ensureDir, writeFileAtomic } from './paths'
 import { rasterizePdf } from './raster'
 import { outputDir } from './workspace'
 import { documentStem } from './security'
@@ -47,6 +48,7 @@ export async function exportSource(
           continue
         }
         await rasterizePdf(pdfPath, join(outputDir('rasterize'), folder), config.pdf.imageScale)
+        recordAudit({ action: 'output', area: 'images', target: folder, tool: 'export' })
         results.push({ format, ok: true, name: folder })
         continue
       }
@@ -59,7 +61,8 @@ export async function exportSource(
         const buffer = await pdfToDocx(readFileSync(pdfPath), stem)
         ensureDir(outputDir('export'))
         const target = join(outputDir('export'), `${stem}.docx`)
-        writeFileSync(target, buffer)
+        writeFileAtomic(target, buffer)
+        recordAudit({ action: 'output', area: 'office', target: basename(target), tool: 'export' })
         results.push({ format, ok: true, name: `${stem}.docx` })
         continue
       }
@@ -78,6 +81,7 @@ export async function exportSource(
 
       const files = await writeProducts(outputDir('extract'), `${stem}_products`, rows)
       const written = files[format as 'csv' | 'json' | 'xlsx' | 'docx' | 'xml']
+      recordAudit({ action: 'output', area: 'products', target: basename(written), tool: 'export' })
       results.push({
         format,
         ok: statSync(written).size > 0,

@@ -7,6 +7,7 @@ import type {
 } from '#shared/types/pdf'
 import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { AREA_DIRS, PDF_FILE_AREAS } from './inspect'
+import { recordAudit } from './audit'
 import { isInputName, isPdfName } from './security'
 
 /**
@@ -60,12 +61,16 @@ export function areaAcceptPredicate(area: PdfFileArea): (name: string) => boolea
 
 /** Throws when an area forbids subfolder mutations (the legacy `word` folder). */
 export function assertFolderWritable(area: PdfFileArea): void {
-  if (!areaDescriptor(area).writableFolders) throw new Error('PDF_FOLDER_IMMUTABLE')
+  if (areaDescriptor(area).writableFolders) return
+  recordAudit({ action: 'denied', area, code: 'PDF_FOLDER_IMMUTABLE' })
+  throw new Error('PDF_FOLDER_IMMUTABLE')
 }
 
 /** Throws when an area forbids file mutations (the legacy `word` folder). */
 export function assertFileWritable(area: PdfFileArea): void {
-  if (!areaDescriptor(area).writableFiles) throw new Error('PDF_FILE_IMMUTABLE')
+  if (areaDescriptor(area).writableFiles) return
+  recordAudit({ action: 'denied', area, code: 'PDF_FILE_IMMUTABLE' })
+  throw new Error('PDF_FILE_IMMUTABLE')
 }
 
 export function outputArea(tool: keyof typeof outputMapping): PdfFileArea {
@@ -125,5 +130,6 @@ export function repairWorkspace(): PdfWorkspaceRepair {
     mkdirSync(root, { recursive: true })
     created.push(descriptor.area)
   }
+  if (created.length) recordAudit({ action: 'repair', target: created.join(',') })
   return { created, needsRepair: workspaceReport().needsRepair }
 }

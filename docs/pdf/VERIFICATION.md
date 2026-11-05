@@ -616,3 +616,275 @@ Folder-tree UX pass driven by user feedback on `/pdf/library`.
 - `tests/unit/dev_port.spec.ts` (committed 2026-10-31, unrelated to PDF) still
   reports two style errors under the current rule set; it is out of scope here
   and was not modified.
+
+## Phase 15 — atomic output, audit log, lazy tree, viewer controls (2026-11-05)
+
+Closes the four items left open by the P0–P3 audit: writers are atomic, every
+mutation is audited, the explorer loads per node, and the image viewer has
+zoom/rotate.
+
+- `writeFileAtomic` (`paths.ts`) writes `.<name>.tmp` beside the target and
+  renames over it, removing the temp file on failure; every PDF writer now uses
+  it (`document`, `merge`, `images-to-pdf`, `raster`, `convert`, `source-export`,
+  `extract/export`, `extract/presets`, `trash`, `audit`, the DOCX export route).
+- `server/modules/pdf/audit.ts` appends JSONL to `<pdfRoot>/audit.jsonl`, caps
+  the file at 500 events by atomically rewriting the tail, and `recordAudit`
+  swallows write failures. `GET /api/v1/pdf/audit?limit=` reads newest events.
+  Actions: `upload`, `output` (with `tool`), `folder-create`, `rename`,
+  `delete`, `restore`, `purge`, `repair`, `denied`.
+- `GET /api/v1/pdf/explorer` returns depth 1; `GET /api/v1/pdf/explorer/children`
+  loads one folder. Both the library and all five tool pages pass `lazy`, keep a
+  `loadedChildren` map, and switch to `?depth=full` only while a folder search is
+  active. `HeTreeMenu` treats `hasChildren: true` as expandable.
+- `PreviewFile` image viewer gained zoom (50–300 %, seven steps), ±90° rotation
+  and reset; all three i18n labels exist in both locales.
+- Two routes still read raw router params (`split/[name]/merge.post.ts`,
+  `images/[name]/pdf.post.ts`); both now use `pathParam`, matching the rest of
+  the API.
+
+| Gate | Command / input | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | exit 0, 0 × `error TS`, config regenerated |
+| 2 Lint | `npx eslint` on every touched server module, route, composable, component and page, plus the four new specs | PASS | exit 0, after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs, exit 0 (`pdf_atomic_write`, `pdf_audit`, `pdf_audit_output`, `pdf_lazy_tree` added) |
+| 4 Routes | `GET /explorer`, `GET /explorer/children`, `GET /audit` | PASS (auth-gated) | 401 `error.tokenMissing`, not 404 |
+| 5 Library tree | signed-in `/pdf/library` | PASS | 7 area roots + nested folders after the lazy switch |
+| 6 Deep search | type `page` in the folder filter | PASS | nested `page_0005…0007` appear under `Trang tách` from `?depth=full` |
+| 7 Image viewer | `/pdf/preview?area=images&name=bang-gia-ghe/page_0001.png` | PASS | zoom → `matrix(1.25…)`, 125 % label; rotate → `matrix(0,1.25,-1.25,0)`; reset re-disables |
+
+### Not proven
+
+- No screenshot of the viewer: the in-app browser reported no visible viewport,
+  so the toolbar state and computed `transform` are the evidence.
+- The audit log was exercised through the temp-root specs only; the live
+  `audit.jsonl` was not inspected because the dev data root was not modified.
+- Lazy expand was verified through the shallow tree plus the deep-search query;
+  clicking a lazy chevron in the signed-in tab was not needed once deep search
+  proved the children endpoint returns the same nested nodes.
+
+## Phase 16 — v3 rebuild Phase 0: audit and baseline (2026-11-05)
+
+Baseline taken before any v3 code change, per
+[TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md](./TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md) §15.
+No source file was modified in this phase.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = 0; `.nuxt/eslint.config.mjs` regenerated 24107 bytes at 19:26 |
+| 2 Lint | `npx eslint` on `app/pages/pdf`, `app/components/pdf`, the 3 PDF composables, `app/utils/pdfStudio.ts`, `shared/types/pdf.ts`, `server/modules/pdf`, `server/utils/pdfApi.ts` | PASS | `LINT_EXIT=0`, 0 problems, run after the config regeneration |
+| 3 Tests | `pnpm test` | PASS | `22/22 specs passed`, `TEST_EXIT=0` |
+
+### §1 reconciled against code
+
+| §1 claim | Verified with |
+|---|---|
+| 7 UI routes, no `/pdf/merge` | `ls app/pages/pdf` = `export, extract, images, import, index, library, preview, split` |
+| 16 components in `app/components/pdf/` | `ls app/components/pdf` matches the §1.4 table exactly |
+| 3 composables + `app/utils/pdfStudio.ts` | `usePdfDirectory`, `usePdfMenus`, `usePdfStudio` present |
+| Server modules and 48 API routes | `ls server/modules/pdf`, `find server/api/v1/pdf` count matches §1.7 |
+| 7-key `outputMapping`, `word` read-only, every root `systemRoot` | `server/modules/pdf/workspace.ts` |
+| Three codes missing from `PDF_ERROR_STATUS` | `server/utils/pdfApi.ts` has none of `PDF_FOLDER_NAME_REQUIRED`, `PDF_TRASH_ITEM_NOT_FOUND`, `PDF_EXPORT_FAILED` |
+
+§1 needed no edits; the audit stands as written on 2026-11-05.
+
+## Phase 17 — v3 rebuild Phase 1: Home (2026-11-05)
+
+- New [app/utils/pdfOperations.ts](../../app/utils/pdfOperations.ts): the seven running
+  operations with `group`, `route`, `input`, `output.mappingKey`, `execution`,
+  `config` and `resultHint`, plus the naming formulas read from
+  `server/modules/pdf/security.ts` and the three route handlers.
+- `/pdf` rebuilt: search over the operation list, three groups
+  (organize / convert / extract), the Library card, the repair banner when
+  `needsRepair`, and one collapsed `<details>` holding the limits and the
+  `outputMapping` table. The pipeline list and the six workspace cards are gone.
+- Counts come from `GET /library`; a card shows `—` until the library resolves,
+  never a fake `0`. AI state now comes from `GET /extract/models`.
+- i18n: `pdf.operations.*` and the new `pdf.overview.*` keys in both locales; the
+  dead `overview.kpi`, `overview.pipeline` and `overview.config.description`
+  blocks were removed.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config regenerated 24446 bytes at 19:42 |
+| 2 Lint | `npx eslint app/pages/pdf/index.vue app/utils/pdfOperations.ts` | PASS | exit 0, run after the regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs |
+| 4 SFC compile | dev server `/_nuxt/pages/pdf/index.vue`, `/_nuxt/utils/pdfOperations.ts` | PASS | HTTP 200 both |
+
+### Not proven
+
+- The rebuilt Home has not been opened in a signed-in browser yet; acceptance
+  checks for all rebuilt pages are batched with the Phase 3 pass.
+
+## Phase 18 — v3 rebuild Phase 2: one explorer for six pages (2026-11-05)
+
+- New [app/composables/usePdfExplorer.ts](../../app/composables/usePdfExplorer.ts)
+  moves the seven-area tree, lazy children, deep search, folder modal state and
+  the server-decided `writableFiles`/`writableFolders` out of `library.vue`.
+  It takes the page's `library` ref so the area roots count the same data the
+  page already fetched. A request sequence guard stops a slow folder response
+  from overwriting a folder opened after it.
+- `library.vue`, `split.vue`, `images.vue`, `import.vue`, `export.vue` and
+  `extract.vue` all use it; `usePdfDirectory` now has **no caller** and is left
+  in place only until Phase 5 decides whether anything still needs it.
+- Every tool page now shows the same seven area roots, follows the active area
+  when the tree switches area, and hides its per-operation row action outside
+  the area that action accepts (`sources` for split/rasterize/export/extract,
+  `inputs` for convert).
+- `library.vue` lost its `overwrite` footer checkbox and its auto-select of the
+  first source: neither had a meaning on a browse-only page.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24484 bytes at 20:06 |
+| 2 Lint | `npx eslint app/pages/pdf app/composables/usePdfExplorer.ts app/utils/pdfOperations.ts` | PASS | exit 0 after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs; `i18n_keys` green in both locales |
+| 4 SFC compile | six PDF pages + `usePdfExplorer.ts` on the dev server | PASS | HTTP 200 for each |
+
+### Not proven
+
+- No signed-in browser pass yet: the seven-root assertion, area switching and
+  permission-derived edit affordances are read from the code path, not observed
+  in the running app. Batched with the Phase 3 browser pass.
+
+## Phase 19 — v3 rebuild Phase 3: Active Input split from Active Folder (2026-11-05)
+
+- `shared/types/pdf.ts` gained `PdfDocumentRef` (area + relativePath + name +
+  kind) and `PdfSelection` (one `mode`, one item). There is no `multi-file`
+  mode because no endpoint accepts several inputs.
+- New [app/composables/usePdfSelection.ts](../../app/composables/usePdfSelection.ts):
+  `pickFile` / `pickFolder` / `clear` / `compatible` / `isValid`. A pick whose
+  kind or area does not match the operation is refused with a reason key
+  instead of replacing the selection.
+- `FileBrowser.vue`: `selectable` and its second row template are gone; a file
+  name click always opens the preview, and the new `pickable` prop renders the
+  dedicated pick button. New `folder-actions` slot, and `FileRow` gained a
+  `selected` highlight. `FolderRow` gained an `actions` slot so a page can put
+  an operation button on a folder.
+- `FolderTree.vue` passes `hide-checkbox`, a new `HeTreeMenu` prop defaulting to
+  `false`, so `administration/routes.vue` keeps its checkbox while the explorer
+  no longer shows a dead one.
+- `export.vue` and `extract.vue` use `usePdfSelection`. Both dropped the
+  "select the first file on mount" behaviour, so the input only changes on an
+  explicit pick; switching folders keeps it.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24566 bytes at 20:16 |
+| 2 Lint | `npx eslint app/pages/pdf app/components/pdf app/components/shared/HeTreeMenu.vue app/composables/usePdfExplorer.ts app/composables/usePdfSelection.ts app/utils/pdfOperations.ts shared/types/pdf.ts` | PASS | exit 0 after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs |
+| 4 SFC compile | `FileBrowser`, `FileRow`, `FolderRow`, `FolderTree`, `HeTreeMenu`, `usePdfSelection`, `export.vue`, `extract.vue` | PASS | HTTP 200 for each |
+
+### Not proven
+
+- Selection persistence across folder switches is read from the composable's
+  scope, not observed in the running app; the same browser pass covers it.
+
+## Phase 20 — v3 rebuild Phase 4: Data Flow Note and result panel (2026-11-05)
+
+- New [app/components/pdf/DocumentDataFlowNote.vue](../../app/components/pdf/DocumentDataFlowNote.vue)
+  renders `Đầu vào → Xử lý → Đầu ra` in one `panel-flat` row (stacked below
+  `md`). It takes the strings as props, emits `openOutput`, and never resolves a
+  path itself.
+- New [app/components/pdf/OperationResult.vue](../../app/components/pdf/OperationResult.vue)
+  summarises a finished run: status icon, one line per format, and the area it
+  landed in. It renders inside `FileBrowser`'s `flow-note` slot or as its own
+  panel, never as a second file list.
+- `usePdfExplorer` now keeps `outputMapping` from `GET /workspace` and exposes
+  `outputArea(tool)`, so every flow note reads its destination from the server
+  mapping instead of hard-coding an area.
+- Split, Images, Import, Export and Extract each render a flow note for the
+  operation their active area drives, and "open output folder" switches the
+  explorer to that area instead of leaving the page.
+- Export declares all three destinations: the picked formats map to `images`,
+  `office` or `products`, and the note lists the others as "also writes".
+  `PdfExportFormatResult` drives `OperationResult`, including the real partial
+  state where only some formats succeeded.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24566 bytes at 20:28 |
+| 2 Lint | `npx eslint app/pages/pdf app/components/pdf app/composables/usePdfExplorer.ts app/composables/usePdfSelection.ts app/utils/pdfOperations.ts shared/types/pdf.ts app/components/shared/HeTreeMenu.vue` | PASS | exit 0 after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs; `i18n_keys` green |
+| 4 SFC compile | the 5 tool pages + the 2 new components | PASS | HTTP 200 for each |
+
+### Not proven
+
+- The notes were not read in a signed-in browser yet. The area labels come from
+  the live `GET /workspace` response, which needs the auth session.
+
+## Phase 21 — v3 rebuild Phase 5: one list per page (2026-11-05)
+
+Each tool page now has exactly one `PdfFileBrowser`; the operation panels became
+row or folder actions.
+
+| Page | Before | After |
+|---|---|---|
+| `/pdf/split` | FileBrowser + "Page folders" + "Built PDFs" panels | "Merge to PDF" button on every folder row while browsing `split` |
+| `/pdf/images` | FileBrowser + "Image folders" panel | "Build PDF" button on every folder row while browsing `images` |
+| `/pdf/import` | FileBrowser + "Created PDFs" panel | panel removed; converted files are browsed in `merged` |
+| `/pdf/export` | always-open format panel | format picker + overwrite moved into a modal opened by "Export" |
+| `/pdf/extract` | always-open model/preset/format panel + results panel | settings modal opened by "Start extraction"; results panel removed; **Jobs panel kept** |
+
+Other changes in this phase:
+
+- `split.vue` and `images.vue` no longer compute `split`/`images`/`merged` lists;
+  everything comes from the explorer listing.
+- Extract lost `outputFormats` and its `localStorage` preference (the server
+  always writes five formats), and `force` moved into the settings modal.
+- Every operation now navigates the explorer to its output area after a
+  successful run, so the result is visible without a second list.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24566 bytes at 20:41 |
+| 2 Lint | `npx eslint` over the PDF surface | PASS | exit 0 after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 22/22 specs |
+| 4 Panels | `grep -n 'class="panel'` per tool page | PASS | only the action bar, the extract Jobs panel and the import empty-state tiles remain |
+| 5 Row lists | `grep -n "PdfOutputFolderRow\\|PdfFileRow" app/pages/pdf/*.vue` | PASS | no matches outside `FileBrowser` |
+
+### Not proven
+
+- No click-through of the new folder actions in a signed-in browser; the wiring
+  is covered by the compile gate and the type checks on the emitted payloads.
+
+
+## Phase 22 — v3 rebuild Phase 6: contract mismatches (2026-11-05)
+
+Every option the UI offered but the server ignored is gone, and every action
+that writes now asks first.
+
+| §10 item | Fix | Where |
+|---|---|---|
+| 10.5 — three codes fell through to 500 | `PDF_FOLDER_NAME_REQUIRED` 422, `PDF_TRASH_ITEM_NOT_FOUND` 404, `PDF_EXPORT_FAILED` 422 added to `PDF_ERROR_STATUS`; the map is exported so a spec can read it | `server/utils/pdfApi.ts` |
+| 10.7 — `outputFormats` never reached the server | checkbox, `localStorage` preference and both i18n keys deleted; the five formats are shown as information under `formatsHint` | `app/pages/pdf/extract.vue`, both locales |
+| 10.6 — Library overwrite applied to one row action | footer checkbox removed; the quick split opens `PdfConfirmAction` with overwrite defaulting on and names the destination folder | `app/pages/pdf/library.vue` |
+| 10.4 — the source-delete confirm promised a cascade that `/directory/delete` did not do | cascade extracted to `removeDerivedOutputs()` and called from `deleteAreaItem` for `sources`, so the explorer path matches `removeSource` | `server/modules/pdf/library.ts`, `server/modules/pdf/directory.ts` |
+| 8.3/8.4/8.5 — footer overwrite on tool pages | split, images and import each open `PdfConfirmAction` with the same checkbox; the modal states the real output folder or file name | new `app/components/pdf/ConfirmAction.vue` |
+| all six pages — deletes ran with no confirm | export and extract deleted through the explorer silently; now every page routes deletion through `BaseConfirmModal` and the text distinguishes a cascading source delete from a plain one | all six pages |
+| extract — a stopped poll read as success | result status now comes from the job record (`failed`/`cancelled` → failed, `queued`/`running` → partial, done with failed pages → partial) | `app/pages/pdf/extract.vue` |
+| dead code after the migration | `OutputFolderRow.vue` had no reader once split and images moved to the folder slot, so it is deleted; `PDF_PAGE_SIZE` was declared and never used, so it is deleted too | `app/components/pdf/OutputFolderRow.vue`, `app/utils/pdfStudio.ts` |
+
+The confirm text repeats the naming formulas from `pdfOperations.ts`
+(`pdfDocumentStem`, `pdfMergeOutputName`, `pdfImagesToPdfOutputName`,
+`pdfConvertOutputName`) rather than inventing new strings, so a change to a
+formula breaks one spec instead of silently mislabelling the modal.
+
+Not done, deliberately: §8.6 asks for the data formats to be disabled when a
+source has no AI cache. No v3 endpoint reports cache availability, so the
+picker would have to guess; guessing would either block a valid export or
+promise one that fails with `PDF_NO_ROWS`. The routing note in the flow note
+and the `PDF_NO_ROWS` error message carry that information instead.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24569 bytes at 21:59 |
+| 2 Lint | `npx eslint` over pages, pdf components, the two composables, `pdfOperations`, `pdfStudio`, shared types, `HeTreeMenu`, `directory.ts`, `library.ts`, `pdfApi.ts`, `pdf_contract.spec.ts` | PASS | exit 0 after the last regeneration |
+| 3 Tests | `pnpm test` | PASS | 26/26 specs; `pdf_contract.spec.ts` covers 8 assertions |
+| 4 SFC compile | the 7 pages + 5 pdf components through Vite | PASS | HTTP 200 for each |
+
+### Not proven
+
+- The cascade was proven on a temp `PDF_DATA_DIR` (spec), not on the real
+  workspace through the API.
+- No signed-in browser pass over the new modals; the auth gate returns 401
+  without a session, so the visual check was not performed.

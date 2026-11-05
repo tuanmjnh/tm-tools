@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { PdfFileInfo } from '#shared/types/pdf'
+import type { PdfFileArea, PdfFileInfo, PdfFolderInfo } from '#shared/types/pdf'
 import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfDocumentStem, pdfMergeOutputName, pdfOperation } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
 const {
@@ -11,22 +12,24 @@ const {
   refresh,
   upload,
   splitSource,
-  mergeFolder,
-  removeSplitFolder,
-  removeMerged
+  mergeFolder
 } = usePdfStudio()
 const { workspaceItems, refreshItem, folderItems } = usePdfMenus()
 
-const dir = usePdfDirectory('sources')
+const explorer = usePdfExplorer(library)
 
-type Pending = { kind: 'folder' | 'merged', name: string, path: string }
+type Pending = { name: string, path: string, area: PdfFileArea }
 const pending = ref<Pending | null>(null)
 const confirmOpen = ref(false)
 const activeSource = ref('')
 const overwrite = ref(true)
 
+type PendingAction = { kind: 'split' | 'merge', name: string, path: string }
+const pendingAction = ref<PendingAction | null>(null)
+const actionOpen = ref(false)
+
 async function reloadAll() {
-  await Promise.all([refresh(), dir.loadDirectory(dir.currentFolder.value)])
+  await Promise.all([refresh(), explorer.reload()])
 }
 
 onMounted(() => {
@@ -34,13 +37,10 @@ onMounted(() => {
 })
 
 const maxUploadMb = computed(() => library.value?.maxUploadMb ?? 0)
-const splitFolders = computed(() => library.value?.split ?? [])
-const merged = computed(() => library.value?.merged ?? [])
-
 const pageMenu = computed<DropdownMenuItem[][]>(() => [
   [refreshItem(reloadAll)],
   workspaceItems('split'),
-  folderItems(pdfParentPath(dir.files.value[0]?.path)).slice(0, 2)
+  folderItems(pdfParentPath(explorer.files.value[0]?.path)).slice(0, 2)
 ].filter(group => group.length > 0))
 
 function exportItem(name: string): DropdownMenuItem {
@@ -55,42 +55,112 @@ function sourceMenu(file: PdfFileInfo): DropdownMenuItem[] {
   return [exportItem(file.relativePath || file.name)]
 }
 
-function mergedMenu(file: PdfFileInfo): DropdownMenuItem[] {
-  return [exportItem(file.name)]
-}
-
-function askDelete(kind: Pending['kind'], name: string, path = name) {
-  pending.value = { kind, name, path }
+function askDelete(item: { name: string, path: string }, area: PdfFileArea) {
+  pending.value = { name: item.name, path: item.path, area }
   confirmOpen.value = true
 }
 
-const confirmTitle = computed(() => {
-  if (!pending.value) return ''
-  return pending.value.kind === 'folder'
-    ? t('pdf.split.removeFolderTitle')
-    : t('pdf.split.removeMergedTitle')
+const confirmTitle = computed(() =>
+  pending.value ? t(`pdf.areas.${pending.value.area}`) : ''
+)
+
+const confirmDescription = computed(() => {
+  const item = pending.value
+  if (!item) return ''
+  return item.area === 'sources'
+    ? t('pdf.library.deleteDesc', { name: item.name })
+    : t('pdf.split.removeDesc', { name: item.name })
 })
 
 async function confirmDelete() {
-  if (!pending.value) return
-  const { kind, name, path } = pending.value
+  const item = pending.value
   confirmOpen.value = false
   pending.value = null
-  if (kind === 'folder') await removeSplitFolder(path)
-  else await removeMerged(name)
+  if (!item) return
+  await explorer.removeItem(item.path, item.area ?? explorer.activeArea.value)
   await reloadAll()
 }
 
 async function handleUpload(files: File[]) {
-  await upload(files, dir.currentFolder.value)
+  await upload(files, explorer.currentFolder.value)
   await reloadAll()
 }
 
-async function split(filePath: string) {
-  activeSource.value = filePath
-  await splitSource(filePath, overwrite.value)
-  activeSource.value = ''
-  await reloadAll()
+const askTitle = computed(() => {
+  const action = pendingAction.value
+  if (!action) return ''
+  return action.kind === 'split' ? t('pdf.split.splitToPages') : t('pdf.split.mergeToPdf')
+})
+
+const askDescription = computed(() => {
+  const action = pendingAction.value
+  if (!action) return ''
+  return action.kind === 'split'
+    ? t('pdf.split.confirmSplit', { name: action.name, folder: pdfDocumentStem(action.name) })
+    : t('pdf.split.confirmMerge', { name: action.name, output: pdfMergeOutputName(action.name) })
+})
+
+function askSplit(file: PdfFileInfo) {
+  const path = file.relativePath || file.name
+  pendingAction.value = { kind: 'split', name: path, path }
+  actionOpen.value = true
+}
+
+function askMerge(folder: PdfFolderInfo) {
+  const path = folder.relativePath || folder.name
+  pendingAction.value = { kind: 'merge', name: folder.name, path }
+  actionOpen.value = true
+}
+
+const merging = ref('')
+
+async function runAction() {
+  const action = pendingAction.value
+  actionOpen.value = false
+  if (!action) return
+  if (action.kind === 'split') {
+    activeSource.value = action.path
+    const ok = await splitSource(action.path, overwrite.value)
+    activeSource.value = ''
+    await reloadAll()
+    if (ok) await openOutput('split')
+  } else {
+    merging.value = action.name
+    const ok = await mergeFolder(action.path, overwrite.value)
+    merging.value = ''
+    await reloadAll()
+    if (ok) await openOutput('merge')
+  }
+  pendingAction.value = null
+}
+
+/** Operation the active area drives; the output area comes from the server mapping. */
+const activeOperation = computed(() => {
+  if (explorer.activeArea.value === 'sources') return pdfOperation('split')
+  if (explorer.activeArea.value === 'split') return pdfOperation('merge')
+  return null
+})
+
+const flowInput = computed(() => {
+  const file = explorer.files.value.find(entry => (entry.relativePath || entry.name) === activeSource.value)
+  if (activeSource.value) {
+    return { label: activeSource.value.split('/').pop() ?? activeSource.value, detail: activeSource.value }
+  }
+  if (explorer.activeArea.value === 'split') {
+    return { label: t('pdf.flow.browsing', { folder: explorer.currentFolder.value || '/' }) }
+  }
+  if (file) return { label: file.name, detail: file.relativePath }
+  return { label: t('pdf.flow.none') }
+})
+
+const flowOutputArea = computed(() => {
+  const operation = activeOperation.value
+  return operation ? explorer.outputArea(operation.output.mappingKey) : null
+})
+
+async function openOutput(tool: string) {
+  const area = explorer.outputArea(tool)
+  if (area) await explorer.select('', area)
 }
 </script>
 
@@ -98,50 +168,63 @@ async function split(filePath: string) {
   <BasePage id="pdf-split" :title="t('pdf.workspaces.split.title')" :description="t('pdf.workspaces.split.desc')">
     <PdfContextMenu :items="pageMenu">
       <PdfWorkspaceShell
-        :tree="dir.tree.value"
-        :current-folder="dir.currentFolder.value"
-        area="sources"
-        :loading="loading || dir.dirLoading.value"
-        @select="dir.loadDirectory"
-        @create="dir.openCreateFolderModal"
-        @rename="item => dir.openRenameModal({ name: item.name, relativePath: item.path }, true)"
-        @delete="item => askDelete('folder', item.name, item.path)"
+        :tree="explorer.tree.value"
+        :current-folder="explorer.currentFolder.value"
+        :area="explorer.activeArea.value"
+        :selected-key="explorer.selectedKey.value"
+        :can-create="explorer.foldersWritable.value"
+        :loading="loading || explorer.loading.value"
+        lazy
+        @select="explorer.select"
+        @expand="explorer.expand"
+        @search="explorer.searchFolders"
+        @create="explorer.openCreateFolder"
+        @rename="item => explorer.openRename({ name: item.name, relativePath: item.path }, true, item.area ?? explorer.activeArea.value)"
+        @delete="item => askDelete({ name: item.name, path: item.path }, item.area ?? explorer.activeArea.value)"
       >
         <PdfFileBrowser
-          area="sources"
-          :title="t('pdf.split.sources')"
+          :area="explorer.activeArea.value"
+          :title="t(`pdf.areas.${explorer.activeArea.value}`)"
           :description="t('pdf.split.sourcesDesc')"
-          :current-folder="dir.currentFolder.value"
-          :folders="dir.folders.value"
-          :files="dir.files.value"
-          :breadcrumbs="dir.breadcrumbs.value"
-          :parent-folder="dir.parentFolder.value"
-          :loading="dir.dirLoading.value"
+          :current-folder="explorer.currentFolder.value"
+          :folders="explorer.folders.value"
+          :files="explorer.files.value"
+          :breadcrumbs="explorer.breadcrumbs.value"
+          :parent-folder="explorer.parentFolder.value"
+          :loading="explorer.loading.value"
           :uploading="busy === 'upload'"
           :upload-accept="PDF_UPLOAD_ACCEPT"
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: maxUploadMb })"
+          :readonly="explorer.activeArea.value !== 'sources'"
+          :folders-writable="explorer.foldersWritable.value"
+          :deletable="explorer.fileDeletable.value"
+          :file-menu="explorer.activeArea.value === 'sources' ? sourceMenu : undefined"
           list-class="max-h-[46vh]"
-          :deletable="false"
-          :file-menu="sourceMenu"
           @upload="handleUpload"
           @refresh="reloadAll"
-          @create-folder="dir.openCreateFolderModal"
-          @select-folder="dir.loadDirectory"
-          @open-folder="folder => dir.loadDirectory(folder.relativePath || folder.name)"
-          @rename-folder="folder => dir.openRenameModal(folder, true)"
-          @delete-folder="folder => askDelete('folder', folder.name, folder.relativePath || folder.name)"
-          @rename-file="file => dir.openRenameModal(file, false)"
+          @create-folder="explorer.openCreateFolder"
+          @select-folder="explorer.select"
+          @open-folder="folder => explorer.select(folder.relativePath || folder.name)"
+          @rename-folder="folder => explorer.openRename(folder, true)"
+          @delete-folder="folder => askDelete({ name: folder.name, path: folder.relativePath || folder.name }, explorer.activeArea.value)"
+          @rename-file="file => explorer.openRename(file, false)"
+          @delete-file="file => askDelete({ name: file.name, path: file.relativePath || file.name }, explorer.activeArea.value)"
         >
-          <template #footer>
-            <UCheckbox
-              v-model="overwrite"
-              :label="t('pdf.actions.overwrite')"
-              :title="t('pdf.actions.overwriteHint')"
+          <template v-if="activeOperation" #flow-note>
+            <PdfDocumentDataFlowNote
+              :operation="t(activeOperation.titleKey)"
+              :input="flowInput"
+              :output="{
+                areaLabel: flowOutputArea ? t(`pdf.areas.${flowOutputArea}`) : '—',
+                openable: Boolean(flowOutputArea)
+              }"
+              :state="flowOutputArea ? 'partial' : 'empty'"
+              @open-output="activeOperation && openOutput(activeOperation.output.mappingKey)"
             />
           </template>
 
-          <template #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'sources'" #file-actions="{ file }">
             <UButton
               icon="i-lucide-scissors"
               :label="t('pdf.split.splitToPages')"
@@ -149,115 +232,53 @@ async function split(filePath: string) {
               variant="soft"
               size="xs"
               :loading="activeSource === file.path"
-              @click="split(file.relativePath || file.name)"
+              @click="askSplit(file)"
+            />
+          </template>
+
+          <template v-if="explorer.activeArea.value === 'split'" #folder-actions="{ folder }">
+            <UButton
+              icon="i-lucide-layers"
+              :label="t('pdf.split.mergeToPdf')"
+              color="primary"
+              variant="soft"
+              size="xs"
+              :loading="merging === folder.name"
+              @click="askMerge(folder)"
             />
           </template>
         </PdfFileBrowser>
-
-        <section class="panel shrink-0">
-          <header class="flex items-center justify-between gap-3 border-b border-default px-4 py-2.5">
-            <div class="min-w-0">
-              <h2 class="text-sm font-semibold">
-                {{ t('pdf.split.folders') }}
-              </h2>
-              <p class="truncate text-xs text-muted">
-                {{ t('pdf.split.foldersDesc') }}
-              </p>
-            </div>
-            <span class="mono shrink-0 text-xs text-muted">{{ splitFolders.length }}</span>
-          </header>
-
-          <div v-if="!splitFolders.length" class="space-y-1 px-4 py-6 text-center">
-            <p class="text-sm font-medium">
-              {{ t('pdf.split.noFolders') }}
-            </p>
-            <p class="text-xs text-muted">
-              {{ t('pdf.split.noFoldersDesc') }}
-            </p>
-          </div>
-
-          <div v-else class="max-h-[320px] divide-y divide-default overflow-y-auto scroll-thin">
-            <PdfOutputFolderRow
-              v-for="folder in splitFolders"
-              :key="folder.name"
-              icon="i-lucide-files"
-              :name="folder.name"
-              :path="folder.path"
-              :meta="t('pdf.split.pageCount', { count: folder.fileCount })"
-              :modified-at="folder.modifiedAt"
-              :primary-label="t('pdf.split.mergeToPdf')"
-              primary-icon="i-lucide-file-plus-2"
-              :primary-loading="busy === 'merge'"
-              @primary="mergeFolder(folder.name, overwrite)"
-              @delete="askDelete('folder', folder.name)"
-            />
-          </div>
-        </section>
-
-        <section class="panel shrink-0">
-          <header class="flex items-center justify-between gap-3 border-b border-default px-4 py-2.5">
-            <div class="min-w-0">
-              <h2 class="text-sm font-semibold">
-                {{ t('pdf.split.merged') }}
-              </h2>
-              <p class="truncate text-xs text-muted">
-                {{ t('pdf.split.mergedDesc') }}
-              </p>
-            </div>
-            <span class="mono shrink-0 text-xs text-muted">{{ merged.length }}</span>
-          </header>
-
-          <div v-if="!merged.length" class="px-4 py-6 text-center text-xs text-muted">
-            {{ t('pdf.split.noMerged') }}
-          </div>
-
-          <div v-else class="max-h-[320px] divide-y divide-default overflow-y-auto scroll-thin">
-            <PdfFileRow
-              v-for="file in merged"
-              :key="file.name"
-              area="merged"
-              :name="file.name"
-              :path="file.path"
-              :size="file.size"
-              :modified-at="file.modifiedAt"
-              :menu="mergedMenu(file)"
-              @delete="askDelete('merged', file.name)"
-            >
-              <template #actions>
-                <UButton
-                  icon="i-lucide-scissors"
-                  :label="t('pdf.split.splitToPages')"
-                  color="neutral"
-                  variant="soft"
-                  size="xs"
-                  :loading="activeSource === file.path"
-                  @click="split(file.name)"
-                />
-              </template>
-            </PdfFileRow>
-          </div>
-        </section>
       </PdfWorkspaceShell>
 
       <BaseConfirmModal
         v-model:open="confirmOpen"
         :title="confirmTitle"
-        :description="t('pdf.split.removeDesc', { name: pending?.name ?? '' })"
-        :loading="busy === 'removeFolder' || busy === 'removeOutput'"
+        :description="confirmDescription"
+        :loading="busy === 'deleteItem'"
         @confirm="confirmDelete"
       />
 
+      <PdfConfirmAction
+        v-model:open="actionOpen"
+        v-model:overwrite="overwrite"
+        :title="askTitle"
+        :description="askDescription"
+        :icon="pendingAction?.kind === 'split' ? 'i-lucide-scissors' : 'i-lucide-layers'"
+        :loading="Boolean(activeSource) || Boolean(merging)"
+        @confirm="runAction"
+      />
+
       <LazyPdfFolderModal
-        v-model:open="dir.folderModalOpen.value"
-        :parent-folder="dir.folderTargetParent.value"
-        @submit="dir.handleCreateFolder"
+        v-model:open="explorer.folderModalOpen.value"
+        :parent-folder="explorer.folderTargetParent.value"
+        @submit="explorer.handleCreateFolder"
       />
 
       <LazyPdfRenameModal
-        v-model:open="dir.renameModalOpen.value"
-        :current-name="dir.renameTarget.value?.name"
-        :is-folder="dir.renameTarget.value?.isFolder"
-        @submit="dir.handleRename"
+        v-model:open="explorer.renameModalOpen.value"
+        :current-name="explorer.renameTarget.value?.name"
+        :is-folder="explorer.renameTarget.value?.isFolder"
+        @submit="explorer.handleRename"
       />
     </PdfContextMenu>
   </BasePage>

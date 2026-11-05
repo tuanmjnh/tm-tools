@@ -1674,41 +1674,27 @@
       "resize": "Resize explorer"
     },
     "overview": {
-      "kpi": {
-        "sources": "Source PDFs",
-        "split": "Split folders",
-        "images": "Image folders",
-        "merged": "Merged PDFs",
-        "products": "Price files"
-      },
-      "pipeline": {
-        "title": "Pipeline",
-        "description": "Each step writes to its own folder, so a failed step never blocks the next one.",
-        "upload": "Upload",
-        "uploadDesc": "Drop the wholesale price list PDFs into the library.",
-        "split": "Split pages",
-        "splitDesc": "Cut each source into single-page PDFs for review or extraction.",
-        "imagesDesc": "Render pages to PNG, then rebuild a PDF from an image folder.",
+      "search": "Find a tool…",
+      "noMatch": "No tool matches that search.",
+      "technical": "Technical details and output folders",
+      "repairTitle": "A workspace folder is missing",
+      "groups": {
+        "organize": "Split & merge",
         "convert": "Convert",
-        "convertDesc": "Merge split pages or rebuild a PDF from rendered images.",
-        "extract": "Extract",
-        "extractDesc": "Read every page with Gemini and export 25-column CSV/JSON.",
-        "export": "Export",
-        "exportDesc": "Export and convert document formats, download results.",
-        "import": "Import",
-        "importDesc": "Bring in a PDF, or build one from images, Excel, Word or data.",
-        "library": "Prepare",
-        "libraryDesc": "Keep PDFs in the library: it is the single source for every step."
+        "extract": "Extract"
+      },
+      "library": {
+        "title": "Document library",
+        "description": "Browse every folder, upload, preview, rename and delete."
       },
       "config": {
         "title": "Workspace limits",
-        "description": "These values come from the server config, not from this page.",
         "maxUpload": "Max upload size",
         "maxPages": "Max pages per source",
         "imageScale": "Image render scale",
-        "ai": "Gemini extraction",
-        "aiReady": "API key configured",
-        "aiMissing": "API key missing"
+        "ai": "AI extraction",
+        "aiReady": "Model available",
+        "aiMissing": "No model available"
       },
       "repairHint": "A managed folder is missing on disk. Repair recreates only missing folders; it never deletes or moves files.",
       "mapping": {
@@ -1750,9 +1736,11 @@
         "actions": "Actions"
       },
       "split": "Split",
+      "splitConfirm": "Split \"{name}\" into single-page PDFs? They go to the split folder \"{folder}\". If that folder already exists, it is replaced.",
       "rasterize": "To images",
       "deleteTitle": "Delete source PDF",
-      "deleteDesc": "Delete \"{name}\"? Split and image folders derived from it stay on disk.",
+      "deleteDesc": "Delete \"{name}\"? Its split folder, page images, merged PDF and extracted data are deleted too.",
+      "deletePlain": "Delete \"{name}\"? This cannot be undone.",
       "wordTitle": "Word documents",
       "wordDesc": "Upload .docx price lists. Converting one to PDF makes it available to split, rasterize and extraction.",
       "wordDropzone": "Drop a .docx here or click to choose",
@@ -1817,7 +1805,7 @@
       "presetSaved": "Preset saved.",
       "presetDeleted": "Preset deleted.",
       "start": "Start extraction",
-      "force": "Re-read cached pages",
+      "force": "Ignore the cache and re-read every page",
       "forceHint": "Without this, pages already checkpointed are reused.",
       "running": "An extraction is running. Wait for it to finish or cancel it.",
       "noSources": "No source PDFs",
@@ -1839,9 +1827,12 @@
       "wordSource": "Word",
       "downloadXlsx": "XLSX",
       "downloadDocx": "DOCX",
-      "outputFormats": "Output formats",
-      "outputFormatsHint": "The selected formats are offered on every finished job.",
-      "copySource": "Copy file name"
+      "copySource": "Copy file name",
+      "resultSummary": "Extraction started for {name} — {count} product file(s) on disk",
+      "configTitle": "Extraction settings",
+      "noModelSelected": "No model selected",
+      "formatsHint": "One run writes all five formats; the list is informational.",
+      "cacheHint": "Cached page results are reused by file and page name. Changing the model or preset does not clear the cache."
     },
     "status": {
       "queued": "Queued",
@@ -1893,7 +1884,8 @@
       "rename": "Rename",
       "delete": "Delete",
       "repairWorkspace": "Repair folders",
-      "namePlaceholder": "Enter new name..."
+      "namePlaceholder": "Enter new name...",
+      "openOutputFolder": "Open output folder"
     },
     "notices": {
       "uploaded": "{count} file(s) uploaded",
@@ -1981,6 +1973,36 @@
         "desc": "Read price lists with an AI model and export the rows you picked."
       }
     },
+    "operations": {
+      "split": {
+        "title": "Split into pages",
+        "description": "Cut one source PDF into single-page files."
+      },
+      "merge": {
+        "title": "Merge pages",
+        "description": "Rebuild one PDF from a page folder."
+      },
+      "rasterize": {
+        "title": "Render pages to images",
+        "description": "Turn every page of a source PDF into a PNG."
+      },
+      "imagesToPdf": {
+        "title": "Build PDF from images",
+        "description": "Rebuild one PDF from an image folder."
+      },
+      "convertInput": {
+        "title": "Convert to PDF",
+        "description": "Turn images, Word, Excel, CSV, JSON or XML into a PDF."
+      },
+      "export": {
+        "title": "Export a source PDF",
+        "description": "Write PNG images, Word, Excel, CSV, JSON or XML from one PDF."
+      },
+      "extract": {
+        "title": "Extract with AI",
+        "description": "Read a price list and write CSV, JSON, XLSX, DOCX and XML."
+      }
+    },
     "formats": {
       "pdf": "PDF",
       "image": "Image",
@@ -2012,6 +2034,8 @@
       "noFoldersDesc": "Split a source PDF to create the first one.",
       "pageCount": "{count} pages",
       "mergeToPdf": "Merge to PDF",
+      "confirmSplit": "Split \"{name}\" into single-page PDFs? They go to the split folder \"{folder}\". If that folder already exists, it is replaced.",
+      "confirmMerge": "Merge the pages of \"{name}\" into {output}? It goes to the merged folder.",
       "merged": "Merged PDFs",
       "mergedDesc": "PDFs rebuilt from page folders.",
       "noMerged": "No merged PDFs yet.",
@@ -2028,6 +2052,8 @@
       "noFolders": "No image folders",
       "noFoldersDesc": "Render a source PDF to create the first one.",
       "buildPdf": "Build PDF",
+      "confirmRasterize": "Render every page of \"{name}\" to PNG? They go to the images folder \"{folder}\". If that folder already exists, it is replaced.",
+      "confirmBuild": "Build {output} from the PNG files in \"{name}\"? It goes to the merged folder.",
       "removeTitle": "Delete image folder",
       "removeDesc": "Delete \"{name}\"? This cannot be undone."
     },
@@ -2043,7 +2069,8 @@
       "data": "Extracted data",
       "dataDesc": "CSV, JSON, XML and Excel files written by extraction or export.",
       "noData": "No data files yet.",
-      "officeDesc": "Word documents exported from a PDF."
+      "officeDesc": "Word documents exported from a PDF.",
+      "resultSummary": "{count} format(s) attempted"
     },
     "import": {
       "title": "Other formats → PDF",
@@ -2055,6 +2082,7 @@
       "empty": "No files uploaded yet",
       "emptyDesc": "Drop an image, a Word document or a data file above.",
       "convert": "To PDF",
+      "confirmConvert": "Convert \"{name}\" to {output}? It goes to the merged folder.",
       "converted": "Created PDFs",
       "convertedDesc": "Output of the conversions above — ready to split, export or extract.",
       "noConverted": "No PDFs built yet.",
@@ -2074,7 +2102,12 @@
       "unsupported": "This file type has no preview.",
       "missingName": "No file selected",
       "missingNameDesc": "Open a preview from one of the PDF Studio pages.",
-      "converting": "Converting to PDF…"
+      "converting": "Converting to PDF…",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
+      "rotateLeft": "Rotate left",
+      "rotateRight": "Rotate right"
     },
     "folder": {
       "new": "New folder",
@@ -2115,6 +2148,24 @@
       "deleteFolder": "Delete folder",
       "deleteFolderDesc": "Move folder to trash?",
       "systemRootHint": "Fixed workspace folder. Subfolders and files inside it stay editable."
+    },
+    "selection": {
+      "needsFile": "This tool needs a single file, not a folder.",
+      "needsFolder": "This tool works on a folder, not a file.",
+      "wrongArea": "This tool cannot start from the folder you are browsing.",
+      "none": "No input selected"
+    },
+    "flow": {
+      "input": "Input",
+      "process": "Process",
+      "output": "Output",
+      "alongside": "Also writes: {areas}",
+      "savedTo": "Saved to {area}/{folder}",
+      "none": "No input selected",
+      "browsing": "Browsing {folder}",
+      "selectedFile": "{name}",
+      "selectedFolder": "Folder: {name}",
+      "openOutput": "Open output folder"
     }
   },
   "products": {

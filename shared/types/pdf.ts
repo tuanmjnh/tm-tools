@@ -151,6 +151,8 @@ export interface PdfFolderTreeNode {
   /** Fixed system root: shown with a lock and cannot be renamed or deleted. */
   system?: boolean
   children?: PdfFolderTreeNode[]
+  /** This node has subfolders that were not sent; fetch them on expand. */
+  hasChildren?: boolean
 }
 
 export interface PdfDirectoryListing {
@@ -240,4 +242,18 @@ export interface PdfWorkspaceReport {
 export interface PdfWorkspaceRepair {
   created: PdfFileArea[]
   needsRepair: boolean
+}
+
+/** A document the operator picked to process: one file, or one folder. */
+export interface PdfDocumentRef {
+  area: PdfFileArea
+  /** Relative path inside the area; "" means the area root itself. */
+  relativePath: string
+  name: string
+  kind: 'file' | 'folder'
+}
+
+export interface PdfSelection {
+  mode: 'single-file' | 'folder'
+  item: PdfDocumentRef
 }

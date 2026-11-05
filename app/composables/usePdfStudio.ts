@@ -393,9 +393,19 @@ export function usePdfStudio() {
     return res.data
   }
 
-  /** Folder trees for every area, used by the library explorer. */
-  async function getExplorerTrees(): Promise<Record<PdfFileArea, PdfFolderTreeNode[]>> {
-    const res = await $fetch<PdfResponse<Record<PdfFileArea, PdfFolderTreeNode[]>>>(pdfUrl('/explorer'))
+  /**
+   * Area folder trees for the explorer: first level by default, or the complete
+   * trees when `deep` is set and a search needs to match nested folders.
+   */
+  async function getExplorerTrees(deep = false): Promise<Record<PdfFileArea, PdfFolderTreeNode[]>> {
+    const res = await $fetch<PdfResponse<Record<PdfFileArea, PdfFolderTreeNode[]>>>(pdfUrl(`/explorer${deep ? '?depth=full' : ''}`))
+    return res.data
+  }
+
+  /** Subfolders of one folder, fetched when a lazy tree node expands. */
+  async function getExplorerChildren(area: PdfFileArea, folder: string): Promise<PdfFolderTreeNode[]> {
+    const folderParam = folder ? `&folder=${encodeURIComponent(folder)}` : ''
+    const res = await $fetch<PdfResponse<PdfFolderTreeNode[]>>(pdfUrl(`/explorer/children?area=${area}${folderParam}`))
     return res.data
   }
 
@@ -473,6 +483,7 @@ export function usePdfStudio() {
     emptyAllTrash,
     getDirectory,
     getExplorerTrees,
+    getExplorerChildren,
     getWorkspaceReport,
     repairWorkspace,
     createFolder,

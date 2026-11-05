@@ -33,6 +33,8 @@ interface Props {
   draggable?: boolean
   /** Makes the whole node card emit `node:click`, not only the label. */
   cardClickable?: boolean
+  /** Single-selection trees hide the checkbox: one node is active at a time. */
+  hideCheckbox?: boolean
   actionOptions?: (node: TNode) => TreeMenuItems
 }
 
@@ -47,6 +49,7 @@ const props = withDefaults(defineProps<Props>(), {
   expandedIds: () => [],
   draggable: true,
   cardClickable: false,
+  hideCheckbox: false,
   actionOptions: undefined
 })
 
@@ -114,6 +117,8 @@ function isSelected(node: TNode): boolean {
 const getLabel = (node: TNode) => (node as Record<string, unknown>)[props.fieldNames.label]
 
 function hasChildren(node: TNode): boolean {
+  // Lazy nodes advertise their children without shipping them.
+  if ((node as Record<string, unknown>).hasChildren === true) return true
   const children = (node as Record<string, unknown>)[props.fieldNames.children]
   return Array.isArray(children) && children.length > 0
 }
@@ -300,32 +305,60 @@ defineExpose({
     </div>
 
     <div v-show="!isLoading">
-      <Draggable ref="treeRef" v-model="treeData" :children-key="fieldNames.children" :node-key="getNodeKey"
-        :default-open="defaultExpandAll" class="he-tree-root" :trigger-class="dragTriggerClass" tree-line @drop="onDrop"
-        @after-drop="onAfterDrop">
+      <Draggable
+        ref="treeRef"
+        v-model="treeData"
+        :children-key="fieldNames.children"
+        :node-key="getNodeKey"
+        :default-open="defaultExpandAll"
+        class="he-tree-root"
+        :trigger-class="dragTriggerClass"
+        tree-line
+        @drop="onDrop"
+        @after-drop="onAfterDrop"
+      >
         <template #default="{ node, stat }">
           <div
             class="group flex flex-col mb-2 py-2 px-3 rounded-lg border border-gray-300/50 dark:border-gray-700/50 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm shadow-xs transition-all hover:bg-white/60 dark:hover:bg-gray-800/60 hover:shadow-md hover:border-primary-500/50"
             :class="[classNode, { 'bg-blue-50/50! dark:bg-sky-300/20! border-sky-500/50 dark:border-sky-800/50': isSelected(node), 'cursor-pointer': cardClickable }]"
-            @click="cardClickable && onNodeClick(node)" @contextmenu.prevent="handleContextMenu(node, $event)">
+            @click="cardClickable && onNodeClick(node)"
+            @contextmenu.prevent="handleContextMenu(node, $event)"
+          >
             <div class="flex items-center gap-2">
-              <div v-if="draggable" :class="dragTriggerClass"
-                class="flex cursor-move p-1 text-gray-400 opacity-50 group-hover:opacity-100" @click.stop>
+              <div
+                v-if="draggable"
+                :class="dragTriggerClass"
+                class="flex cursor-move p-1 text-gray-400 opacity-50 group-hover:opacity-100"
+                @click.stop
+              >
                 <UIcon name="i-lucide-grip-vertical" class="w-4 h-4" />
               </div>
 
-              <div class="flex items-center p-1" @click.stop>
-                <UCheckbox :model-value="isSelected(node)"
-                  @update:model-value="(val: unknown) => onSelect(node, val === true)" />
+              <div v-if="!hideCheckbox" class="flex items-center p-1" @click.stop>
+                <UCheckbox
+                  :model-value="isSelected(node)"
+                  @update:model-value="(val: unknown) => onSelect(node, val === true)"
+                />
               </div>
 
-              <slot v-if="!hideIcon" name="icon" :node="node" :stat="stat">
-                <UIcon v-if="getIconName(node)" :name="getIconName(node) ?? ''"
-                  class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <slot
+                v-if="!hideIcon"
+                name="icon"
+                :node="node"
+                :stat="stat"
+              >
+                <UIcon
+                  v-if="getIconName(node)"
+                  :name="getIconName(node) ?? ''"
+                  class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                />
               </slot>
 
-              <div class="flex-1 min-w-0 select-none" :class="{ 'cursor-pointer': !cardClickable }"
-                @click="!cardClickable && onNodeClick(node)">
+              <div
+                class="flex-1 min-w-0 select-none"
+                :class="{ 'cursor-pointer': !cardClickable }"
+                @click="!cardClickable && onNodeClick(node)"
+              >
                 <div class="flex flex-col">
                   <slot name="title" :node="node" :stat="stat">
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-200 truncate block">
@@ -339,11 +372,17 @@ defineExpose({
               <div class="flex items-center gap-1">
                 <slot name="right-text" :node="node" :stat="stat" />
 
-                <button type="button"
+                <button
+                  type="button"
                   class="flex items-center justify-center w-5 h-5 mr-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none"
-                  :class="{ 'invisible pointer-events-none': !hasChildren(node) }" @click.stop="toggleNode(node, stat)">
-                  <UIcon name="i-lucide-chevron-right" class="text-gray-500 transition-transform duration-200"
-                    :class="{ 'rotate-90': stat.open }" />
+                  :class="{ 'invisible pointer-events-none': !hasChildren(node) }"
+                  @click.stop="toggleNode(node, stat)"
+                >
+                  <UIcon
+                    name="i-lucide-chevron-right"
+                    class="text-gray-500 transition-transform duration-200"
+                    :class="{ 'rotate-90': stat.open }"
+                  />
                 </button>
 
                 <slot name="actions" :node="node" :stat="stat" />
@@ -351,8 +390,10 @@ defineExpose({
             </div>
 
             <!-- Mobile Extra Slot (Visible only on mobile) -->
-            <div v-if="$slots['mobile-extra']"
-              class="block lg:hidden px-3 pb-3 -mt-1 ml-10 sm:ml-12 border-t border-gray-100 dark:border-gray-800/10 pt-2">
+            <div
+              v-if="$slots['mobile-extra']"
+              class="block lg:hidden px-3 pb-3 -mt-1 ml-10 sm:ml-12 border-t border-gray-100 dark:border-gray-800/10 pt-2"
+            >
               <slot name="mobile-extra" :node="node" :stat="stat" />
             </div>
           </div>
@@ -363,10 +404,18 @@ defineExpose({
       </slot>
     </div>
     <!-- Global Context Menu (Virtual) -->
-    <div v-if="contextMenu.isOpen" class="fixed w-1 h-1 z-9999 pointer-events-none"
-      :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }">
-      <UDropdownMenu :items="contextMenu.items" :open="true" :popper="{ placement: 'bottom-start' }"
-        class="pointer-events-auto" @update:open="(val) => !val && (contextMenu.isOpen = false)">
+    <div
+      v-if="contextMenu.isOpen"
+      class="fixed w-1 h-1 z-9999 pointer-events-none"
+      :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
+    >
+      <UDropdownMenu
+        :items="contextMenu.items"
+        :open="true"
+        :popper="{ placement: 'bottom-start' }"
+        class="pointer-events-auto"
+        @update:open="(val) => !val && (contextMenu.isOpen = false)"
+      >
         <div />
       </UDropdownMenu>
     </div>

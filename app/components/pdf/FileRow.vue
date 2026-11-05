@@ -14,13 +14,16 @@ const props = withDefaults(defineProps<{
   preview?: boolean
   /** Denser row spacing for long listings. */
   compact?: boolean
+  /** This row is the active input of the current operation. */
+  selected?: boolean
   /** Page-specific entries added on top of the shared file actions. */
   menu?: DropdownMenuItem[]
   onRename?: () => void
 }>(), {
   deletable: true,
   preview: true,
-  compact: false
+  compact: false,
+  selected: false
 })
 
 const emit = defineEmits<{ delete: [], rename: [] }>()
@@ -45,8 +48,8 @@ const menuItems = computed(() => fileItems({
 <template>
   <PdfContextMenu :items="menuItems">
     <div
-      class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between"
-      :class="compact ? 'py-1.5' : 'py-3'"
+      class="flex flex-col gap-3 px-4 transition-colors sm:flex-row sm:items-center sm:justify-between"
+      :class="[compact ? 'py-1.5' : 'py-3', selected ? 'bg-primary-50/40 dark:bg-primary-950/20' : '']"
     >
       <div class="min-w-0 space-y-0.5">
         <div class="flex min-w-0 items-center gap-2">

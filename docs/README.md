@@ -41,6 +41,11 @@ media/utility workspace, and a read-only view of the AI providers that live in
   and **[WORKSPACE-UPGRADE-PLAN.md](./pdf/WORKSPACE-UPGRADE-PLAN.md)** (what
   shipped, what is still open). The v1 spec is archived in
   [`docs/archive/2026-11-05-workspace-spec-v1/`](./archive/2026-11-05-workspace-spec-v1/README.md).
+- 🎨 **[Document Studio rebuild spec (v3)](./pdf/TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md)** —
+  task-first UX rebuild: one shared 7-area explorer, one file browser, active
+  input, Data Flow Note. Its §12 holds the multi-runtime (Electron/Vercel) v4
+  design and the blockers found in this repo. The first v3 draft is archived in
+  [`docs/archive/2026-11-05-rebuild-spec-v3-draft/`](./archive/2026-11-05-rebuild-spec-v3-draft/README.md).
   The Hoa Phat / THE ONE extraction spec lives in [`docs/pdf/`](./pdf/).
 
 ## Plans & implementation notes

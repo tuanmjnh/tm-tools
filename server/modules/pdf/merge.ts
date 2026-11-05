@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
-import { ensureDir } from './paths'
+import { recordAudit } from './audit'
+import { ensureDir, writeFileAtomic } from './paths'
 import { isPdfName, naturalCompare, safeFileName } from './security'
 
 export async function mergePdfFolder(
@@ -31,7 +32,8 @@ export async function mergePdfFolder(
 
   ensureDir(outputDir)
   const output = join(outputDir, safeFileName(outputName))
-  writeFileSync(output, await merged.save())
+  writeFileAtomic(output, await merged.save())
+  recordAudit({ action: 'output', area: 'merged', target: basename(output), tool: 'merge' })
 
   return { output, pages: merged.getPageCount() }
 }

@@ -3,11 +3,11 @@ import { join } from 'node:path'
 import { imagesToPdf } from '#server/modules/pdf/images-to-pdf'
 import { areaDir, outputDir } from '#server/modules/pdf/workspace'
 import { safeFileName } from '#server/modules/pdf/security'
-import { runPdf, overwriteFlag } from '#server/utils/pdfApi'
+import { runPdf, pathParam, overwriteFlag } from '#server/utils/pdfApi'
 
 export default defineEventHandler(async (event) => {
   return runPdf(async () => {
-    const name = getRouterParam(event, 'name')
+    const name = pathParam(getRouterParam(event, 'name'))
     if (!name) throw new Error('PDF_FOLDER_NOT_FOUND')
 
     const body = await readBody<{ overwrite?: unknown }>(event) || {}

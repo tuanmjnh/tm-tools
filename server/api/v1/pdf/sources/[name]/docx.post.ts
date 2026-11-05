@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { recordAudit } from '#server/modules/pdf/audit'
 import { sourcePath } from '#server/modules/pdf/library'
 import { pdfToDocx } from '#server/modules/pdf/office/pdfToDocx'
-import { ensureDir } from '#server/modules/pdf/paths'
+import { ensureDir, writeFileAtomic } from '#server/modules/pdf/paths'
 import { documentStem } from '#server/modules/pdf/security'
 import { outputDir } from '#server/modules/pdf/workspace'
 import { runPdf, pathParam, overwriteFlag } from '#server/utils/pdfApi'
@@ -25,7 +26,8 @@ export default defineEventHandler(async (event) => {
     const buffer = await pdfToDocx(pdf, stem)
     ensureDir(outputDir('export'))
     const target = join(outputDir('export'), file)
-    writeFileSync(target, buffer)
+    writeFileAtomic(target, buffer)
+    recordAudit({ action: 'output', area: 'office', target: file, tool: 'pdf-to-docx' })
 
     return {
       success: true,

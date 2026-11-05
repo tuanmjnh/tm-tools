@@ -16,6 +16,8 @@ interface Props {
   rootLabel?: string
   /** Shows the folder filter above the tree. */
   searchable?: boolean
+  /** Fetch subfolders on expand instead of expecting the whole tree up front. */
+  lazy?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -25,13 +27,16 @@ const props = withDefaults(defineProps<Props>(), {
   selectedKey: undefined,
   canCreate: true,
   rootLabel: undefined,
-  searchable: true
+  searchable: true,
+  lazy: false
 })
 
 const emit = defineEmits<{
   (e: 'select' | 'create', folderPath: string, area?: PdfFileArea): void
   (e: 'rename' | 'delete', folder: { path: string, name: string, area?: PdfFileArea }): void
   (e: 'collapse'): void
+  (e: 'expand', folder: { path: string, area?: PdfFileArea }): void
+  (e: 'search', term: string): void
 }>()
 
 const { t } = useI18n()
@@ -41,6 +46,8 @@ const query = ref('')
 
 const applySearch = useDebounceFn(() => {
   query.value = searchInput.value.trim().toLowerCase()
+  // A lazy tree only holds the first level, so the page must widen the query.
+  if (props.lazy) emit('search', query.value)
 }, 180)
 
 watch(searchInput, applySearch)
@@ -62,6 +69,9 @@ function filterTree(nodes: PdfFolderTreeNode[], term: string): PdfFolderTreeNode
 const visibleTree = computed(() => filterTree(props.tree, query.value))
 const isSearching = computed(() => query.value.length > 0)
 
+// Expanded ids: include root ('') and current ancestor paths
+const expandedIds = ref<(string | number)[]>([''])
+
 // Root virtual node wrapped around real subfolders
 const rootTreeData = computed<PdfFolderTreeNode[]>(() => {
   return [
@@ -76,9 +86,6 @@ const rootTreeData = computed<PdfFolderTreeNode[]>(() => {
     }
   ]
 })
-
-// Expanded ids: include root ('') and current ancestor paths
-const expandedIds = ref<(string | number)[]>([''])
 
 const selectionPath = computed(() => props.selectedKey ?? props.currentFolder)
 
@@ -102,6 +109,14 @@ const selectedKeys = computed(() => [selectionPath.value])
 
 function handleNodeClick(node: PdfFolderTreeNode) {
   emit('select', node.relativePath ?? '', node.area)
+}
+
+function handleToggle(payload: { node: PdfFolderTreeNode, isOpen: boolean }) {
+  // Nodes render expanded by default, so the first click can be a collapse;
+  // fetching on either direction keeps a lazy node from looking empty.
+  if (!props.lazy) return
+  if (!payload.node.hasChildren || payload.node.children?.length) return
+  emit('expand', { path: payload.node.relativePath ?? '', area: payload.node.area })
 }
 
 function isSystemRoot(node: PdfFolderTreeNode): boolean {
@@ -203,11 +218,13 @@ function getNodeActions(node: PdfFolderTreeNode): DropdownMenuItem[] {
         :selected-keys="selectedKeys"
         :draggable="false"
         card-clickable
+        hide-checkbox
         :field-names="{ id: 'id', label: 'label', children: 'children' }"
         :default-expand-all="true"
         class-node="mb-1 py-1 px-2 cursor-pointer transition-colors"
         :action-options="getNodeActions"
         @node:click="handleNodeClick"
+        @node:toggle="handleToggle"
         @update:expanded-ids="val => expandedIds = val"
       >
         <template #icon="{ node }">

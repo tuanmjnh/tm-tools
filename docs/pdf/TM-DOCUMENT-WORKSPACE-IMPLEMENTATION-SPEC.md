@@ -31,7 +31,7 @@ gate ở [`VERIFICATION.md`](./VERIFICATION.md).
 | Data Flow Note `Đầu vào → Đầu ra` | **Chưa** |
 | Viewer: PDF/ảnh/bảng/docx/json/text | Đã có |
 | Viewer: zoom/rotate/thumbnail/search/sheet-nav | **Chưa** |
-| Atomic write, audit log | **Chưa** (symlink/junction guard đã có) |
+| Atomic write, audit log | Đã có |
 | Lazy tree theo node | **Chưa** |
 
 ---
@@ -235,7 +235,7 @@ Nếu triển khai multi-select:
 
 ### 3.6. Lazy loading và hiệu năng — hiện trạng
 
-- Cây **không** lazy theo node: `GET /api/v1/pdf/explorer` trả toàn bộ cây của 7 area trong một response; `GET /directory` trả cây của một area. Đây là gap đã biết.
+- Cây **lazy theo node**: `GET /api/v1/pdf/explorer` chỉ trả level đầu của 7 area; mỗi node còn subfolder mang `hasChildren: true`, và `GET /api/v1/pdf/explorer/children?area=&folder=` nạp đúng một node khi người dùng mở nó. Khi người dùng gõ tìm folder, page gọi `GET /explorer?depth=full` một lần để filter khớp cả cây sâu.
 - Mỗi lần chuyển folder gọi `GET /directory` (không cache metadata).
 - Folder filter chạy client-side có debounce; không quét nội dung file.
 - Chưa có virtual scrolling; chưa có TTL cache.
@@ -644,7 +644,8 @@ Hợp đồng dưới đây là **hiện trạng đã có**, không phải tên 
 |---|---|
 | `GET /api/v1/pdf/workspace` | `PdfWorkspaceReport`: mỗi area descriptor + `exists`/`fileCount`/`folderCount`, `needsRepair`, `outputMapping` |
 | `POST /api/v1/pdf/workspace/repair` | `PdfWorkspaceRepair`: `created: PdfFileArea[]`, `needsRepair` |
-| `GET /api/v1/pdf/explorer` | Cây folder cho 7 area (`sources`…`office`, không gồm `word`) để dựng root `.data/pdf` trên Library |
+| `GET /api/v1/pdf/explorer` | Level đầu cây folder cho 7 area (`sources`…`office`, không gồm `word`) để dựng root `.data/pdf`; `?depth=full` trả cả cây khi search |
+| `GET /api/v1/pdf/explorer/children?area=&folder=` | Subfolder của đúng một folder, dùng khi mở một node lazy |
 
 ### 9.2. Folder & listing
 
@@ -655,6 +656,7 @@ Hợp đồng dưới đây là **hiện trạng đã có**, không phải tên 
 | `PATCH /api/v1/pdf/directory/rename` | rename file/folder — từ chối `relativePath` rỗng |
 | `POST /api/v1/pdf/directory/delete` | xoá vào `.trash` — từ chối `relativePath` rỗng |
 | `GET /api/v1/pdf/trash`, `POST /trash/restore`, `DELETE /trash/:id`, `DELETE /trash/empty` | soft delete |
+| `GET /api/v1/pdf/audit?limit=` | JSONL audit, newest last, tối đa 500 dòng |
 
 Mutation kiểm tra descriptor trong `workspace.ts` tại server. Không tin `area`/`relativePath` từ client mà không qua `parseArea` + `safeRelativePath`.
 
@@ -941,7 +943,6 @@ Chưa có (gap, không được mô tả như đã có):
 - Metadata cache + invalidation, và file watcher.
 - Concurrency limit tường minh cho extraction (hiện chạy tuần tự theo unit).
 - Chống mất job history khi app đóng; job chỉ nằm trong bộ nhớ tiến trình Nitro.
-- Atomic write.
 - Xử lý riêng cho Windows file lock (lỗi bubble lên như `PDF_*` thường).
 
 ---
@@ -996,14 +997,13 @@ Error code đã có, phải tái dùng thay vì bịa mã mới. `runPdf` (`serv
 
 Mã mới phải thêm vào `PDF_ERROR_STATUS` cùng lúc với nơi throw, và phải có key i18n ở cả `en.json` và `vi.json`.
 
-Audit log: repo **chưa có** audit log cho thao tác PDF. Đây là gap đã biết; nếu thêm, ghi tối thiểu:
-- Import, ghi output/overwrite.
-- Rename/delete file.
-- Tạo/xoá subfolder.
-- Repair workspace.
-- Request bị từ chối do descriptor (`PDF_FOLDER_IMMUTABLE`).
+Audit log: `server/modules/pdf/audit.ts` ghi JSONL tại `<pdfRoot>/audit.jsonl`, đọc qua `GET /api/v1/pdf/audit?limit=`.
 
-Không ghi API key, nội dung nhạy cảm hoặc toàn bộ binary vào log.
+Sự kiện đã ghi: `upload` (sources/inputs, kèm `bytes`), `output` (split/merge/rasterize/images→PDF/convert/export/extract, kèm `tool`), `restore`, `purge`, `folder-create`, `rename` (kèm `to`), `delete` (kèm `bytes`), `repair`, `denied` (kèm `code` + `area`). Mỗi dòng có `at` ISO.
+
+File giữ tối đa 500 dòng (cắt bớt khi vượt), ghi qua `writeFileAtomic`, và lỗi ghi log **không** làm hỏng thao tác (`recordAudit` nuốt lỗi). Không ghi API key, nội dung nhạy cảm hay binary — chỉ metadata.
+
+Overwrite được biểu diễn bằng chính sự kiện `output`: mỗi lần tool ghi đè output cũ sẽ thêm một dòng mới với `tool` tương ứng, nên lịch sử ghi đè đọc được mà không cần cờ riêng.
 
 ---
 
@@ -1135,7 +1135,7 @@ Không tuyên bố hoàn tất nếu chỉ build thành công mà chưa smoke-te
 
 - Migration cây thư mục: **không cần**, layout đã là đích.
 - Integrity check/repair: `GET /workspace` + `POST /workspace/repair`.
-- Recovery và audit logs: **audit log chưa có** (gap).
+- Recovery và audit logs: audit log JSONL đã có (`audit.ts`, `GET /api/v1/pdf/audit`).
 - Chạy toàn bộ regression tests.
 - Cập nhật tài liệu sử dụng và architecture docs.
 
@@ -1153,7 +1153,7 @@ Chỉ coi công việc hoàn tất khi đạt tất cả điều kiện áp dụ
 - [x] UI giữ bố cục 2 side và design system hiện tại.
 - [x] Có resize/collapse Explorer và preference persistence.
 - [x] Cây thư mục lấy từ filesystem thật.
-- [ ] Lazy loading thật cho cây — hiện tải cả cây area trong một request (`/explorer`), chưa lazy theo node.
+- [x] Lazy loading thật cho cây — `/explorer` trả level đầu, `/explorer/children` nạp theo node, `?depth=full` chỉ dùng khi search.
 - [x] Area root không thể rename/move/delete từ UI lẫn API route.
 - [x] File operations được kiểm soát bằng descriptor/`assertFolderWritable`.
 - [x] Path traversal được ngăn chặn bằng `safeRelativePath`; symlink/junction escape bị chặn bằng `assertInsideRoot` + bỏ qua `Dirent` là link khi liệt kê.
@@ -1165,7 +1165,7 @@ Chỉ coi công việc hoàn tất khi đạt tất cả điều kiện áp dụ
 - [x] Regression test các chức năng PDF hiện tại đạt (`pnpm test` 16/16 specs, 2026-11-05).
 - [x] Build/lint/typecheck/test theo khả năng dự án đều đạt; lỗi còn lại được ghi rõ.
 - [x] Có tài liệu audit, phase plan, component inventory và cách thêm tool mới.
-- [ ] Audit log cho thao tác PDF — **chưa có**.
+- [x] Audit log cho thao tác PDF — JSONL + route đọc, giới hạn 500 dòng.
 - [ ] Multi-select + bulk actions — **deferred**.`
 
 ---

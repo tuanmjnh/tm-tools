@@ -1,22 +1,44 @@
 # PDF Studio — Document Workspace upgrade plan
 
-Companion to `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md` and
-[WORKSPACE-AUDIT.md](./WORKSPACE-AUDIT.md). The audit records the repo as it
-ships; the spec's v2 now states the same architecture (Nitro owns the
+Companion to `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md` (v2, filesystem and
+permission contract), `TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` (v3, product/UX
+rebuild) and [WORKSPACE-AUDIT.md](./WORKSPACE-AUDIT.md). The audit records the
+repo as it ships; v2 now states the same architecture (Nitro owns the
 filesystem, no PDF IPC channel). This file records what is delivered and what
 stays open, phase by phase.
 
+## Two tracks
+
+| Track | Spec | Scope | Status |
+|---|---|---|---|
+| **v3 — UX rebuild** | `TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` §15 | Home, one shared Explorer on every tool page, one FileBrowser, Active Input, Data Flow Note, remove duplicate panels | Phases 0–6 in the v3 spec; **not started** |
+| **v4 — multi-runtime** | v3 §12 | Storage/temp/job adapters so the same engines run on local, Electron and Vercel | Design only; gated on v3 |
+
+v3 must finish and pass its gates before any v4 work starts. §12 of the v3 spec
+lists the four blockers found while reviewing the multi-runtime proposal:
+wrong proposed layout, unbundled Vietnamese font, optional native canvas, and
+`process.cwd()` / `better-sqlite3` on serverless.
+
 ## Phase status
+
+Delivered against v2 (see `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md`):
 
 | Phase | Spec scope | Status |
 |---|---|---|
 | 0 | Audit & baseline | **Done** — [WORKSPACE-AUDIT.md](./WORKSPACE-AUDIT.md), baseline gates green |
 | 1 | Workspace registry + safe filesystem | **Done (registry, no migration needed)** |
-| 2 | Universal Explorer | **Done** — shared tree, folder filter, collapse/expand, persisted width |
+| 2 | Universal Explorer | **Partial** — shared tree, folder filter, collapse/expand, persisted width; only `/pdf/library` shows all seven areas |
 | 3 | Universal File Explorer | **Done** — toolbar (search/sort/density) delivered; multi-select deferred |
 | 4 | Output mapping | **Done (centralised registry + overview panel)** |
-| 5 | Universal Viewer | **Partial** — current preview renderers kept; zoom/rotate/search/sheet-nav open |
-| 6 | Integrity / regression | **Done** — read-only report + guarded manual repair (recreates missing roots only); audit log open |
+| 5 | Universal Viewer | **Partial** — image zoom/rotate/reset delivered; PDF page thumbnails and in-PDF search open |
+| 6 | Integrity / regression | **Done** — read-only report + guarded manual repair (recreates missing roots only) |
+| 7 | Audit log | **Done** — JSONL for uploads, tool outputs, renames, deletes, restores, purges, repairs and denials |
+| 8 | Lazy explorer tree | **Done** — depth-1 load, per-node children endpoint, deep query only for search |
+| 9 | Viewer parity | **Partial** — image zoom/rotate/reset done; page thumbnails and PDF search open |
+
+The v3 rebuild replaces the "partial" row of phase 2: every tool page gets the
+same seven-area explorer and one FileBrowser. It does not re-open the delivered
+phases; it composes them differently.
 
 ## Phase 1 — workspace registry
 
@@ -107,6 +129,43 @@ moves or rewrites a file, so it cannot destroy work. The `/pdf` overview shows
 the repair button only while `needsRepair` is true, with a tooltip stating the
 scope.
 
+## Phase 7 — audit log
+
+`server/modules/pdf/audit.ts` appends one JSON line per mutation to
+`<pdfRoot>/audit.jsonl` and keeps the file at 500 lines by rewriting the tail
+atomically. `recordAudit` swallows write failures, so a locked or full log can
+never fail a user action. `GET /api/v1/pdf/audit?limit=` reads the newest events.
+
+Recorded actions: `upload` (sources/inputs, with `bytes`), `output` (split,
+merge, rasterize, images→PDF, convert, PDF→DOCX, export, extract, with `tool`),
+`folder-create`, `rename` (with `to`), `delete` (with `bytes`), `restore`,
+`purge`, `repair` and `denied` (with `code` + `area`). No payload, no bytes of
+content, no credentials — metadata only.
+
+## Phase 8 — lazy explorer tree
+
+`GET /api/v1/pdf/explorer` now returns only the first level of the seven areas.
+Every folder that still has subfolders carries `hasChildren: true`; opening it
+calls `GET /api/v1/pdf/explorer/children?area=&folder=`, which resolves the path
+through `safeRelativePath` + `assertInsideRoot` before listing one level.
+
+The library and all five tool pages pass `lazy` to `WorkspaceShell` →
+`FolderTree`; each page keeps its own `loadedChildren` map keyed by
+`area:relativePath`. Typing a folder search swaps in `GET /explorer?depth=full`
+once, because filtering must see nested names; clearing the term returns to the
+shallow tree and drops the memo.
+
+`GET /api/v1/pdf/directory` keeps returning a depth-1 `tree`, so a page that
+needs the full nested shape must ask `/explorer?depth=full`.
+
+## Phase 9 — viewer parity
+
+The image viewer gained zoom (50–300 %, seven steps), 90° rotation and a reset
+that is disabled at the default view; both reset when the file changes. The PDF
+viewer stays on the browser's native frame, which already offers its own zoom and
+page search, and the table viewer keeps filter/wrap/horizontal scroll. Page
+thumbnails and cross-page PDF search remain open.
+
 ## Deliberate deviations
 
 | Spec item | Decision |
@@ -117,21 +176,51 @@ scope.
 | File watcher | Not added; refresh stays explicit to avoid watching a large tree |
 | Migration of folder names | Not needed — on-disk layout is already the target layout |
 | `01-sources/…` numbered layout | Not adopted; renaming would break existing files and job references |
-| Full workspace tree on every tool page | Not delivered; library has the 7-area root, tool pages show their own area tree |
-| Multi-select folder checkbox | Rendered but unwired in `FolderTree`; decide to wire or hide |
+| Full workspace tree on every tool page | v2 delivered it on Library only; v3 §4.2 makes it the default on all six pages |
+| Multi-select folder checkbox | Rendered but unwired in `FolderTree`; v3 keeps it unwired and removes the checkbox from the Explorer contract |
 
 ## Open items
 
 - Viewer parity: zoom, rotate, thumbnail, fullscreen, page search, sheet navigation, Previous/Next.
-- Audit log for PDF mutations (import, output, rename/delete, folder CRUD, repair, denied).
-- Atomic output write (temp file in the same area, then rename).
-- Node-level lazy loading for the folder tree; `GET /explorer` currently returns all areas at once.
-- Data Flow Note (`Đầu vào → Đầu ra`) and "open output folder" affordance.
-- Flow note + output navigation depend on the above; not started.
+- Data Flow Note (`Đầu vào → Đầu ra`) and "open output folder" affordance — designed in v3 §5, not implemented.
+- Seven-area explorer on tool pages — designed in v3 §4.2, not implemented.
+- Duplicate file-list panels on split/images/import/export/extract — removal plan in v3 §15 Phase 5.
+- Three error codes missing from `pdfHttpStatus` (`PDF_FOLDER_NAME_REQUIRED`, `PDF_TRASH_ITEM_NOT_FOUND`, `PDF_EXPORT_FAILED`) — v3 §10.5.
+- `outputFormats` checkbox in `extract.vue` never reaches the server; server always writes all five files — v3 §10.7.
+- `overwrite` checkbox in `library.vue` applies to one row action only — v3 §10.6.
+- Deleting a source cascades to split/images/checkpoints/merged/products; the confirm does not say so — v3 §10.4.
+- Orphan `*.tmp` files after a crash; Windows file-lock behaviour — hardening, not scheduled.
+
+## Multi-runtime (v4)
+
+Not started. Design, blockers and the required order of work are in
+`TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` §12. Summary of the four blockers found
+against this repo:
+
+1. The proposed `input/` + `output/` layout does not exist here; the eight areas
+   are the stable contract, so v4 must map areas onto storage namespaces.
+2. `office/font.ts` reads OS fonts (`C:/Windows/Fonts`, `/usr/share/fonts`); a
+   Vercel runtime may have none, so Word→PDF would throw `PDF_FONT_MISSING`.
+3. `pdf-to-img` → `pdfjs-dist` needs `@napi-rs/canvas`, declared only as an
+   optional dependency; rasterize and PNG export can fail on a serverless build.
+4. `config.pdf.dir` defaults to `process.cwd()`, and the chat store uses
+   `better-sqlite3` on a `process.cwd()` path — neither works on a read-only
+   `/var/task`; there is no cloud database in the repo yet.
 
 ## Verification
 
-Recorded on 2026-11-04, after the last `.nuxt/eslint.config.mjs` regeneration:
+### Docs-only change — 2026-11-05 (v3 spec rewrite)
+
+No source file changed in this pass; only `docs/pdf/*` and `docs/README.md`.
+
+- `pnpm test` → `22/22 specs passed` (run after the doc rewrite).
+- Markdown link check across `docs/`, `docs/pdf/`, `docs/archive/2026-11-05-rebuild-spec-v3-draft/`:
+  all new links resolve. Two pre-existing broken links in `docs/README.md`
+  (`./guides/user-guide.md`, `./guides/system-setup-and-configuration-guide.md`)
+  point to a `guides/` directory that does not exist in this repo; untouched.
+- Typecheck/lint not needed: no `.ts`/`.vue` file was edited.
+
+### Delivered features — recorded on 2026-11-04, after the last `.nuxt/eslint.config.mjs` regeneration
 
 - `npx nuxt typecheck` → `TC_EXIT=0`, `grep -c "error TS"` = 0.
 - `npx eslint` over every touched file → `LINT_EXIT=0` (run after the regenerate

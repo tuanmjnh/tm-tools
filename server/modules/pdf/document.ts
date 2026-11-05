@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
 import { config } from '#server/config'
-import { ensureDir } from './paths'
+import { recordAudit } from './audit'
+import { ensureDir, writeFileAtomic } from './paths'
 
 export async function loadPdf(path: string): Promise<PDFDocument> {
   try {
@@ -35,8 +36,10 @@ export async function splitPdf(inputPath: string, outputDir: string): Promise<{ 
     const single = await PDFDocument.create()
     const [page] = await single.copyPages(doc, [index])
     single.addPage(page)
-    writeFileSync(join(outputDir, `${pageFileName(index + 1)}.pdf`), await single.save())
+    writeFileAtomic(join(outputDir, `${pageFileName(index + 1)}.pdf`), await single.save())
   }
+
+  recordAudit({ action: 'output', area: 'split', target: basename(outputDir), tool: 'split' })
 
   return { totalPages, dir: outputDir }
 }

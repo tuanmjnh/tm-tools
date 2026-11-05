@@ -3,6 +3,7 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfFileInfo } from '#shared/types/pdf'
 import type { AvailableModel } from '~/types/chat'
 import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfDocumentStem, pdfOperation, pdfProductsStem } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
 const { formatDateTime } = useDateTime()
@@ -16,12 +17,11 @@ const {
   refreshLibrary,
   upload,
   startExtraction,
-  cancelJob,
-  removeProduct
+  cancelJob
 } = usePdfStudio()
 const { workspaceItems, refreshItem, folderItems, copyText } = usePdfMenus()
 
-const dir = usePdfDirectory('sources')
+const explorer = usePdfExplorer(library)
 
 interface ExtractModel {
   connectionId: string
@@ -40,7 +40,8 @@ interface ExtractPreset {
   updatedAt: string
 }
 
-const selectedSource = ref('')
+const selection = usePdfSelection('extract')
+const selectedSource = computed(() => selection.selection.value?.item.relativePath ?? '')
 const selectedModel = ref('')
 const modelList = ref<ExtractModel[]>([])
 const modelsLoading = ref(true)
@@ -52,22 +53,22 @@ const presetSaving = ref(false)
 const presetDraft = reactive({ id: '', name: '', description: '', sample: '' })
 const force = ref(false)
 const overwrite = ref(true)
-const pendingDelete = ref<string | null>(null)
-const confirmOpen = ref(false)
+const pendingDelete = ref<{ name: string, path: string, area: PdfFileArea } | null>(null)
+const deleteOpen = ref(false)
 
 let poll: ReturnType<typeof setInterval> | null = null
 let wasRunning = false
 
 async function reloadAll() {
-  await Promise.all([refresh(), dir.loadDirectory(dir.currentFolder.value)])
+  await Promise.all([refresh(), explorer.reload()])
 }
 
 function pickSource(file: PdfFileInfo) {
-  selectedSource.value = file.relativePath || file.name
+  selection.pickFile({ area: explorer.activeArea.value, relativePath: file.relativePath || file.name, name: file.name })
 }
 
 async function handleUpload(files: File[]) {
-  await upload(files, dir.currentFolder.value)
+  await upload(files, explorer.currentFolder.value)
   await reloadAll()
 }
 
@@ -113,6 +114,7 @@ const presetItems = computed(() => [
   ...presets.value.map(preset => ({ label: preset.name, value: preset.id }))
 ])
 const products = computed(() => library.value?.products ?? [])
+const sourcePicker = computed(() => explorer.activeArea.value === 'sources')
 
 const pageMenu = computed<DropdownMenuItem[][]>(() => [
   [
@@ -146,14 +148,6 @@ function jobMenu(job: { id: string, source: string, status: string }): DropdownM
   return groups
 }
 
-function productMenu(file: PdfFileInfo): DropdownMenuItem[] {
-  const baseName = file.name.replace(/\.[^.]+$/, '')
-  return [{
-    label: t('pdf.workspaces.export.title'),
-    icon: 'i-lucide-share-2',
-    onSelect: () => void navigateTo(`/pdf/export?source=${encodeURIComponent(baseName)}`)
-  }]
-}
 const hasRunning = computed(() => jobs.value.some(job => job.status === 'running' || job.status === 'queued'))
 const canStart = computed(() => Boolean(selectedSource.value) && !hasRunning.value && busy.value === null)
 
@@ -220,8 +214,6 @@ async function deletePreset() {
 
 onMounted(async () => {
   await reloadAll()
-  const first = dir.files.value[0]
-  if (!selectedSource.value && first) selectedSource.value = first.relativePath || first.name
   void loadModels()
   void loadPresets()
   poll = setInterval(() => {
@@ -250,59 +242,90 @@ watch(extractorModels, (models) => {
 async function start() {
   if (!canStart.value) return
   const preset = selectedPreset.value
-  await startExtraction(
+  const started = await startExtraction(
     selectedSource.value,
     force.value,
     selectedTarget.value ? { connectionId: selectedTarget.value.connectionId, model: selectedTarget.value.model } : null,
     preset ? { preset: preset.id, description: preset.description, sample: preset.sample } : null,
     overwrite.value
   )
+  if (started) {
+    lastRunSource.value = selectedSource.value
+    lastRunJobId.value = jobs.value.find(job => job.source === lastRunSource.value)?.id ?? ''
+  }
 }
 
-const EXTRACT_FORMATS = ['csv', 'json', 'xlsx', 'docx', 'xml'] as const
-type ExtractFormat = typeof EXTRACT_FORMATS[number]
-const PREF_FORMATS_KEY = 'tm:pdf:extract:formats'
-const outputFormats = ref<ExtractFormat[]>(['csv', 'json'])
+const extractOperation = computed(() => pdfOperation('extract'))
+const outputArea = computed(() => explorer.outputArea('extract'))
 
-watch(outputFormats, (values) => {
-  if (!import.meta.client) return
-  try {
-    localStorage.setItem(PREF_FORMATS_KEY, JSON.stringify(values))
-  } catch {
-    // Ignore Storage quota/disabled errors.
-  }
-}, { deep: true })
-
-onMounted(() => {
-  if (!import.meta.client) return
-  try {
-    const raw = localStorage.getItem(PREF_FORMATS_KEY)
-    if (!raw) return
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return
-    const valid = EXTRACT_FORMATS.filter(item => parsed.includes(item))
-    if (valid.length) outputFormats.value = valid
-  } catch {
-    // Ignore a corrupted preference and keep the defaults.
-  }
+const flowInput = computed(() => {
+  const item = selection.selection.value?.item
+  return item ? { label: item.name, detail: item.relativePath } : { label: t('pdf.flow.none') }
 })
 
-function askDelete(name: string) {
-  pendingDelete.value = name
-  confirmOpen.value = true
+async function openOutput() {
+  if (outputArea.value) await explorer.select('', outputArea.value)
 }
 
-async function deleteSource(item: { path: string, relativePath?: string }) {
-  await dir.handleDelete(item.relativePath || item.path)
-  await reloadAll()
+/** Products of the last started job, so a finished run can be summarised. */
+const lastRunSource = ref('')
+const lastRunJobId = ref('')
+
+/** The job itself decides the outcome; a stopped poll is not a success. */
+const lastRunStatus = computed<'success' | 'partial' | 'failed'>(() => {
+  const job = jobs.value.find(entry => entry.id === lastRunJobId.value)
+  if (!job) return 'partial'
+  if (job.status === 'failed' || job.status === 'cancelled') return 'failed'
+  if (job.status === 'queued' || job.status === 'running') return 'partial'
+  return job.failedPages.length ? 'partial' : 'success'
+})
+const lastRunProducts = computed(() => {
+  const stem = pdfDocumentStem(lastRunSource.value)
+  if (!stem) return []
+  const prefix = `${pdfProductsStem(stem)}.`
+  return products.value.filter(file => file.name.startsWith(prefix))
+})
+
+/** The server always writes all five formats in one run; the list is information. */
+const EXTRACT_FORMATS = ['csv', 'json', 'xlsx', 'docx', 'xml'] as const
+
+const configOpen = ref(false)
+
+const modelSummary = computed(() => {
+  if (!selectedModel.value) return t('pdf.extract.noModelSelected')
+  return `${t('pdf.extract.model')}: ${displayModelName.value}`
+})
+
+const displayModelName = computed(() =>
+  extractorModels.value.find(model => `${model.connectionId}:${model.modelId}` === selectedModel.value)?.displayName
+  ?? selectedModel.value
+)
+
+function startFromConfig() {
+  if (!canStart.value) return
+  configOpen.value = false
+  void start()
 }
+
+async function deleteTreeItem(item: { path: string }, area: PdfFileArea) {
+  pendingDelete.value = { name: item.path, path: item.path, area }
+  deleteOpen.value = true
+}
+
+const deleteDescription = computed(() => {
+  const item = pendingDelete.value
+  if (!item) return ''
+  return item.area === 'sources'
+    ? t('pdf.library.deleteDesc', { name: item.name })
+    : t('pdf.library.deletePlain', { name: item.name })
+})
 
 async function confirmDelete() {
-  if (!pendingDelete.value) return
-  const name = pendingDelete.value
-  confirmOpen.value = false
+  const item = pendingDelete.value
+  deleteOpen.value = false
   pendingDelete.value = null
-  await removeProduct(name)
+  if (!item) return
+  await explorer.removeItem(item.path, item.area)
   await reloadAll()
 }
 </script>
@@ -317,151 +340,104 @@ async function confirmDelete() {
         size="xs"
         square
         :aria-label="t('pdf.actions.refresh')"
-        :loading="busy === 'extract' || dir.dirLoading.value"
+        :loading="busy === 'extract' || explorer.loading.value"
         @click="reloadAll"
       />
     </template>
 
     <PdfContextMenu :items="pageMenu">
       <PdfWorkspaceShell
-        :tree="dir.tree.value"
-        :current-folder="dir.currentFolder.value"
-        area="sources"
-        :loading="dir.dirLoading.value"
-        @select="dir.loadDirectory"
-        @create="dir.openCreateFolderModal"
-        @rename="item => dir.openRenameModal({ name: item.name, relativePath: item.path }, true)"
-        @delete="deleteSource"
+        :tree="explorer.tree.value"
+        :current-folder="explorer.currentFolder.value"
+        :area="explorer.activeArea.value"
+        :selected-key="explorer.selectedKey.value"
+        :can-create="explorer.foldersWritable.value"
+        :loading="explorer.loading.value"
+        lazy
+        @select="explorer.select"
+        @expand="explorer.expand"
+        @search="explorer.searchFolders"
+        @create="explorer.openCreateFolder"
+        @rename="item => explorer.openRename({ name: item.name, relativePath: item.path }, true, item.area ?? explorer.activeArea.value)"
+        @delete="item => deleteTreeItem({ path: item.path }, item.area ?? explorer.activeArea.value)"
       >
         <PdfFileBrowser
-          area="sources"
-          selectable
-          :title="t('pdf.library.title')"
+          :area="explorer.activeArea.value"
+          :title="t(`pdf.areas.${explorer.activeArea.value}`)"
           :description="t('pdf.library.description')"
-          :current-folder="dir.currentFolder.value"
-          :folders="dir.folders.value"
-          :files="dir.files.value"
-          :breadcrumbs="dir.breadcrumbs.value"
-          :parent-folder="dir.parentFolder.value"
-          :loading="dir.dirLoading.value"
+          :current-folder="explorer.currentFolder.value"
+          :folders="explorer.folders.value"
+          :files="explorer.files.value"
+          :breadcrumbs="explorer.breadcrumbs.value"
+          :parent-folder="explorer.parentFolder.value"
+          :loading="explorer.loading.value"
           :uploading="busy === 'upload'"
           :upload-accept="PDF_UPLOAD_ACCEPT"
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: library?.maxUploadMb ?? 0 })"
           :selected-path="selectedSource"
+          :pickable="sourcePicker"
+          :readonly="explorer.activeArea.value !== 'sources'"
+          :folders-writable="explorer.foldersWritable.value"
+          :deletable="explorer.fileDeletable.value"
           list-class="max-h-[40vh]"
           @pick="pickSource"
           @upload="handleUpload"
           @refresh="reloadAll"
-          @select-folder="dir.loadDirectory"
-          @open-folder="folder => dir.loadDirectory(folder.relativePath || folder.name)"
-          @rename-folder="folder => dir.openRenameModal(folder, true)"
-          @delete-folder="deleteSource"
-          @rename-file="file => dir.openRenameModal(file, false)"
+          @select-folder="explorer.select"
+          @open-folder="folder => explorer.select(folder.relativePath || folder.name)"
+          @rename-folder="folder => explorer.openRename(folder, true)"
+          @delete-folder="folder => deleteTreeItem({ path: folder.relativePath || folder.name }, explorer.activeArea.value)"
+          @rename-file="file => explorer.openRename(file, false)"
+          @delete-file="file => deleteTreeItem({ path: file.relativePath || file.name }, explorer.activeArea.value)"
+        >
+          <template v-if="sourcePicker" #flow-note>
+            <PdfDocumentDataFlowNote
+              :operation="t(extractOperation.titleKey)"
+              :input="flowInput"
+              :output="{
+                areaLabel: outputArea ? t(`pdf.areas.${outputArea}`) : '—',
+                openable: Boolean(outputArea)
+              }"
+              :state="selection.isValid.value ? 'ready' : 'empty'"
+              @open-output="openOutput"
+            />
+          </template>
+        </PdfFileBrowser>
+
+        <PdfOperationResult
+          v-if="lastRunSource"
+          :status="lastRunStatus"
+          :summary="t('pdf.extract.resultSummary', { name: lastRunSource, count: lastRunProducts.length })"
+          :items="lastRunProducts.map(file => ({ label: file.name.split('.').pop() ?? file.name, ok: true, detail: file.name }))"
+          :output-area="outputArea ? t(`pdf.areas.${outputArea}`) : ''"
+          :openable="Boolean(outputArea)"
+          @open-output="openOutput"
         />
 
-        <section class="panel shrink-0 p-4 space-y-3">
-          <div class="grid gap-3 md:grid-cols-2 md:items-end">
-            <UFormField :label="t('pdf.extract.model')">
-              <AiProvidersModelSelect
-                v-model="selectedModel"
-                :models="extractorModels"
-                :loading="modelsLoading"
-                :disabled="hasRunning"
-                width-class="w-full"
-              />
-            </UFormField>
-
-            <UFormField :label="t('pdf.extract.preset')">
-              <div class="flex min-w-0 items-center gap-1">
-                <USelect
-                  v-model="selectedPresetId"
-                  :items="presetItems"
-                  :disabled="hasRunning"
-                  class="min-w-0 flex-1"
-                />
-                <UButton
-                  icon="i-lucide-plus"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  :aria-label="t('pdf.extract.presetNewTitle')"
-                  :title="t('pdf.extract.presetNewTitle')"
-                  @click="openPresetModal(null)"
-                />
-                <UButton
-                  v-if="selectedPreset"
-                  icon="i-lucide-pencil"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  :aria-label="t('pdf.extract.presetEditTitle')"
-                  :title="t('pdf.extract.presetEditTitle')"
-                  @click="openPresetModal(selectedPreset)"
-                />
-                <UButton
-                  v-if="selectedPreset"
-                  icon="i-lucide-trash-2"
-                  color="error"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  :aria-label="t('pdf.extract.presetDelete')"
-                  :title="t('pdf.extract.presetDelete')"
-                  @click="deletePreset"
-                />
-              </div>
-            </UFormField>
-          </div>
-
-          <div class="space-y-2 border-t border-default pt-2">
-            <p class="text-xs font-medium text-muted">
-              {{ t('pdf.export.formats') }}
+        <section class="panel flex flex-wrap items-center justify-between gap-2 p-3">
+          <div class="min-w-0 space-y-0.5">
+            <p class="flex items-center gap-2 text-xs text-muted">
+              <UIcon v-if="hasRunning" name="i-lucide-loader-circle" class="size-4 shrink-0 animate-spin" />
+              <UIcon v-else name="i-lucide-cpu" class="size-4 shrink-0" />
+              <span class="truncate">{{ hasRunning ? t('pdf.extract.running') : modelSummary }}</span>
             </p>
-            <div class="flex flex-wrap gap-x-4 gap-y-2">
-              <UCheckbox
-                v-for="fmt in EXTRACT_FORMATS"
-                :key="fmt"
-                :model-value="outputFormats.includes(fmt)"
-                :label="fmt.toUpperCase()"
-                @update:model-value="(val) => {
-                  if (val) outputFormats.push(fmt)
-                  else outputFormats = outputFormats.filter(f => f !== fmt)
-                }"
-              />
-            </div>
+            <p v-if="noModels" class="flex items-start gap-1 text-xs text-(--ui-warning)">
+              <UIcon name="i-lucide-plug-zap" class="mt-0.5 size-3.5 shrink-0" />
+              {{ t('pdf.errors.aiKeyMissing') }}
+            </p>
           </div>
 
-          <p v-if="hasRunning" class="flex items-center gap-2 text-xs text-muted">
-            <UIcon name="i-lucide-loader-circle" class="size-4 shrink-0 animate-spin" />
-            {{ t('pdf.extract.running') }}
-          </p>
-
-          <div v-if="noModels" class="flex items-start gap-2 text-xs text-(--ui-warning)">
-            <UIcon name="i-lucide-plug-zap" class="size-4 shrink-0" />
-            {{ t('pdf.errors.aiKeyMissing') }}
-          </div>
-
-          <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-default pt-3">
-            <UCheckbox
-              v-model="overwrite"
-              :label="t('pdf.actions.overwrite')"
-              :title="t('pdf.actions.overwriteHint')"
-              :disabled="hasRunning"
-            />
-            <UButton
-              icon="i-lucide-scan-text"
-              :label="t('pdf.extract.start')"
-              color="primary"
-              variant="soft"
-              size="xs"
-              :disabled="!canStart"
-              :loading="busy === 'extract'"
-              @click="start"
-            />
-          </footer>
+          <UButton
+            icon="i-lucide-scan-text"
+            :label="t('pdf.extract.start')"
+            color="primary"
+            variant="soft"
+            size="xs"
+            :disabled="!canStart"
+            :loading="busy === 'extract'"
+            @click="configOpen = true"
+          />
         </section>
 
         <section class="panel shrink-0">
@@ -525,39 +501,107 @@ async function confirmDelete() {
             </PdfContextMenu>
           </div>
         </section>
+      </PdfWorkspaceShell>
 
-        <section class="panel shrink-0">
-          <header class="flex items-center justify-between gap-3 border-b border-default px-4 py-2.5">
-            <div class="min-w-0">
-              <h2 class="text-sm font-semibold">
-                {{ t('pdf.extract.results') }}
-              </h2>
-              <p class="truncate text-xs text-muted">
-                {{ t('pdf.extract.resultsDesc') }}
+      <UModal v-model:open="configOpen" :title="t('pdf.extract.configTitle')">
+        <template #body>
+          <div class="space-y-4">
+            <UFormField :label="t('pdf.extract.model')">
+              <AiProvidersModelSelect
+                v-model="selectedModel"
+                :models="extractorModels"
+                :loading="modelsLoading"
+                :disabled="hasRunning"
+                width-class="w-full"
+              />
+            </UFormField>
+
+            <UFormField :label="t('pdf.extract.preset')">
+              <div class="flex min-w-0 items-center gap-1">
+                <USelect
+                  v-model="selectedPresetId"
+                  :items="presetItems"
+                  :disabled="hasRunning"
+                  class="min-w-0 flex-1"
+                />
+                <UButton
+                  icon="i-lucide-plus"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  :aria-label="t('pdf.extract.presetNewTitle')"
+                  :title="t('pdf.extract.presetNewTitle')"
+                  @click="openPresetModal(null)"
+                />
+                <UButton
+                  v-if="selectedPreset"
+                  icon="i-lucide-pencil"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  :aria-label="t('pdf.extract.presetEditTitle')"
+                  :title="t('pdf.extract.presetEditTitle')"
+                  @click="openPresetModal(selectedPreset)"
+                />
+                <UButton
+                  v-if="selectedPreset"
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  :aria-label="t('pdf.extract.presetDelete')"
+                  :title="t('pdf.extract.presetDelete')"
+                  @click="deletePreset"
+                />
+              </div>
+            </UFormField>
+
+            <UFormField :label="t('pdf.export.formats')" :help="t('pdf.extract.formatsHint')">
+              <p class="text-xs text-muted">
+                {{ EXTRACT_FORMATS.map(format => format.toUpperCase()).join(' · ') }}
               </p>
-            </div>
-            <span class="mono shrink-0 text-xs text-muted">{{ products.length }}</span>
-          </header>
+            </UFormField>
 
-          <div v-if="!products.length" class="px-4 py-6 text-center text-xs text-muted">
-            {{ t('pdf.extract.noResults') }}
-          </div>
+            <UFormField :help="t('pdf.extract.cacheHint')">
+              <UCheckbox
+                v-model="force"
+                :label="t('pdf.extract.force')"
+                :disabled="hasRunning"
+              />
+            </UFormField>
 
-          <div v-else class="max-h-[320px] divide-y divide-default overflow-y-auto scroll-thin">
-            <PdfFileRow
-              v-for="file in products"
-              :key="file.name"
-              area="products"
-              :name="file.name"
-              :path="file.path"
-              :size="file.size"
-              :modified-at="file.modifiedAt"
-              :menu="productMenu(file)"
-              @delete="askDelete(file.name)"
+            <UCheckbox
+              v-model="overwrite"
+              :label="t('pdf.actions.overwrite')"
+              :title="t('pdf.actions.overwriteHint')"
+              :disabled="hasRunning"
             />
           </div>
-        </section>
-      </PdfWorkspaceShell>
+        </template>
+
+        <template #footer>
+          <div class="flex w-full items-center justify-end gap-2">
+            <UButton
+              :label="t('pdf.actions.cancel')"
+              color="neutral"
+              variant="ghost"
+              @click="configOpen = false"
+            />
+            <UButton
+              icon="i-lucide-scan-text"
+              :label="t('pdf.extract.start')"
+              color="primary"
+              variant="soft"
+              :disabled="!canStart"
+              :loading="busy === 'extract'"
+              @click="startFromConfig"
+            />
+          </div>
+        </template>
+      </UModal>
 
       <UModal
         v-model:open="presetOpen"
@@ -604,10 +648,10 @@ async function confirmDelete() {
       </UModal>
 
       <BaseConfirmModal
-        v-model:open="confirmOpen"
-        :title="t('pdf.convert.removeOutputTitle')"
-        :description="t('pdf.convert.removeOutputDesc', { name: pendingDelete ?? '' })"
-        :loading="busy === 'removeOutput'"
+        v-model:open="deleteOpen"
+        :title="t('pdf.actions.delete')"
+        :description="deleteDescription"
+        :loading="busy === 'deleteItem'"
         @confirm="confirmDelete"
       />
     </PdfContextMenu>

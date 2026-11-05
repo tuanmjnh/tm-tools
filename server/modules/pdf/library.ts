@@ -1,8 +1,9 @@
-import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PdfFileInfo, PdfFolderInfo, PdfLibrary } from '#shared/types/pdf'
 import { config } from '#server/config'
-import { ensureDir, ensurePdfDirs, pdfDirs } from './paths'
+import { ensureDir, ensurePdfDirs, pdfDirs, writeFileAtomic } from './paths'
+import { recordAudit } from './audit'
 import { listTrashItems, moveToTrash } from './trash'
 import { assertFileWritable } from './workspace'
 import {
@@ -90,7 +91,8 @@ export function saveSource(rawName: string, data: Buffer, rawFolder = ''): PdfFi
   ensureDir(targetDir)
   const target = join(targetDir, name)
   const overwritten = existsSync(target)
-  writeFileSync(target, data)
+  writeFileAtomic(target, data)
+  recordAudit({ action: 'upload', area: 'sources', target: folder ? `${folder}/${name}` : name, bytes: data.length })
   return {
     name,
     path: target,
@@ -121,7 +123,7 @@ export function saveWord(rawName: string, data: Buffer): PdfFileInfo {
   ensureDir(pdfDirs.word)
   const target = join(pdfDirs.word, name)
   const overwritten = existsSync(target)
-  writeFileSync(target, data)
+  writeFileAtomic(target, data)
   return { name, path: target, size: data.length, modifiedAt: statSync(target).mtime.toISOString(), overwritten }
 }
 
@@ -182,12 +184,9 @@ function removeIfExists(path: string, recursive = false): void {
  * Deleting a source removes everything derived from it. Before this, split
  * pages, rendered images and checkpoints stayed on disk forever.
  */
-export function removeSource(rawName: string): void {
-  const name = safeFileName(rawName)
-  const stem = safeStem(name)
-  const path = sourcePath(rawName)
+export function removeDerivedOutputs(rawName: string): void {
+  const stem = safeStem(safeFileName(rawName))
 
-  moveToTrash('sources', path, name)
   removeIfExists(join(pdfDirs.split, stem), true)
   removeIfExists(join(pdfDirs.images, stem), true)
   removeIfExists(join(pdfDirs.checkpoints, stem), true)
@@ -195,6 +194,14 @@ export function removeSource(rawName: string): void {
   for (const extension of ['csv', 'json', 'xlsx', 'docx', 'xml']) {
     removeIfExists(join(pdfDirs.products, `${stem}_products.${extension}`))
   }
+}
+
+export function removeSource(rawName: string): void {
+  const name = safeFileName(rawName)
+  const path = sourcePath(rawName)
+
+  moveToTrash('sources', path, name)
+  removeDerivedOutputs(name)
 }
 
 export function removeWord(rawName: string): void {

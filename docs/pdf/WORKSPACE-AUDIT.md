@@ -132,11 +132,11 @@ supports. It must be kept, not replaced.
 | Output mapping centralised | **Delivered** — `outputMapping` / `outputDir` / `areaDir` |
 | Integrity check / repair | **Delivered** — `GET /workspace`, `POST /workspace/repair` |
 | Migration of legacy layout | **Not needed** — on-disk layout already canonical; legacy `word` read-only |
-| Universal Viewer parity (zoom/rotate/thumbnail/search) | **Open** — preview keeps its current renderers only |
-| Audit log for PDF mutations | **Open** — not implemented |
+| Universal Viewer parity (zoom/rotate/thumbnail/search) | **Partial** — image viewer has zoom (50–300 %), rotate and reset; PDF stays on the native browser frame; table viewer already has filter/wrap; page thumbnails and in-PDF search remain open |
+| Audit log for PDF mutations | **Delivered** — JSONL at `<pdfRoot>/audit.jsonl`, read via `GET /api/v1/pdf/audit`; covers upload, tool output, rename, delete, restore, purge, repair and denials |
 | Symlink / reparse-point escape guard | **Delivered** — `assertInsideRoot` (`paths.ts`) checks the resolved path; listings skip link entries |
-| Atomic output write (temp + rename) | **Open** — overwrite flag only |
-| Lazy tree by node | **Open** — `/explorer` returns every area tree in one call |
+| Atomic output write (temp + rename) | **Delivered** — `writeFileAtomic` in `paths.ts`, used by every writer |
+| Lazy tree by node | **Delivered** — `/explorer` returns the first level only; `/explorer/children?area&folder` loads one node on expand, and a folder search swaps in `?depth=full` |
 
 ## 8. What must not change
 
@@ -161,3 +161,26 @@ supports. It must be kept, not replaced.
    against stable without freezing the generated structure.
 4. Multi-select bulk operations are out of scope for this pass; the file list
    keeps single selection and per-row actions.
+
+## 10. Findings added by the v3 review (2026-11-05)
+
+Checked against the code while writing
+[`TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md`](./TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md).
+Each one is a real mismatch, not a preference.
+
+| Finding | Evidence | Consequence |
+|---|---|---|
+| Tool pages show one area tree, not seven | `split.vue:20`, `images.vue:19`, `export.vue:18`, `extract.vue:24` call `usePdfDirectory('sources')`; only `library.vue:20-23` builds the 7-root tree | v3 §4.2 moves the 7-area explorer into `usePdfExplorer()` |
+| Four pages carry parallel file lists | `split.vue:160`, `:200`; `images.vue:156`; `import.vue:157`; `extract.vue:470`, `:532` | v3 §15 Phase 5 removes them after moving their actions to row/folder actions |
+| `HeTreeMenu` renders a checkbox that nothing handles in the PDF tree | `HeTreeMenu.vue:334-343` always renders `UCheckbox`; `FolderTree.vue` never listens for `node:select` | A dead control ships today; v3 §3.1 adds `hideCheckbox` |
+| `outputMapping.export` names one area, the route writes three | `outputMapping.export = 'office'` (`workspace.ts`); `source-export.ts` writes `png → images`, `docx → office`, `xlsx/csv/json/xml → products` | Data Flow Note must list per-format destinations (v3 §10.1) |
+| Export result chunk carries no area | `PdfExportFormatResult = { format, ok, name?, error? }` | The client maps format → area from the table in v3 §1.9, never from `name` |
+| Three thrown codes have no HTTP status | `PDF_FOLDER_NAME_REQUIRED` (`directory/folder.post.ts:11`), `PDF_TRASH_ITEM_NOT_FOUND` (`trash/*.ts`), `PDF_EXPORT_FAILED` (`source-export.ts:91`) are absent from `PDF_ERROR_STATUS` | They surface as 500; v3 §10.5 adds them |
+| `extract.vue` format checkboxes never reach the server | `outputFormats` is persisted to `localStorage` and never passed to `startExtraction`; the job always writes all five files | v3 §10.7 removes the control instead of faking it |
+| Deleting a source cascades silently | `removeSource()` deletes `split/<stem>`, `images/<stem>`, `checkpoints/<stem>`, `merged/<stem>_merged.pdf` and `products/<stem>_products.*` | The confirm text must say so (v3 §10.4) |
+| Extraction jobs live in a process-local `Map` | `extract/jobs.ts:42` (`const jobs = new Map()`) | Restarting Nitro loses them. UI must not call it history. Blocking issue for v4 (§12) |
+| `PDF_DATA_DIR` is never set by Electron | `electron/main.cjs:78` sets only `TOOLS_DATA_DIR` | Installed builds write PDF data under the app directory via `process.cwd()` |
+| Word→PDF needs an OS font | `office/font.ts` probes `C:/Windows/Fonts` and `/usr/share/fonts` | A runtime without those files throws `PDF_FONT_MISSING`; matters for v4 |
+| Rasterize needs a native canvas | `pdf-to-img@7` → `pdfjs-dist`, which lists `@napi-rs/canvas` as an *optional* dependency | A serverless install that skips optional deps breaks rasterize and PNG export |
+| Chat store is native SQLite on a `cwd` path | `server/modules/chat/store.ts` uses `better-sqlite3` under `process.env.TOOLS_DATA_DIR ?? join(process.cwd(), '.data')` | No cloud database exists yet; v4 job metadata needs one |
+| No `vercel.json` / Vercel preset | repo has neither | v4 adds build config; v3 must not touch it |

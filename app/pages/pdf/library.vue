@@ -1,119 +1,23 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import type { PdfFileArea, PdfFileInfo, PdfFolderTreeNode } from '#shared/types/pdf'
+import type { PdfFileArea, PdfFileInfo } from '#shared/types/pdf'
 import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfDocumentStem } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
-const {
-  library,
-  loading,
-  busy,
-  refresh,
-  upload,
-  splitSource,
-  getExplorerTrees,
-  getWorkspaceReport
-} = usePdfStudio()
+const { library, loading, busy, refresh, upload, splitSource } = usePdfStudio()
 const { workspaceItems, refreshItem, folderItems } = usePdfMenus()
-
-const activeArea = ref<PdfFileArea>('sources')
-const dir = usePdfDirectory(activeArea)
-
-const EXPLORER_AREAS: PdfFileArea[] = ['sources', 'inputs', 'split', 'images', 'merged', 'products', 'office']
-const explorerTrees = ref<Partial<Record<PdfFileArea, PdfFolderTreeNode[]>>>({})
+const explorer = usePdfExplorer(library)
 
 const pendingDelete = ref<{ name: string, path: string, area: PdfFileArea } | null>(null)
 const confirmOpen = ref(false)
 const activeSource = ref('')
 const overwrite = ref(true)
-
-/** Server registry decides what each area allows; the page never re-decides. */
-const areaRules = ref<Partial<Record<PdfFileArea, { files: boolean, folders: boolean }>>>({})
-
-function rulesFor(area: PdfFileArea) {
-  return areaRules.value[area] ?? { files: area !== 'word', folders: area !== 'word' }
-}
-
-const foldersWritable = computed(() => rulesFor(activeArea.value).folders)
-const fileDeletable = computed(() => rulesFor(activeArea.value).files)
-const canUpload = computed(() => activeArea.value === 'sources')
-
-function canWriteFolders(area?: PdfFileArea) {
-  return rulesFor(area ?? activeArea.value).folders
-}
-
-const areaCounts = computed<Record<string, number>>(() => ({
-  sources: library.value?.sources.length ?? 0,
-  inputs: library.value?.inputs.length ?? 0,
-  split: library.value?.split.length ?? 0,
-  images: library.value?.images.length ?? 0,
-  merged: library.value?.merged.length ?? 0,
-  products: library.value?.products.length ?? 0,
-  office: library.value?.office.length ?? 0
-}))
-
-function withArea(nodes: PdfFolderTreeNode[], area: PdfFileArea): PdfFolderTreeNode[] {
-  return nodes.map(node => ({
-    ...node,
-    id: `${area}:${node.id}`,
-    area,
-    children: node.children ? withArea(node.children, area) : undefined
-  }))
-}
-
-const tree = computed<PdfFolderTreeNode[]>(() => EXPLORER_AREAS.map((area) => {
-  const children = withArea(explorerTrees.value[area] ?? [], area)
-  return {
-    id: `${area}:`,
-    label: t(`pdf.areas.${area}`),
-    path: '',
-    relativePath: '',
-    fileCount: areaCounts.value[area] ?? 0,
-    area,
-    system: true,
-    readonly: !rulesFor(area).folders,
-    children: children.length ? children : undefined
-  }
-}))
-
-const selectedKey = computed(() => `${activeArea.value}:${dir.currentFolder.value}`)
-
-const areaDescription = computed(() => {
-  switch (activeArea.value) {
-    case 'inputs': return t('pdf.import.inputsDesc')
-    case 'split': return t('pdf.split.foldersDesc')
-    case 'images': return t('pdf.images.foldersDesc')
-    case 'merged': return t('pdf.split.mergedDesc')
-    case 'products': return t('pdf.extract.resultsDesc')
-    case 'office': return t('pdf.export.officeDesc')
-    default: return t('pdf.library.description')
-  }
-})
-
-async function loadExplorer() {
-  try {
-    explorerTrees.value = await getExplorerTrees()
-  } catch {
-    explorerTrees.value = {}
-  }
-}
-
-async function loadAreaRules() {
-  try {
-    const report = await getWorkspaceReport()
-    const next: Partial<Record<PdfFileArea, { files: boolean, folders: boolean }>> = {}
-    for (const area of EXPLORER_AREAS) {
-      const descriptor = report.areas.find(entry => entry.area === area)
-      if (descriptor) next[area] = { files: descriptor.writableFiles, folders: descriptor.writableFolders }
-    }
-    areaRules.value = next
-  } catch {
-    areaRules.value = {}
-  }
-}
+const pendingSplit = ref<{ name: string, path: string } | null>(null)
+const splitOpen = ref(false)
 
 async function reloadAll() {
-  await Promise.all([refresh(), dir.loadDirectory(dir.currentFolder.value), loadExplorer(), loadAreaRules()])
+  await Promise.all([refresh(), explorer.reload()])
 }
 
 onMounted(() => {
@@ -122,68 +26,83 @@ onMounted(() => {
 
 const maxUploadMb = computed(() => library.value?.maxUploadMb ?? 0)
 const trashCount = computed(() => library.value?.trashCount ?? 0)
+const canUpload = computed(() => explorer.activeArea.value === 'sources')
+
+const descriptionKeys: Record<PdfFileArea, string> = {
+  sources: 'pdf.library.description',
+  inputs: 'pdf.import.inputsDesc',
+  word: 'pdf.library.wordDesc',
+  split: 'pdf.split.foldersDesc',
+  images: 'pdf.images.foldersDesc',
+  merged: 'pdf.split.mergedDesc',
+  products: 'pdf.extract.resultsDesc',
+  office: 'pdf.export.officeDesc'
+}
+
+const areaDescription = computed(() => t(descriptionKeys[explorer.activeArea.value]))
 
 const pageMenu = computed<DropdownMenuItem[][]>(() => [
   [refreshItem(reloadAll)],
   workspaceItems('library'),
-  folderItems(pdfParentPath(dir.files.value[0]?.path)).slice(0, 2)
+  folderItems(pdfParentPath(explorer.files.value[0]?.path)).slice(0, 2)
 ].filter(group => group.length > 0))
 
 function fileMenu(file: PdfFileInfo): DropdownMenuItem[] {
-  const filePath = file.relativePath || file.name
   return [{
     label: t('pdf.workspaces.export.title'),
     icon: 'i-lucide-share-2',
-    onSelect: () => void navigateTo(`/pdf/export?source=${encodeURIComponent(filePath)}`)
+    onSelect: () => void navigateTo(`/pdf/export?source=${encodeURIComponent(file.relativePath || file.name)}`)
   }]
-}
-
-async function handleSelect(folderPath: string, area?: PdfFileArea) {
-  const nextArea = area ?? activeArea.value
-  if (nextArea !== activeArea.value) activeArea.value = nextArea
-  await dir.loadDirectory(folderPath ?? '')
 }
 
 async function handleUpload(files: File[]) {
   if (!canUpload.value) return
-  await upload(files, dir.currentFolder.value)
+  await upload(files, explorer.currentFolder.value)
   await reloadAll()
 }
 
 async function splitFile(file: PdfFileInfo) {
-  activeSource.value = file.path
-  await splitSource(file.relativePath || file.name, overwrite.value)
-  activeSource.value = ''
-  await reloadAll()
+  const path = file.relativePath || file.name
+  pendingSplit.value = { name: path, path }
+  splitOpen.value = true
 }
 
-function askDelete(item: { name: string, path: string, relativePath?: string }, area = activeArea.value) {
-  pendingDelete.value = {
-    name: item.name,
-    path: item.relativePath || item.name,
-    area
-  }
+const splitDescription = computed(() => {
+  const item = pendingSplit.value
+  return item ? t('pdf.library.splitConfirm', { name: item.name, folder: pdfDocumentStem(item.name) }) : ''
+})
+
+async function runSplit() {
+  const item = pendingSplit.value
+  splitOpen.value = false
+  if (!item) return
+  activeSource.value = item.path
+  await splitSource(item.path, overwrite.value)
+  activeSource.value = ''
+  await reloadAll()
+  pendingSplit.value = null
+}
+
+function askDelete(item: { name: string, path: string, relativePath?: string }, area = explorer.activeArea.value) {
+  pendingDelete.value = { name: item.name, path: item.relativePath || item.path, area }
   confirmOpen.value = true
 }
 
-async function handleCreateFolder(name: string) {
-  await dir.handleCreateFolder(name)
-  await reloadAll()
-}
-
-async function handleRename(newName: string) {
-  await dir.handleRename(newName)
-  await reloadAll()
-}
+const deleteDescription = computed(() => {
+  const item = pendingDelete.value
+  if (!item) return ''
+  return item.area === 'sources'
+    ? t('pdf.library.deleteDesc', { name: item.name })
+    : t('pdf.library.deletePlain', { name: item.name })
+})
 
 async function confirmDelete() {
   const item = pendingDelete.value
   confirmOpen.value = false
   pendingDelete.value = null
-  if (item) {
-    await dir.handleDelete(item.path, item.area)
-    await reloadAll()
-  }
+  if (!item) return
+  await explorer.removeItem(item.path, item.area ?? explorer.activeArea.value)
+  await reloadAll()
 }
 </script>
 
@@ -191,58 +110,53 @@ async function confirmDelete() {
   <BasePage id="pdf-library" :title="t('pdf.workspaces.library.title')" :description="t('pdf.workspaces.library.desc')">
     <PdfContextMenu :items="pageMenu">
       <PdfWorkspaceShell
-        :tree="tree"
-        :current-folder="dir.currentFolder.value"
-        :area="activeArea"
-        :selected-key="selectedKey"
-        :can-create="foldersWritable"
+        :tree="explorer.tree.value"
+        :current-folder="explorer.currentFolder.value"
+        :area="explorer.activeArea.value"
+        :selected-key="explorer.selectedKey.value"
+        :can-create="explorer.foldersWritable.value"
         :root-label="t('pdf.library.rootLabel')"
-        :loading="loading || dir.dirLoading.value"
-        @select="handleSelect"
-        @create="(folder, area) => canWriteFolders(area) && dir.openCreateFolderModal(folder, area)"
-        @rename="item => canWriteFolders(item.area) && dir.openRenameModal({ name: item.name, relativePath: item.path }, true, item.area)"
-        @delete="item => canWriteFolders(item.area) && askDelete({ name: item.name, path: item.path, relativePath: item.path }, item.area)"
+        :loading="loading || explorer.loading.value"
+        lazy
+        @select="explorer.select"
+        @expand="explorer.expand"
+        @search="explorer.searchFolders"
+        @create="explorer.openCreateFolder"
+        @rename="item => explorer.openRename({ name: item.name, relativePath: item.path }, true, item.area ?? explorer.activeArea.value)"
+        @delete="item => askDelete({ name: item.name, path: item.path, relativePath: item.path }, item.area ?? explorer.activeArea.value)"
       >
         <PdfFileBrowser
-          :area="activeArea"
+          :area="explorer.activeArea.value"
           fill
-          :title="t(`pdf.areas.${activeArea}`)"
+          :title="t(`pdf.areas.${explorer.activeArea.value}`)"
           :description="areaDescription"
-          :current-folder="dir.currentFolder.value"
-          :folders="dir.folders.value"
-          :files="dir.files.value"
-          :breadcrumbs="dir.breadcrumbs.value"
-          :parent-folder="dir.parentFolder.value"
-          :loading="dir.dirLoading.value"
+          :current-folder="explorer.currentFolder.value"
+          :folders="explorer.folders.value"
+          :files="explorer.files.value"
+          :breadcrumbs="explorer.breadcrumbs.value"
+          :parent-folder="explorer.parentFolder.value"
+          :loading="explorer.loading.value"
           :uploading="busy === 'upload'"
           :upload-accept="PDF_UPLOAD_ACCEPT"
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: maxUploadMb })"
-          :trash-count="foldersWritable ? trashCount : 0"
+          :trash-count="explorer.foldersWritable.value ? trashCount : 0"
           :readonly="!canUpload"
-          :folders-writable="foldersWritable"
-          :deletable="fileDeletable"
-          :file-menu="activeArea === 'sources' ? fileMenu : undefined"
+          :folders-writable="explorer.foldersWritable.value"
+          :deletable="explorer.fileDeletable.value"
+          :file-menu="explorer.activeArea.value === 'sources' ? fileMenu : undefined"
           @upload="handleUpload"
           @refresh="reloadAll"
-          @create-folder="folder => foldersWritable && dir.openCreateFolderModal(folder)"
-          @open-trash="dir.trashOpen.value = true"
-          @select-folder="dir.loadDirectory"
-          @open-folder="folder => dir.loadDirectory(folder.relativePath || folder.name)"
-          @rename-folder="folder => foldersWritable && dir.openRenameModal(folder, true)"
-          @delete-folder="folder => foldersWritable && askDelete({ name: folder.name, path: folder.relativePath || folder.name })"
-          @rename-file="file => fileDeletable && dir.openRenameModal(file, false)"
-          @delete-file="file => fileDeletable && askDelete(file)"
+          @create-folder="explorer.openCreateFolder"
+          @open-trash="explorer.trashOpen.value = true"
+          @select-folder="explorer.select"
+          @open-folder="folder => explorer.select(folder.relativePath || folder.name)"
+          @rename-folder="folder => explorer.openRename(folder, true)"
+          @delete-folder="folder => askDelete({ name: folder.name, path: folder.relativePath || folder.name })"
+          @rename-file="file => explorer.openRename(file, false)"
+          @delete-file="file => askDelete(file)"
         >
-          <template #footer>
-            <UCheckbox
-              v-model="overwrite"
-              :label="t('pdf.actions.overwrite')"
-              :title="t('pdf.actions.overwriteHint')"
-            />
-          </template>
-
-          <template v-if="activeArea === 'sources'" #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'sources'" #file-actions="{ file }">
             <UButton
               icon="i-lucide-scissors"
               :label="t('pdf.library.split')"
@@ -256,28 +170,38 @@ async function confirmDelete() {
         </PdfFileBrowser>
       </PdfWorkspaceShell>
 
+      <PdfConfirmAction
+        v-model:open="splitOpen"
+        v-model:overwrite="overwrite"
+        :title="t('pdf.library.split')"
+        :description="splitDescription"
+        icon="i-lucide-scissors"
+        :loading="Boolean(activeSource)"
+        @confirm="runSplit"
+      />
+
       <BaseConfirmModal
         v-model:open="confirmOpen"
         :title="t('pdf.library.deleteTitle')"
-        :description="t('pdf.library.deleteDesc', { name: pendingDelete?.name ?? '' })"
+        :description="deleteDescription"
         :loading="busy === 'deleteItem'"
         @confirm="confirmDelete"
       />
 
       <LazyPdfFolderModal
-        v-model:open="dir.folderModalOpen.value"
-        :parent-folder="dir.folderTargetParent.value"
-        @submit="handleCreateFolder"
+        v-model:open="explorer.folderModalOpen.value"
+        :parent-folder="explorer.folderTargetParent.value"
+        @submit="explorer.handleCreateFolder"
       />
 
       <LazyPdfRenameModal
-        v-model:open="dir.renameModalOpen.value"
-        :current-name="dir.renameTarget.value?.name"
-        :is-folder="dir.renameTarget.value?.isFolder"
-        @submit="handleRename"
+        v-model:open="explorer.renameModalOpen.value"
+        :current-name="explorer.renameTarget.value?.name"
+        :is-folder="explorer.renameTarget.value?.isFolder"
+        @submit="explorer.handleRename"
       />
 
-      <LazyPdfTrashModal v-model:open="dir.trashOpen.value" @restored="reloadAll" />
+      <LazyPdfTrashModal v-model:open="explorer.trashOpen.value" @restored="reloadAll" />
     </PdfContextMenu>
   </BasePage>
 </template>

@@ -1,9 +1,9 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { PDF_EXPORT_COLUMNS, type PdfExportRow } from '#shared/types/pdf'
 import { rowsToXml } from '../data/parse'
 import { rowsToDocx, rowsToXlsx } from '../office/rowExports'
-import { ensureDir } from '../paths'
+import { ensureDir, writeFileAtomic } from '../paths'
 
 const CSV_SEPARATOR = ','
 const CSV_LINE_BREAK = '\r\n'
@@ -36,11 +36,11 @@ export async function writeProducts(
   const docx = join(dir, `${stem}.docx`)
   const xml = join(dir, `${stem}.xml`)
 
-  writeFileSync(csv, toCsv(rows), 'utf8')
-  writeFileSync(json, JSON.stringify(rows, null, 2), 'utf8')
-  writeFileSync(xml, rowsToXml(rows), 'utf8')
-  writeFileSync(xlsx, await rowsToXlsx(rows, stem.slice(0, 31)))
-  writeFileSync(docx, await rowsToDocx(rows, stem))
+  writeFileAtomic(csv, toCsv(rows), 'utf8')
+  writeFileAtomic(json, JSON.stringify(rows, null, 2), 'utf8')
+  writeFileAtomic(xml, rowsToXml(rows), 'utf8')
+  writeFileAtomic(xlsx, await rowsToXlsx(rows, stem.slice(0, 31)))
+  writeFileAtomic(docx, await rowsToDocx(rows, stem))
 
   return { csv, json, xlsx, docx, xml }
 }

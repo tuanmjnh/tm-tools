@@ -18,10 +18,17 @@ export function usePdfDirectory(areaInput: Ref<PdfFileArea> | PdfFileArea) {
 
   const {
     getDirectory,
+    getExplorerTrees,
+    getExplorerChildren,
     createFolder,
     renameItem,
     deleteItem
   } = usePdfStudio()
+
+  /** Children fetched when a lazy tree node expands, keyed by relative path. */
+  const loadedChildren = ref<Record<string, PdfFolderTreeNode[]>>({})
+  /** Complete tree, fetched only while a folder search needs deep matching. */
+  const deepTree = ref<PdfFolderTreeNode[] | null>(null)
 
   async function loadDirectory(folder = '') {
     currentFolder.value = folder
@@ -29,9 +36,35 @@ export function usePdfDirectory(areaInput: Ref<PdfFileArea> | PdfFileArea) {
     try {
       const res = await getDirectory(areaRef.value, folder)
       directoryListing.value = res
+      loadedChildren.value = {}
+      deepTree.value = null
     } finally {
       dirLoading.value = false
     }
+  }
+
+  async function expandFolder(relativePath: string) {
+    if (deepTree.value || loadedChildren.value[relativePath]) return
+    try {
+      loadedChildren.value = {
+        ...loadedChildren.value,
+        [relativePath]: await getExplorerChildren(areaRef.value, relativePath)
+      }
+    } catch {
+      loadedChildren.value = { ...loadedChildren.value, [relativePath]: [] }
+    }
+  }
+
+  async function searchFolders(term: string) {
+    if (term && !deepTree.value) {
+      try {
+        deepTree.value = (await getExplorerTrees(true))[areaRef.value] ?? []
+      } catch {
+        deepTree.value = null
+      }
+      return
+    }
+    if (!term) deepTree.value = null
   }
 
   function openCreateFolderModal(parentFolder = currentFolder.value, area = areaRef.value) {
@@ -75,7 +108,20 @@ export function usePdfDirectory(areaInput: Ref<PdfFileArea> | PdfFileArea) {
   const folderTargetParent = computed(() => folderTarget.value.parent)
   const folders = computed<PdfFolderInfo[]>(() => directoryListing.value?.folders ?? [])
   const files = computed<PdfFileInfo[]>(() => directoryListing.value?.files ?? [])
-  const tree = computed<PdfFolderTreeNode[]>(() => directoryListing.value?.tree ?? [])
+
+  function mergeChildren(nodes: PdfFolderTreeNode[], complete: boolean): PdfFolderTreeNode[] {
+    return nodes.map((node) => {
+      const children = complete
+        ? node.children
+        : (loadedChildren.value[node.relativePath] ?? node.children)
+      return { ...node, children: children?.length ? mergeChildren(children, complete) : undefined }
+    })
+  }
+
+  const tree = computed<PdfFolderTreeNode[]>(() => {
+    if (deepTree.value) return deepTree.value
+    return mergeChildren(directoryListing.value?.tree ?? [], false)
+  })
   const breadcrumbs = computed(() => directoryListing.value?.breadcrumbs ?? [])
   const parentFolder = computed(() => directoryListing.value?.parentFolder ?? null)
 
@@ -95,6 +141,8 @@ export function usePdfDirectory(areaInput: Ref<PdfFileArea> | PdfFileArea) {
     renameTarget,
     trashOpen,
     loadDirectory,
+    expandFolder,
+    searchFolders,
     openCreateFolderModal,
     handleCreateFolder,
     openRenameModal,

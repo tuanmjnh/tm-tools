@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
   PdfExportRow,
@@ -8,10 +8,11 @@ import type {
   PdfExtractPage
 } from '#shared/types/pdf'
 import { config } from '#server/config'
+import { recordAudit } from '../audit'
 import { pageFileName, splitPdf } from '../document'
 import { anySourcePath, splitDirName } from '../library'
 import { docxToText } from '../office/docxParse'
-import { ensureDir, pdfDirs } from '../paths'
+import { ensureDir, pdfDirs, writeFileAtomic } from '../paths'
 import { naturalCompare, safeRelativePath, safeStem } from '../security'
 import { hasProductFiles, writeProducts } from './export'
 import { normalizeTo25Columns } from './normalize'
@@ -269,7 +270,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
 
       try {
         const data = await unit.extract()
-        writeFileSync(cachedFile, JSON.stringify(data, null, 2), 'utf8')
+        writeFileAtomic(cachedFile, JSON.stringify(data, null, 2), 'utf8')
         entry.pages.push(data)
         entry.state.productCount += data.products.length
       } catch (error) {
@@ -291,6 +292,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
     entry.rows = normalizeTo25Columns(entry.pages)
     entry.state.rowCount = entry.rows.length
     await writeProducts(pdfDirs.products, `${stem}_products`, entry.rows)
+    recordAudit({ action: 'output', area: 'products', target: `${stem}_products`, tool: 'extract' })
 
     if (entry.state.cancelRequested) {
       entry.state.status = 'cancelled'

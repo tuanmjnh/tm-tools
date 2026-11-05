@@ -33,6 +33,33 @@ const loading = ref(false)
 const failure = ref('')
 const inspected = ref<PdfInspectResult | null>(null)
 
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3]
+const zoom = ref(1)
+const rotation = ref(0)
+
+const canZoom = computed(() => kind.value === 'image')
+const imageStyle = computed(() => ({
+  transform: `rotate(${rotation.value}deg) scale(${zoom.value})`,
+  transition: 'transform 150ms ease'
+}))
+
+function zoomBy(direction: 1 | -1) {
+  const index = ZOOM_STEPS.indexOf(zoom.value)
+  const nextIndex = Math.min(ZOOM_STEPS.length - 1, Math.max(0, (index === -1 ? 2 : index) + direction))
+  zoom.value = ZOOM_STEPS[nextIndex] ?? 1
+}
+
+function resetView() {
+  zoom.value = 1
+  rotation.value = 0
+}
+
+function rotateBy(direction: 1 | -1) {
+  rotation.value = (rotation.value + direction * 90 + 360) % 360
+}
+
+watch(() => [props.area, props.name], resetView)
+
 const jsonValue = computed<unknown>(() => {
   const text = inspected.value?.text
   if (!text) return {}
@@ -87,6 +114,62 @@ watch(() => [props.area, props.name], load)
       </div>
 
       <div class="flex shrink-0 items-center gap-1.5">
+        <template v-if="canZoom">
+          <UButton
+            icon="i-lucide-zoom-out"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            :disabled="zoom === ZOOM_STEPS[0]"
+            :aria-label="t('pdf.preview.zoomOut')"
+            :title="t('pdf.preview.zoomOut')"
+            @click="zoomBy(-1)"
+          />
+          <span class="mono text-[11px] text-muted tabular-nums w-9 text-center">{{ Math.round(zoom * 100) }}%</span>
+          <UButton
+            icon="i-lucide-zoom-in"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            :disabled="zoom === ZOOM_STEPS.at(-1)"
+            :aria-label="t('pdf.preview.zoomIn')"
+            :title="t('pdf.preview.zoomIn')"
+            @click="zoomBy(1)"
+          />
+          <UButton
+            icon="i-lucide-rotate-ccw"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            :aria-label="t('pdf.preview.rotateLeft')"
+            :title="t('pdf.preview.rotateLeft')"
+            @click="rotateBy(-1)"
+          />
+          <UButton
+            icon="i-lucide-rotate-cw"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            :aria-label="t('pdf.preview.rotateRight')"
+            :title="t('pdf.preview.rotateRight')"
+            @click="rotateBy(1)"
+          />
+          <UButton
+            icon="i-lucide-maximize"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            :disabled="zoom === 1 && rotation === 0"
+            :aria-label="t('pdf.preview.zoomReset')"
+            :title="t('pdf.preview.zoomReset')"
+            @click="resetView"
+          />
+        </template>
         <UButton
           v-if="!isStandaloneWindow"
           icon="i-lucide-external-link"
@@ -129,7 +212,12 @@ watch(() => [props.area, props.name], load)
 
     <!-- 2. Image viewer -->
     <div v-else-if="kind === 'image'" class="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-elevated/20 p-4">
-      <img :src="fileUrl" :alt="name" class="max-h-full max-w-full object-contain rounded-(--ui-radius) shadow-sm">
+      <img
+        :src="fileUrl"
+        :alt="name"
+        class="max-h-full max-w-full object-contain rounded-(--ui-radius) shadow-sm"
+        :style="imageStyle"
+      >
     </div>
 
     <!-- 3. Table viewer (CSV / XLSX) with full horizontal and vertical scroll -->

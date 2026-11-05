@@ -11,13 +11,15 @@ withDefaults(defineProps<{
   selectedKey?: string
   canCreate?: boolean
   rootLabel?: string
+  lazy?: boolean
 }>(), {
   area: 'sources',
   loading: false,
   title: undefined,
   selectedKey: undefined,
   canCreate: true,
-  rootLabel: undefined
+  rootLabel: undefined,
+  lazy: false
 })
 
 const emit = defineEmits<{
@@ -25,6 +27,8 @@ const emit = defineEmits<{
   create: [parentFolder: string, area?: PdfFileArea]
   rename: [folder: { path: string, name: string, area?: PdfFileArea }]
   delete: [folder: { path: string, name: string, area?: PdfFileArea }]
+  expand: [folder: { path: string, area?: PdfFileArea }]
+  search: [term: string]
 }>()
 
 const WIDTH_KEY = 'pdf.explorer.width'
@@ -118,11 +122,14 @@ const shellStyle = computed(() => ({
         :selected-key="selectedKey"
         :can-create="canCreate"
         :root-label="rootLabel"
+        :lazy="lazy"
         class="h-full min-h-0"
         @select="(folder, nodeArea) => emit('select', folder, nodeArea)"
         @create="(folder, nodeArea) => emit('create', folder, nodeArea)"
         @rename="folder => emit('rename', folder)"
         @delete="folder => emit('delete', folder)"
+        @expand="folder => emit('expand', folder)"
+        @search="term => emit('search', term)"
         @collapse="toggleCollapsed"
       />
     </aside>

@@ -1674,41 +1674,27 @@
       "resize": "Đổi kích thước thanh thư mục"
     },
     "overview": {
-      "kpi": {
-        "sources": "PDF gốc",
-        "split": "Thư mục trang",
-        "images": "Thư mục ảnh",
-        "merged": "PDF đầu ra",
-        "products": "File bảng giá"
-      },
-      "pipeline": {
-        "title": "Quy trình",
-        "description": "Mỗi bước ghi vào thư mục riêng, nên một bước lỗi không chặn bước sau.",
-        "upload": "Tải lên",
-        "uploadDesc": "Đưa các file PDF bảng giá bán buôn vào thư viện.",
-        "split": "Tách trang",
-        "splitDesc": "Cắt mỗi file gốc thành các trang PDF đơn để xem hoặc bóc tách.",
-        "imagesDesc": "Xuất trang thành PNG, rồi dựng lại PDF từ thư mục ảnh.",
+      "search": "Tìm công cụ…",
+      "noMatch": "Không có công cụ nào khớp.",
+      "technical": "Thông tin kỹ thuật và thư mục đầu ra",
+      "repairTitle": "Thiếu một thư mục workspace",
+      "groups": {
+        "organize": "Tách & Ghép",
         "convert": "Chuyển đổi",
-        "convertDesc": "Ghép các trang đã tách hoặc dựng lại PDF từ ảnh.",
-        "extract": "Bóc tách",
-        "extractDesc": "Đọc từng trang bằng Gemini và xuất CSV/JSON 25 cột.",
-        "export": "Xuất file",
-        "exportDesc": "Xuất và chuyển đổi định dạng tài liệu, tải về kết quả.",
-        "import": "Nhập vào",
-        "importDesc": "Đưa PDF vào, hoặc tạo PDF từ ảnh, Excel, Word hay file dữ liệu.",
-        "library": "Chuẩn bị",
-        "libraryDesc": "Giữ PDF trong thư viện — nguồn chung cho mọi bước."
+        "extract": "Bóc tách"
+      },
+      "library": {
+        "title": "Thư viện tài liệu",
+        "description": "Duyệt mọi thư mục, tải lên, xem trước, đổi tên và xoá."
       },
       "config": {
         "title": "Giới hạn workspace",
-        "description": "Các giá trị này lấy từ cấu hình server, không nằm trong trang.",
         "maxUpload": "Dung lượng tải lên tối đa",
         "maxPages": "Số trang tối đa mỗi file",
         "imageScale": "Tỷ lệ render ảnh",
-        "ai": "Bóc tách Gemini",
-        "aiReady": "Đã cấu hình API key",
-        "aiMissing": "Chưa có API key"
+        "ai": "Bóc tách bằng AI",
+        "aiReady": "Có model khả dụng",
+        "aiMissing": "Không có model khả dụng"
       },
       "repairHint": "Một thư mục quản lý đang thiếu trên đĩa. Sửa lại chỉ tạo thư mục còn thiếu, không xoá hay di chuyển tệp nào.",
       "mapping": {
@@ -1750,9 +1736,11 @@
         "actions": "Thao tác"
       },
       "split": "Tách trang",
+      "splitConfirm": "Tách \"{name}\" thành các trang PDF? Kết quả vào thư mục trang \"{folder}\". Nếu thư mục đó đã có, nó bị thay thế.",
       "rasterize": "Xuất ảnh",
       "deleteTitle": "Xóa PDF gốc",
-      "deleteDesc": "Xóa \"{name}\"? Các thư mục trang và ảnh đã tạo từ file này vẫn được giữ lại.",
+      "deleteDesc": "Xoá \"{name}\"? Thư mục trang đã tách, ảnh trang, PDF ghép và dữ liệu bóc tách của tệp này cũng bị xoá theo.",
+      "deletePlain": "Xoá \"{name}\"? Không thể hoàn tác.",
       "wordTitle": "Tài liệu Word",
       "wordDesc": "Tải bảng giá .docx lên. Chuyển sang PDF để tách trang, xuất ảnh và bóc tách.",
       "wordDropzone": "Kéo file .docx vào đây hoặc bấm để chọn",
@@ -1817,7 +1805,7 @@
       "presetSaved": "Đã lưu mẫu.",
       "presetDeleted": "Đã xoá mẫu.",
       "start": "Bắt đầu bóc tách",
-      "force": "Đọc lại các trang đã lưu",
+      "force": "Bỏ qua cache và đọc lại mọi trang",
       "forceHint": "Nếu không chọn, các trang đã checkpoint sẽ được dùng lại.",
       "running": "Đang có một tiến trình bóc tách. Hãy chờ hoặc hủy nó.",
       "noSources": "Chưa có PDF gốc",
@@ -1839,9 +1827,12 @@
       "wordSource": "Word",
       "downloadXlsx": "XLSX",
       "downloadDocx": "DOCX",
-      "outputFormats": "Định dạng xuất",
-      "outputFormatsHint": "Định dạng đã chọn sẽ hiện ở mỗi job hoàn thành.",
-      "copySource": "Sao chép tên tệp"
+      "copySource": "Sao chép tên tệp",
+      "resultSummary": "Đã bắt đầu bóc tách {name} — {count} tệp kết quả trên đĩa",
+      "configTitle": "Cấu hình bóc tách",
+      "noModelSelected": "Chưa chọn model",
+      "formatsHint": "Mỗi lần chạy ghi đủ cả năm định dạng; danh sách chỉ để tham khảo.",
+      "cacheHint": "Kết quả cache dùng lại theo tên tệp/trang. Đổi model hoặc preset không tự xoá cache."
     },
     "status": {
       "queued": "Đang chờ",
@@ -1893,7 +1884,8 @@
       "rename": "Đổi tên",
       "delete": "Xóa",
       "repairWorkspace": "Sửa lại thư mục",
-      "namePlaceholder": "Nhập tên mới..."
+      "namePlaceholder": "Nhập tên mới...",
+      "openOutputFolder": "Mở thư mục đầu ra"
     },
     "notices": {
       "uploaded": "Đã tải lên {count} file",
@@ -1981,6 +1973,36 @@
         "desc": "Đọc bảng giá bằng model AI và xuất đúng các cột bạn chọn."
       }
     },
+    "operations": {
+      "split": {
+        "title": "Tách thành từng trang",
+        "description": "Cắt một PDF gốc thành các tệp một trang."
+      },
+      "merge": {
+        "title": "Ghép trang",
+        "description": "Dựng lại một PDF từ thư mục trang."
+      },
+      "rasterize": {
+        "title": "Xuất trang thành ảnh",
+        "description": "Chuyển mọi trang của PDF gốc thành PNG."
+      },
+      "imagesToPdf": {
+        "title": "Dựng PDF từ ảnh",
+        "description": "Dựng lại một PDF từ thư mục ảnh."
+      },
+      "convertInput": {
+        "title": "Chuyển thành PDF",
+        "description": "Chuyển ảnh, Word, Excel, CSV, JSON hoặc XML thành PDF."
+      },
+      "export": {
+        "title": "Xuất một PDF gốc",
+        "description": "Ghi ảnh PNG, Word, Excel, CSV, JSON hoặc XML từ một PDF."
+      },
+      "extract": {
+        "title": "Bóc tách bằng AI",
+        "description": "Đọc bảng giá và ghi CSV, JSON, XLSX, DOCX cùng XML."
+      }
+    },
     "formats": {
       "pdf": "PDF",
       "image": "Ảnh",
@@ -2012,6 +2034,8 @@
       "noFoldersDesc": "Hãy tách một PDF nguồn để tạo thư mục đầu tiên.",
       "pageCount": "{count} trang",
       "mergeToPdf": "Ghép thành PDF",
+      "confirmSplit": "Tách \"{name}\" thành các trang PDF? Kết quả vào thư mục trang \"{folder}\". Nếu thư mục đó đã có, nó bị thay thế.",
+      "confirmMerge": "Ghép các trang của \"{name}\" thành {output}? Kết quả vào thư mục merged.",
       "merged": "PDF đã ghép",
       "mergedDesc": "PDF được dựng lại từ các thư mục trang.",
       "noMerged": "Chưa có PDF nào được ghép.",
@@ -2028,6 +2052,8 @@
       "noFolders": "Chưa có thư mục ảnh",
       "noFoldersDesc": "Hãy xuất ảnh từ một PDF nguồn để tạo thư mục đầu tiên.",
       "buildPdf": "Tạo PDF",
+      "confirmRasterize": "Xuất mọi trang của \"{name}\" thành PNG? Kết quả vào thư mục ảnh \"{folder}\". Nếu thư mục đó đã có, nó bị thay thế.",
+      "confirmBuild": "Dựng {output} từ các file PNG trong \"{name}\"? Kết quả vào thư mục merged.",
       "removeTitle": "Xoá thư mục ảnh",
       "removeDesc": "Xoá \"{name}\"? Không thể hoàn tác."
     },
@@ -2043,7 +2069,8 @@
       "data": "Dữ liệu bóc tách",
       "dataDesc": "File CSV, JSON, XML và Excel do bóc tách hoặc xuất tạo ra.",
       "noData": "Chưa có file dữ liệu.",
-      "officeDesc": "Tài liệu Word xuất từ PDF."
+      "officeDesc": "Tài liệu Word xuất từ PDF.",
+      "resultSummary": "Đã thử {count} định dạng"
     },
     "import": {
       "title": "Định dạng khác → PDF",
@@ -2055,6 +2082,7 @@
       "empty": "Chưa có file nào",
       "emptyDesc": "Kéo ảnh, tài liệu Word hoặc file dữ liệu vào ô trên.",
       "convert": "Sang PDF",
+      "confirmConvert": "Chuyển \"{name}\" thành {output}? Kết quả vào thư mục merged.",
       "converted": "PDF đã tạo",
       "convertedDesc": "Kết quả chuyển đổi — sẵn sàng để tách, xuất hoặc bóc tách.",
       "noConverted": "Chưa tạo PDF nào.",
@@ -2074,7 +2102,12 @@
       "unsupported": "Định dạng này không có bản xem trước.",
       "missingName": "Chưa chọn file",
       "missingNameDesc": "Mở bản xem trước từ một trang trong PDF Studio.",
-      "converting": "Đang chuyển sang PDF…"
+      "converting": "Đang chuyển sang PDF…",
+      "zoomIn": "Phóng to",
+      "zoomOut": "Thu nhỏ",
+      "zoomReset": "Đặt lại zoom",
+      "rotateLeft": "Xoay trái",
+      "rotateRight": "Xoay phải"
     },
     "folder": {
       "new": "Thư mục mới",
@@ -2115,6 +2148,24 @@
       "deleteFolder": "Xoá thư mục",
       "deleteFolderDesc": "Chuyển thư mục vào thùng rác?",
       "systemRootHint": "Thư mục gốc cố định của workspace. Thư mục con và tệp bên trong vẫn sửa được bình thường."
+    },
+    "selection": {
+      "needsFile": "Công cụ này cần một tệp, không phải thư mục.",
+      "needsFolder": "Công cụ này xử lý trên thư mục, không phải tệp.",
+      "wrongArea": "Công cụ này không nhận đầu vào từ thư mục bạn đang mở.",
+      "none": "Chưa chọn đầu vào"
+    },
+    "flow": {
+      "input": "Đầu vào",
+      "process": "Xử lý",
+      "output": "Đầu ra",
+      "alongside": "Cũng ghi vào: {areas}",
+      "savedTo": "Đã lưu vào {area}/{folder}",
+      "none": "Chưa chọn tệp",
+      "browsing": "Đang duyệt {folder}",
+      "selectedFile": "{name}",
+      "selectedFolder": "Thư mục: {name}",
+      "openOutput": "Mở thư mục đầu ra"
     }
   },
   "products": {
