@@ -75,7 +75,7 @@ export function readLibrary(): PdfLibrary {
 function assertUpload(name: string, data: Buffer): void {
   if (data.length === 0) throw new Error('PDF_EMPTY_UPLOAD')
   if (data.length > config.pdf.maxUploadMb * 1024 * 1024) throw new Error('PDF_UPLOAD_TOO_LARGE')
-  if (!name) throw new Error('Invalid name')
+  if (!name) throw new Error('PDF_NAME_REQUIRED')
 }
 
 export function saveSource(rawName: string, data: Buffer, rawFolder = ''): PdfFileInfo {

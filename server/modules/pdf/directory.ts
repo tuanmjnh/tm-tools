@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from 'node:f
 import { dirname, basename, join } from 'node:path'
 import type { PdfDirectoryListing, PdfFileInfo, PdfFolderInfo, PdfFolderTreeNode } from '#shared/types/pdf'
 import { AREA_DIRS, type PdfFileArea } from './inspect'
-import { ensureDir, pdfDirs } from './paths'
+import { ensureDir, assertInsideRoot, pdfDirs } from './paths'
 import { naturalCompare, safeFileName, safeRelativePath } from './security'
 import { moveToTrash } from './trash'
 import { assertFileWritable, assertFolderWritable } from './workspace'
@@ -25,6 +25,7 @@ export function listAreaDirectory(
   if (!existsSync(currentAbsPath) || !statSync(currentAbsPath).isDirectory()) {
     throw new Error('PDF_FOLDER_NOT_FOUND')
   }
+  assertInsideRoot(areaRoot, currentAbsPath)
 
   // Calculate breadcrumbs
   const breadcrumbs: Array<{ name: string, path: string }> = []
@@ -47,6 +48,8 @@ export function listAreaDirectory(
 
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue // Skip hidden like .trash
+    // Links are never workspace content: following one would leave the area.
+    if (entry.isSymbolicLink()) continue
     const entryAbsPath = join(currentAbsPath, entry.name)
     const stats = statSync(entryAbsPath)
     const entryRelative = currentFolder ? `${currentFolder}/${entry.name}` : entry.name
@@ -168,6 +171,7 @@ export function renameAreaItem(
   if (!existsSync(targetAbs)) {
     throw new Error('PDF_FILE_NOT_FOUND')
   }
+  assertInsideRoot(areaRoot, targetAbs)
 
   if (statSync(targetAbs).isDirectory()) assertFolderWritable(area)
   else assertFileWritable(area)
@@ -213,6 +217,7 @@ export function getAreaFolderTree(area: PdfFileArea): PdfFolderTreeNode[] {
       for (const entry of entries) {
         const entryName = String(entry.name)
         if (entryName.startsWith('.')) continue
+        if (entry.isSymbolicLink()) continue
         if (entry.isDirectory()) {
           const subAbs = join(currentDir, entryName)
           const subRelative = currentRelative ? `${currentRelative}/${entryName}` : entryName
@@ -274,6 +279,8 @@ export function deleteAreaItem(area: PdfFileArea, rawRelativePath: string) {
 
   if (statSync(targetAbs).isDirectory()) assertFolderWritable(area)
   else assertFileWritable(area)
+
+  assertInsideRoot(areaRoot, targetAbs)
 
   return moveToTrash(area, targetAbs, relativePath)
 }

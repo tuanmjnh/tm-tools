@@ -23,7 +23,7 @@ export function safeFileName(raw: string): string {
     .trim()
 
   if (!cleaned) {
-    throw new Error('Invalid name')
+    throw new Error('PDF_NAME_REQUIRED')
   }
   return cleaned.slice(0, 180)
 }
@@ -48,11 +48,11 @@ export function safeRelativePath(raw: string): string {
   const sanitizedParts: string[] = []
   for (const part of parts) {
     if (part === '.' || part === '..') {
-      throw new Error('Invalid path traversal')
+      throw new Error('PDF_INVALID_PATH')
     }
     const clean = stripUnsafeChars(part).trim().replace(/^\.+/, '').trim()
     if (!clean) {
-      throw new Error('Invalid path component')
+      throw new Error('PDF_INVALID_PATH')
     }
     sanitizedParts.push(clean.slice(0, 180))
   }

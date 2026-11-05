@@ -5,6 +5,7 @@ import {
   isPdfName,
   naturalCompare,
   safeFileName,
+  safeRelativePath,
   safeStem
 } from '../../server/modules/pdf/security'
 
@@ -28,8 +29,8 @@ describe('safeFileName', () => {
   })
 
   it('rejects names that become empty', () => {
-    assert.throws(() => safeFileName(''), /Invalid name/)
-    assert.throws(() => safeFileName('  ...  '), /Invalid name/)
+    assert.throws(() => safeFileName(''), /PDF_NAME_REQUIRED/)
+    assert.throws(() => safeFileName('  ...  '), /PDF_NAME_REQUIRED/)
   })
 
   it('caps the name at 180 characters', () => {
@@ -66,5 +67,24 @@ describe('naturalCompare', () => {
   it('orders page_2 before page_10', () => {
     const sorted = ['page_10.pdf', 'page_2.pdf', 'page_1.pdf'].sort(naturalCompare)
     assert.deepEqual(sorted, ['page_1.pdf', 'page_2.pdf', 'page_10.pdf'])
+  })
+})
+
+describe('safeRelativePath', () => {
+  it('normalises separators and keeps nesting', () => {
+    assert.equal(safeRelativePath('a\\b/c.pdf'), 'a/b/c.pdf')
+  })
+
+  it('accepts the empty root', () => {
+    assert.equal(safeRelativePath(''), '')
+  })
+
+  it('rejects traversal with a code the API can translate', () => {
+    assert.throws(() => safeRelativePath('../etc'), /PDF_INVALID_PATH/)
+    assert.throws(() => safeRelativePath('a/./b'), /PDF_INVALID_PATH/)
+  })
+
+  it('rejects a component that sanitises to nothing', () => {
+    assert.throws(() => safeRelativePath('a/.../b'), /PDF_INVALID_PATH/)
   })
 })

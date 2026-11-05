@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, realpathSync } from 'node:fs'
+import { dirname, join, relative, sep } from 'node:path'
 import { config } from '#server/config'
 
 export const pdfRoot = config.pdf.dir
@@ -31,4 +31,38 @@ export function ensureDir(dir: string): string {
 
 export function ensurePdfDirs(): void {
   Object.values(pdfDirs).forEach(ensureDir)
+}
+
+function realpathOrSelf(path: string): string {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return path
+  }
+}
+
+/**
+ * Resolves `target` and rejects it when a symlink or Windows junction redirects
+ * it outside `root`. Path strings alone cannot catch this: `sources/escape/x`
+ * is a clean relative path whose parent is a link pointing anywhere on disk.
+ */
+export function assertInsideRoot(root: string, target: string): string {
+  const realRoot = realpathOrSelf(root)
+  let current = target
+
+  // Walk up to the first ancestor that exists: the leaf may be a file that is
+  // about to be created, and realpathSync fails on paths that do not exist yet.
+  while (!existsSync(current)) {
+    const parent = dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+
+  const realTarget = realpathOrSelf(current)
+  const rel = relative(realRoot, realTarget)
+  if (rel === '') return target
+  if (rel.startsWith('..') || rel.startsWith(sep) || /^[a-zA-Z]:/.test(rel)) {
+    throw new Error('PDF_INVALID_PATH')
+  }
+  return target
 }

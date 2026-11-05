@@ -31,7 +31,7 @@ gate ở [`VERIFICATION.md`](./VERIFICATION.md).
 | Data Flow Note `Đầu vào → Đầu ra` | **Chưa** |
 | Viewer: PDF/ảnh/bảng/docx/json/text | Đã có |
 | Viewer: zoom/rotate/thumbnail/search/sheet-nav | **Chưa** |
-| Atomic write, audit log, symlink guard | **Chưa** |
+| Atomic write, audit log | **Chưa** (symlink/junction guard đã có) |
 | Lazy tree theo node | **Chưa** |
 
 ---
@@ -1040,7 +1040,9 @@ Còn phải kiểm khi làm:
 - Source file không thay đổi sau Split/Merge/Rasterize/Export/AI Extraction.
 - File trùng tên có xử lý collision đúng (`overwriteFlag`, `PDF_FILE_ALREADY_EXISTS`).
 
-**Chưa có, phải coi là gap:** kiểm tra symlink/reparse point (không có `realpath`/`lstat` trong `server/`), và bảo vệ "file đang được job dùng" khỏi bị xoá (không có lock).
+- Symlink/junction escape bị chặn: `assertInsideRoot` (`paths.ts`) `realpath` ancestor gần nhất đã tồn tại rồi so với area root, và `listAreaDirectory`/`getAreaFolderTree` bỏ qua mọi `Dirent` là link (Windows junction báo `isSymbolicLink`, không `isDirectory`).
+
+**Chưa có, phải coi là gap:** bảo vệ "file đang được job dùng" khỏi bị xoá (không có lock).
 
 ### 17.3. Migration/recovery
 
@@ -1154,7 +1156,7 @@ Chỉ coi công việc hoàn tất khi đạt tất cả điều kiện áp dụ
 - [ ] Lazy loading thật cho cây — hiện tải cả cây area trong một request (`/explorer`), chưa lazy theo node.
 - [x] Area root không thể rename/move/delete từ UI lẫn API route.
 - [x] File operations được kiểm soát bằng descriptor/`assertFolderWritable`.
-- [ ] Path traversal được ngăn chặn — đã có; **symlink escape chưa có guard**.
+- [x] Path traversal được ngăn chặn bằng `safeRelativePath`; symlink/junction escape bị chặn bằng `assertInsideRoot` + bỏ qua `Dirent` là link khi liệt kê.
 - [x] Các tool dùng output mapping tập trung.
 - [x] Source files không bị ghi đè bởi xử lý thông thường.
 - [ ] Output collision handling — có `overwriteFlag` + `PDF_FILE_ALREADY_EXISTS`; **atomic write (temp + rename) chưa có**.

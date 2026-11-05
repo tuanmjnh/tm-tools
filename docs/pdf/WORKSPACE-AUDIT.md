@@ -134,7 +134,7 @@ supports. It must be kept, not replaced.
 | Migration of legacy layout | **Not needed** — on-disk layout already canonical; legacy `word` read-only |
 | Universal Viewer parity (zoom/rotate/thumbnail/search) | **Open** — preview keeps its current renderers only |
 | Audit log for PDF mutations | **Open** — not implemented |
-| Symlink / reparse-point escape guard | **Open** — no `realpath`/`lstat` in `server/` |
+| Symlink / reparse-point escape guard | **Delivered** — `assertInsideRoot` (`paths.ts`) checks the resolved path; listings skip link entries |
 | Atomic output write (temp + rename) | **Open** — overwrite flag only |
 | Lazy tree by node | **Open** — `/explorer` returns every area tree in one call |
 

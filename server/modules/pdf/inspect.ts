@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { PDF_FILE_AREAS } from '#shared/types/pdf'
 import type { PdfFileArea } from '#shared/types/pdf'
 import { parseCsv, parseJson, parseXlsx, parseXml } from './data/parse'
-import { pdfDirs } from './paths'
+import { assertInsideRoot, pdfDirs } from './paths'
 import { safeFileName, safeRelativePath } from './security'
 
 /**
@@ -68,6 +68,10 @@ export function resolveAreaFile(area: PdfFileArea, rawName: string): { path: str
       throw new Error('PDF_FILE_NOT_FOUND')
     }
   }
+
+  // The joined path can leave the area through a symlink or junction, so the
+  // resolved location has to be checked, not just the relative path string.
+  assertInsideRoot(AREA_DIRS[area], filePath)
 
   const name = relative.split('/').pop() || relative
   return { path: filePath, name, extension: name.split('.').pop()?.toLowerCase() ?? '' }

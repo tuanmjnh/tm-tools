@@ -124,7 +124,6 @@ scope.
 
 - Viewer parity: zoom, rotate, thumbnail, fullscreen, page search, sheet navigation, Previous/Next.
 - Audit log for PDF mutations (import, output, rename/delete, folder CRUD, repair, denied).
-- Symlink / reparse-point guard on resolved paths.
 - Atomic output write (temp file in the same area, then rename).
 - Node-level lazy loading for the folder tree; `GET /explorer` currently returns all areas at once.
 - Data Flow Note (`Đầu vào → Đầu ra`) and "open output folder" affordance.
