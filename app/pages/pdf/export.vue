@@ -118,8 +118,9 @@ const resultItems = computed(() => results.value.map(entry => ({
   detail: entry.ok ? entry.name : errorText(entry.error)
 })))
 
-async function deleteSource(item: { path: string, relativePath?: string }, area: PdfFileArea) {
-  pendingDelete.value = { name: item.relativePath || item.path, path: item.relativePath || item.path, area }
+function deleteSource(item: { name?: string, path: string, relativePath?: string }, area: PdfFileArea) {
+  const path = item.relativePath || item.path
+  pendingDelete.value = { name: item.name || path, path, area }
   deleteOpen.value = true
 }
 
@@ -170,11 +171,11 @@ async function confirmDelete() {
         @search="explorer.searchFolders"
         @create="explorer.openCreateFolder"
         @rename="item => explorer.openRename({ name: item.name, relativePath: item.path }, true, item.area ?? explorer.activeArea.value)"
-        @delete="item => deleteSource({ path: item.path }, item.area ?? explorer.activeArea.value)"
+        @delete="item => deleteSource({ name: item.name, path: item.path }, item.area ?? explorer.activeArea.value)"
       >
         <PdfFileBrowser
           :area="explorer.activeArea.value"
-          :title="t('pdf.export.source')"
+          :title="t(`pdf.areas.${explorer.activeArea.value}`)"
           :description="explorer.areaDescription.value"
           :current-folder="explorer.currentFolder.value"
           :folders="explorer.folders.value"
@@ -198,9 +199,9 @@ async function confirmDelete() {
           @select-folder="explorer.select"
           @open-folder="folder => explorer.select(folder.relativePath || folder.name)"
           @rename-folder="folder => explorer.openRename(folder, true)"
-          @delete-folder="folder => deleteSource({ path: folder.relativePath || folder.name }, explorer.activeArea.value)"
+          @delete-folder="folder => deleteSource({ name: folder.name, path: folder.relativePath || folder.name }, explorer.activeArea.value)"
           @rename-file="file => explorer.openRename(file, false)"
-          @delete-file="file => deleteSource({ path: file.relativePath || file.name }, explorer.activeArea.value)"
+          @delete-file="file => deleteSource({ name: file.name, path: file.relativePath || file.name }, explorer.activeArea.value)"
         >
           <template #flow-note>
             <PdfDocumentDataFlowNote

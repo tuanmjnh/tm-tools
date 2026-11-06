@@ -134,13 +134,28 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   }
 
   async function loadExplorer() {
+    const opened = Object.keys(loadedChildren.value)
     try {
       explorerTrees.value = await getExplorerTrees()
     } catch {
       explorerTrees.value = {}
     }
-    loadedChildren.value = {}
     deepTrees.value = null
+    // The shallow tree only carries the first level, so re-fetch the folders the
+    // user had opened; otherwise they stay expanded around an empty list.
+    const next: Record<string, PdfFolderTreeNode[]> = {}
+    await Promise.all(opened.map(async (key) => {
+      const split = key.indexOf(':')
+      const area = key.slice(0, split) as PdfFileArea
+      const path = key.slice(split + 1)
+      try {
+        next[key] = await getExplorerChildren(area, path)
+      } catch {
+        // Left out of `next` so the next expand retries instead of caching a
+        // failure as "this folder is empty".
+      }
+    }))
+    loadedChildren.value = next
   }
 
   async function expand(folder: { path: string, area?: PdfFileArea }) {

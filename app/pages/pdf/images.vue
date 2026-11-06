@@ -226,7 +226,7 @@ async function openOutput(tool: string) {
               color="neutral"
               variant="soft"
               size="xs"
-              :loading="activeSource === file.path"
+              :loading="activeSource === (file.relativePath || file.name)"
               @click="askRasterize(file)"
             />
           </template>

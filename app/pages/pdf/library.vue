@@ -150,7 +150,7 @@ async function confirmDelete() {
               color="neutral"
               variant="soft"
               size="xs"
-              :loading="activeSource === file.path"
+              :loading="activeSource === (file.relativePath || file.name)"
               @click="splitFile(file)"
             />
           </template>

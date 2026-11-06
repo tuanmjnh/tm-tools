@@ -1006,3 +1006,34 @@ paragraph tells a reader where the current state lives instead.
 
 Only Markdown changed in this phase, so the gates above confirm the edits did
 not disturb the code surface they describe.
+
+## Phase 27 — row feedback, explorer refresh, honest labels (2026-11-06)
+
+A read-through of the five tool pages plus `FileBrowser` and `usePdfExplorer`,
+looking for state that could never match its source of truth.
+
+| Finding | Why it was wrong | Fix |
+|---|---|---|
+| Four row spinners compared `activeSource` / `converting` against `file.path` | The markers are stored as `file.relativePath \|\| file.name`, but `PdfFileInfo.path` is the **absolute** on-disk path. The comparison never held, so the "Split"/"Rasterize"/"Convert" button never showed its spinner and the row looked frozen for the whole run | compare against the same identifier the action stores, in `library`, `split`, `images`, `import` |
+| `loadExplorer()` reset `loadedChildren` to `{}` on every reload | The shallow tree endpoint returns only the first level. Any folder the user had expanded collapsed to an empty list after an upload, split or delete — and `expand()` refuses to re-fetch while `loadedChildren[key]` is absent… it was absent, so the folder stayed open with no children until a manual collapse | re-fetch the keys that were loaded before the reload, in parallel; a failed re-fetch is left out of the map so the next expand retries instead of caching an empty folder |
+| `split.vue` computed a `file` it could never reach | The `find()` ran before the `activeSource` branch that returns, and `activeSource` is the only way the lookup could ever have produced a value | removed the dead lookup |
+| `export.vue` captioned the browser "Source PDF" regardless of the browsed area | every other page names the active area; export alone showed a fixed label while the user browsed `images`/`products`/`office` | title is `pdf.areas.<activeArea>`, and the now-unused `pdf.export.source` key is gone from both locales |
+| Delete dialogs named the row after its path | `extract.vue` and `export.vue` passed only `path`, so the confirm read `Delete "bang_gia/page_0001.pdf"` instead of the file name | both take `name` and fall back to the path |
+
+`tests/unit/pdf_contract.spec.ts` gained two guards: no page compares a row
+marker against `file.path`, and `loadExplorer` must re-fetch the previously
+opened keys rather than clear them.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 12:17 |
+| 2 Lint | `npx eslint` over `pages/pdf`, `components/pdf`, three composables, both specs | PASS | `LINT_EXIT=0` after the config regeneration and after `--fix` rewrote one regex to `\n {2}\}` |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs; the contract spec now runs 10 assertions |
+| 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 |
+| 5 i18n parity | flattened key sets of both locales | PASS | 2754 keys each, no en-only or vi-only entry |
+
+### Not proven
+
+- Still no signed-in browser pass. The spinner fix in particular is a visual
+  behaviour: the static guard proves the comparison now uses a comparable
+  value, not that the spinner renders during a real split.

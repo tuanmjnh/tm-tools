@@ -142,14 +142,12 @@ const activeOperation = computed(() => {
 })
 
 const flowInput = computed(() => {
-  const file = explorer.files.value.find(entry => (entry.relativePath || entry.name) === activeSource.value)
   if (activeSource.value) {
     return { label: activeSource.value.split('/').pop() ?? activeSource.value, detail: activeSource.value }
   }
   if (explorer.activeArea.value === 'split') {
     return { label: t('pdf.flow.browsing', { folder: explorer.currentFolder.value || '/' }) }
   }
-  if (file) return { label: file.name, detail: file.relativePath }
   return { label: t('pdf.flow.none') }
 })
 
@@ -231,7 +229,7 @@ async function openOutput(tool: string) {
               color="neutral"
               variant="soft"
               size="xs"
-              :loading="activeSource === file.path"
+              :loading="activeSource === (file.relativePath || file.name)"
               @click="askSplit(file)"
             />
           </template>

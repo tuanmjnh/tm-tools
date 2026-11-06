@@ -181,7 +181,7 @@ const deleteDescription = computed(() => {
               color="neutral"
               variant="soft"
               size="xs"
-              :loading="converting === file.path"
+              :loading="converting === (file.relativePath || file.name)"
               @click="convert(file)"
             />
           </template>

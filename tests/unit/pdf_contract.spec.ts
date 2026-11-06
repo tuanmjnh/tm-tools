@@ -64,6 +64,38 @@ describe('options the server actually honours', () => {
   })
 })
 
+describe('row action feedback', () => {
+  // The actions store `relativePath || name`; `file.path` is absolute, so a
+  // spinner keyed on it never matches and the row looks frozen during the run.
+  it('keys the row spinner on the identifier the action stores', () => {
+    for (const page of ['library', 'split', 'images', 'import']) {
+      const source = read(`app/pages/pdf/${page}.vue`)
+      assert.ok(
+        !/=== file\.path"/.test(source),
+        `${page}.vue compares a relative marker against the absolute file.path`
+      )
+    }
+  })
+})
+
+describe('lazy explorer reload', () => {
+  // The shallow tree carries one level, so dropping the child cache on reload
+  // leaves expanded folders open around nothing.
+  it('re-fetches the folders that were open before the reload', () => {
+    const source = read('app/composables/usePdfExplorer.ts')
+    const body = source.match(/async function loadExplorer\(\)[\s\S]*?\n {2}\}/)?.[0] ?? ''
+    assert.ok(body, 'loadExplorer not found')
+    assert.ok(
+      /Object\.keys\(loadedChildren\.value\)/.test(body),
+      'loadExplorer discards the opened folders instead of refreshing them'
+    )
+    assert.ok(
+      !/loadedChildren\.value = \{\}/.test(body),
+      'loadExplorer still clears the child cache outright'
+    )
+  })
+})
+
 // The explorer deletes through `/directory/delete`, so the cascade the confirm
 // text promises has to live there too — not only in `removeSource`.
 const dataRoot = mkdtempSync(join(tmpdir(), 'pdf-contract-'))

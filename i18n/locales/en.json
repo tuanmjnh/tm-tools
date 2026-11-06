@@ -1978,7 +1978,6 @@
       "removeDesc": "Delete \"{name}\"? This cannot be undone."
     },
     "export": {
-      "source": "Source PDF",
       "sourcePlaceholder": "Select a source PDF",
       "run": "Export",
       "formats": "Output formats",

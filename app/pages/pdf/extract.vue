@@ -307,8 +307,8 @@ function startFromConfig() {
   void start()
 }
 
-async function deleteTreeItem(item: { path: string }, area: PdfFileArea) {
-  pendingDelete.value = { name: item.path, path: item.path, area }
+function deleteTreeItem(item: { name: string, path: string }, area: PdfFileArea) {
+  pendingDelete.value = { name: item.name, path: item.path, area }
   deleteOpen.value = true
 }
 
@@ -359,7 +359,7 @@ async function confirmDelete() {
         @search="explorer.searchFolders"
         @create="explorer.openCreateFolder"
         @rename="item => explorer.openRename({ name: item.name, relativePath: item.path }, true, item.area ?? explorer.activeArea.value)"
-        @delete="item => deleteTreeItem({ path: item.path }, item.area ?? explorer.activeArea.value)"
+        @delete="item => deleteTreeItem({ name: item.name, path: item.path }, item.area ?? explorer.activeArea.value)"
       >
         <PdfFileBrowser
           :area="explorer.activeArea.value"
@@ -387,9 +387,9 @@ async function confirmDelete() {
           @select-folder="explorer.select"
           @open-folder="folder => explorer.select(folder.relativePath || folder.name)"
           @rename-folder="folder => explorer.openRename(folder, true)"
-          @delete-folder="folder => deleteTreeItem({ path: folder.relativePath || folder.name }, explorer.activeArea.value)"
+          @delete-folder="folder => deleteTreeItem({ name: folder.name, path: folder.relativePath || folder.name }, explorer.activeArea.value)"
           @rename-file="file => explorer.openRename(file, false)"
-          @delete-file="file => deleteTreeItem({ path: file.relativePath || file.name }, explorer.activeArea.value)"
+          @delete-file="file => deleteTreeItem({ name: file.name, path: file.relativePath || file.name }, explorer.activeArea.value)"
         >
           <template v-if="sourcePicker" #flow-note>
             <PdfDocumentDataFlowNote
