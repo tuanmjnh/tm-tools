@@ -979,3 +979,30 @@ fresh, full run.
 ### Not proven
 
 - Still no signed-in browser pass over the PDF pages.
+
+## Phase 26 — documentation caught up with the code (2026-11-06)
+
+§17 of the v3 spec lists the docs that must reflect the shipped state. Three of
+them still described the pre-rebuild tree, and one claimed the work had not
+started.
+
+| File | Was | Now |
+|---|---|---|
+| `WORKSPACE-UPGRADE-PLAN.md` | v3 "**not started**"; phase 2 Explorer "**Partial** — only `/pdf/library` shows all seven areas"; eight open items that Phases 4–6 closed | v3 "done 2026-11-06"; phase 2 "Done"; closed items struck through with the phase that closed them, and the two genuinely open ones left standing |
+| `WORKSPACE-AUDIT.md` | component inventory listed `OutputFolderRow.vue` and `usePdfDirectory.ts` as current; composables table listed only the old pair | inventory lists `ConfirmAction`, `DocumentDataFlowNote`, `OperationResult`, notes the two removals; composables table lists `usePdfExplorer` and `usePdfSelection`; §10 findings marked as fixed by v3 |
+| `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md` (v2) | status table still said the 7-area tree, Data Flow Note and lazy tree were missing; component/state tables named `usePdfDirectory` and `OutputFolderRow` | status table updated with the phase that delivered each; new components added; state table describes the three-way split (explorer / selection / view prefs) |
+| `TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` (this spec) | no status line; §0.1 and §1 read as current code | status paragraph added: Phases 0–6 done, 7 optional, 8 out of scope, §12 not started; §0.1/§1 explicitly labelled as the pre-rebuild snapshot and the two removed symbols called out |
+
+The spec keeps its pre-rebuild sections verbatim: they are the evidence for why
+the rebuild happened, and rewriting them would erase the audit trail. The new
+paragraph tells a reader where the current state lives instead.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 11:56 |
+| 2 Lint | `npx eslint` over the touched PDF surface + both new specs | PASS | `LINT_EXIT=0`, after that regeneration |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
+| 4 Docs links | every relative link in `docs/pdf/*.md` resolved against the filesystem | PASS | 0 broken |
+
+Only Markdown changed in this phase, so the gates above confirm the edits did
+not disturb the code surface they describe.

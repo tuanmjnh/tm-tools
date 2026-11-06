@@ -11,7 +11,7 @@ stays open, phase by phase.
 
 | Track | Spec | Scope | Status |
 |---|---|---|---|
-| **v3 — UX rebuild** | `TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` §15 | Home, one shared Explorer on every tool page, one FileBrowser, Active Input, Data Flow Note, remove duplicate panels | Phases 0–6 in the v3 spec; **not started** |
+| **v3 — UX rebuild** | `TM-DOCUMENT-STUDIO-REBUILD-SPEC-v3.md` §15 | Home, one shared Explorer on every tool page, one FileBrowser, Active Input, Data Flow Note, remove duplicate panels | Phases 0–6 **done** 2026-11-06; see [VERIFICATION.md](./VERIFICATION.md) |
 | **v4 — multi-runtime** | v3 §12 | Storage/temp/job adapters so the same engines run on local, Electron and Vercel | Design only; gated on v3 |
 
 v3 must finish and pass its gates before any v4 work starts. §12 of the v3 spec
@@ -27,7 +27,7 @@ Delivered against v2 (see `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md`):
 |---|---|---|
 | 0 | Audit & baseline | **Done** — [WORKSPACE-AUDIT.md](./WORKSPACE-AUDIT.md), baseline gates green |
 | 1 | Workspace registry + safe filesystem | **Done (registry, no migration needed)** |
-| 2 | Universal Explorer | **Partial** — shared tree, folder filter, collapse/expand, persisted width; only `/pdf/library` shows all seven areas |
+| 2 | Universal Explorer | **Done** — shared tree, folder filter, collapse/expand, persisted width; v3 Phase 2 put all seven areas on every tool page |
 | 3 | Universal File Explorer | **Done** — toolbar (search/sort/density) delivered; multi-select deferred |
 | 4 | Output mapping | **Done (centralised registry + overview panel)** |
 | 5 | Universal Viewer | **Partial** — image zoom/rotate/reset delivered; PDF page thumbnails and in-PDF search open |
@@ -36,9 +36,9 @@ Delivered against v2 (see `TM-DOCUMENT-WORKSPACE-IMPLEMENTATION-SPEC.md`):
 | 8 | Lazy explorer tree | **Done** — depth-1 load, per-node children endpoint, deep query only for search |
 | 9 | Viewer parity | **Partial** — image zoom/rotate/reset done; page thumbnails and PDF search open |
 
-The v3 rebuild replaces the "partial" row of phase 2: every tool page gets the
-same seven-area explorer and one FileBrowser. It does not re-open the delivered
-phases; it composes them differently.
+The v3 rebuild closed the "partial" row of phase 2: every tool page now gets
+the same seven-area explorer and one FileBrowser. It did not re-open the
+delivered phases; it composes them differently.
 
 ## Phase 1 — workspace registry
 
@@ -176,20 +176,26 @@ thumbnails and cross-page PDF search remain open.
 | File watcher | Not added; refresh stays explicit to avoid watching a large tree |
 | Migration of folder names | Not needed — on-disk layout is already the target layout |
 | `01-sources/…` numbered layout | Not adopted; renaming would break existing files and job references |
-| Full workspace tree on every tool page | v2 delivered it on Library only; v3 §4.2 makes it the default on all six pages |
-| Multi-select folder checkbox | Rendered but unwired in `FolderTree`; v3 keeps it unwired and removes the checkbox from the Explorer contract |
+| Full workspace tree on every tool page | Delivered in v3 Phase 2 — the same `PDF_EXPLORER_AREAS` tree on all six pages |
+| Multi-select folder checkbox | Removed from the Explorer contract in v3 Phase 3; `FolderTree` passes `hide-checkbox` |
 
 ## Open items
 
-- Viewer parity: zoom, rotate, thumbnail, fullscreen, page search, sheet navigation, Previous/Next.
-- Data Flow Note (`Đầu vào → Đầu ra`) and "open output folder" affordance — designed in v3 §5, not implemented.
-- Seven-area explorer on tool pages — designed in v3 §4.2, not implemented.
-- Duplicate file-list panels on split/images/import/export/extract — removal plan in v3 §15 Phase 5.
-- Three error codes missing from `pdfHttpStatus` (`PDF_FOLDER_NAME_REQUIRED`, `PDF_TRASH_ITEM_NOT_FOUND`, `PDF_EXPORT_FAILED`) — v3 §10.5.
-- `outputFormats` checkbox in `extract.vue` never reaches the server; server always writes all five files — v3 §10.7.
-- `overwrite` checkbox in `library.vue` applies to one row action only — v3 §10.6.
-- Deleting a source cascades to split/images/checkpoints/merged/products; the confirm does not say so — v3 §10.4.
+Closed by v3 (details and gate evidence in [VERIFICATION.md](./VERIFICATION.md)):
+
+- ~~Data Flow Note (`Đầu vào → Đầu ra`) and "open output folder" affordance~~ — Phase 4.
+- ~~Seven-area explorer on tool pages~~ — Phase 2.
+- ~~Duplicate file-list panels on split/images/import/export/extract~~ — Phase 5; the extract Jobs panel stays, which the spec allows (`§14.2`).
+- ~~Three error codes missing from `pdfHttpStatus`~~ — Phase 6.
+- ~~`outputFormats` checkbox in `extract.vue`~~ — Phase 6.
+- ~~`overwrite` checkbox in `library.vue`~~ — Phase 6.
+- ~~Source-delete cascade not stated in the confirm~~ — Phase 6.
+
+Still open:
+
+- Viewer parity: zoom, rotate, thumbnail, fullscreen, page search, sheet navigation, Previous/Next. Optional Phase 7, only on a specific request.
 - Orphan `*.tmp` files after a crash; Windows file-lock behaviour — hardening, not scheduled.
+- No signed-in browser pass over the PDF pages; `/api/v1/pdf/*` answers 401 without a session, so the UX acceptance list is verified statically and by compile.
 
 ## Multi-runtime (v4)
 
@@ -208,6 +214,19 @@ against this repo:
    `/var/task`; there is no cloud database in the repo yet.
 
 ## Verification
+
+### v3 UX rebuild — 2026-11-06
+
+Phases 0–6 plus three self-audit passes, gate evidence per phase in
+[VERIFICATION.md](./VERIFICATION.md). Final state of the tree:
+
+- `npx nuxt typecheck` → `TC_EXIT=0`, 0 × `error TS`.
+- `npx eslint` over the touched PDF surface, re-run after the last
+  `.nuxt/eslint.config.mjs` regeneration → `LINT_EXIT=0`.
+- `pnpm test` → `27/27 specs passed`.
+- All 7 PDF pages compile through Vite → HTTP 200.
+- No signed-in browser pass: `/api/v1/pdf/*` answers 401 without a session, so
+  the UX acceptance list (§14.2) is verified statically and by compile only.
 
 ### Docs-only change — 2026-11-05 (v3 spec rewrite)
 

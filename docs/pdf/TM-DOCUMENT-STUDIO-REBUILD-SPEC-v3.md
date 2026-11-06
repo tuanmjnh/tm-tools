@@ -15,6 +15,16 @@
 | Phase + kết quả | `docs/pdf/WORKSPACE-UPGRADE-PLAN.md` |
 | Bằng chứng gate | `docs/pdf/VERIFICATION.md` |
 
+**Trạng thái 2026-11-06:** Phases 0–6 đã xong; gate và bằng chứng nằm trong
+`VERIFICATION.md`. Phase 7 (viewer parity) chỉ làm khi có yêu cầu cụ thể;
+Phase 8 ngoài v3; §12 (v4 multi-runtime) chưa bắt đầu.
+
+Hệ quả cho người đọc: §0.1 và §1 là **ảnh chụp trước khi rebuild**, giữ nguyên
+làm bằng chứng. Chúng còn nhắc `usePdfDirectory` và `OutputFolderRow` — cả hai
+đã bị xoá (`usePdfExplorer` thay thế từ Phase 2, `ConfirmAction`/folder action
+thay thế row từ Phase 5/6). Đọc trạng thái hiện tại ở `WORKSPACE-AUDIT.md` §3–4
+và `WORKSPACE-UPGRADE-PLAN.md`, không đọc §1 như mô tả code đang chạy.
+
 Bản nháp v3 đầu tiên viết từ mô tả sản phẩm mà chưa đọc code, nên có ba giả định sai: (1) tồn tại route `/pdf/merge` — thực tế không có, Merge nằm trong `/pdf/split`; (2) app tự khai báo menu — thực tế tm-hub sinh từ `system_routes`; (3) filesystem đi qua Electron IPC — thực tế đi qua Nitro. Bản nháp lưu nguyên văn ở `docs/archive/`, **không dùng để triển khai**. Mọi route, field và con số dưới đây đọc trực tiếp từ code ngày 2026-11-05.
 
 ---

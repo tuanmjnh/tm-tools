@@ -25,14 +25,20 @@ gate ở [`VERIFICATION.md`](./VERIFICATION.md).
 | Area root bất biến, subfolder sửa được | Đã có |
 | Explorer 2 side + splitter/collapse/persist | Đã có |
 | Library cây 7 area | Đã có |
-| Cây đầy đủ trên mọi trang tool | **Chưa** — mỗi trang chỉ có cây area của mình |
+| Cây đầy đủ trên mọi trang tool | Đã có (v3 Phase 2) |
 | Toolbar file (search/sort/density) | Đã có |
 | Multi-select, bulk, grid view | **Chưa** |
-| Data Flow Note `Đầu vào → Đầu ra` | **Chưa** |
+| Data Flow Note `Đầu vào → Đầu ra` | Đã có (v3 Phase 4) |
 | Viewer: PDF/ảnh/bảng/docx/json/text | Đã có |
 | Viewer: zoom/rotate/thumbnail/search/sheet-nav | **Chưa** |
 | Atomic write, audit log | Đã có |
-| Lazy tree theo node | **Chưa** |
+| Lazy tree theo node | Đã có |
+
+Bảng trên là ảnh chụp 2026-11-05. Sau đó: lazy tree hoàn tất ở v2 Phase 8;
+cây 7 area trên mọi trang tool (v3 Phase 2) và Data Flow Note (v3 Phase 4) đến
+từ v3 — bằng chứng gate ở [`VERIFICATION.md`](./VERIFICATION.md).
+Multi-select/bulk và viewer parity vẫn chưa làm: viewer parity là v3 Phase 7
+tuỳ chọn, bulk không nằm trong v3.
 
 ---
 
@@ -870,34 +876,42 @@ Không tạo bản trùng; các component dưới đây đã gánh các vai trò
 | Một file row | `FileRow.vue` |
 | Menu hành động của file | `FileActions.vue` |
 | Folder row trong listing | `FolderRow.vue` |
-| Output-folder row có action chính | `OutputFolderRow.vue` |
 | Right-click menu | `ContextMenu.vue` |
 | Chọn format export | `ExportFormatPicker.vue` |
 | Modal folder / rename / trash | `FolderModal.vue`, `RenameModal.vue`, `TrashModal.vue` |
+| Xác nhận một write action + toggle overwrite | `ConfirmAction.vue` (v3 Phase 6) |
+| Note `Đầu vào → Đầu ra`, đích từ `GET /workspace` | `DocumentDataFlowNote.vue` (v3 Phase 4) |
+| Kết quả sau khi chạy + mở thư mục đích | `OperationResult.vue` (v3 Phase 4) |
 | Viewer theo MIME | `PreviewFile.vue` + `PreviewTable.vue` / `PreviewText.vue` |
 | Preset extraction | `PresetSampleEditor.vue` |
 
-**Chưa có** (không được coi là đã có): `DocumentDataFlowNote`, `DocumentOperationConfigDrawer`, `DocumentJobProgress`, `DocumentSelectionToolbar` (bulk), grid view, `DocumentFileMetadata` riêng. Khi cần, thêm mới hoặc mở rộng component ở trên, không tạo song song.
+`OutputFolderRow.vue` đã bị xoá ở v3 Phase 5: split và images đưa action chính
+vào folder action trong `FileBrowser`, nên row component thứ hai không còn
+reader.
+
+**Chưa có** (không được coi là đã có): `DocumentOperationConfigDrawer`, `DocumentJobProgress`, `DocumentSelectionToolbar` (bulk), grid view, `DocumentFileMetadata` riêng. Khi cần, thêm mới hoặc mở rộng component ở trên, không tạo song song.
 
 **Viewer:** `app/pages/pdf/preview.vue` (`layout: false`) là viewer hiện tại; thêm renderer MIME mới trong `PreviewFile.vue`.
 
 ### 12.3. Nguyên tắc phân lớp component
 
 - Presentation component: nhận props, emit event; không tự truy cập filesystem.
-- Container/composable/store: quản lý state, gọi typed API (`usePdfStudio`, `usePdfDirectory`).
+- Container/composable/store: quản lý state, gọi typed API (`usePdfStudio`, `usePdfExplorer`, `usePdfSelection`).
 - Nitro module: xử lý filesystem, policy, registry (`server/modules/pdf/*`).
 - Không nhồi tree loading, permission và file operation vào cùng một Vue component.
 - Không để mỗi page tự duy trì một bản folder tree hoặc list file riêng.
 - Component dùng chung phải có props/events rõ ràng và không phụ thuộc cứng vào một route.
 
-### 12.4. State — hiện trạng
+### 12.4. State — hiện trạng (sau v3)
 
 | State | Nơi giữ hiện tại |
 |---|---|
-| Folder đang mở (`currentFolder`) | `usePdfDirectory` (ref cục bộ mỗi page) |
+| Folder đang mở (`currentFolder`) + area | `usePdfExplorer` (một instance mỗi page) |
+| Lazy children / deep tree | `usePdfExplorer` (`loadedChildren`, `deepTrees`) |
 | `expandedIds` | `HeTreeMenu` + `FolderTree` |
 | Selection folder | `selectedKey` computed = `${area}:${currentFolder}` |
 | Selection file | state cục bộ trong `FileBrowser`/page |
+| Active Input cho operation | `usePdfSelection` (tách khỏi folder đang duyệt) |
 | View density | `FileBrowser` (không persist) |
 | Search/sort file | `FileBrowser` (không persist) |
 | Explorer width/collapsed | `localStorage` (`pdf.explorer.width`, `pdf.explorer.collapsed`) |

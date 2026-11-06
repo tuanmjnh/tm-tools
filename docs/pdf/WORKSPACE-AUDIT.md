@@ -60,18 +60,24 @@ served by the directory API. `PDF_FILE_AREAS` (server) and `PdfFileArea`
 
 | Component | Responsibility | Used by | Reuse decision |
 |---|---|---|---|
-| `WorkspaceShell.vue` | 2-side grid: tree left, workspace right; forwards tree events | library, split, images, export, import | **Extend** – add resize/collapse + mode switch |
-| `FolderTree.vue` | Area folder tree, expansion, per-node actions | via WorkspaceShell | **Extend** – search, contextual highlight, collapse |
+| `WorkspaceShell.vue` | 2-side grid: tree left, workspace right; forwards tree events | library, split, images, export, import, extract | Reuse |
+| `FolderTree.vue` | Area folder tree, expansion, per-node actions; passes `hide-checkbox` | via WorkspaceShell | Reuse |
 | `FolderRow.vue` | Row in a directory listing for a folder | FileBrowser | Reuse – readonly gating already exists |
-| `FileBrowser.vue` | Right-side browser: header, breadcrumb, upload, list, footer slot | all 5 workspaces | **Extend** – toolbar (search/sort/view) |
-| `FileRow.vue` | One file row, icon/meta/actions, context menu | FileBrowser, pages | Reuse |
+| `FileBrowser.vue` | Right-side browser: header, breadcrumb, upload, list, footer slot | all 6 explorer pages | Reuse |
+| `FileRow.vue` | One file row, icon/meta/actions, context menu | FileBrowser | Reuse |
 | `FileActions.vue` | Row dropdown with shared file actions | FileRow | Reuse |
-| `OutputFolderRow.vue` | Output-folder row with a primary action | split, images, import, export | Reuse |
+| `ConfirmAction.vue` | Modal that hosts one write action plus the overwrite toggle | library, split, images, import | Added in v3 Phase 6 |
+| `DocumentDataFlowNote.vue` | Input → operation → output note, destination from `GET /workspace` | split, images, import, export, extract | Added in v3 Phase 4 |
+| `OperationResult.vue` | Post-run summary with "open output folder" | same five tool pages | Added in v3 Phase 4 |
 | `ContextMenu.vue` | Right-click wrapper for arbitrary content | everywhere | Reuse |
 | `ExportFormatPicker.vue` | Format toggle group | export | Reuse |
-| `FolderModal` / `RenameModal` / `TrashModal` | CRUD dialogs | usePdfDirectory consumers | Reuse |
+| `FolderModal` / `RenameModal` / `TrashModal` | CRUD dialogs | `usePdfExplorer` consumers | Reuse |
 | `PreviewFile` / `PreviewTable` / `PreviewText` | Inline renderers per MIME | preview page | Reuse – already the universal viewer |
 | `PresetSampleEditor` | Extraction preset editor | extract | Reuse |
+
+`OutputFolderRow.vue` was removed in v3 Phase 5: split and images now expose
+their primary action as a folder action inside `FileBrowser`, so a second row
+component had no reader.
 
 No duplicate of these should be created; the workspace upgrade extends them.
 
@@ -80,13 +86,15 @@ No duplicate of these should be created; the workspace upgrade extends them.
 | Composable | Responsibility |
 |---|---|
 | `usePdfStudio.ts` | All `/api/v1/pdf/*` calls, `busy` action key, notifications |
-| `usePdfDirectory.ts` | Current area/folder, listing, folder CRUD modal state |
+| `usePdfExplorer.ts` | Active area/folder, listing, lazy tree, folder CRUD modal state, per-area caption, `outputMapping` |
+| `usePdfSelection.ts` | Active Input for one operation, kept apart from the folder being browsed |
 | `usePdfMenus.ts` | Shared file/folder/workspace menus, `PDF_WORKSPACES` list |
-| `usePdfStudio` + `usePdfDirectory` used together on every page |
 
-`usePdfDirectory` currently takes a *static* area (or a ref) and reloads the
-listing itself. There is no shared explorer state, no persisted view
-preferences and no permission model on the client.
+Every explorer page composes `usePdfStudio` + `usePdfExplorer` (plus
+`usePdfSelection` on the five tool pages). The older `usePdfDirectory.ts` was
+deleted in v3 Phase 25 after `usePdfExplorer` replaced it; nothing referenced
+it. Client-side view preferences stay in `localStorage`; there is no permission
+model on the client — the server decides and the UI reads `GET /workspace`.
 
 ## 5. Preview window (Universal Viewer)
 
@@ -184,3 +192,7 @@ Each one is a real mismatch, not a preference.
 | Rasterize needs a native canvas | `pdf-to-img@7` → `pdfjs-dist`, which lists `@napi-rs/canvas` as an *optional* dependency | A serverless install that skips optional deps breaks rasterize and PNG export |
 | Chat store is native SQLite on a `cwd` path | `server/modules/chat/store.ts` uses `better-sqlite3` under `process.env.TOOLS_DATA_DIR ?? join(process.cwd(), '.data')` | No cloud database exists yet; v4 job metadata needs one |
 | No `vercel.json` / Vercel preset | repo has neither | v4 adds build config; v3 must not touch it |
+
+All of the v3 items above were fixed in Phases 0–6 on 2026-11-06; the evidence
+per item is in [VERIFICATION.md](./VERIFICATION.md). Code references in the
+table describe the pre-v3 state and are kept as the audit record.
