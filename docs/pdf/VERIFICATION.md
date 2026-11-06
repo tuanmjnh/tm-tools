@@ -950,3 +950,32 @@ fixed in the same phase; the log's final entry is `Found 0 errors`.
 ### Not proven
 
 - Still no signed-in browser pass over the PDF pages.
+
+## Phase 25 — last orphan removal (2026-11-06)
+
+| Removed | Why it was dead |
+|---|---|
+| `app/composables/usePdfDirectory.ts` (152 lines) | `usePdfExplorer` replaced it in Phase 2; a tree-wide search across `app/`, `shared/`, `server/`, `tests/` and `electron/` found no reference other than its own definition |
+
+The file held a second, older implementation of folder listing, breadcrumbs
+and rename/delete plumbing. Leaving it in place meant two sources of truth for
+the same server calls, and any later edit would have had to guess which one the
+pages used.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config regenerated to 24585 bytes at 11:43 |
+| 2 Lint | `npx eslint` over `pages/pdf`, `components/pdf`, `usePdfStudio`, `usePdfExplorer`, `usePdfSelection`, both new specs | PASS | `LINT_EXIT=0`, run after that regeneration |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
+| 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 for `index`, `library`, `split`, `images`, `import`, `export`, `extract` |
+| 5 Dead reference | `grep -rn usePdfDirectory` | PASS | no matches (exit 1) |
+
+The dev log still contains older `vue-tsc` errors from the intermediate states
+of Phase 24 and a `[Server Error] Missing authorization token` from an
+unauthenticated curl. Neither reflects this phase: the watcher converged to
+`[vue-tsc] Found 0 errors. Watching for file changes.` and gate 1 above is a
+fresh, full run.
+
+### Not proven
+
+- Still no signed-in browser pass over the PDF pages.
