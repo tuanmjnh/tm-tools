@@ -197,6 +197,19 @@ Still open:
 - Orphan `*.tmp` files after a crash; Windows file-lock behaviour — hardening, not scheduled.
 - No signed-in browser pass over the PDF pages; `/api/v1/pdf/*` answers 401 without a session, so the UX acceptance list is verified statically and by compile.
 
+## Blocked on backend
+
+- **Export data formats cannot be disabled per-source.** §8.6 of the v3 spec
+  asks the CSV/JSON/XLSX/XML checkboxes to be disabled with a reason when the
+  source has no AI cache. No route exposes that fact: `readCachedRows()` is
+  only reachable through `exportSource()`, and `/workspace` reports areas, not
+  per-source cache. The UI therefore keeps all formats selectable and the run
+  returns `PDF_NO_ROWS` for the missing ones, which `OperationResult` shows per
+  format. Making the checkboxes honest needs either a `GET /cache?source=` route
+  or a `hasCache` field on the source listing — both are new backend surface,
+  which §11.3 forbids in v3.
+
+
 ## Multi-runtime (v4)
 
 Not started. Design, blockers and the required order of work are in
