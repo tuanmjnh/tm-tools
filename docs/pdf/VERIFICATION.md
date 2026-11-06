@@ -917,3 +917,36 @@ in the map.
 - Still no signed-in browser pass: `/api/v1/pdf/*` answers 401 without a
   session, so the counts, captions and toasts were verified statically and by
   compile only.
+
+## Phase 24 — dead surface removal (2026-11-06)
+
+The v3 migration left code and copy with no reader. Everything below was
+checked against the whole tree (`app/`, `shared/`, `server/`, `electron/`)
+first, and the runtime-composed key families (`pdf.areas.*`,
+`pdf.overview.groups.*`, `pdf.overview.config.*`,
+`pdf.overview.mapping.tools.*`, `pdf.status.*`, `pdf.workspaces.*`) were
+excluded from the scan so a live key could not be mistaken for a dead one.
+
+| Removed | Why it was dead |
+|---|---|
+| `uploadWord`, `wordToPdf`, `removeWord`, `removeOffice` | no page calls them; `word` is a read-only legacy area no explorer page exposes |
+| `removeSource`, `removeSplitFolder`, `removeImagesFolder`, `removeMerged`, `removeProduct` | deletes now go through `explorer.removeItem`, which calls `/directory/delete` |
+| the matching `PDF_ACTION_LABELS` ids (`uploadWord`, `wordToPdf`, `removeWord`, `removeOffice`, `removeSource`, `removeFolder`, `removeOutput`) | their `run()` callers are gone, so the label entries had no reader either |
+| 98 `pdf.*` i18n keys in each locale | the whole `pdf.convert` namespace (26 keys), the Word-upload block in `pdf.library`, the old panel/table headers in `split`, `images`, `extract`, `export`, `import`, plus `selection.none`, `flow.selectedFile`, `flow.selectedFolder`, `flow.openOutput` |
+
+Both locales stayed identical: 2755 keys each, no en-only or vi-only entry.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24603 bytes at 11:36; the dev-server vue-tsc watcher also ends at "Found 0 errors" |
+| 2 Lint | `npx eslint` over the touched PDF surface | PASS | exit 0 |
+| 3 Tests | `pnpm test` | PASS | 27/27 specs; `i18n_keys` still green after the purge |
+| 4 SFC compile | 7 pages through Vite | PASS | HTTP 200 with non-empty output |
+
+Two intermediate states during this phase produced `vue-tsc` errors in the dev
+log (shorthand properties whose functions had just been deleted). They were
+fixed in the same phase; the log's final entry is `Found 0 errors`.
+
+### Not proven
+
+- Still no signed-in browser pass over the PDF pages.

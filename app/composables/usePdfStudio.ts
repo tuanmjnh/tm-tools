@@ -35,17 +35,10 @@ export const PDF_ACTION_LABELS = {
   removeInput: 'pdf.actions.removeInput',
   convertInput: 'pdf.actions.convertInput',
   exportSource: 'pdf.actions.exportSource',
-  uploadWord: 'pdf.actions.uploadWord',
-  wordToPdf: 'pdf.actions.wordToPdf',
-  removeWord: 'pdf.actions.removeWord',
-  removeOffice: 'pdf.actions.removeOffice',
   split: 'pdf.actions.split',
   rasterize: 'pdf.actions.rasterize',
-  removeSource: 'pdf.actions.removeSource',
   merge: 'pdf.actions.merge',
-  removeFolder: 'pdf.actions.removeFolder',
   imagesToPdf: 'pdf.actions.imagesToPdf',
-  removeOutput: 'pdf.actions.removeOutput',
   extract: 'pdf.actions.extract',
   cancel: 'pdf.actions.cancel',
   restoreTrash: 'pdf.actions.restore',
@@ -221,50 +214,6 @@ export function usePdfStudio() {
     return result
   }
 
-  async function uploadWord(files: File[]): Promise<boolean> {
-    const body = new FormData()
-    for (const file of files) body.append('files', file)
-
-    const result = await run('uploadWord', async () => {
-      const res = await $fetch<PdfResponse<PdfFileInfo[]>>(pdfUrl('/word/upload'), { method: 'POST', body })
-      await refreshLibrary()
-      return res.data
-    })
-    if (result) notifySaved('uploadWord', 'pdf.notices.uploaded', result)
-    return Boolean(result)
-  }
-
-  /** Word→PDF creates a normal source, so split/rasterize/extract work on it. */
-  async function wordToPdf(name: string, overwrite = true): Promise<boolean> {
-    const result = await run('wordToPdf', async () => {
-      await $fetch(pdfUrl(`/word/${segment(name)}/pdf`), { method: 'POST', body: { overwrite } })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.wordToPdf'), t('pdf.notices.wordToPdfDone', { name }))
-    return Boolean(result)
-  }
-
-  async function removeWord(name: string): Promise<boolean> {
-    const result = await run('removeWord', async () => {
-      await $fetch(pdfUrl(`/word/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeWord'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
-  async function removeOffice(name: string): Promise<boolean> {
-    const result = await run('removeOffice', async () => {
-      await $fetch(pdfUrl(`/office/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeOutput'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
   async function splitSource(name: string, overwrite = true): Promise<boolean> {
     const result = await run('split', async () => {
       await $fetch(pdfUrl(`/sources/${segment(name)}/split`), { method: 'POST', body: { overwrite } })
@@ -285,16 +234,6 @@ export function usePdfStudio() {
     return Boolean(result)
   }
 
-  async function removeSource(name: string): Promise<boolean> {
-    const result = await run('removeSource', async () => {
-      await $fetch(pdfUrl(`/sources/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeSource'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
   async function mergeFolder(name: string, overwrite = true): Promise<boolean> {
     const result = await run('merge', async () => {
       await $fetch(pdfUrl(`/split/${segment(name)}/merge`), { method: 'POST', body: { overwrite } })
@@ -305,16 +244,6 @@ export function usePdfStudio() {
     return Boolean(result)
   }
 
-  async function removeSplitFolder(name: string): Promise<boolean> {
-    const result = await run('removeFolder', async () => {
-      await $fetch(pdfUrl(`/split/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeFolder'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
   async function imagesToPdf(name: string, overwrite = true): Promise<boolean> {
     const result = await run('imagesToPdf', async () => {
       await $fetch(pdfUrl(`/images/${segment(name)}/pdf`), { method: 'POST', body: { overwrite } })
@@ -322,36 +251,6 @@ export function usePdfStudio() {
       return true
     })
     if (result) notify.success(t('pdf.actions.imagesToPdf'), t('pdf.notices.imagesToPdfDone', { name }))
-    return Boolean(result)
-  }
-
-  async function removeImagesFolder(name: string): Promise<boolean> {
-    const result = await run('removeFolder', async () => {
-      await $fetch(pdfUrl(`/images/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeFolder'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
-  async function removeMerged(name: string): Promise<boolean> {
-    const result = await run('removeOutput', async () => {
-      await $fetch(pdfUrl(`/merged/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeOutput'), t('pdf.notices.removed', { name }))
-    return Boolean(result)
-  }
-
-  async function removeProduct(name: string): Promise<boolean> {
-    const result = await run('removeOutput', async () => {
-      await $fetch(pdfUrl(`/products/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeOutput'), t('pdf.notices.removed', { name }))
     return Boolean(result)
   }
 
@@ -526,19 +425,10 @@ export function usePdfStudio() {
     removeInput,
     convertInput,
     exportSource,
-    uploadWord,
-    wordToPdf,
-    removeWord,
-    removeOffice,
     splitSource,
     rasterizeSource,
-    removeSource,
     mergeFolder,
-    removeSplitFolder,
     imagesToPdf,
-    removeImagesFolder,
-    removeMerged,
-    removeProduct,
     startExtraction,
     cancelJob,
     jobDetail,
