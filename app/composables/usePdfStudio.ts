@@ -2,7 +2,6 @@ import type {
   PdfDirectoryListing,
   PdfExportFormatResult,
   PdfExtractJobState,
-  PdfExtractJobSummary,
   PdfFileInfo,
   PdfFolderInfo,
   PdfFolderTreeNode,
@@ -384,10 +383,6 @@ export function usePdfStudio() {
     return Boolean(result)
   }
 
-  function jobDetail(id: string): Promise<PdfExtractJobSummary> {
-    return $fetch<PdfResponse<PdfExtractJobSummary>>(pdfUrl(`/extract/${segment(id)}`)).then(res => res.data)
-  }
-
   return {
     library,
     jobs,
@@ -419,7 +414,6 @@ export function usePdfStudio() {
     imagesToPdf,
     startExtraction,
     cancelJob,
-    jobDetail,
     errorText
   }
 }

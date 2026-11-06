@@ -249,7 +249,6 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   return {
     activeArea,
     currentFolder,
-    directoryListing,
     loading,
     folders,
     files,
@@ -265,9 +264,7 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
     renameModalOpen,
     renameTarget,
     trashOpen,
-    outputMapping,
     outputArea,
-    rules,
     select,
     reload,
     expand,

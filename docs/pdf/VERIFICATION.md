@@ -1054,3 +1054,24 @@ were removed.
 | 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
 | 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 |
 | 5 i18n parity | flattened key sets | PASS | 2752 keys each (two removed per locale), no drift |
+
+## Phase 29 — unnamed exports with no reader (2026-11-06)
+
+A script compared every name in the three PDF composables' return objects
+against all of `app/` and `tests/`, so the check could not be fooled by a
+destructuring site the earlier greps missed.
+
+| Removed | Why it was dead |
+|---|---|
+| `usePdfStudio.jobDetail()` | no caller; the extract page reads progress from the `jobs` list it already polls, and `GET /extract/<id>` stays available to the API |
+| `usePdfExplorer.directoryListing` | the pages read `folders`/`files`/`breadcrumbs`/`parentFolder`; the raw listing was never destructured |
+| `usePdfExplorer.outputMapping` | pages call `explorer.outputArea(tool)`; `index.vue` keeps its own copy from the same report |
+| `usePdfExplorer.rules` | used internally for permissions; no page asked for the helper itself |
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 12:31 |
+| 2 Lint | `npx eslint` over the same surface | PASS | `LINT_EXIT=0` |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
+| 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 |
+| 5 Export check | names in each composable's return object vs every `app/` + `tests/` file | PASS | no unused name left |
