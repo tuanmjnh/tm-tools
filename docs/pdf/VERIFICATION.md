@@ -1075,3 +1075,30 @@ destructuring site the earlier greps missed.
 | 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
 | 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 |
 | 5 Export check | names in each composable's return object vs every `app/` + `tests/` file | PASS | no unused name left |
+
+## Phase 30 — confirmations and preview actions that could not work (2026-11-06)
+
+Reading the remaining components (`TrashModal`, `PreviewFile`, `FileActions`,
+`usePdfMenus`, `FolderRow`) instead of only the pages.
+
+| Finding | Why it was wrong | Fix |
+|---|---|---|
+| "Empty trash" asked for confirmation; the per-item "Delete permanently" button did not, although it is the same irreversible disk erase | one click on a trash-row icon destroyed a file, while the bulk equivalent asked first | single delete now opens its own `BaseConfirmModal` naming the item (`pdf.trash.deletePermanentDesc`) |
+| The DOCX fallback offered "Convert to PDF" for every `.docx`, in every area | `POST /inputs/<name>/pdf` resolves the name through `inputs/` (plus the legacy `word/`), so a DOCX opened from `office/` or `products/` always failed with `PDF_INPUT_NOT_FOUND` | the button is only rendered for `inputs`/`word`; elsewhere the panel explains why (`pdf.preview.docxNoConvert`) |
+
+`TrashModal` is reached from `library` and `import`, so both pages inherit the
+confirmation without touching them.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 15:20 |
+| 2 Lint | `npx eslint` over `pages/pdf`, `components/pdf`, three composables, both specs | PASS | `LINT_EXIT=0` |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
+| 4 SFC compile | 8 pages (incl. `preview`) + 6 pdf components through Vite | PASS | HTTP 200 each |
+| 5 i18n parity | flattened key sets | PASS | 2754 keys each, zero drift |
+
+### Not proven
+
+- The trash confirmation and the hidden convert button are interaction states;
+  no signed-in browser pass was possible, so both are verified by compile and
+  by reading the code path they guard.

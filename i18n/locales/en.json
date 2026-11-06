@@ -2012,7 +2012,8 @@
       "zoomOut": "Zoom out",
       "zoomReset": "Reset zoom",
       "rotateLeft": "Rotate left",
-      "rotateRight": "Rotate right"
+      "rotateRight": "Rotate right",
+      "docxNoConvert": "This Word file lives in a read-only result folder; only uploaded inputs can be converted here."
     },
     "folder": {
       "new": "New folder",
@@ -2037,7 +2038,8 @@
       "emptyDesc": "All files and folders in trash will be permanently deleted from disk. This cannot be undone.",
       "restore": "Restore",
       "deletePermanent": "Delete permanently",
-      "badge": "{count} in trash"
+      "badge": "{count} in trash",
+      "deletePermanentDesc": "Delete \"{name}\"? It will be erased from disk and cannot be recovered."
     },
     "kpi": {
       "sources": "Source PDFs",

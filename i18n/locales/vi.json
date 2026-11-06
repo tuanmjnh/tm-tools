@@ -2012,7 +2012,8 @@
       "zoomOut": "Thu nhỏ",
       "zoomReset": "Đặt lại zoom",
       "rotateLeft": "Xoay trái",
-      "rotateRight": "Xoay phải"
+      "rotateRight": "Xoay phải",
+      "docxNoConvert": "Tệp Word này nằm trong thư mục kết quả chỉ đọc; chỉ tệp đầu vào đã tải lên mới chuyển được ở đây."
     },
     "folder": {
       "new": "Thư mục mới",
@@ -2037,7 +2038,8 @@
       "emptyDesc": "Tất cả các tệp và thư mục trong thùng rác sẽ bị xóa vĩnh viễn khỏi ổ đĩa. Bạn không thể hoàn tác.",
       "restore": "Khôi phục",
       "deletePermanent": "Xóa vĩnh viễn",
-      "badge": "{count} trong thùng rác"
+      "badge": "{count} trong thùng rác",
+      "deletePermanentDesc": "Xóa \"{name}\"? Tệp sẽ bị xoá khỏi ổ đĩa và không thể khôi phục."
     },
     "kpi": {
       "sources": "PDF gốc",

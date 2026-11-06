@@ -38,6 +38,8 @@ const zoom = ref(1)
 const rotation = ref(0)
 
 const canZoom = computed(() => kind.value === 'image')
+/** Only inputs (and the legacy word area) reach the conversion route. */
+const canConvert = computed(() => props.area === 'inputs' || props.area === 'word')
 const imageStyle = computed(() => ({
   transform: `rotate(${rotation.value}deg) scale(${zoom.value})`,
   transition: 'transform 150ms ease'
@@ -256,9 +258,10 @@ watch(() => [props.area, props.name], load)
     <div v-else-if="kind === 'docx'" class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <UIcon name="i-lucide-file-type-2" class="size-8 text-muted" />
       <p class="max-w-sm text-sm text-muted">
-        {{ t('pdf.preview.docxNeedsPdf') }}
+        {{ canConvert ? t('pdf.preview.docxNeedsPdf') : t('pdf.preview.docxNoConvert') }}
       </p>
       <UButton
+        v-if="canConvert"
         icon="i-lucide-file-text"
         color="primary"
         variant="soft"

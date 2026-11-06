@@ -16,6 +16,8 @@ const { formatDateTime } = useDateTime()
 const { trashItems, loading, busy, refreshTrash, restoreTrash, deleteTrashPermanent, emptyAllTrash } = usePdfStudio()
 
 const confirmEmptyOpen = ref(false)
+const pendingDelete = ref<PdfTrashItem | null>(null)
+const confirmDeleteOpen = ref(false)
 
 watch(() => props.open, (val) => {
   if (val) {
@@ -28,7 +30,22 @@ async function onRestore(item: PdfTrashItem) {
   if (ok) emit('restored')
 }
 
-async function onDeletePermanent(item: PdfTrashItem) {
+function askDeletePermanent(item: PdfTrashItem) {
+  pendingDelete.value = item
+  confirmDeleteOpen.value = true
+}
+
+const deleteDescription = computed(() =>
+  pendingDelete.value
+    ? t('pdf.trash.deletePermanentDesc', { name: pendingDelete.value.originalName })
+    : ''
+)
+
+async function onDeletePermanent() {
+  const item = pendingDelete.value
+  confirmDeleteOpen.value = false
+  pendingDelete.value = null
+  if (!item) return
   await deleteTrashPermanent(item.id)
 }
 
@@ -132,7 +149,7 @@ async function onEmpty() {
               square
               :aria-label="t('pdf.trash.deletePermanent')"
               :loading="busy === 'deleteTrashPermanent'"
-              @click="onDeletePermanent(item)"
+              @click="askDeletePermanent(item)"
             />
           </div>
         </div>
@@ -145,6 +162,14 @@ async function onEmpty() {
       :description="t('pdf.trash.emptyDesc')"
       :loading="busy === 'emptyTrash'"
       @confirm="onEmpty"
+    />
+
+    <BaseConfirmModal
+      v-model:open="confirmDeleteOpen"
+      :title="t('pdf.trash.deletePermanent')"
+      :description="deleteDescription"
+      :loading="busy === 'deleteTrashPermanent'"
+      @confirm="onDeletePermanent"
     />
   </LazyBaseResponsiveModal>
 </template>
