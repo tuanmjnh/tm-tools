@@ -11,6 +11,8 @@ const props = withDefaults(defineProps<{
   size?: number
   modifiedAt?: string
   deletable?: boolean
+  /** A legacy row lives in the read-only `word/` folder: no rename either. */
+  renamable?: boolean
   preview?: boolean
   /** Denser row spacing for long listings. */
   compact?: boolean
@@ -21,6 +23,7 @@ const props = withDefaults(defineProps<{
   onRename?: () => void
 }>(), {
   deletable: true,
+  renamable: true,
   preview: true,
   compact: false,
   selected: false
@@ -40,7 +43,7 @@ const menuItems = computed(() => fileItems({
   deletable: props.deletable,
   preview: props.preview,
   extra: props.menu,
-  onRename: props.onRename || (() => emit('rename')),
+  onRename: props.renamable ? (props.onRename || (() => emit('rename'))) : undefined,
   onDelete: () => emit('delete')
 }))
 </script>
@@ -82,6 +85,7 @@ const menuItems = computed(() => fileItems({
           :relative-path="relativePath"
           :path="path"
           :deletable="deletable"
+          :renamable="renamable"
           :preview="preview"
           :extra="menu"
           @delete="emit('delete')"

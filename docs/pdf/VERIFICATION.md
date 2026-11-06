@@ -1129,3 +1129,36 @@ built it at runtime:
 | 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs; `i18n_keys` green |
 | 4 SFC compile | 8 PDF pages through Vite | PASS | HTTP 200 |
 | 5 i18n parity | flattened key sets | PASS | 2736 keys each (18 removed per locale), zero drift |
+
+## Phase 32 — legacy `word/` inputs were unreachable and erasable (2026-11-06)
+
+Files uploaded before `inputs/` existed still live in `word/` and are listed
+under the `inputs` area. Two of that path's three operations were wrong, and
+one of the bugs had been there since the fallback was added.
+
+| Finding | Evidence | Fix |
+|---|---|---|
+| Reading a legacy input always failed | `resolveAreaFile('inputs', …)` resolved the path inside `word/`, then called `assertInsideRoot(AREA_DIRS.inputs, path)` — a path outside that root, so every preview/inspect threw `PDF_INVALID_PATH`. Reproduced before the change: `READ FAILED -> PDF_INVALID_PATH` | containment is checked against the root the file actually came from (`pdfDirs.word` when the fallback fired) |
+| Deleting a legacy input through the explorer always failed the same way | `deleteAreaItem('inputs', …)` had the same root mismatch. Reproduced: `DELETE FAILED -> PDF_INVALID_PATH` | the resolved owner area travels with the path, so both the guard and `assertInsideRoot` use `word` |
+| **Deleting a legacy input through `removeInput()` bypassed the read-only `word` area** | `removeInput` called `moveToTrash('inputs', inputPath(name))`; `inputPath` returns the `word/` file, so a file the registry marks `writableFiles: false` was erased. Reproduced: `REMOVE OK; word file still exists = false` while `removeWord` on the same file correctly throws | `removeInput` asserts writability of the area the file physically lives in |
+| The UI still offered rename/delete on those rows | `listAreaDirectory` and `listInputs` marked nothing, so the new refusal surfaced as a failed action | `PdfFileInfo.legacy` is set for the fallback rows; `FileBrowser` hides delete and rename for them |
+
+Four specs in `pdf_area_guard.spec.ts` pin the behaviour. Each was verified by
+re-introducing the bug and watching the spec fail:
+reverting the `assertInsideRoot` root made `resolves a legacy input for reading`
+fail (19 pass / 1 fail), and removing the new `assertFileWritable` from
+`removeInput` made `refuses to delete or remove a legacy input through the
+inputs area` fail (1 fail).
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 15:41 |
+| 2 Lint | `npx eslint` over `pages/pdf`, `components/pdf`, three composables, `server/modules/pdf`, `server/api/v1/pdf`, `shared/types/pdf.ts`, three specs | PASS | `LINT_EXIT=0` after the regeneration |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs (the suite total is per file; `pdf_area_guard` now runs 20 assertions) |
+| 4 SFC compile | 8 PDF pages + 5 touched components through Vite | PASS | HTTP 200 each |
+
+### Not proven
+
+- No signed-in browser pass, so the hidden rename/delete entries were verified
+  by reading `FileBrowser` → `PdfFileRow` → `PdfFileActions` rather than by
+  opening the import page.

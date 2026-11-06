@@ -54,6 +54,7 @@ export function resolveAreaFile(area: PdfFileArea, rawName: string): { path: str
   if (!relative) throw new Error('PDF_FILE_NOT_FOUND')
 
   let filePath = join(AREA_DIRS[area], relative)
+  let root = AREA_DIRS[area]!
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
     // If area is inputs and file not found in inputs, check legacy word folder
     if (area === 'inputs') {
@@ -61,6 +62,7 @@ export function resolveAreaFile(area: PdfFileArea, rawName: string): { path: str
       const legacyPath = join(pdfDirs.word, fileNameOnly)
       if (existsSync(legacyPath) && statSync(legacyPath).isFile()) {
         filePath = legacyPath
+        root = pdfDirs.word
       } else {
         throw new Error('PDF_FILE_NOT_FOUND')
       }
@@ -70,8 +72,8 @@ export function resolveAreaFile(area: PdfFileArea, rawName: string): { path: str
   }
 
   // The joined path can leave the area through a symlink or junction, so the
-  // resolved location has to be checked, not just the relative path string.
-  assertInsideRoot(AREA_DIRS[area], filePath)
+  // resolved location has to be checked against the root it actually came from.
+  assertInsideRoot(root, filePath)
 
   const name = relative.split('/').pop() || relative
   return { path: filePath, name, extension: name.split('.').pop()?.toLowerCase() ?? '' }

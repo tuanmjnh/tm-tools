@@ -11,6 +11,8 @@ process.env.PDF_DATA_DIR = dataRoot
 const { createAreaFolder, deleteAreaItem, getAreaFolderTree, listAreaDirectory, renameAreaItem } = await import('../../server/modules/pdf/directory')
 const { moveToTrash, restoreTrashItem } = await import('../../server/modules/pdf/trash')
 const { saveWord, removeWord } = await import('../../server/modules/pdf/library')
+const { removeInput } = await import('../../server/modules/pdf/inputs')
+const { resolveAreaFile } = await import('../../server/modules/pdf/inspect')
 const { readAudit } = await import('../../server/modules/pdf/audit')
 
 before(() => {
@@ -136,6 +138,41 @@ describe('legacy word area is read-only end to end', () => {
 
     assert.throws(() => removeWord('keep-me.docx'), /PDF_FILE_IMMUTABLE/)
     assert.equal(existsSync(join(dataRoot, 'word', 'keep-me.docx')), true)
+  })
+})
+
+// Files uploaded before `inputs/` existed are served under `inputs` while they
+// physically sit in `word/`. Reading them must work; changing them must not.
+describe('legacy inputs served from the word area', () => {
+  it('resolves a legacy input for reading', () => {
+    writeFileSync(join(dataRoot, 'word', 'old-price.docx'), 'docx')
+
+    const resolved = resolveAreaFile('inputs', 'old-price.docx')
+    assert.equal(resolved.path, join(dataRoot, 'word', 'old-price.docx'))
+  })
+
+  it('marks the legacy row so the UI hides rename and delete', () => {
+    writeFileSync(join(dataRoot, 'word', 'flagged.docx'), 'docx')
+    writeFileSync(join(dataRoot, 'inputs', 'flagged-input.docx'), 'docx')
+
+    const listing = listAreaDirectory('inputs')
+    assert.equal(listing.files.find(file => file.name === 'flagged.docx')?.legacy, true)
+    assert.equal(listing.files.find(file => file.name === 'flagged-input.docx')?.legacy, undefined)
+  })
+
+  it('refuses to delete or remove a legacy input through the inputs area', () => {
+    writeFileSync(join(dataRoot, 'word', 'guarded.docx'), 'docx')
+
+    assert.throws(() => deleteAreaItem('inputs', 'guarded.docx'), /PDF_FILE_IMMUTABLE/)
+    assert.throws(() => removeInput('guarded.docx'), /PDF_FILE_IMMUTABLE/)
+    assert.equal(existsSync(join(dataRoot, 'word', 'guarded.docx')), true)
+  })
+
+  it('still deletes a real input', () => {
+    writeFileSync(join(dataRoot, 'inputs', 'temp-input.docx'), 'docx')
+
+    assert.ok(deleteAreaItem('inputs', 'temp-input.docx'))
+    assert.equal(existsSync(join(dataRoot, 'inputs', 'temp-input.docx')), false)
   })
 })
 

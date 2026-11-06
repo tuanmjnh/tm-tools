@@ -13,12 +13,15 @@ const props = withDefaults(defineProps<{
   relativePath?: string
   path?: string
   deletable?: boolean
+  /** Hide the rename entry for rows the server cannot rename. */
+  renamable?: boolean
   preview?: boolean
   download?: boolean
   extra?: DropdownMenuItem[]
   onRename?: () => void
 }>(), {
   deletable: true,
+  renamable: true,
   preview: true,
   download: true
 })
@@ -36,7 +39,7 @@ const items = computed(() => fileItems({
   preview: props.preview,
   download: props.download,
   extra: props.extra,
-  onRename: props.onRename || (() => emit('rename')),
+  onRename: props.renamable ? (props.onRename || (() => emit('rename'))) : undefined,
   onDelete: () => emit('delete')
 }))
 </script>

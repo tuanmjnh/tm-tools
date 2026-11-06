@@ -97,7 +97,8 @@ export function listAreaDirectory(
           relativePath: entry.name,
           parentFolder: '',
           size: stats.size,
-          modifiedAt: stats.mtime.toISOString()
+          modifiedAt: stats.mtime.toISOString(),
+          legacy: true
         })
       }
     }
@@ -301,13 +302,17 @@ export function deleteAreaItem(area: PdfFileArea, rawRelativePath: string) {
   if (!relativePath) throw new Error('PDF_INVALID_PATH')
 
   let targetAbs = join(areaRoot, relativePath)
+  // A legacy input physically lives in the read-only `word` area. Containment and
+  // the permission guard both have to follow the file, or deleting it from the
+  // input list would bypass `word` being read-only.
+  let owner = area
   if (!existsSync(targetAbs)) {
-    // If input area, check legacy word folder fallback
     if (area === 'inputs') {
       const fileName = relativePath.split('/').pop() || relativePath
       const legacyAbs = join(AREA_DIRS.word, fileName)
       if (existsSync(legacyAbs)) {
         targetAbs = legacyAbs
+        owner = 'word'
       } else {
         throw new Error('PDF_FILE_NOT_FOUND')
       }
@@ -316,13 +321,13 @@ export function deleteAreaItem(area: PdfFileArea, rawRelativePath: string) {
     }
   }
 
-  if (statSync(targetAbs).isDirectory()) assertFolderWritable(area)
-  else assertFileWritable(area)
+  if (statSync(targetAbs).isDirectory()) assertFolderWritable(owner)
+  else assertFileWritable(owner)
 
-  assertInsideRoot(areaRoot, targetAbs)
+  assertInsideRoot(AREA_DIRS[owner], targetAbs)
 
-  const item = moveToTrash(area, targetAbs, relativePath)
-  if (area === 'sources') removeDerivedOutputs(relativePath)
-  recordAudit({ action: 'delete', area, target: relativePath, bytes: item.size })
+  const item = moveToTrash(owner, targetAbs, relativePath)
+  if (owner === 'sources') removeDerivedOutputs(relativePath)
+  recordAudit({ action: 'delete', area: owner, target: relativePath, bytes: item.size })
   return item
 }

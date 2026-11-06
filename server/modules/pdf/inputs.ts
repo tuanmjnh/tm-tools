@@ -8,6 +8,7 @@ import { ensureDir, pdfDirs, writeFileAtomic } from './paths'
 import { recordAudit } from './audit'
 import { isImageName, isWordName, safeFileName, safeRelativePath } from './security'
 import { moveToTrash } from './trash'
+import { assertFileWritable } from './workspace'
 
 /**
  * Inputs are the non-PDF half of the workspace: images and tabular/office files
@@ -83,12 +84,17 @@ export function readInput(rawName: string): { path: string, kind: PdfInputKind, 
 export function listInputs(): PdfFileInfo[] {
   const current = listFiles(pdfDirs.inputs, acceptedInput)
   const legacy = listFiles(pdfDirs.word, name => isWordName(name) && !current.some(entry => entry.name === name))
+    .map(file => ({ ...file, legacy: true }))
   return [...current, ...legacy]
 }
 
 export function removeInput(rawName: string): void {
   const name = safeFileName(rawName)
-  moveToTrash('inputs', inputPath(rawName), name)
+  const path = inputPath(rawName)
+  // A legacy file physically lives in `word/`, which the registry keeps
+  // read-only; routing the delete through this helper must not bypass that.
+  assertFileWritable(path.startsWith(pdfDirs.inputs) ? 'inputs' : 'word')
+  moveToTrash('inputs', path, name)
 }
 
 /** Files that can be previewed/edited as data instead of as a document. */

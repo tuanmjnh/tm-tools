@@ -113,6 +113,8 @@ export interface PdfFileInfo {
   parentFolder?: string
   /** Set when an upload replaced a file that already had this name. */
   overwritten?: boolean
+  /** Served under this area but stored in the read-only `word/` folder. */
+  legacy?: boolean
 }
 
 export interface PdfFolderInfo {
