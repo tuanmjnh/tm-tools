@@ -1102,3 +1102,30 @@ confirmation without touching them.
 - The trash confirmation and the hidden convert button are interaction states;
   no signed-in browser pass was possible, so both are verified by compile and
   by reading the code path they guard.
+
+## Phase 31 — 18 more unreachable `pdf.*` keys (2026-11-06)
+
+Re-ran the dead-key scan after the recent code cuts, this time comparing every
+flattened `pdf.*` key against the whole of `app/`, `shared/`, `server/` and
+`tests/`, with the runtime-composed families excluded
+(`pdf.areas.*`, `pdf.status.*`, `pdf.overview.groups.*`,
+`pdf.overview.config.*`, `pdf.overview.mapping.tools.*`, `pdf.workspaces.*`,
+`pdf.operations.*`, `pdf.errors.*`).
+
+Each of the 18 was then grepped individually as `'<key>'` to confirm nothing
+built it at runtime:
+
+| Removed group | Keys |
+|---|---|
+| Word-era actions | `actions.uploadWord`, `actions.wordToPdf`, `actions.removeWord`, `actions.removeOffice`, `notices.wordToPdfDone` |
+| Per-area deletes replaced by the explorer | `actions.removeSource`, `actions.removeFolder`, `actions.removeOutput` |
+| Old panel and column headings | `split.folders`, `split.merged`, `images.folders`, `import.inputs`, `export.data`, `extract.results`, `library.empty` |
+| Unused controls | `actions.preview` (preview is `actions.previewWindow`), `extract.presetNew` / `extract.presetEdit` (`presetNewTitle` / `presetEditTitle` are the live pair) |
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 15:27 |
+| 2 Lint | `npx eslint` over the same surface | PASS | `LINT_EXIT=0` |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs; `i18n_keys` green |
+| 4 SFC compile | 8 PDF pages through Vite | PASS | HTTP 200 |
+| 5 i18n parity | flattened key sets | PASS | 2736 keys each (18 removed per locale), zero drift |
