@@ -32,7 +32,6 @@ export const PDF_ACTION_LABELS = {
   refresh: 'pdf.actions.refresh',
   upload: 'pdf.actions.upload',
   uploadInput: 'pdf.actions.uploadInput',
-  removeInput: 'pdf.actions.removeInput',
   convertInput: 'pdf.actions.convertInput',
   exportSource: 'pdf.actions.exportSource',
   split: 'pdf.actions.split',
@@ -166,16 +165,6 @@ export function usePdfStudio() {
       return res.data
     })
     if (result) notifySaved('uploadInput', 'pdf.notices.inputsUploaded', result)
-    return Boolean(result)
-  }
-
-  async function removeInput(name: string): Promise<boolean> {
-    const result = await run('removeInput', async () => {
-      await $fetch(pdfUrl(`/inputs/${segment(name)}`), { method: 'DELETE' })
-      await refreshLibrary()
-      return true
-    })
-    if (result) notify.success(t('pdf.actions.removeInput'), t('pdf.notices.removed', { name }))
     return Boolean(result)
   }
 
@@ -422,7 +411,6 @@ export function usePdfStudio() {
     deleteItem,
     upload,
     uploadInputs,
-    removeInput,
     convertInput,
     exportSource,
     splitSource,

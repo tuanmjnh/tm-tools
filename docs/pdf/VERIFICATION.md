@@ -1037,3 +1037,20 @@ opened keys rather than clear them.
 - Still no signed-in browser pass. The spinner fix in particular is a visual
   behaviour: the static guard proves the comparison now uses a comparable
   value, not that the spinner renders during a real split.
+
+## Phase 28 — `removeInput` was dead client code (2026-11-06)
+
+`usePdfStudio.removeInput()` called `DELETE /inputs/<name>` and reported
+`pdf.notices.removed`, but no page or component ever called it: the explorer's
+delete already goes through `/directory/delete`. The server route stays (it is
+a public API the app is not the only caller of); only the unused client
+wrapper, its `PDF_ACTION_LABELS` entry and the two now-unread locale strings
+were removed.
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, 0 × `error TS`; config 24585 bytes at 12:25 |
+| 2 Lint | `npx eslint` over the same surface | PASS | `LINT_EXIT=0` |
+| 3 Tests | `pnpm test` | PASS | `TEST_EXIT=0`, 27/27 specs |
+| 4 SFC compile | all 7 PDF pages through Vite | PASS | HTTP 200 |
+| 5 i18n parity | flattened key sets | PASS | 2752 keys each (two removed per locale), no drift |
