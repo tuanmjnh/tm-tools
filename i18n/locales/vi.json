@@ -1750,6 +1750,8 @@
     "convert": {},
     "extract": {
       "model": "Model bóc tách",
+      "presets": "Mẫu bóc tách",
+      "outputFormats": "Định dạng xuất ra",
       "preset": "Mẫu bóc tách",
       "presetDefault": "Quy tắc mặc định",
       "presetDelete": "Xoá mẫu",

@@ -1,4 +1,4 @@
-import { copyFileSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { DocumentOperationId } from '#shared/types/document'
 import type {
@@ -242,7 +242,7 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
   async execute(context: OperationExecutionContext, options: Record<string, unknown>): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
     const force = Boolean(options.force)
-    const target = resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null)
+    const target = await resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null)
     const preset = options.presetId ? getPreset(String(options.presetId)) : null
     const requestedFormats = Array.isArray(options.formats) ? options.formats.map(String) : null
 
@@ -250,7 +250,7 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
       input.safeName,
       force,
       target,
-      preset ? { prompt: preset.sample, preset: preset.name } : null,
+      preset ? { sample: preset.sample, description: preset.description, preset: preset.name } : null,
       true,
       requestedFormats
     )

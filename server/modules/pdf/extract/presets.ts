@@ -56,6 +56,10 @@ export function listPresets(): PdfExtractPreset[] {
   return readAll().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
+export function getPreset(id: string): PdfExtractPreset | null {
+  return readAll().find(entry => entry.id === id) ?? null
+}
+
 /**
  * Creates a preset, or updates one when `id` is given. Storage is a plain JSON
  * file next to the PDFs so presets survive restarts without a migration.

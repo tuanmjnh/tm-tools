@@ -1750,6 +1750,8 @@
     "convert": {},
     "extract": {
       "model": "Extraction model",
+      "presets": "Extraction presets",
+      "outputFormats": "Export formats",
       "preset": "Extraction preset",
       "presetDefault": "Default rules",
       "presetDelete": "Delete preset",
