@@ -21,6 +21,7 @@
 | **P4** | Activity Artifact Action Triad | Clear separation in `app/pages/document-studio/activity.vue`: OS Open vs safe in-app Preview vs Download (`e4e7ef5`) | Completed |
 | **P5** | Legacy Migration Engine | Non-destructive dry-run migration engine `server/modules/document/legacy-migration.ts` with SHA-256 verification and API `server/api/v1/documents/migration.ts` (`249cdf1`) | Completed |
 | **P6** | Cutover & Route Retirement | Route `/document-studio/tools/extract.vue`, updated `DOCUMENT_STUDIO_OPERATIONS`, updated TM Hub route seeds for `document_library` & `document_extract` (`07e8427`, Hub `6d27c3e`) | Completed |
+| **P7** | Smart Output & Preview Enhancement | Direct file preview popup (`INLINE_MIME` expanded for PDF, images, JSON, txt, md), local OS opener endpoint (`/api/v1/documents/open-local`), output destination selection & change in `settings.vue` and `OperationPageShell.vue` (`split`, `merge`, `rasterize`, `images-to-pdf`, `convert`, `export`, `extract`) | Completed |
 
 ---
 
@@ -59,5 +60,20 @@
 
 - `pnpm test:unit`: 40/40 test suites passing.
 - `pnpm check:hygiene`: Clean tree.
-- `npx vue-tsc --noEmit`: 0 TypeScript errors across frontend and backend.
+- `npx vue-tsc --noEmit`: 0 TypeScript errors across frontend and backend (`tsconfig.app.json` and `tsconfig.server.json`).
 - `pnpm build`: Successful production build (`node .output/server/index.mjs`).
+
+---
+
+## 5. Local Web & Electron Runtime Integration (P7 Upgrades)
+
+- **Direct File Preview Window**:
+  - `INLINE_MIME` extended to support: PDF, PNG, JPG, JPEG, WebP, GIF, SVG, TXT, Markdown, HTML, and JSON.
+  - Sized popup window (`window.open(..., '_blank', 'popup=yes,width=...,height=...')`) provides responsive in-place preview for all browser-supported formats with `?inline=1`.
+- **Local OS Opener**:
+  - `server/api/v1/documents/open-local.post.ts`: Executes platform-native openers (`explorer.exe /select,"..."` or `start` on Windows, `open -R` on macOS, `xdg-open` on Linux) when running in Local/Desktop mode.
+  - `app/utils/desktop.ts`: `openLocalPath` and `revealLocalPath` transparently invoke Electron IPC (`electronAPI.openPath` / `showItemInFolder`) in Electron, or fall back to `/api/v1/documents/open-local` on Local Web.
+- **Output Folder Customization**:
+  - Global default configurable in `/document-studio/settings` via path input or folder browser (`pickFolder` on Electron).
+  - Per-operation live override in `OperationPageShell.vue` with "Đổi thư mục" button, enabling dynamic selection per execution across all tool pages (`split`, `merge`, `images`, `images-to-pdf`, `convert`, `export`, `extract`).
+  - Runner and delivery adapters accept `customOutputDir` and dispatch artifacts directly to the requested folder.

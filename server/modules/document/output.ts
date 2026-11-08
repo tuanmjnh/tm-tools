@@ -15,9 +15,9 @@ import { safeFileName } from '../pdf/security'
 export class LocalOutputDelivery implements OutputDeliveryAdapter {
   readonly mode = 'folder' as const
 
-  async publish(artifact: DocumentArtifactRecord, localPath: string): Promise<PublishedObject> {
+  async publish(artifact: DocumentArtifactRecord, localPath: string, customOutputDir?: string): Promise<PublishedObject> {
     if (!existsSync(localPath)) throw new DocumentError('DOCUMENT_OUTPUT_NOT_READY')
-    const folder = ensureDocumentDir(documentDirs.output)
+    const folder = ensureDocumentDir(customOutputDir || documentDirs.output)
     const target = uniqueTarget(folder, artifact.fileName)
     copyFileSync(localPath, target)
     return {

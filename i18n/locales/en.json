@@ -3088,7 +3088,11 @@
     "output": {
       "defaultFolder": "Default output folder",
       "downloadHint": "Download when finished",
-      "ephemeralHint": "Results are handed back in this response; they are not stored afterwards."
+      "ephemeralHint": "Results are handed back in this response; they are not stored afterwards.",
+      "changeFolder": "Change folder",
+      "changeFolderTitle": "Change output folder",
+      "changeFolderHint": "Enter directory path on local machine to store exported outputs:",
+      "folderPlaceholder": "e.g. C:\\output or /path/to/output"
     },
     "result": {
       "title": "Results ({count})",
@@ -3237,6 +3241,7 @@
         "folder": "Save to the output folder",
         "download": "Download when finished",
         "outputPath": "Default output folder",
+        "outputPathUpdated": "Default output folder updated",
         "saveDialog": "Native save dialog",
         "cloudNotice": "Cloud results are kept for {days} days, then removed automatically."
       },

@@ -15,7 +15,8 @@ function runMerge() {
         :ready="page.selection.ready.value" :running="page.session.running.value"
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
-        :accept="page.selection.accept.value" multiple @add="page.addFiles" @remove="page.selection.remove"
+        :accept="page.selection.accept.value" multiple
+        @update:output-path="page.runtime.setOutputPath" @add="page.addFiles" @remove="page.selection.remove"
         @move="page.selection.move" @reset="page.selection.clear" @run="runMerge"
         @deleted="page.session.removeArtifact">
         <template #config>

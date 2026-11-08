@@ -42,11 +42,13 @@ const emit = defineEmits<{
   run: []
   reset: []
   deleted: [artifactId: string]
+  'update:outputPath': [path: string]
 }>()
 
 const { t } = useI18n()
 const api = useDocumentApi()
 const notify = useNotify()
+const { pickFolder } = useFileSystem()
 const inputRef = ref<HTMLInputElement | null>(null)
 const folderInputRef = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
@@ -122,19 +124,23 @@ function saveInlineArchive() {
   saveBytes(zip, 'document-results.zip', 'application/zip')
 }
 
-/** `?inline=1` only renders PDFs and images; anything else needs the OS handler or a download. */
+/** `?inline=1` renders browser-compatible formats directly; anything else falls back to OS opener or download. */
 const INLINE_MIME = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'text/plain'
+  'image/svg+xml',
+  'text/plain',
+  'text/markdown',
+  'text/html',
+  'application/json'
 ])
 
 function canPreview(artifact: DocumentArtifactView): boolean {
   if (artifact.inlineBase64) return true
-  return desktop || INLINE_MIME.has(artifact.mimeType)
+  return Boolean(artifact.localPath) || INLINE_MIME.has(artifact.mimeType)
 }
 
 function previewArtifact(artifact: DocumentArtifactView) {
@@ -144,15 +150,20 @@ function previewArtifact(artifact: DocumentArtifactView) {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
     return
   }
-  if (desktop && artifact.localPath) {
+  // If the format is inline-renderable by the browser/app, open the preview popup window
+  if (INLINE_MIME.has(artifact.mimeType)) {
     const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
     const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
     window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
     return
   }
-  const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
-  const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
-  window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
+  // Otherwise open via the OS handler (Electron or Local Web)
+  if (artifact.localPath) {
+    openLocalPath(artifact.localPath)
+    return
+  }
+  // Fallback to direct download
+  downloadArtifact(artifact)
 }
 
 function downloadArtifact(artifact: DocumentArtifactView) {
@@ -171,6 +182,30 @@ async function copyValue(value: string) {
 
 function openOutputFolder() {
   openLocalPath(props.outputPath)
+}
+
+const showChangeOutputModal = ref(false)
+const customOutputPathInput = ref(props.outputPath)
+
+watch(() => props.outputPath, (val) => {
+  customOutputPathInput.value = val
+})
+
+async function onPickCustomOutput() {
+  if (desktop) {
+    const picked = await pickFolder({ defaultPath: props.outputPath })
+    if (picked) {
+      customOutputPathInput.value = picked
+      emit('update:outputPath', picked)
+    }
+  } else {
+    showChangeOutputModal.value = true
+  }
+}
+
+function saveCustomOutput() {
+  emit('update:outputPath', customOutputPathInput.value.trim())
+  showChangeOutputModal.value = false
 }
 
 const pendingDelete = ref<DocumentArtifactView | null>(null)
@@ -217,7 +252,7 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
   })
   groups.push(primary)
 
-  if (desktop && artifact.localPath) {
+  if (artifact.localPath) {
     const localPath = artifact.localPath
     groups.push([
       {
@@ -337,7 +372,7 @@ const progress = computed(() => {
               <UButton v-else-if="artifacts.length > 1 && artifacts[0]" color="neutral" variant="ghost" size="xs"
                 icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
                 @click="triggerDownload(archivePath(artifacts[0].jobId))" />
-              <UButton v-if="desktop && outputPath" color="neutral" variant="ghost" size="xs"
+              <UButton v-if="outputPath" color="neutral" variant="ghost" size="xs"
                 icon="i-lucide-folder-open" :label="t('document.activity.openOutputFolder')"
                 @click="openOutputFolder" />
               <span class="text-xs text-muted">{{ destinationText }}</span>
@@ -409,8 +444,11 @@ const progress = computed(() => {
               <dt class="text-muted">
                 {{ t('document.summary.output') }}
               </dt>
-              <dd class="break-all text-end font-medium">
-                {{ destinationText || '—' }}
+              <dd class="flex flex-col items-end gap-1">
+                <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                <UButton v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
+                  color="neutral" variant="ghost" size="xs" icon="i-lucide-folder-cog"
+                  :label="t('document.output.changeFolder')" @click="onPickCustomOutput" />
               </dd>
             </div>
           </dl>
@@ -438,5 +476,22 @@ const progress = computed(() => {
     <BaseConfirmModal v-model:open="deleteOpen" :title="t('document.result.deleteTitle')"
       :description="pendingDelete ? t('document.result.deleteConfirm', { name: pendingDelete.fileName }) : ''"
       :loading="deleting" :confirm-label="t('global.delete')" @confirm="confirmDelete" @cancel="pendingDelete = null" />
+
+    <LazyBaseResponsiveModal v-model:open="showChangeOutputModal" :title="t('document.output.changeFolderTitle')">
+      <template #body>
+        <div class="space-y-3 p-4">
+          <p class="text-xs text-muted">
+            {{ t('document.output.changeFolderHint') }}
+          </p>
+          <UInput v-model="customOutputPathInput" class="w-full" :placeholder="t('document.output.folderPlaceholder')" />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-end gap-2 p-3">
+          <UButton color="neutral" variant="ghost" :label="t('global.cancel')" @click="showChangeOutputModal = false" />
+          <UButton color="primary" variant="soft" :label="t('global.save')" @click="saveCustomOutput" />
+        </div>
+      </template>
+    </LazyBaseResponsiveModal>
   </div>
 </template>

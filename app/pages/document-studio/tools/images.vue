@@ -15,7 +15,8 @@ function runRasterize() {
         :ready="page.selection.ready.value" :running="page.session.running.value"
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
-        :accept="page.selection.accept.value" @add="page.addFiles" @remove="page.selection.remove"
+        :accept="page.selection.accept.value"
+        @update:output-path="page.runtime.setOutputPath" @add="page.addFiles" @remove="page.selection.remove"
         @move="page.selection.move" @reset="page.selection.clear" @run="runRasterize"
         @deleted="page.session.removeArtifact">
         <template #config>

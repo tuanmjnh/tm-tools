@@ -64,6 +64,7 @@ function handleRun() {
         :artifacts="page.session.artifacts.value"
         :accept="page.selection.accept.value"
         :multiple="page.multiple.value"
+        @update:output-path="page.runtime.setOutputPath"
         @add="page.addFiles"
         @remove="page.selection.remove"
         @move="page.selection.move"

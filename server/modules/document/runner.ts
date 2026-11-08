@@ -194,7 +194,10 @@ export async function startDocumentJob(
     }, job.configSnapshot as never)
 
     await deps.jobs.updateStatus(jobId, { to: 'publishing' })
-    const artifacts = await publishArtifacts(deps, job, operation, execution.files)
+    const customOutputDir = typeof (job.configSnapshot as { outputDir?: unknown })?.outputDir === 'string'
+      ? (job.configSnapshot as { outputDir: string }).outputDir.trim()
+      : undefined
+    const artifacts = await publishArtifacts(deps, job, operation, execution.files, customOutputDir)
 
     const partial = (execution.failedUnits ?? 0) > 0
     await deps.jobs.updateStatus(jobId, {
@@ -230,7 +233,8 @@ async function publishArtifacts(
   deps: DocumentRunDeps,
   job: DocumentJobRecord,
   operation: DocumentOperationDefinition,
-  files: { fileName: string, mimeType: string, path: string, size: number }[]
+  files: { fileName: string, mimeType: string, path: string, size: number }[],
+  customOutputDir?: string
 ): Promise<DocumentArtifactRecord[]> {
   const artifacts: DocumentArtifactRecord[] = []
 
@@ -254,7 +258,7 @@ async function publishArtifacts(
       expiresAt: job.expiresAt
     }
 
-    const published = await deps.delivery.publish(artifact, file.path)
+    const published = await deps.delivery.publish(artifact, file.path, customOutputDir)
     const stored: DocumentArtifactRecord = {
       ...artifact,
       storageProvider: published.storageProvider,

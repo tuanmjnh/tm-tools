@@ -3088,7 +3088,11 @@
     "output": {
       "defaultFolder": "Thư mục kết quả mặc định",
       "downloadHint": "Tải về khi hoàn tất",
-      "ephemeralHint": "Kết quả trả về ngay trong lần chạy này và không được lưu lại sau đó."
+      "ephemeralHint": "Kết quả trả về ngay trong lần chạy này và không được lưu lại sau đó.",
+      "changeFolder": "Đổi thư mục",
+      "changeFolderTitle": "Thay đổi thư mục kết quả",
+      "changeFolderHint": "Nhập đường dẫn thư mục trên máy chủ cục bộ để lưu kết quả xuất:",
+      "folderPlaceholder": "Ví dụ: C:\\output hoặc /path/to/output"
     },
     "result": {
       "title": "Kết quả ({count})",
@@ -3237,6 +3241,7 @@
         "folder": "Lưu vào thư mục kết quả",
         "download": "Tải về khi hoàn tất",
         "outputPath": "Thư mục kết quả mặc định",
+        "outputPathUpdated": "Đã cập nhật thư mục kết quả mặc định",
         "saveDialog": "Hộp thoại lưu của hệ thống",
         "cloudNotice": "Kết quả trên cloud được giữ {days} ngày rồi tự động xoá."
       },

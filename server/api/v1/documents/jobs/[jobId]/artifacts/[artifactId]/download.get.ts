@@ -9,7 +9,11 @@ const INLINE_PREVIEW_MIME = new Set([
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'text/plain'
+  'image/svg+xml',
+  'text/plain',
+  'text/markdown',
+  'text/html',
+  'application/json'
 ])
 
 /**

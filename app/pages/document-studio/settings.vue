@@ -1,14 +1,18 @@
 <script setup lang="ts">
 const { t } = useI18n()
 const api = useDocumentApi()
+const { pickFolder } = useFileSystem()
+const notify = useNotify()
 
 type Health = Awaited<ReturnType<ReturnType<typeof useDocumentApi>['health']>>
 type Settings = Awaited<ReturnType<ReturnType<typeof useDocumentApi>['settings']>>
 
+const OUTPUT_PATH_STORAGE_KEY = 'document_studio:custom_output_dir'
 const settings = ref<Settings | null>(null)
 const health = ref<Health | null>(null)
 const loading = ref(true)
 const error = ref('')
+const customOutputPath = ref('')
 
 async function load() {
   loading.value = true
@@ -17,10 +21,44 @@ async function load() {
     const [nextSettings, nextHealth] = await Promise.all([api.settings(), api.health()])
     settings.value = nextSettings
     health.value = nextHealth
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(OUTPUT_PATH_STORAGE_KEY)
+      customOutputPath.value = saved || nextSettings.defaultOutputPath
+    }
   } catch {
     error.value = t('document.errors.generic')
   } finally {
     loading.value = false
+  }
+}
+
+async function handleBrowseFolder() {
+  const picked = await pickFolder({ defaultPath: customOutputPath.value })
+  if (picked) {
+    customOutputPath.value = picked
+    saveOutputPath()
+  }
+}
+
+function saveOutputPath() {
+  const val = customOutputPath.value.trim()
+  if (typeof window !== 'undefined') {
+    if (val) {
+      localStorage.setItem(OUTPUT_PATH_STORAGE_KEY, val)
+    } else {
+      localStorage.removeItem(OUTPUT_PATH_STORAGE_KEY)
+    }
+  }
+  notify.success(t('global.save'), t('document.settings.storage.outputPathUpdated'))
+}
+
+function resetOutputPath() {
+  if (settings.value?.defaultOutputPath) {
+    customOutputPath.value = settings.value.defaultOutputPath
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(OUTPUT_PATH_STORAGE_KEY)
+    }
+    notify.success(t('global.reset'), t('document.settings.storage.outputPathUpdated'))
   }
 }
 
@@ -72,21 +110,20 @@ const limits = computed(() => health.value?.limits ?? null)
               </dd>
             </div>
 
-            <div v-if="folderDelivery && settings?.defaultOutputPath">
-              <dt class="text-xs text-muted">
+            <div v-if="folderDelivery" class="sm:col-span-2">
+              <dt class="text-xs text-muted mb-1">
                 {{ t('document.settings.storage.outputPath') }}
               </dt>
-              <dd class="mt-0.5 truncate font-mono text-xs">
-                {{ settings.defaultOutputPath }}
-              </dd>
-            </div>
-
-            <div v-else-if="folderDelivery">
-              <dt class="text-xs text-muted">
-                {{ t('document.settings.storage.saveDialog') }}
-              </dt>
-              <dd class="mt-0.5 text-sm">
-                {{ settings?.supportsNativeSaveDialog ? t('global.yes') : t('global.no') }}
+              <dd class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <UInput v-model="customOutputPath" class="w-full flex-1 font-mono text-xs" />
+                <div class="flex items-center gap-2 shrink-0">
+                  <UButton color="neutral" variant="soft" size="xs" icon="i-lucide-folder-open"
+                    :label="t('document.input.browseFolder')" @click="handleBrowseFolder" />
+                  <UButton color="primary" variant="soft" size="xs" icon="i-lucide-save"
+                    :label="t('global.save')" @click="saveOutputPath" />
+                  <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-rotate-ccw"
+                    :label="t('global.reset')" @click="resetOutputPath" />
+                </div>
               </dd>
             </div>
           </dl>

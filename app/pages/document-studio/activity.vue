@@ -115,18 +115,22 @@ function downloadableArtifacts(job: DocumentJobView): DocumentArtifactView[] {
   return job.artifacts.filter(downloadable)
 }
 
-/** `?inline=1` only renders PDFs and images; everything else needs the OS handler. */
+/** `?inline=1` renders browser-compatible formats directly; anything else falls back to OS opener or download. */
 const INLINE_MIME = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'text/plain'
+  'image/svg+xml',
+  'text/plain',
+  'text/markdown',
+  'text/html',
+  'application/json'
 ])
 
 function canOpenWithOs(artifact: DocumentArtifactView): boolean {
-  return desktop && Boolean(artifact.localPath)
+  return Boolean(artifact.localPath)
 }
 
 function canPreviewInApp(artifact: DocumentArtifactView): boolean {
