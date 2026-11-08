@@ -8,6 +8,7 @@ const operationId = computed(() => operationIdFromSlug(slug.value))
 
 const page = useDocumentOperationPage(operationId.value)
 const exportFormats = ref<PdfSourceExportFormat[]>(['png'])
+const extractConfig = ref<Record<string, unknown>>({})
 
 // Watch for slug changes if navigating between tools
 watch(operationId, (newId) => {
@@ -26,6 +27,8 @@ const isReady = computed(() => {
 function handleRun() {
   if (operationId.value === 'pdf.export') {
     void page.run({ formats: exportFormats.value })
+  } else if (operationId.value === 'document.ai-extract') {
+    void page.run(extractConfig.value)
   } else {
     void page.run()
   }
@@ -69,6 +72,10 @@ function handleRun() {
           <LazyDocumentStudioOperationsConfigsExportFormatsConfig
             v-else-if="operationId === 'pdf.export'"
             v-model="exportFormats"
+          />
+          <LazyDocumentStudioOperationsConfigsAiExtractionConfig
+            v-else-if="operationId === 'document.ai-extract'"
+            v-model="extractConfig"
           />
         </template>
       </DocumentStudioOperationPageShell>

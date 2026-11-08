@@ -11,6 +11,9 @@ import type {
 } from './contracts'
 import { DocumentError } from './operations'
 import { splitPdf } from '../pdf/document'
+import { startExtraction } from '../pdf/extract/jobs'
+import { resolveExtractTarget } from '../pdf/extract/models'
+import { getPreset } from '../pdf/extract/presets'
 import { mergePdfFolder } from '../pdf/merge'
 import { imagesToPdf } from '../pdf/images-to-pdf'
 import { rasterizePdf } from '../pdf/raster'
@@ -228,13 +231,76 @@ function toProduced(path: string): ProducedFile {
   return { fileName, path, size: statSync(path).size, mimeType: mimeOf(fileName) }
 }
 
+class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unknown>> {
+  readonly operationId: DocumentOperationId = 'document.ai-extract'
+
+  async validateInputs(inputs: VerifiedInput[]): Promise<ValidationResult> {
+    if (inputs.length !== 1) return { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
+    return ok()
+  }
+
+  async execute(context: OperationExecutionContext, options: Record<string, unknown>): Promise<OperationExecutionResult> {
+    const input = single(context.inputs)
+    const force = Boolean(options.force)
+    const target = resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null)
+    const preset = options.presetId ? getPreset(String(options.presetId)) : null
+    const requestedFormats = Array.isArray(options.formats) ? options.formats.map(String) : null
+
+    const job = await startExtraction(
+      input.safeName,
+      force,
+      target,
+      preset ? { prompt: preset.sample, preset: preset.name } : null,
+      true,
+      requestedFormats
+    )
+
+    // Poll until completion or failure
+    const { getJob } = await import('../pdf/extract/jobs')
+    let current = getJob(job.id)
+    while (current && (current.status === 'running' || current.status === 'queued')) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      current = getJob(job.id)
+      if (current) {
+        await context.onProgress({
+          totalUnits: current.totalPages || 1,
+          completedUnits: current.processedPages + current.cachedPages
+        })
+      }
+    }
+
+    if (current?.status === 'failed') {
+      throw new DocumentError('DOCUMENT_PROCESSING_TIMEOUT', { cause: current.error })
+    }
+
+    // Copy generated products into job workspace outputDir
+    const stem = safeStem(input.safeName)
+    const { pdfDirs } = await import('../pdf/paths')
+    const productsDir = pdfDirs.products
+    const produced: ProducedFile[] = []
+
+    if (existsSync(productsDir)) {
+      const candidates = readdirSync(productsDir).filter(f => f.startsWith(`${stem}_products`))
+      for (const name of candidates) {
+        const src = join(productsDir, name)
+        const dest = join(context.workspace.outputDir, name)
+        copyFileSync(src, dest)
+        produced.push(toProduced(dest))
+      }
+    }
+
+    return { files: produced }
+  }
+}
+
 const EXECUTORS: Record<string, DocumentOperationExecutor<never>> = {
   'pdf.split': new SplitExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.merge': new MergeExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.rasterize': new RasterizeExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.images-to-pdf': new ImagesToPdfExecutor() as unknown as DocumentOperationExecutor<never>,
   'document.convert-to-pdf': new ConvertExecutor() as unknown as DocumentOperationExecutor<never>,
-  'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>
+  'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>,
+  'document.ai-extract': new AiExtractExecutor() as unknown as DocumentOperationExecutor<never>
 }
 
 export function executorFor(operationId: DocumentOperationId): DocumentOperationExecutor<never> {
