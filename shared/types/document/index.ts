@@ -33,7 +33,7 @@ export const DOCUMENT_INPUT_MODES = ['single-file', 'multi-file', 'folder-batch'
 export type DocumentInputMode = typeof DOCUMENT_INPUT_MODES[number]
 
 /** Configuration forms the client is allowed to mount for an operation. */
-export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'export-formats', 'ai-extraction'] as const
+export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'export-formats', 'ai-extraction'] as const
 
 export type DocumentConfigComponent = typeof DOCUMENT_CONFIG_COMPONENTS[number]
 
