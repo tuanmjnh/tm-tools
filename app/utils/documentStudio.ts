@@ -68,8 +68,7 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     titleKey: 'document.operations.extract.title',
     descriptionKey: 'document.operations.extract.description',
     icon: 'i-lucide-scan-text',
-    // AI extraction is not a v4 job; it keeps its own page and API.
-    route: '/pdf/extract',
+    route: '/document-studio/tools/extract',
     category: 'extract'
   }
 ]
