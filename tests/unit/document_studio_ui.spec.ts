@@ -48,7 +48,7 @@ describe('document studio pages', () => {
     const operationPages = pages.filter(page => page.includes('/tools/'))
     assert.ok(operationPages.length >= 6, 'expected at least six operation pages')
     for (const page of operationPages) {
-      assert.match(read(page), /useDocumentOperationPage\('/, `${page} must use the shared binding`)
+      assert.match(read(page), /useDocumentOperationPage\(/, `${page} must use the shared binding`)
     }
   })
 })

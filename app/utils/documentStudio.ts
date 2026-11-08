@@ -80,6 +80,20 @@ export function documentStudioOperation(id: string): DocumentStudioOperation | n
   return DOCUMENT_STUDIO_OPERATIONS.find(entry => entry.id === id) ?? null
 }
 
+const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
+  'split': 'pdf.split',
+  'merge': 'pdf.merge',
+  'images': 'pdf.rasterize',
+  'images-to-pdf': 'pdf.images-to-pdf',
+  'convert': 'document.convert-to-pdf',
+  'export': 'pdf.export',
+  'extract': 'document.ai-extract'
+}
+
+export function operationIdFromSlug(slug: string): DocumentOperationId {
+  return SLUG_TO_OPERATION_ID[slug] || (slug as DocumentOperationId)
+}
+
 export function extensionOf(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
 }

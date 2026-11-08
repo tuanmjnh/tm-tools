@@ -82,6 +82,7 @@ export function useDocumentOperationPage(operationId: string) {
     selection,
     session,
     runtime,
+    loadDefinition,
     addFiles,
     run,
     errorText: computed(() => session.error.value ? t(`document.errors.${session.error.value.code}`) : '')

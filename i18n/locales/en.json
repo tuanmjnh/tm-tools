@@ -3020,6 +3020,21 @@
     "deleteConfirmDesc": "Soft-delete route '{id}'? It will disappear from the menu."
   },
   "document": {
+    "library": {
+      "title": "Document Library",
+      "description": "Unified document library across input sources and output artifacts.",
+      "inputTab": "Input Documents",
+      "outputTab": "Output Artifacts",
+      "createFolder": "New Folder",
+      "folderName": "Folder Name",
+      "renameTitle": "Rename Item",
+      "newName": "New Name",
+      "deleteTitle": "Delete Item",
+      "deleteFolderDesc": "Are you sure you want to delete folder '{name}' and all its contents?",
+      "deleteFileDesc": "Are you sure you want to delete file '{name}'?",
+      "emptyFolder": "This folder is empty.",
+      "itemCount": "{count} items"
+    },
     "home": {
       "title": "Document Studio",
       "description": "Pick a document, run one job, save the result.",
