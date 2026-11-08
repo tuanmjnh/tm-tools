@@ -3090,6 +3090,7 @@
       "download": "Download",
       "downloadAll": "Download all (ZIP)",
       "preview": "Preview",
+      "openWithOs": "Open with default app",
       "openFolder": "Show in folder",
       "copyPath": "Copy path",
       "more": "More actions",

@@ -125,8 +125,16 @@ const INLINE_MIME = new Set([
   'text/plain'
 ])
 
+function canOpenWithOs(artifact: DocumentArtifactView): boolean {
+  return desktop && Boolean(artifact.localPath)
+}
+
+function canPreviewInApp(artifact: DocumentArtifactView): boolean {
+  return downloadable(artifact) && INLINE_MIME.has(artifact.mimeType)
+}
+
 function canPreview(artifact: DocumentArtifactView): boolean {
-  return downloadable(artifact) && (desktop || INLINE_MIME.has(artifact.mimeType))
+  return canOpenWithOs(artifact) || canPreviewInApp(artifact)
 }
 
 function archivePath(jobId: string): string {
@@ -138,6 +146,16 @@ function previewArtifact(artifact: DocumentArtifactView) {
   const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
   const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
   window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
+}
+
+function handleArtifactClick(artifact: DocumentArtifactView) {
+  if (canOpenWithOs(artifact) && artifact.localPath) {
+    openLocalPath(artifact.localPath)
+  } else if (canPreviewInApp(artifact)) {
+    previewArtifact(artifact)
+  } else {
+    triggerDownload(artifact.downloadPath)
+  }
 }
 
 async function copyValue(value: string) {
@@ -275,7 +293,14 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
 
   if (downloadable(artifact)) {
     const primary: DropdownMenuItem[] = []
-    if (canPreview(artifact)) {
+    if (canOpenWithOs(artifact) && artifact.localPath) {
+      primary.push({
+        label: t('document.result.openWithOs'),
+        icon: 'i-lucide-app-window',
+        onSelect: () => openLocalPath(artifact.localPath!)
+      })
+    }
+    if (canPreviewInApp(artifact)) {
       primary.push({
         label: t('document.result.preview'),
         icon: 'i-lucide-external-link',
@@ -394,7 +419,7 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                       <UIcon name="i-lucide-file-text" class="size-3.5 shrink-0 text-dimmed" />
                       <button v-if="canPreview(artifact)" type="button"
                         class="min-w-0 flex-1 truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
-                        :title="artifact.fileName" @click="previewArtifact(artifact)">
+                        :title="artifact.fileName" @click="handleArtifactClick(artifact)">
                         {{ artifact.fileName }}
                       </button>
                       <span v-else class="min-w-0 flex-1 truncate text-xs" :title="artifact.fileName">
@@ -407,7 +432,10 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                       <span v-else class="text-xs text-warning">
                         {{ t('document.activity.expired') }}
                       </span>
-                      <UButton v-if="canPreview(artifact)" color="neutral" variant="ghost" size="xs"
+                      <UButton v-if="canOpenWithOs(artifact)" color="neutral" variant="ghost" size="xs"
+                        icon="i-lucide-app-window" :aria-label="t('document.result.openWithOs')"
+                        @click="openLocalPath(artifact.localPath!)" />
+                      <UButton v-if="canPreviewInApp(artifact)" color="neutral" variant="ghost" size="xs"
                         icon="i-lucide-external-link" :aria-label="t('document.result.preview')"
                         @click="previewArtifact(artifact)" />
                       <UButton v-if="downloadable(artifact)" color="neutral" variant="ghost" size="xs"
