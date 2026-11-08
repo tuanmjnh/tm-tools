@@ -9,6 +9,8 @@ const operationId = computed(() => operationIdFromSlug(slug.value))
 const page = useDocumentOperationPage(operationId.value)
 const exportFormats = ref<PdfSourceExportFormat[]>(['png'])
 const extractConfig = ref<Record<string, unknown>>({})
+const splitConfig = ref({ createSubfolder: true })
+const mergeConfig = ref({ outputName: '' })
 
 // Watch for slug changes if navigating between tools
 watch(operationId, (newId) => {
@@ -29,6 +31,10 @@ function handleRun() {
     void page.run({ formats: exportFormats.value })
   } else if (operationId.value === 'document.ai-extract') {
     void page.run(extractConfig.value)
+  } else if (operationId.value === 'pdf.split') {
+    void page.run(splitConfig.value)
+  } else if (operationId.value === 'pdf.merge') {
+    void page.run(mergeConfig.value)
   } else {
     void page.run()
   }
@@ -65,6 +71,11 @@ function handleRun() {
         <template #config>
           <LazyDocumentStudioOperationsConfigsSplitConfig
             v-if="operationId === 'pdf.split'"
+            v-model="splitConfig"
+          />
+          <LazyDocumentStudioOperationsConfigsMergeConfig
+            v-else-if="operationId === 'pdf.merge'"
+            v-model="mergeConfig"
           />
           <LazyDocumentStudioOperationsConfigsConvertConfig
             v-else-if="operationId === 'document.convert-to-pdf'"

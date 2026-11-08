@@ -56,7 +56,7 @@ const limits = computed(() => health.value?.limits ?? null)
       <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="error" />
 
       <template v-else>
-        <section class="panel p-4">
+        <section class="panel-flat rounded-lg p-4">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {{ t('document.settings.storage.title') }}
           </h2>
@@ -96,7 +96,7 @@ const limits = computed(() => health.value?.limits ?? null)
           </p>
         </section>
 
-        <section class="panel p-4">
+        <section class="panel-flat rounded-lg p-4">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {{ t('document.settings.runtime.title') }}
           </h2>
@@ -152,7 +152,7 @@ const limits = computed(() => health.value?.limits ?? null)
           </p>
         </section>
 
-        <section v-if="limits" class="panel p-4">
+        <section v-if="limits" class="panel-flat rounded-lg p-4">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {{ t('document.settings.limits.title') }}
           </h2>
@@ -192,7 +192,7 @@ const limits = computed(() => health.value?.limits ?? null)
           </dl>
         </section>
 
-        <section v-if="settings" class="panel p-4">
+        <section v-if="settings" class="panel-flat rounded-lg p-4">
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {{ t('document.settings.cleanup.title') }}
           </h2>

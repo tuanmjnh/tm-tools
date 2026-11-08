@@ -18,7 +18,7 @@ export class LocalOutputDelivery implements OutputDeliveryAdapter {
   async publish(artifact: DocumentArtifactRecord, localPath: string): Promise<PublishedObject> {
     if (!existsSync(localPath)) throw new DocumentError('DOCUMENT_OUTPUT_NOT_READY')
     const folder = ensureDocumentDir(documentDirs.output)
-    const target = uniqueTarget(folder, safeFileName(artifact.fileName))
+    const target = uniqueTarget(folder, artifact.fileName)
     copyFileSync(localPath, target)
     return {
       storageProvider: 'local',
@@ -36,17 +36,24 @@ export class LocalOutputDelivery implements OutputDeliveryAdapter {
 
 let counter = 0
 
-function uniqueTarget(folder: string, fileName: string): string {
+function uniqueTarget(baseFolder: string, relativeOrBaseName: string): string {
+  // If the artifact relative path has subdirectories (e.g. "my-doc/page_0001.pdf"),
+  // preserve and ensure the destination subfolder exists.
+  const cleanRelative = relativeOrBaseName.replace(/\\/g, '/').replace(/^\/+/, '')
+  const lastSlash = cleanRelative.lastIndexOf('/')
+  const targetFolder = lastSlash >= 0 ? ensureDocumentDir(join(baseFolder, cleanRelative.slice(0, lastSlash))) : baseFolder
+  const fileName = lastSlash >= 0 ? cleanRelative.slice(lastSlash + 1) : cleanRelative
+
   const stem = fileName.replace(/\.[^.]+$/, '')
   const ext = fileName.slice(stem.length)
-  let candidate = join(folder, fileName)
+  let candidate = join(targetFolder, fileName)
   let index = 1
   while (existsSync(candidate)) {
-    candidate = join(folder, `${stem} (${index})${ext}`)
+    candidate = join(targetFolder, `${stem} (${index})${ext}`)
     index++
     if (index > 999) {
       counter++
-      candidate = join(folder, `${stem} (${Date.now()}-${counter})${ext}`)
+      candidate = join(targetFolder, `${stem} (${Date.now()}-${counter})${ext}`)
       break
     }
   }

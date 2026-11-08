@@ -125,13 +125,23 @@ describe('split runs through the new pipeline', () => {
 
     assert.equal(result.status, 'completed')
     assert.equal(result.artifacts.length, 3)
-    assert.deepEqual(result.artifacts.map(entry => entry.fileName).sort(), ['page_0001.pdf', 'page_0002.pdf', 'page_0003.pdf'])
+    assert.deepEqual(result.artifacts.map(entry => entry.fileName).sort(), ['catalogue/page_0001.pdf', 'catalogue/page_0002.pdf', 'catalogue/page_0003.pdf'])
 
     for (const artifact of result.artifacts) {
       assert.ok(artifact.downloadPath.includes(`/jobs/${job.id}/artifacts/`))
       assert.ok(existsSync(join(documentDirs.output, artifact.fileName)), `${artifact.fileName} must be published`)
       assert.ok(existsSync(join(jobOutputDir(job.id), artifact.fileName)))
     }
+  })
+
+  it('can split into root output folder without subfolder if createSubfolder is false', async () => {
+    const job = await draft('pdf.split', { createSubfolder: false })
+    await stage(job.id, 'pdf.split', 'flat.pdf', await samplePdf(2))
+
+    const result = await startDocumentJob(await deps(), job.id, OWNER)
+    assert.equal(result.status, 'completed')
+    assert.equal(result.artifacts.length, 2)
+    assert.deepEqual(result.artifacts.map(entry => entry.fileName).sort(), ['page_0001.pdf', 'page_0002.pdf'])
   })
 
   it('drops input and working bytes but keeps the output for download', async () => {
@@ -192,6 +202,20 @@ describe('merge and images-to-pdf keep the requested order', () => {
       (await import('node:fs')).readFileSync(join(jobOutputDir(job.id), result.artifacts[0]!.fileName))
     )
     assert.equal(merged.getPageCount(), 5)
+  })
+
+  it('supports custom outputName and folderName for merge', async () => {
+    const jobCustom = await draft('pdf.merge', { outputName: 'custom_catalog.pdf' })
+    await stage(jobCustom.id, 'pdf.merge', 'page1.pdf', await samplePdf(1))
+    await stage(jobCustom.id, 'pdf.merge', 'page2.pdf', await samplePdf(1))
+    const resCustom = await startDocumentJob(await deps(), jobCustom.id, OWNER)
+    assert.equal(resCustom.artifacts[0]?.fileName, 'custom_catalog.pdf')
+
+    const jobFolder = await draft('pdf.merge', { folderName: 'hoa-phat-split' })
+    await stage(jobFolder.id, 'pdf.merge', 'p1.pdf', await samplePdf(1))
+    await stage(jobFolder.id, 'pdf.merge', 'p2.pdf', await samplePdf(1))
+    const resFolder = await startDocumentJob(await deps(), jobFolder.id, OWNER)
+    assert.equal(resFolder.artifacts[0]?.fileName, 'hoa-phat-split_merged.pdf')
   })
 
   it('converts staged PNGs to a single PDF', async () => {

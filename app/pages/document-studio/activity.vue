@@ -370,12 +370,12 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
       </div>
 
       <p v-else-if="!visible.length"
-        class="rounded-lg border border-dashed border-default p-6 text-center text-sm text-muted">
+        class="panel-flat rounded-lg border border-dashed border-default/70 p-6 text-center text-sm text-muted">
         {{ t('document.activity.empty') }}
       </p>
 
       <ul v-else
-        class="panel max-h-[calc(100vh-14rem)] divide-y divide-default/50 overflow-auto rounded-lg border border-default/70">
+        class="panel-flat max-h-[calc(100vh-14rem)] divide-y divide-default/50 overflow-auto rounded-lg">
         <li v-for="job in visible" :key="job.id" class="p-3">
           <AppContextMenu :items="jobMenu(job)">
             <div class="space-y-2">

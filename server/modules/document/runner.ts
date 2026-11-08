@@ -23,7 +23,7 @@ import type {
 import { executorFor, hasExecutor } from './executors'
 import { DocumentError, requireOperation } from './operations'
 import { exceedsScratchBudget } from './runtime'
-import { safeFileName } from '../pdf/security'
+import { safeFileName, safeRelativePath } from '../pdf/security'
 
 export interface DocumentRunDeps {
   jobs: DocumentJobRepository
@@ -237,7 +237,7 @@ async function publishArtifacts(
   for (const file of files) {
     const stats = statSync(file.path)
     if (stats.size === 0) continue
-    const fileName = safeFileName(file.fileName)
+    const fileName = safeRelativePath(file.fileName) || safeFileName(file.fileName)
 
     const artifact: DocumentArtifactRecord = {
       id: randomUUID(),

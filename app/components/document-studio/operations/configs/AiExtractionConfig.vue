@@ -38,19 +38,19 @@ const { t } = useI18n()
 const selectedModel = ref(props.modelValue?.model || '')
 const selectedConnectionId = ref(props.modelValue?.connectionId || '')
 const selectedPresetId = ref(props.modelValue?.presetId || '__none__')
-const selectedFormats = ref<PdfOfficeFormat[]>(props.modelValue?.formats || ['csv', 'xlsx', 'json', 'docx', 'xml'])
+const selectedFormats = ref<PdfOfficeFormat[]>(props.modelValue?.formats || ['csv']) // , 'xlsx', 'json', 'docx', 'xml'
 const force = ref(Boolean(props.modelValue?.force))
 
 const modelList = ref<ExtractModel[]>([])
 const modelsLoading = ref(true)
 const presets = ref<ExtractPreset[]>([])
 
-const formatOptions: { format: PdfOfficeFormat, label: string }[] = [
-  { format: 'csv', label: 'CSV' },
-  { format: 'xlsx', label: 'Excel (XLSX)' },
-  { format: 'json', label: 'JSON' },
-  { format: 'docx', label: 'Word (DOCX)' },
-  { format: 'xml', label: 'XML' }
+const formatOptions: { format: PdfOfficeFormat, label: string, icon: string, hintKey: string }[] = [
+  { format: 'csv', label: 'CSV', icon: 'i-lucide-table-2', hintKey: 'pdf.formats.csvHint' },
+  { format: 'xlsx', label: 'Excel (XLSX)', icon: 'i-lucide-file-spreadsheet', hintKey: 'pdf.formats.xlsxHint' },
+  { format: 'json', label: 'JSON', icon: 'i-lucide-braces', hintKey: 'pdf.formats.jsonHint' },
+  { format: 'docx', label: 'Word (DOCX)', icon: 'i-lucide-file-type-2', hintKey: 'pdf.formats.docxHint' },
+  { format: 'xml', label: 'XML', icon: 'i-lucide-code-xml', hintKey: 'pdf.formats.xmlHint' }
 ]
 
 function emitUpdate() {
@@ -96,10 +96,10 @@ function onModelSelected(modelId: string) {
   if (match) selectedConnectionId.value = match.connectionId
 }
 
-function toggleFormat(fmt: PdfOfficeFormat, checked: boolean) {
-  selectedFormats.value = checked
-    ? [...new Set([...selectedFormats.value, fmt])]
-    : selectedFormats.value.filter(f => f !== fmt)
+function toggleFormat(fmt: PdfOfficeFormat) {
+  selectedFormats.value = selectedFormats.value.includes(fmt)
+    ? selectedFormats.value.filter(f => f !== fmt)
+    : [...selectedFormats.value, fmt]
 }
 </script>
 
@@ -111,51 +111,66 @@ function toggleFormat(fmt: PdfOfficeFormat, checked: boolean) {
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
-      <USelect
-        v-else
-        :model-value="selectedModel"
+      <USelect v-else :model-value="selectedModel"
         :items="modelList.map(m => ({ label: `${m.displayName} (${m.connectionName})`, value: m.modelId }))"
-        class="w-full"
-        @update:model-value="onModelSelected"
-      />
+        class="w-full" @update:model-value="onModelSelected" />
     </UFormField>
 
     <!-- Preset selection -->
     <UFormField :label="t('pdf.extract.presets')">
-      <USelect
-        v-model="selectedPresetId"
-        :items="[
-          { label: t('pdf.extract.presetDefault'), value: '__none__' },
-          ...presets.map(p => ({ label: p.name, value: p.id }))
-        ]"
-        class="w-full"
-      />
+      <USelect v-model="selectedPresetId" :items="[
+        { label: t('pdf.extract.presetDefault'), value: '__none__' },
+        ...presets.map(p => ({ label: p.name, value: p.id }))
+      ]" class="w-full" />
     </UFormField>
 
     <!-- Export formats -->
-    <div class="space-y-1.5">
-      <label class="text-xs font-semibold uppercase tracking-wide text-muted">
-        {{ t('pdf.extract.outputFormats') }}
-      </label>
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <label
-          v-for="item in formatOptions"
-          :key="item.format"
-          class="flex cursor-pointer items-center gap-2 rounded-md p-2 hover:bg-muted/10"
-        >
-          <input
-            type="checkbox"
-            class="size-3.5"
-            :checked="selectedFormats.includes(item.format)"
-            @change="toggleFormat(item.format, ($event.target as HTMLInputElement).checked)"
-          >
-          <span class="text-sm font-medium">{{ item.label }}</span>
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <label class="text-xs font-semibold uppercase tracking-wide text-muted">
+          {{ t('pdf.extract.outputFormats') }}
         </label>
+        <span class="text-[11px] font-medium text-muted">
+          {{ selectedFormats.length }} / {{ formatOptions.length }}
+        </span>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button v-for="item in formatOptions" :key="item.format" type="button"
+          class="panel-flat flex items-start gap-3 rounded-lg p-3 text-start transition-all cursor-pointer" :class="[
+            selectedFormats.includes(item.format)
+              ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
+              : 'hover:border-primary/50 hover:bg-muted/10'
+          ]" :aria-pressed="selectedFormats.includes(item.format)" @click="toggleFormat(item.format)">
+          <div class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors"
+            :class="[
+              selectedFormats.includes(item.format)
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-default/60 bg-muted/15 text-muted'
+            ]">
+            <UIcon :name="selectedFormats.includes(item.format) ? 'i-lucide-check-circle-2' : item.icon"
+              class="size-4" />
+          </div>
+          <div class="min-w-0 flex-1 space-y-0.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-semibold text-highlighted"
+                :class="{ 'text-primary': selectedFormats.includes(item.format) }">
+                {{ item.label }}
+              </span>
+              <span v-if="selectedFormats.includes(item.format)"
+                class="text-[10px] font-medium uppercase tracking-wider text-primary">
+                {{ t('pdf.browser.selected') }}
+              </span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-muted">
+              {{ t(item.hintKey) }}
+            </p>
+          </div>
+        </button>
       </div>
     </div>
 
     <!-- Force re-extract checkbox -->
-    <div class="flex items-center gap-2 pt-1">
+    <div class="flex items-center gap-2 pt-1 pb-2">
       <input id="force-check" v-model="force" type="checkbox" class="size-3.5">
       <label for="force-check" class="text-xs text-muted cursor-pointer">
         {{ t('pdf.extract.force') }}
@@ -163,4 +178,3 @@ function toggleFormat(fmt: PdfOfficeFormat, checked: boolean) {
     </div>
   </div>
 </template>
-

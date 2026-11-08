@@ -3152,7 +3152,14 @@
       }
     },
     "split": {
-      "configHint": "Every page becomes its own PDF. Results are saved to the output folder."
+      "configHint": "Every page becomes its own PDF. Results are saved to the output folder.",
+      "subfolderLabel": "Create subfolder by document name",
+      "subfolderDesc": "Group split pages into a dedicated folder (e.g. output/document/page_0001.pdf) for easy management and one-click re-merging."
+    },
+    "merge": {
+      "outputNameLabel": "Merged file name",
+      "outputNameHint": "Leave blank to name automatically based on the selected folder or first file.",
+      "configHint": "Combines all selected PDF pages in the order shown into a single PDF document."
     },
     "errors": {
       "DOCUMENT_INPUT_REQUIRED": "Choose at least one file first.",

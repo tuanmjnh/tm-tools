@@ -1,6 +1,10 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.split')
-const { t } = useI18n()
+const splitConfig = ref({ createSubfolder: true })
+
+function runSplit() {
+  void page.run(splitConfig.value)
+}
 </script>
 
 <template>
@@ -12,12 +16,10 @@ const { t } = useI18n()
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
         :accept="page.selection.accept.value" :multiple="page.multiple.value" @add="page.addFiles"
-        @remove="page.selection.remove" @move="page.selection.move" @reset="page.selection.clear" @run="page.run()"
+        @remove="page.selection.remove" @move="page.selection.move" @reset="page.selection.clear" @run="runSplit"
         @deleted="page.session.removeArtifact">
         <template #config>
-          <p class="rounded-md bg-muted/20 p-2 text-xs text-muted">
-            {{ t('document.split.configHint') }}
-          </p>
+          <DocumentStudioOperationsConfigsSplitConfig v-model="splitConfig" />
         </template>
       </DocumentStudioOperationPageShell>
     </div>

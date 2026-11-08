@@ -87,11 +87,26 @@ class SplitExecutor implements DocumentOperationExecutor {
     return inputs.length === 1 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
-    const result = await splitPdf(input.stagedPath, context.workspace.outputDir)
+    const splitConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    const createSubfolder = splitConfig.createSubfolder !== false
+    const stem = safeStem(input.safeName)
+    const targetDir = createSubfolder ? join(context.workspace.outputDir, stem) : context.workspace.outputDir
+
+    const result = await splitPdf(input.stagedPath, targetDir)
     await context.onProgress({ totalUnits: result.totalPages, completedUnits: result.totalPages })
-    return { files: listFiles(context.workspace.outputDir, name => name.endsWith('.pdf')) }
+
+    const files = listFiles(targetDir, name => name.endsWith('.pdf'))
+    if (createSubfolder) {
+      return {
+        files: files.map(file => ({
+          ...file,
+          fileName: `${stem}/${file.fileName}`
+        }))
+      }
+    }
+    return { files }
   }
 }
 
@@ -102,9 +117,21 @@ class MergeExecutor implements DocumentOperationExecutor {
     return inputs.length >= 2 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const working = orderedFolder(context.inputs, join(context.workspace.workingDir, 'merge'))
-    const outputName = `${safeStem(context.inputs[0]?.safeName ?? 'document')}_merged.pdf`
+    const mergeConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    let outputName = typeof mergeConfig.outputName === 'string' && mergeConfig.outputName.trim()
+      ? mergeConfig.outputName.trim()
+      : ''
+    if (outputName) {
+      if (!outputName.toLowerCase().endsWith('.pdf')) outputName = `${outputName}.pdf`
+      outputName = safeFileName(outputName)
+    } else {
+      const folderCandidate = typeof mergeConfig.folderName === 'string' && mergeConfig.folderName.trim()
+        ? safeStem(mergeConfig.folderName.trim())
+        : safeStem(context.inputs[0]?.safeName ?? 'document')
+      outputName = `${folderCandidate}_merged.pdf`
+    }
     const result = await mergePdfFolder(working, context.workspace.outputDir, outputName)
     await context.onProgress({ totalUnits: result.pages, completedUnits: result.pages })
     return { files: [toProduced(result.output)] }

@@ -257,11 +257,11 @@ const progress = computed(() => {
     <DocumentStudioOperationStepHeader :operation="operation"
       :step="running ? 'process' : artifacts.length ? 'save' : 'choose'" :loading="running" />
 
-    <div class="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div class="flex min-h-0 flex-col gap-3">
+    <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
         <div
-          class="panel flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center transition-colors"
-          :class="dragging ? 'border-primary bg-primary/5' : 'border-default'" @dragover.prevent="dragging = true"
+          class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
+          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'" @dragover.prevent="dragging = true"
           @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
           <input ref="inputRef" type="file" class="hidden" :accept="accept || undefined" :multiple="multiple"
             @change="onPick">
@@ -276,8 +276,8 @@ const progress = computed(() => {
             :label="t('document.input.browse')" @click="browse" />
         </div>
 
-        <div v-if="files.length" class="rounded-lg border border-default/70">
-          <div class="flex items-center justify-between border-b border-default/60 px-3 py-2">
+        <div v-if="files.length" class="panel-flat rounded-lg shrink-0 overflow-hidden">
+          <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.input.selected', { count: files.length }) }}
             </p>
@@ -285,7 +285,7 @@ const progress = computed(() => {
               @click="emit('reset')" />
           </div>
           <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
-            <li v-for="(file, index) in files" :key="file.id" class="flex items-center gap-2 px-3 py-2">
+            <li v-for="(file, index) in files" :key="file.id" class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
               <UIcon :name="fileIcon(file.name)" class="size-4 shrink-0 text-dimmed" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">
@@ -314,8 +314,8 @@ const progress = computed(() => {
           </ul>
         </div>
 
-        <div v-if="artifacts.length" class="rounded-lg border border-default/70">
-          <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2">
+        <div v-if="artifacts.length" class="panel-flat rounded-lg shrink-0 overflow-hidden">
+          <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.result.title', { count: artifacts.length }) }}
             </p>
@@ -334,7 +334,7 @@ const progress = computed(() => {
           <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
             <li v-for="artifact in artifacts" :key="artifact.id">
               <AppContextMenu :items="artifactMenu(artifact)">
-                <div class="flex items-center gap-2 px-3 py-2">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
                   <UIcon :name="fileIcon(artifact.fileName)" class="size-4 shrink-0 text-dimmed" />
                   <div class="min-w-0 flex-1">
                     <button v-if="canPreview(artifact)" type="button"
@@ -365,8 +365,8 @@ const progress = computed(() => {
         </div>
       </div>
 
-      <div class="flex min-h-0 flex-col gap-3">
-        <UCard :ui="{ root: 'panel', body: 'gap-3 p-4 sm:p-4' }">
+      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+        <UCard :ui="{ root: 'panel-flat', body: 'gap-3 p-4 sm:p-4' }">
           <template #header>
             <div class="flex items-center gap-2">
               <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
@@ -404,7 +404,7 @@ const progress = computed(() => {
           </dl>
 
           <slot name="config" />
-
+          <USeparator color="primary" class="py-2 opacity-30" />
           <div v-if="running" class="space-y-1">
             <UProgress :model-value="progress" size="xs" />
             <p class="text-xs text-muted">

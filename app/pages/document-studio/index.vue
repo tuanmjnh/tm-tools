@@ -140,8 +140,8 @@ function operationLabel(operationId: string): string {
           <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
             {{ t('document.home.recent') }}
           </h2>
-          <ul class="divide-y divide-default/50 rounded-lg border border-default/70">
-            <li v-for="job in jobs" :key="job.id" class="flex items-center gap-3 px-3 py-2">
+          <ul class="panel-flat divide-y divide-default/50 rounded-lg">
+            <li v-for="job in jobs" :key="job.id" class="flex items-center gap-3 px-3 py-2 hover:bg-muted/10 transition-colors">
               <UBadge :color="statusColor(job.status)" variant="soft" size="sm">
                 {{ t(`document.status.${job.status}`) }}
               </UBadge>

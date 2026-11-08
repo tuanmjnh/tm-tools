@@ -131,12 +131,12 @@ function fileIcon(name: string, isFolder: boolean): string {
         {{ t('common.loading') }}
       </div>
 
-      <div v-else-if="!library.items.value.length" class="rounded-lg border border-dashed border-default p-8 text-center text-muted">
+      <div v-else-if="!library.items.value.length" class="panel-flat rounded-lg border border-dashed border-default/70 p-8 text-center text-muted">
         <UIcon name="i-lucide-folder-open" class="mx-auto mb-2 size-8 text-dimmed" />
         <p class="text-sm font-medium">{{ t('document.library.emptyFolder') }}</p>
       </div>
 
-      <div v-else class="divide-y divide-default/50 rounded-lg border border-default/70 bg-card">
+      <div v-else class="panel-flat divide-y divide-default/50 rounded-lg">
         <div
           v-for="item in library.items.value"
           :key="item.relativePath"
