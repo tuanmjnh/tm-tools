@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { mergePdfFolder } from '#server/modules/pdf/merge'
-import { areaDir, outputDir } from '#server/modules/pdf/workspace'
+import { outputDir } from '#server/modules/pdf/workspace'
 import { safeFileName } from '#server/modules/pdf/security'
 import { runPdf, pathParam, overwriteFlag } from '#server/utils/pdfApi'
 
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const result = await mergePdfFolder(
-      join(areaDir('split'), folder),
+      join(outputDir('split'), folder),
       outputDir('merge'),
       outputName
     )

@@ -1,4 +1,6 @@
-import type { PdfJobStatus, PdfSourceExportFormat } from '#shared/types/pdf'
+import type { PdfFileArea, PdfJobStatus, PdfSourceExportFormat } from '#shared/types/pdf'
+
+export type { PdfFileArea }
 
 export const PDF_STUDIO_POLL_MS = 2500
 export const PDF_UPLOAD_ACCEPT = 'application/pdf'
@@ -9,17 +11,10 @@ export const PDF_DATA_ACCEPT = '.csv,.json,.xml'
 export const PDF_SHEET_ACCEPT = '.xlsx'
 export const PDF_OFFICE_ACCEPT = '.docx,.xlsx'
 
-export type PdfFileArea = 'sources' | 'inputs' | 'word' | 'split' | 'images' | 'merged' | 'products' | 'office'
-
+/** The workspace has exactly two roots; tool output lives below `output/`. */
 export const PDF_AREA_DIR: Record<PdfFileArea, string> = {
-  sources: 'sources',
-  inputs: 'inputs',
-  word: 'word',
-  split: 'split',
-  images: 'images',
-  merged: 'merged',
-  products: 'products',
-  office: 'office'
+  input: 'input',
+  output: 'output'
 }
 
 export const PDF_EXPORT_FORMAT_META: Record<PdfSourceExportFormat, { icon: string, labelKey: string, hintKey: string }> = {
@@ -114,32 +109,6 @@ export function openPdfPreview(area: PdfFileArea, name: string, path?: string): 
   window.open(pdfPreviewHref(area, name, path), '_blank', `popup=yes,width=${width},height=${height}`)
 }
 
-/** Desktop-only helpers; they no-op in the browser build. */
-export function isPdfDesktop(): boolean {
-  return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron)
-}
-
-function normalizeLocalPath(path: string): string {
-  return window.electronAPI?.platform === 'win32' ? path.replace(/\//g, '\\') : path
-}
-
-/** Opens a file or folder with the OS default handler. */
-export function openLocalPath(path?: string | null): void {
-  if (!path || !isPdfDesktop() || !window.electronAPI?.openPath) return
-  void window.electronAPI.openPath(normalizeLocalPath(path)).catch(() => undefined)
-}
-
-/** Reveals a file (or opens its folder) in Explorer/Finder. */
-export function revealLocalPath(path?: string | null): void {
-  if (!path || !isPdfDesktop()) return
-  const normalized = normalizeLocalPath(path)
-  if (window.electronAPI?.showItemInFolder) {
-    void window.electronAPI.showItemInFolder(normalized).catch(() => undefined)
-    return
-  }
-  void window.electronAPI?.openPath(normalized).catch(() => undefined)
-}
-
 export function pdfMergedUrl(name: string): string {
   return `/api/v1/pdf/merged/${segment(name)}`
 }
@@ -176,6 +145,12 @@ export function pdfParentPath(filePath?: string | null): string | undefined {
   return index > 0 ? filePath.slice(0, index) : undefined
 }
 
+/** True when a relative path is the folder itself or lives below it. */
+export function pdfInFolder(relativePath: string | null | undefined, folder: string): boolean {
+  if (!relativePath) return false
+  return relativePath === folder || relativePath.startsWith(`${folder}/`)
+}
+
 export function formatPdfBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
@@ -186,6 +161,15 @@ export function formatPdfBytes(bytes: number): string {
 
 export function pdfFileExtension(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
+}
+
+/** Files the import workspace can turn into a PDF. */
+export function pdfIsConvertible(name: string): boolean {
+  return ['png', 'jpg', 'jpeg', 'docx', 'xlsx', 'csv', 'json', 'xml'].includes(pdfFileExtension(name))
+}
+
+export function pdfIsPdf(name: string): boolean {
+  return pdfFileExtension(name) === 'pdf'
 }
 
 /** Colour + icon for a library file, shared by every workspace list. */

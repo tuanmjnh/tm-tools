@@ -5,7 +5,13 @@ const publicRoutes = [
   '/api/auth/register',
   '/api/auth/refresh',
   '/api/health',
-  '/api/system/network'
+  '/api/system/network',
+  // Deployment health: names the runtime and whether a provider is configured,
+  // never a credential. A monitor cannot hold a user session.
+  '/api/v1/documents/health',
+  // Retention cron: proves itself with its own bearer token inside the handler
+  // because a scheduler has no user session.
+  '/api/v1/documents/maintenance/cleanup'
 ]
 
 export default defineEventHandler(async (event) => {
@@ -50,4 +56,8 @@ export default defineEventHandler(async (event) => {
   }
 
   event.context.auth = payload
+  // Server-only: Hub Storage checks the Storage grant against the caller's own
+  // token, so the raw bearer has to survive past verification. It is never
+  // copied into a response, a log line or the page payload.
+  event.context.authToken = token
 })

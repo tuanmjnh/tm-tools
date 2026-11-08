@@ -24,28 +24,47 @@ export function toCsv(rows: PdfExportRow[]): string {
  * A finished run writes every supported format: CSV/JSON/XML for machines, XLSX
  * for the catalogue owner, DOCX for people who want to read or print the table.
  */
-export async function writeProducts(
+export async function writeProducts<T extends readonly string[] = readonly ['csv', 'json', 'xlsx', 'docx', 'xml']>(
   dir: string,
   stem: string,
-  rows: PdfExportRow[]
-): Promise<{ csv: string, json: string, xlsx: string, docx: string, xml: string }> {
+  rows: PdfExportRow[],
+  formats?: T
+): Promise<Record<string, string>> {
   ensureDir(dir)
-  const csv = join(dir, `${stem}.csv`)
-  const json = join(dir, `${stem}.json`)
-  const xlsx = join(dir, `${stem}.xlsx`)
-  const docx = join(dir, `${stem}.docx`)
-  const xml = join(dir, `${stem}.xml`)
+  const allowed = formats && formats.length > 0 ? new Set(formats) : new Set(['csv', 'json', 'xlsx', 'docx', 'xml'])
+  const result: Record<string, string> = {}
 
-  writeFileAtomic(csv, toCsv(rows), 'utf8')
-  writeFileAtomic(json, JSON.stringify(rows, null, 2), 'utf8')
-  writeFileAtomic(xml, rowsToXml(rows), 'utf8')
-  writeFileAtomic(xlsx, await rowsToXlsx(rows, stem.slice(0, 31)))
-  writeFileAtomic(docx, await rowsToDocx(rows, stem))
+  if (allowed.has('csv')) {
+    const csv = join(dir, `${stem}.csv`)
+    writeFileAtomic(csv, toCsv(rows), 'utf8')
+    result.csv = csv
+  }
+  if (allowed.has('json')) {
+    const json = join(dir, `${stem}.json`)
+    writeFileAtomic(json, JSON.stringify(rows, null, 2), 'utf8')
+    result.json = json
+  }
+  if (allowed.has('xml')) {
+    const xml = join(dir, `${stem}.xml`)
+    writeFileAtomic(xml, rowsToXml(rows), 'utf8')
+    result.xml = xml
+  }
+  if (allowed.has('xlsx')) {
+    const xlsx = join(dir, `${stem}.xlsx`)
+    writeFileAtomic(xlsx, await rowsToXlsx(rows, stem.slice(0, 31)))
+    result.xlsx = xlsx
+  }
+  if (allowed.has('docx')) {
+    const docx = join(dir, `${stem}.docx`)
+    writeFileAtomic(docx, await rowsToDocx(rows, stem))
+    result.docx = docx
+  }
 
-  return { csv, json, xlsx, docx, xml }
+  return result
 }
 
 /** True when a previous run already wrote the downloadable table for this stem. */
-export function hasProductFiles(dir: string, stem: string): boolean {
-  return ['csv', 'json', 'xlsx', 'docx', 'xml'].some(ext => existsSync(join(dir, `${stem}.${ext}`)))
+export function hasProductFiles(dir: string, stem: string, formats?: readonly string[]): boolean {
+  const checkFormats = formats && formats.length > 0 ? formats : ['csv', 'json', 'xlsx', 'docx', 'xml']
+  return checkFormats.some(ext => existsSync(join(dir, `${stem}.${ext}`)))
 }

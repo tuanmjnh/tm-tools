@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     const path = wordPath(name)
     const stem = documentStem(name)
     const outputName = `${stem}.pdf`
-    if (!overwriteFlag(body.overwrite) && existsSync(join(areaDir('sources'), outputName))) {
+    if (!overwriteFlag(body.overwrite) && existsSync(join(areaDir('input'), outputName))) {
       throw new Error('PDF_FILE_ALREADY_EXISTS')
     }
 

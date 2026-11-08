@@ -2,9 +2,9 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 
 /**
- * Right-click surface for the PDF workspaces. The menu renders at the pointer
- * through UDropdownMenu, and nested menus win because the innermost handler
- * stops propagation.
+ * Right-click surface used by the file explorers and the activity list. The
+ * menu renders at the pointer through UDropdownMenu, and nested menus win
+ * because the innermost handler stops propagation.
  */
 const props = withDefaults(defineProps<{
   items: DropdownMenuItem[][]

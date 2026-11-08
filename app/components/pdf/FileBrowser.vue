@@ -47,6 +47,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   pick: [file: PdfFileInfo]
+  unpick: [file: PdfFileInfo]
   upload: [files: File[]]
   refresh: []
   createFolder: [parentFolder: string]
@@ -392,14 +393,25 @@ watch(selected, (files) => {
         @delete="emit('deleteFile', file)"
       >
         <template #actions>
-          <UBadge
-            v-if="isSelected(file)"
-            color="primary"
-            variant="subtle"
-            size="xs"
-          >
-            {{ t('pdf.browser.selected') }}
-          </UBadge>
+          <div v-if="isSelected(file)" class="flex items-center gap-1">
+            <UBadge
+              color="primary"
+              variant="subtle"
+              size="xs"
+            >
+              {{ t('pdf.browser.selected') }}
+            </UBadge>
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              square
+              :aria-label="t('pdf.browser.unselect')"
+              :title="t('pdf.browser.unselect')"
+              @click="emit('unpick', file)"
+            />
+          </div>
           <UButton
             v-else-if="pickable"
             icon="i-lucide-check"

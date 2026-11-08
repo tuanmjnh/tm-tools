@@ -96,6 +96,47 @@ describe('lazy explorer reload', () => {
   })
 })
 
+describe('desktop actions in the PDF workspaces', () => {
+  it('lets the tree create a folder in either root', () => {
+    for (const page of ['library', 'split', 'images', 'import', 'export', 'extract']) {
+      const source = read(`app/pages/pdf/${page}.vue`)
+      assert.ok(
+        /@create="explorer\.openCreateFolder"/.test(source),
+        `${page}.vue cannot create a folder in the output tree`
+      )
+      assert.ok(
+        /:can-create="explorer\.foldersWritable\.value"/.test(source),
+        `${page}.vue does not ask the server whether its area accepts subfolders`
+      )
+    }
+  })
+
+  it('keeps the result panel able to preview, reveal and open output', () => {
+    const source = read('app/components/pdf/OperationResult.vue')
+    assert.ok(/<PdfFileRow/.test(source), 'the result panel no longer lists the files it wrote')
+    assert.ok(/openLocalPath/.test(source), 'the result panel cannot open the output folder')
+    assert.ok(/revealLocalPath/.test(source), 'the result panel cannot reveal the output folder')
+    assert.ok(/<UDropdownMenu/.test(source), 'the result panel has no context menu')
+  })
+
+  it('deletes through a confirmation modal on every workspace page', () => {
+    for (const page of ['library', 'split', 'images', 'import', 'export', 'extract']) {
+      const source = read(`app/pages/pdf/${page}.vue`)
+      assert.ok(/<BaseConfirmModal/.test(source), `${page}.vue deletes without a confirm modal`)
+    }
+  })
+
+  it('names only the two workspace roots', () => {
+    for (const page of ['library', 'split', 'images', 'import', 'export', 'extract', 'index']) {
+      const source = read(`app/pages/pdf/${page}.vue`)
+      assert.ok(
+        !/'sources'|'inputs'|'split'\s*,\s*'images'/.test(source),
+        `${page}.vue still addresses a removed area`
+      )
+    }
+  })
+})
+
 // The explorer deletes through `/directory/delete`, so the cascade the confirm
 // text promises has to live there too — not only in `removeSource`.
 const dataRoot = mkdtempSync(join(tmpdir(), 'pdf-contract-'))
@@ -104,18 +145,18 @@ process.env.PDF_DATA_DIR = dataRoot
 const { deleteAreaItem } = await import('../../server/modules/pdf/directory')
 
 before(() => {
-  for (const area of ['sources', 'inputs', 'word', 'split', 'images', 'merged', 'products', 'office', 'checkpoints']) {
+  for (const area of ['input', 'output', 'checkpoints']) {
     mkdirSync(join(dataRoot, area), { recursive: true })
   }
   for (const path of [
-    'sources/bang_gia.pdf',
-    'split/bang_gia/page_0001.pdf',
-    'images/bang_gia/page_0001.png',
+    'input/bang_gia.pdf',
+    'output/split/bang_gia/page_0001.pdf',
+    'output/images/bang_gia/page_0001.png',
     'checkpoints/bang_gia/1.json',
-    'merged/bang_gia_merged.pdf',
-    'merged/khac_merged.pdf',
-    'products/bang_gia_products.csv',
-    'products/khac_products.csv'
+    'output/merged/bang_gia_merged.pdf',
+    'output/merged/khac_merged.pdf',
+    'output/products/bang_gia_products.csv',
+    'output/products/khac_products.csv'
   ]) {
     mkdirSync(dirname(join(dataRoot, path)), { recursive: true })
     writeFileSync(join(dataRoot, path), 'x')
@@ -128,22 +169,22 @@ after(() => {
 
 describe('source delete cascade', () => {
   it('removes the split folder, page images, checkpoints, merged PDF and products', () => {
-    deleteAreaItem('sources', 'bang_gia.pdf')
+    deleteAreaItem('input', 'bang_gia.pdf')
 
     for (const path of [
-      'sources/bang_gia.pdf',
-      'split/bang_gia',
-      'images/bang_gia',
+      'input/bang_gia.pdf',
+      'output/split/bang_gia',
+      'output/images/bang_gia',
       'checkpoints/bang_gia',
-      'merged/bang_gia_merged.pdf',
-      'products/bang_gia_products.csv'
+      'output/merged/bang_gia_merged.pdf',
+      'output/products/bang_gia_products.csv'
     ]) {
       assert.equal(existsSync(join(dataRoot, path)), false, `${path} survived the cascade`)
     }
   })
 
   it('leaves files belonging to other sources alone', () => {
-    assert.equal(existsSync(join(dataRoot, 'merged/khac_merged.pdf')), true)
-    assert.equal(existsSync(join(dataRoot, 'products/khac_products.csv')), true)
+    assert.equal(existsSync(join(dataRoot, 'output/merged/khac_merged.pdf')), true)
+    assert.equal(existsSync(join(dataRoot, 'output/products/khac_products.csv')), true)
   })
 })

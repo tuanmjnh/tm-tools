@@ -1,5 +1,13 @@
-export const PDF_FILE_AREAS = ['sources', 'inputs', 'word', 'split', 'images', 'merged', 'products', 'office'] as const
+/**
+ * The workspace has exactly two roots: everything the operator feeds in, and
+ * everything a tool produces. Tool-specific folders live below `output/`.
+ */
+export const PDF_FILE_AREAS = ['input', 'output'] as const
 export type PdfFileArea = typeof PDF_FILE_AREAS[number]
+
+/** Subfolders of `output/` that each tool writes into. */
+export const PDF_OUTPUT_FOLDERS = ['split', 'images', 'merged', 'products', 'office'] as const
+export type PdfOutputFolder = typeof PDF_OUTPUT_FOLDERS[number]
 
 export const PDF_EXPORT_COLUMNS = [
   'no',
@@ -58,8 +66,13 @@ export interface PdfExtractPage {
 }
 
 export const PDF_JOB_STATUSES = ['queued', 'running', 'done', 'failed', 'cancelled'] as const
-
 export type PdfJobStatus = typeof PDF_JOB_STATUSES[number]
+
+/**
+ * Bumped whenever the extraction contract changes shape: prompt, schema, or the
+ * meaning of a field. Old checkpoints stop being reused; they are not deleted.
+ */
+export const PDF_EXTRACT_CHECKPOINT_VERSION = 2
 
 export interface PdfExtractJobState {
   id: string
@@ -168,6 +181,10 @@ export interface PdfDirectoryListing {
 }
 
 export interface PdfLibrary {
+  /** Every file under the `input/` root (PDF and non-PDF). */
+  input: PdfFileInfo[]
+  /** Tool folders directly under the `output/` root. */
+  output: PdfFolderInfo[]
   sources: PdfFileInfo[]
   /** Non-PDF uploads (docx, xlsx, csv, json, xml, images) waiting to be converted. */
   inputs: PdfFileInfo[]
@@ -227,6 +244,8 @@ export interface PdfAreaDescriptor {
 }
 
 export interface PdfWorkspaceAreaReport extends PdfAreaDescriptor {
+  /** Absolute on-disk root, so the desktop app can reveal it. */
+  root: string
   exists: boolean
   fileCount: number
   folderCount: number
@@ -236,8 +255,8 @@ export interface PdfWorkspaceReport {
   areas: PdfWorkspaceAreaReport[]
   /** True when a managed area root is missing from disk. */
   needsRepair: boolean
-  /** Output folder each tool writes to. */
-  outputMapping: Record<string, PdfFileArea>
+  /** Subfolder of `output/` each tool writes to. */
+  outputMapping: Record<string, string>
 }
 
 /** Result of the manual repair: only missing folders are recreated. */

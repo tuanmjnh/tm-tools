@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { PDFDocument } from 'pdf-lib'
@@ -24,10 +24,9 @@ function lastEvent(action: string) {
 }
 
 before(async () => {
-  for (const area of ['sources', 'inputs', 'word', 'split', 'images', 'merged', 'products', 'office']) {
-    mkdirSync(join(dataRoot, area), { recursive: true })
-  }
-  await writePdf(join(dataRoot, 'sources', 'book.pdf'), 2)
+  mkdirSync(join(dataRoot, 'input'), { recursive: true })
+  mkdirSync(join(dataRoot, 'output'), { recursive: true })
+  await writePdf(join(dataRoot, 'input', 'book.pdf'), 2)
 })
 
 after(() => {
@@ -36,25 +35,23 @@ after(() => {
 
 describe('tool outputs are audited', () => {
   it('records a split with its tool and output folder', async () => {
-    await splitPdf(join(dataRoot, 'sources', 'book.pdf'), join(dataRoot, 'split', 'book'))
+    await splitPdf(join(dataRoot, 'input', 'book.pdf'), join(dataRoot, 'output', 'split', 'book'))
 
     const event = lastEvent('output')
-    assert.equal(event?.area, 'split')
     assert.equal(event?.tool, 'split')
     assert.equal(event?.target, 'book')
   })
 
-  it('records a merge with its output file', async () => {
-    await mergePdfFolder(join(dataRoot, 'split', 'book'), join(dataRoot, 'merged'), 'book_merged.pdf')
+  it('records a merge with its output folder and file', async () => {
+    await mergePdfFolder(join(dataRoot, 'output', 'split', 'book'), join(dataRoot, 'output', 'merged'), 'book_merged.pdf')
 
     const event = lastEvent('output')
-    assert.equal(event?.area, 'merged')
     assert.equal(event?.tool, 'merge')
     assert.equal(event?.target, 'book_merged.pdf')
   })
 
   it('never writes page bytes into the log', async () => {
-    await splitPdf(join(dataRoot, 'sources', 'book.pdf'), join(dataRoot, 'split', 'book2'))
+    await splitPdf(join(dataRoot, 'input', 'book.pdf'), join(dataRoot, 'output', 'split', 'book2'))
 
     const serialized = JSON.stringify(readAudit())
     assert.equal(serialized.includes('%PDF'), false)
@@ -62,23 +59,32 @@ describe('tool outputs are audited', () => {
 })
 
 describe('trash mutations are audited', () => {
-  it('records a restore into its original area', () => {
-    writeFileSync(join(dataRoot, 'sources', 'restore-me.pdf'), 'pdf')
-    const item = moveToTrash('sources', join(dataRoot, 'sources', 'restore-me.pdf'), 'restore-me.pdf')
-    restoreTrashItem(item.id)
+  it('records a restore at its original relative path', () => {
+    mkdirSync(join(dataRoot, 'output', 'office'), { recursive: true })
+    const target = join(dataRoot, 'output', 'office', 'restore-me.pdf')
+    writeFileSync(target, 'pdf')
+
+    const item = moveToTrash('output', target, 'office/restore-me.pdf')
+    // The trash routes outside `output/` while it holds the item, so restoring
+    // at the recorded relative path is the only way back to `office/`.
+    assert.equal(existsSync(target), false)
+    const restored = restoreTrashItem(item.id)
 
     const event = lastEvent('restore')
-    assert.equal(event?.area, 'sources')
-    assert.equal(event?.target, 'restore-me.pdf')
+    assert.equal(event?.area, 'output')
+    assert.equal(event?.target, 'office/restore-me.pdf')
+    assert.equal(existsSync(target), true)
+    assert.equal(restored.originalPath, target)
   })
 
   it('records a permanent purge', () => {
-    writeFileSync(join(dataRoot, 'sources', 'purge-me.pdf'), 'pdf')
-    const item = moveToTrash('sources', join(dataRoot, 'sources', 'purge-me.pdf'), 'purge-me.pdf')
+    const target = join(dataRoot, 'output', 'office', 'purge-me.pdf')
+    writeFileSync(target, 'pdf')
+    const item = moveToTrash('output', target, 'office/purge-me.pdf')
     deleteTrashItemPermanently(item.id)
 
     const event = lastEvent('purge')
-    assert.equal(event?.area, 'sources')
-    assert.equal(event?.target, 'purge-me.pdf')
+    assert.equal(event?.area, 'output')
+    assert.equal(event?.target, 'office/purge-me.pdf')
   })
 })

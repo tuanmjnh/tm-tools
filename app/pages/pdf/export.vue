@@ -36,7 +36,7 @@ onMounted(async () => {
   await reloadAll()
   const fromQuery = String(route.query.source ?? '')
   if (fromQuery) {
-    selection.pickFile({ area: 'sources', relativePath: fromQuery, name: fromQuery.split('/').pop() ?? fromQuery })
+    selection.pickFile({ area: 'input', relativePath: fromQuery, name: fromQuery.split('/').pop() ?? fromQuery })
   }
 })
 
@@ -80,18 +80,18 @@ function runFromConfig() {
 
 const exportOperation = computed(() => pdfOperation('export'))
 
-/** The export route writes three different areas, one per format group. */
-const formatArea = (format: PdfSourceExportFormat): PdfFileArea =>
+/** Each format group lands in its own folder below `output/`. */
+const formatFolder = (format: PdfSourceExportFormat): string =>
   format === 'png' ? 'images' : format === 'docx' ? 'office' : 'products'
 
-const primaryOutput = computed(() =>
-  formats.value.length ? formatArea(formats.value[0]!) : explorer.outputArea('export')
+const primaryOutputFolder = computed(() =>
+  formats.value.length ? formatFolder(formats.value[0]!) : explorer.outputFolder('export')
 )
 
 const alternateAreas = computed(() => {
-  const areas = new Set(formats.value.map(formatArea))
-  if (primaryOutput.value) areas.delete(primaryOutput.value)
-  return [...areas].map(area => t(`pdf.areas.${area}`))
+  const folders = new Set(formats.value.map(formatFolder))
+  if (primaryOutputFolder.value) folders.delete(primaryOutputFolder.value)
+  return [...folders].map(folder => t(`pdf.areas.${folder}`))
 })
 
 const flowInput = computed(() => {
@@ -102,7 +102,7 @@ const flowInput = computed(() => {
 })
 
 async function openOutput() {
-  if (primaryOutput.value) await explorer.select('', primaryOutput.value)
+  if (primaryOutputFolder.value) await explorer.select(primaryOutputFolder.value, 'output')
 }
 
 const resultStatus = computed<'success' | 'partial' | 'failed'>(() => {
@@ -127,7 +127,7 @@ function deleteSource(item: { name?: string, path: string, relativePath?: string
 const deleteDescription = computed(() => {
   const item = pendingDelete.value
   if (!item) return ''
-  return item.area === 'sources'
+  return item.area === 'input'
     ? t('pdf.library.deleteDesc', { name: item.name })
     : t('pdf.library.deletePlain', { name: item.name })
 })
@@ -157,7 +157,7 @@ async function confirmDelete() {
       />
     </template>
 
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <PdfWorkspaceShell
         :tree="explorer.tree.value"
         :current-folder="explorer.currentFolder.value"
@@ -188,8 +188,8 @@ async function confirmDelete() {
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: library?.maxUploadMb ?? 0 })"
           :selected-path="selectedSource"
-          :readonly="explorer.activeArea.value !== 'sources'"
-          :pickable="explorer.activeArea.value === 'sources'"
+          :readonly="explorer.activeArea.value !== 'input'"
+          :pickable="explorer.activeArea.value === 'input'"
           :folders-writable="explorer.foldersWritable.value"
           :deletable="explorer.fileDeletable.value"
           list-class="max-h-[44vh]"
@@ -208,9 +208,10 @@ async function confirmDelete() {
               :operation="t(exportOperation.titleKey)"
               :input="flowInput"
               :output="{
-                areaLabel: primaryOutput ? t(`pdf.areas.${primaryOutput}`) : '—',
+                areaLabel: primaryOutputFolder ? t('pdf.areas.output') : '—',
+                relativePath: primaryOutputFolder ?? undefined,
                 alternates: alternateAreas,
-                openable: Boolean(primaryOutput)
+                openable: Boolean(primaryOutputFolder)
               }"
               :state="selection.isValid.value ? 'ready' : formats.length ? 'partial' : 'empty'"
               @open-output="openOutput"
@@ -223,8 +224,10 @@ async function confirmDelete() {
           :status="resultStatus"
           :summary="t('pdf.export.resultSummary', { count: results.length })"
           :items="resultItems"
-          :output-area="primaryOutput ? t(`pdf.areas.${primaryOutput}`) : ''"
-          :openable="Boolean(primaryOutput)"
+          :output-area="primaryOutputFolder ? t('pdf.areas.output') : ''"
+          :output-folder="primaryOutputFolder ?? ''"
+          :openable="Boolean(primaryOutputFolder)"
+          :folder-path="primaryOutputFolder ? explorer.absolutePath('output', primaryOutputFolder) : undefined"
           @open-output="openOutput"
         />
 
@@ -322,6 +325,6 @@ async function confirmDelete() {
         :is-folder="explorer.renameTarget.value?.isFolder"
         @submit="explorer.handleRename"
       />
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

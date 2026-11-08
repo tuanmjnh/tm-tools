@@ -11,9 +11,14 @@ export default defineEventHandler(async (event) => {
       model?: unknown
       connectionId?: unknown
       preset?: unknown
+      formats?: unknown
     }>(event) || {}
     const source = typeof body.source === 'string' ? body.source.trim() : ''
     if (!source) throw new Error('PDF_SOURCE_NOT_FOUND')
+
+    const formats = Array.isArray(body.formats)
+      ? body.formats.filter((f): f is string => typeof f === 'string')
+      : null
 
     // Both values describe one entry of the live model catalogue; the module
     // falls back to the suggested model when they are missing or stale. The
@@ -26,7 +31,8 @@ export default defineEventHandler(async (event) => {
         model: typeof body.model === 'string' ? body.model.trim() : ''
       },
       sanitizeInstructions(body.preset),
-      overwriteFlag(body.overwrite)
+      overwriteFlag(body.overwrite),
+      formats
     )
     return { success: true, data: job }
   })

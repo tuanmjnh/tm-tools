@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfFileArea, PdfFileInfo, PdfFolderInfo } from '#shared/types/pdf'
-import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfInFolder, pdfIsPdf, pdfParentPath } from '~/utils/pdfStudio'
 import { pdfDocumentStem, pdfImagesToPdfOutputName, pdfOperation } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
@@ -45,11 +45,11 @@ const pageMenu = computed<DropdownMenuItem[][]>(() => [
 ].filter(group => group.length > 0))
 
 function sourceMenu(file: PdfFileInfo): DropdownMenuItem[] {
-  const name = file.relativePath || file.name
+  if (!pdfIsPdf(file.name)) return []
   return [{
     label: t('pdf.workspaces.export.title'),
     icon: 'i-lucide-share-2',
-    onSelect: () => void navigateTo(`/pdf/export?source=${encodeURIComponent(name)}`)
+    onSelect: () => void navigateTo(`/pdf/export?source=${encodeURIComponent(file.relativePath || file.name)}`)
   }]
 }
 
@@ -65,7 +65,7 @@ const confirmTitle = computed(() =>
 const confirmDescription = computed(() => {
   const item = pending.value
   if (!item) return ''
-  return item.area === 'sources'
+  return item.area === 'input'
     ? t('pdf.library.deleteDesc', { name: item.name })
     : t('pdf.images.removeDesc', { name: item.name })
 })
@@ -106,6 +106,33 @@ function askRasterize(file: PdfFileInfo) {
 
 const building = ref('')
 
+/** Last finished action, so its output can be reviewed and revealed on disk. */
+const lastRun = ref<{ kind: 'rasterize' | 'build', name: string, target: string } | null>(null)
+const lastRunFiles = ref<PdfFileInfo[]>([])
+
+const lastRunFolder = computed(() => {
+  const run = lastRun.value
+  if (!run) return ''
+  const base = explorer.outputFolder(run.kind === 'build' ? 'imagesToPdf' : 'rasterize') ?? ''
+  return run.kind === 'build' ? base : `${base}/${run.target}`
+})
+
+const lastRunPath = computed(() => {
+  const folder = lastRunFolder.value
+  return folder ? explorer.absolutePath('output', folder) : undefined
+})
+
+async function recordRun(kind: 'rasterize' | 'build', name: string, target: string, tool: string) {
+  lastRun.value = { kind, name, target }
+  const folder = explorer.outputFolder(tool)
+  if (!folder) {
+    lastRunFiles.value = []
+    return
+  }
+  const files = await explorer.listFolder('output', kind === 'build' ? folder : `${folder}/${target}`)
+  lastRunFiles.value = kind === 'build' ? files.filter(file => file.name === target) : files
+}
+
 function askBuild(folder: PdfFolderInfo) {
   const path = folder.relativePath || folder.name
   pendingAction.value = { kind: 'build', name: folder.name, path }
@@ -121,20 +148,32 @@ async function runAction() {
     const ok = await rasterizeSource(action.path, overwrite.value)
     activeSource.value = ''
     await reloadAll()
-    if (ok) await openOutput('rasterize')
+    if (ok) {
+      await recordRun('rasterize', action.name, pdfDocumentStem(action.name), 'rasterize')
+      await openOutput('rasterize')
+    }
   } else {
     building.value = action.name
     const ok = await imagesToPdf(action.path, overwrite.value)
     building.value = ''
     await reloadAll()
-    if (ok) await openOutput('imagesToPdf')
+    if (ok) {
+      await recordRun('build', action.name, pdfImagesToPdfOutputName(action.name), 'imagesToPdf')
+      await openOutput('imagesToPdf')
+    }
   }
   pendingAction.value = null
 }
 
+/** Output subfolder that holds the page-image folders. */
+const imagesFolder = computed(() => explorer.outputFolder('rasterize') ?? 'images')
+
+/** Rasterize reads `input/`; rebuild consumes folders below `output/images`. */
 const activeOperation = computed(() => {
-  if (explorer.activeArea.value === 'sources') return pdfOperation('rasterize')
-  if (explorer.activeArea.value === 'images') return pdfOperation('imagesToPdf')
+  if (explorer.activeArea.value === 'input') return pdfOperation('rasterize')
+  if (explorer.activeArea.value === 'output' && pdfInFolder(explorer.currentFolder.value, imagesFolder.value)) {
+    return pdfOperation('imagesToPdf')
+  }
   return null
 })
 
@@ -142,26 +181,26 @@ const flowInput = computed(() => {
   if (activeSource.value) {
     return { label: activeSource.value.split('/').pop() ?? activeSource.value, detail: activeSource.value }
   }
-  if (explorer.activeArea.value === 'images') {
+  if (explorer.activeArea.value === 'output') {
     return { label: t('pdf.flow.browsing', { folder: explorer.currentFolder.value || '/' }) }
   }
   return { label: t('pdf.flow.none') }
 })
 
-const flowOutputArea = computed(() => {
+const flowOutputFolder = computed(() => {
   const operation = activeOperation.value
-  return operation ? explorer.outputArea(operation.output.mappingKey) : null
+  return operation ? explorer.outputFolder(operation.output.mappingKey) : null
 })
 
 async function openOutput(tool: string) {
-  const area = explorer.outputArea(tool)
-  if (area) await explorer.select('', area)
+  const folder = explorer.outputFolder(tool)
+  if (folder) await explorer.select(folder, 'output')
 }
 </script>
 
 <template>
   <BasePage id="pdf-images" :title="t('pdf.workspaces.images.title')" :description="t('pdf.workspaces.images.desc')">
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <PdfWorkspaceShell
         :tree="explorer.tree.value"
         :current-folder="explorer.currentFolder.value"
@@ -191,10 +230,10 @@ async function openOutput(tool: string) {
           :upload-accept="PDF_UPLOAD_ACCEPT"
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: maxUploadMb })"
-          :readonly="explorer.activeArea.value !== 'sources'"
+          :readonly="explorer.activeArea.value !== 'input'"
           :folders-writable="explorer.foldersWritable.value"
           :deletable="explorer.fileDeletable.value"
-          :file-menu="explorer.activeArea.value === 'sources' ? sourceMenu : undefined"
+          :file-menu="explorer.activeArea.value === 'input' ? sourceMenu : undefined"
           list-class="max-h-[46vh]"
           @upload="handleUpload"
           @refresh="reloadAll"
@@ -211,16 +250,18 @@ async function openOutput(tool: string) {
               :operation="t(activeOperation.titleKey)"
               :input="flowInput"
               :output="{
-                areaLabel: flowOutputArea ? t(`pdf.areas.${flowOutputArea}`) : '—',
-                openable: Boolean(flowOutputArea)
+                areaLabel: flowOutputFolder ? t('pdf.areas.output') : '—',
+                relativePath: flowOutputFolder ?? undefined,
+                openable: Boolean(flowOutputFolder)
               }"
-              :state="flowOutputArea ? 'partial' : 'empty'"
+              :state="flowOutputFolder ? 'partial' : 'empty'"
               @open-output="activeOperation && openOutput(activeOperation.output.mappingKey)"
             />
           </template>
 
-          <template v-if="explorer.activeArea.value === 'sources'" #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'input'" #file-actions="{ file }">
             <UButton
+              v-if="pdfIsPdf(file.name)"
               icon="i-lucide-images"
               :label="t('pdf.images.rasterize')"
               color="neutral"
@@ -231,8 +272,9 @@ async function openOutput(tool: string) {
             />
           </template>
 
-          <template v-if="explorer.activeArea.value === 'images'" #folder-actions="{ folder }">
+          <template v-if="explorer.activeArea.value === 'output'" #folder-actions="{ folder }">
             <UButton
+              v-if="pdfInFolder(folder.relativePath || folder.name, imagesFolder)"
               icon="i-lucide-file-plus-2"
               :label="t('pdf.images.buildPdf')"
               color="primary"
@@ -243,6 +285,19 @@ async function openOutput(tool: string) {
             />
           </template>
         </PdfFileBrowser>
+
+        <PdfOperationResult
+          v-if="lastRun"
+          :status="lastRunFiles.length ? 'success' : 'failed'"
+          :summary="t('pdf.images.resultSummary', { name: lastRun.target })"
+          :output-area="t('pdf.areas.output')"
+          :output-folder="lastRunFolder"
+          :openable="true"
+          :files="lastRunFiles"
+          area="output"
+          :folder-path="lastRunPath"
+          @open-output="openOutput(lastRun.kind === 'build' ? 'imagesToPdf' : 'rasterize')"
+        />
       </PdfWorkspaceShell>
 
       <BaseConfirmModal
@@ -275,6 +330,6 @@ async function openOutput(tool: string) {
         :is-folder="explorer.renameTarget.value?.isFolder"
         @submit="explorer.handleRename"
       />
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

@@ -5,7 +5,6 @@ import { config } from '#server/config'
 import { ensureDir, ensurePdfDirs, pdfDirs, writeFileAtomic } from './paths'
 import { recordAudit } from './audit'
 import { listTrashItems, moveToTrash } from './trash'
-import { assertFileWritable } from './workspace'
 import {
   documentStem,
   isImageName,
@@ -33,13 +32,42 @@ export function listFiles(dir: string, accept: (name: string) => boolean): PdfFi
 }
 
 /**
- * Non-PDF inputs live in `inputs/`; `word/` is still read so documents uploaded
- * before the folder existed stay visible (and convertible).
+ * Walks the whole `input/` root, including nested folders, so the library and
+ * the home counters see every file the operator dropped in.
+ */
+function walkFiles(dir: string, prefix = ''): PdfFileInfo[] {
+  if (!existsSync(dir)) return []
+  const files: PdfFileInfo[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
+    const absolute = join(dir, entry.name)
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(absolute, relative))
+    } else if (entry.isFile()) {
+      const stats = statSync(absolute)
+      files.push({
+        name: entry.name,
+        path: absolute,
+        relativePath: relative,
+        parentFolder: prefix,
+        size: stats.size,
+        modifiedAt: stats.mtime.toISOString()
+      })
+    }
+  }
+  return files.sort((a, b) => naturalCompare(a.name, b.name))
+}
+
+/**
+ * Non-PDF inputs live in `input/`; the legacy `word/` folder is still read so
+ * documents uploaded before the two-root layout stay visible and convertible.
  */
 function listInputs(): PdfFileInfo[] {
-  const current = listFiles(pdfDirs.inputs, name => isInputName(name))
+  const current = walkFiles(pdfDirs.input).filter(file => isInputName(file.name))
   const legacy = listFiles(pdfDirs.word, name => isWordName(name))
     .filter(file => !current.some(entry => entry.name === file.name))
+    .map(file => ({ ...file, legacy: true }))
   return [...current, ...legacy]
 }
 
@@ -57,8 +85,13 @@ export function listFolders(dir: string): PdfFolderInfo[] {
 
 export function readLibrary(): PdfLibrary {
   ensurePdfDirs()
+  const inputFiles = walkFiles(pdfDirs.input)
   return {
-    sources: listFiles(pdfDirs.sources, isPdfName),
+    input: inputFiles,
+    output: listFolders(pdfDirs.output),
+    // Legacy per-tool views are derived from the two roots for callers that
+    // still read them; new code should use `input` / `output`.
+    sources: inputFiles.filter(file => isPdfName(file.name)),
     inputs: listInputs(),
     split: listFolders(pdfDirs.split),
     images: listFolders(pdfDirs.images),
@@ -87,12 +120,12 @@ export function saveSource(rawName: string, data: Buffer, rawFolder = ''): PdfFi
   assertUpload(name, data)
 
   const folder = safeRelativePath(rawFolder)
-  const targetDir = folder ? join(pdfDirs.sources, folder) : pdfDirs.sources
+  const targetDir = folder ? join(pdfDirs.input, folder) : pdfDirs.input
   ensureDir(targetDir)
   const target = join(targetDir, name)
   const overwritten = existsSync(target)
   writeFileAtomic(target, data)
-  recordAudit({ action: 'upload', area: 'sources', target: folder ? `${folder}/${name}` : name, bytes: data.length })
+  recordAudit({ action: 'upload', area: 'input', target: folder ? `${folder}/${name}` : name, bytes: data.length })
   return {
     name,
     path: target,
@@ -105,11 +138,10 @@ export function saveSource(rawName: string, data: Buffer, rawFolder = ''): PdfFi
 }
 
 /**
- * Word files are stored next to the PDFs but kept in their own folder so the
- * "sources" list stays a list of PDFs the rest of the pipeline can split.
+ * Word files are ordinary inputs now, so they land in the single `input/` root
+ * next to the PDFs they get converted into.
  */
 export function saveWord(rawName: string, data: Buffer): PdfFileInfo {
-  assertFileWritable('word')
   const name = safeFileName(rawName)
   if (isLegacyWordName(name)) {
     // .doc is a binary Word 97 format; mammoth only understands OOXML.
@@ -120,8 +152,8 @@ export function saveWord(rawName: string, data: Buffer): PdfFileInfo {
   }
   assertUpload(name, data)
 
-  ensureDir(pdfDirs.word)
-  const target = join(pdfDirs.word, name)
+  ensureDir(pdfDirs.input)
+  const target = join(pdfDirs.input, name)
   const overwritten = existsSync(target)
   writeFileAtomic(target, data)
   return { name, path: target, size: data.length, modifiedAt: statSync(target).mtime.toISOString(), overwritten }
@@ -140,7 +172,7 @@ function relativeOrThrow(rawName: string, code: string): string {
 
 export function sourcePath(rawName: string): string {
   const relative = relativeOrThrow(rawName, 'PDF_SOURCE_NOT_FOUND')
-  const target = join(pdfDirs.sources, relative)
+  const target = join(pdfDirs.input, relative)
   if (!existsSync(target) || !statSync(target).isFile()) {
     throw new Error('PDF_SOURCE_NOT_FOUND')
   }
@@ -149,9 +181,11 @@ export function sourcePath(rawName: string): string {
 
 export function wordPath(rawName: string): string {
   const name = safeFileName(rawName)
-  const target = join(pdfDirs.word, name)
-  if (!existsSync(target)) throw new Error('PDF_WORD_NOT_FOUND')
-  return target
+  const current = join(pdfDirs.input, name)
+  if (existsSync(current) && statSync(current).isFile()) return current
+  const legacy = join(pdfDirs.word, name)
+  if (existsSync(legacy)) return legacy
+  throw new Error('PDF_WORD_NOT_FOUND')
 }
 
 export function outputPath(rawName: string): string {
@@ -172,7 +206,11 @@ export function officePath(rawName: string): string {
 export function anySourcePath(rawName: string): { path: string, kind: 'pdf' | 'word', name: string } {
   const relative = relativeOrThrow(rawName, 'PDF_SOURCE_NOT_FOUND')
   const name = safeFileName(relative)
-  if (isWordName(name)) return { path: wordPath(name), kind: 'word', name }
+  if (isWordName(name)) {
+    const current = join(pdfDirs.input, relative)
+    if (existsSync(current) && statSync(current).isFile()) return { path: current, kind: 'word', name }
+    return { path: wordPath(name), kind: 'word', name }
+  }
   return { path: sourcePath(relative), kind: 'pdf', name }
 }
 
@@ -200,31 +238,33 @@ export function removeSource(rawName: string): void {
   const name = safeFileName(rawName)
   const path = sourcePath(rawName)
 
-  moveToTrash('sources', path, name)
+  moveToTrash('input', path, name)
   removeDerivedOutputs(name)
 }
 
 export function removeWord(rawName: string): void {
-  assertFileWritable('word')
+  const name = safeFileName(rawName)
   const path = wordPath(rawName)
-  moveToTrash('word', path, safeFileName(rawName))
+  // Legacy files still physically live in the read-only `word/` folder.
+  if (path.startsWith(pdfDirs.word)) throw new Error('PDF_FILE_IMMUTABLE')
+  moveToTrash('input', path, name)
 }
 
 export function removeOutput(rawName: string): void {
   const path = outputPath(rawName)
-  moveToTrash('merged', path, safeFileName(rawName))
+  moveToTrash('output', path, safeFileName(rawName))
 }
 
 export function removeOffice(rawName: string): void {
   const path = officePath(rawName)
-  moveToTrash('office', path, safeFileName(rawName))
+  moveToTrash('output', path, safeFileName(rawName))
 }
 
 export function removeProduct(rawName: string): void {
   const name = safeFileName(rawName)
   const target = join(pdfDirs.products, name)
   if (!existsSync(target)) throw new Error('PDF_RESULT_NOT_FOUND')
-  moveToTrash('products', target, name)
+  moveToTrash('output', target, name)
 }
 
 export function removeFolder(baseDir: string, rawName: string): void {
@@ -233,7 +273,7 @@ export function removeFolder(baseDir: string, rawName: string): void {
   if (!existsSync(target) || !statSync(target).isDirectory()) {
     throw new Error('PDF_FOLDER_NOT_FOUND')
   }
-  const area = Object.entries(pdfDirs).find(([_, p]) => p === baseDir)?.[0] || 'sources'
+  const area = baseDir === pdfDirs.input ? 'input' : 'output'
   moveToTrash(area, target, name)
 }
 

@@ -2,8 +2,8 @@ import { getAreaFolderTree } from '#server/modules/pdf/directory'
 import { runPdf } from '#server/utils/pdfApi'
 
 /**
- * First level of every workspace area, so the library can show one root at
- * .data/pdf without walking the whole tree. `?depth=full` returns the complete
+ * First level of both workspace roots, so the library can show one tree at
+ * .data/pdf without walking everything. `?depth=full` returns the complete
  * trees, which the explorer asks for once a search term needs deep matching.
  */
 export default defineEventHandler(async (event) => {
@@ -13,13 +13,8 @@ export default defineEventHandler(async (event) => {
   return runPdf(() => ({
     success: true,
     data: {
-      sources: getAreaFolderTree('sources', depth),
-      inputs: getAreaFolderTree('inputs', depth),
-      split: getAreaFolderTree('split', depth),
-      images: getAreaFolderTree('images', depth),
-      merged: getAreaFolderTree('merged', depth),
-      products: getAreaFolderTree('products', depth),
-      office: getAreaFolderTree('office', depth)
+      input: getAreaFolderTree('input', depth),
+      output: getAreaFolderTree('output', depth)
     }
   }))
 })

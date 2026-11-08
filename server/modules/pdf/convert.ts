@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import type { PdfFileInfo } from '#shared/types/pdf'
 import { recordAudit } from './audit'
 import { dataBufferToPdf } from './data/to-pdf'
-import { readInput } from './inputs'
+import { readInput, inputKindOf } from './inputs'
 import { docxToPdf } from './office/docxToPdf'
 import { writeFileAtomic } from './paths'
 import { safeFileName, safeStem } from './security'
@@ -22,22 +22,28 @@ async function imageToPdf(name: string, buffer: Buffer, title: string): Promise<
 }
 
 /**
+ * Buffer-based conversion shared by the legacy area flow and the v4 executor.
+ * The caller already resolved and validated the bytes.
+ */
+export async function inputBufferToPdf(name: string, buffer: Buffer): Promise<Buffer> {
+  const safe = safeFileName(name)
+  const title = safeStem(safe)
+  const kind = inputKindOf(safe)
+
+  if (kind === 'image') return imageToPdf(safe, buffer, title)
+  if (kind === 'docx') return docxToPdf(buffer, title)
+  return dataBufferToPdf(safe, buffer)
+}
+
+/**
  * Turns any stored input into a PDF in `merged/`, so the result joins the same
  * download / preview / open-folder flow as every other output.
  */
 export async function inputToPdf(rawName: string): Promise<PdfFileInfo> {
   const name = safeFileName(rawName)
-  const { buffer, kind } = readInput(rawName)
-  const title = safeStem(name)
+  const { buffer } = readInput(rawName)
 
-  let bytes: Buffer
-  if (kind === 'image') {
-    bytes = await imageToPdf(name, buffer, title)
-  } else if (kind === 'docx') {
-    bytes = await docxToPdf(buffer, title)
-  } else {
-    bytes = await dataBufferToPdf(name, buffer)
-  }
+  const bytes = await inputBufferToPdf(name, buffer)
 
   const outputName = `${safeStem(name)}.pdf`
   const target = join(outputDir('convertInput'), outputName)

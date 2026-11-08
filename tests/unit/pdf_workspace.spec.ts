@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { PDF_FILE_AREAS } from '../../shared/types/pdf'
+import { join } from 'node:path'
+import { PDF_FILE_AREAS, PDF_OUTPUT_FOLDERS } from '../../shared/types/pdf'
 import { AREA_DIRS, PDF_FILE_AREAS as SERVER_FILE_AREAS } from '../../server/modules/pdf/inspect'
 import {
   areaAcceptPredicate,
@@ -11,50 +12,37 @@ import {
   assertFolderWritable,
   outputArea,
   outputDir,
+  outputFolder,
   outputMapping,
   workspaceReport
 } from '../../server/modules/pdf/workspace'
 
 describe('area descriptors', () => {
-  it('covers every declared area exactly once', () => {
+  it('declares exactly the input and output roots', () => {
+    assert.deepEqual([...PDF_FILE_AREAS], ['input', 'output'])
     const areas = areaDescriptors().map(descriptor => descriptor.area)
-    assert.deepEqual(areas.slice().sort(), [...PDF_FILE_AREAS].sort())
-    assert.equal(new Set(areas).size, areas.length)
+    assert.deepEqual(areas, ['input', 'output'])
   })
 
-  it('lets the source folder own its subfolder structure', () => {
-    assert.equal(areaDescriptor('sources').writableFolders, true)
-    assert.equal(areaDescriptor('inputs').writableFolders, true)
-    assert.doesNotThrow(() => assertFolderWritable('sources'))
-  })
-
-  it('lets every generated area manage its own subfolders', () => {
-    const managed = ['split', 'images', 'merged', 'products', 'office'] as const
-    for (const area of managed) {
+  it('lets both roots manage their own subfolders while the root stays fixed', () => {
+    for (const area of PDF_FILE_AREAS) {
       assert.equal(areaDescriptor(area).writableFolders, true, `${area} must allow subfolder writes`)
       assert.equal(areaDescriptor(area).systemRoot, true, `${area} root must be fixed`)
       assert.doesNotThrow(() => assertFolderWritable(area))
     }
   })
 
-  it('keeps the legacy word folder read-only', () => {
-    assert.equal(areaDescriptor('word').writableFiles, false)
-    assert.equal(areaDescriptor('word').writableFolders, false)
-    assert.throws(() => assertFolderWritable('word'), /PDF_FOLDER_IMMUTABLE/)
-    assert.throws(() => assertFileWritable('word'), /PDF_FILE_IMMUTABLE/)
-  })
-
-  it('allows file writes in every writable area', () => {
-    const writable = ['sources', 'inputs', 'split', 'images', 'merged', 'products', 'office'] as const
-    for (const area of writable) {
+  it('allows file writes in both roots', () => {
+    for (const area of PDF_FILE_AREAS) {
       assert.equal(areaDescriptor(area).writableFiles, true, `${area} must allow file writes`)
       assert.doesNotThrow(() => assertFileWritable(area))
     }
   })
 
-  it('rejects an unknown area', () => {
+  it('rejects an unknown area for files and folders', () => {
     assert.throws(() => areaDescriptor('nope' as never), /PDF_FILE_NOT_FOUND/)
     assert.throws(() => assertFileWritable('nope' as never), /PDF_FILE_NOT_FOUND/)
+    assert.throws(() => assertFolderWritable('nope' as never), /PDF_FILE_NOT_FOUND/)
   })
 })
 
@@ -65,31 +53,27 @@ describe('area type source', () => {
 })
 
 describe('accept predicates', () => {
-  it('accepts only PDFs in the sources area', () => {
-    const accept = areaAcceptPredicate('sources')
-    assert.equal(accept('price-list.pdf'), true)
-    assert.equal(accept('price-list.docx'), false)
+  it('accepts any file in either root', () => {
+    const samples = ['price-list.pdf', 'page.png', 'sheet.xlsx', 'notes.docx', 'data.json', 'feed.xml']
+    for (const area of PDF_FILE_AREAS) {
+      const accept = areaAcceptPredicate(area)
+      for (const name of samples) {
+        assert.equal(accept(name), true, `${area} must accept ${name}`)
+      }
+    }
   })
 
-  it('accepts mixed inputs in the inputs area', () => {
-    const accept = areaAcceptPredicate('inputs')
-    assert.equal(accept('sheet.xlsx'), true)
-    assert.equal(accept('page.png'), true)
-    assert.equal(accept('page.pdf'), false)
-  })
-
-  it('accepts anything inside generated output areas', () => {
-    assert.equal(areaAcceptPredicate('split')('page_0001.pdf'), true)
-    assert.equal(areaAcceptPredicate('images')('page_0001.png'), true)
+  it('rejects an unknown area', () => {
+    assert.throws(() => areaAcceptPredicate('bogus' as never), /PDF_FILE_NOT_FOUND/)
   })
 })
 
 describe('output mapping', () => {
-  it('points every tool at a valid, non-source area', () => {
-    for (const [tool, area] of Object.entries(outputMapping)) {
-      assert.ok(PDF_FILE_AREAS.includes(area), `${tool} maps to unknown area ${area}`)
-      assert.ok(area !== 'sources' && area !== 'inputs' && area !== 'word', `${tool} must not write to ${area}`)
-      assert.equal(outputArea(tool as keyof typeof outputMapping), area)
+  it('points every tool at a valid output subfolder', () => {
+    for (const [tool, folder] of Object.entries(outputMapping)) {
+      assert.ok((PDF_OUTPUT_FOLDERS as readonly string[]).includes(folder), `${tool} maps to unknown folder ${folder}`)
+      assert.equal(outputArea(), 'output', `${tool} must write to output`)
+      assert.equal(outputFolder(tool as keyof typeof outputMapping), folder)
     }
   })
 
@@ -98,12 +82,12 @@ describe('output mapping', () => {
     assert.equal(outputMapping.rasterize, 'images')
   })
 
-  it('resolves a tool directory from the same mapping', () => {
-    for (const tool of Object.keys(outputMapping) as Array<keyof typeof outputMapping>) {
-      assert.equal(outputDir(tool), AREA_DIRS[outputArea(tool)])
-    }
-    assert.equal(outputDir('split'), AREA_DIRS.split)
-    assert.equal(outputDir('rasterize'), AREA_DIRS.images)
+  it('resolves a tool directory under the output root', () => {
+    assert.equal(outputDir('split'), join(AREA_DIRS.output, 'split'))
+    assert.equal(outputDir('rasterize'), join(AREA_DIRS.output, 'images'))
+    assert.equal(outputDir('merge'), join(AREA_DIRS.output, 'merged'))
+    assert.equal(outputDir('extract'), join(AREA_DIRS.output, 'products'))
+    assert.equal(outputDir('export'), join(AREA_DIRS.output, 'office'))
   })
 })
 
@@ -120,7 +104,7 @@ describe('area dirs', () => {
 })
 
 describe('workspace report', () => {
-  it('reports every area with counts and the mapping', () => {
+  it('reports both roots with counts and the mapping', () => {
     const report = workspaceReport()
     assert.equal(report.areas.length, PDF_FILE_AREAS.length)
     assert.equal(typeof report.needsRepair, 'boolean')

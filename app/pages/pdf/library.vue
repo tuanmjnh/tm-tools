@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfFileArea, PdfFileInfo } from '#shared/types/pdf'
-import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfIsPdf, pdfParentPath } from '~/utils/pdfStudio'
 import { pdfDocumentStem } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
@@ -26,7 +26,7 @@ onMounted(() => {
 
 const maxUploadMb = computed(() => library.value?.maxUploadMb ?? 0)
 const trashCount = computed(() => library.value?.trashCount ?? 0)
-const canUpload = computed(() => explorer.activeArea.value === 'sources')
+const canUpload = computed(() => explorer.activeArea.value === 'input')
 
 const pageMenu = computed<DropdownMenuItem[][]>(() => [
   [refreshItem(reloadAll)],
@@ -78,7 +78,7 @@ function askDelete(item: { name: string, path: string, relativePath?: string }, 
 const deleteDescription = computed(() => {
   const item = pendingDelete.value
   if (!item) return ''
-  return item.area === 'sources'
+  return item.area === 'input'
     ? t('pdf.library.deleteDesc', { name: item.name })
     : t('pdf.library.deletePlain', { name: item.name })
 })
@@ -95,7 +95,7 @@ async function confirmDelete() {
 
 <template>
   <BasePage id="pdf-library" :title="t('pdf.workspaces.library.title')" :description="t('pdf.workspaces.library.desc')">
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <PdfWorkspaceShell
         :tree="explorer.tree.value"
         :current-folder="explorer.currentFolder.value"
@@ -131,7 +131,7 @@ async function confirmDelete() {
           :readonly="!canUpload"
           :folders-writable="explorer.foldersWritable.value"
           :deletable="explorer.fileDeletable.value"
-          :file-menu="explorer.activeArea.value === 'sources' ? fileMenu : undefined"
+          :file-menu="explorer.activeArea.value === 'input' ? fileMenu : undefined"
           @upload="handleUpload"
           @refresh="reloadAll"
           @create-folder="explorer.openCreateFolder"
@@ -143,8 +143,9 @@ async function confirmDelete() {
           @rename-file="file => explorer.openRename(file, false)"
           @delete-file="file => askDelete(file)"
         >
-          <template v-if="explorer.activeArea.value === 'sources'" #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'input'" #file-actions="{ file }">
             <UButton
+              v-if="pdfIsPdf(file.name)"
               icon="i-lucide-scissors"
               :label="t('pdf.library.split')"
               color="neutral"
@@ -189,6 +190,6 @@ async function confirmDelete() {
       />
 
       <LazyPdfTrashModal v-model:open="explorer.trashOpen.value" @restored="reloadAll" />
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

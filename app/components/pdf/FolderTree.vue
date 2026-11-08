@@ -21,7 +21,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  area: 'sources',
+  area: 'input',
   loading: false,
   title: undefined,
   selectedKey: undefined,

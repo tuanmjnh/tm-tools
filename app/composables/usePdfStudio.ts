@@ -247,12 +247,20 @@ export function usePdfStudio() {
     force = false,
     target?: { connectionId: string, model: string } | null,
     preset?: { preset: string, description: string, sample: string } | null,
-    overwrite = true
+    overwrite = true,
+    formats?: string[] | null
   ): Promise<boolean> {
     const result = await run('extract', async () => {
       await $fetch(pdfUrl('/extract/start'), {
         method: 'POST',
-        body: { source, force, overwrite, ...(target ?? {}), ...(preset ? { preset } : {}) }
+        body: {
+          source,
+          force,
+          overwrite,
+          ...(target ?? {}),
+          ...(preset ? { preset } : {}),
+          ...(formats && formats.length ? { formats } : {})
+        }
       })
       await refreshJobs()
       return true

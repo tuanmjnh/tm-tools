@@ -261,7 +261,17 @@
     "pdf_split": "Split & Merge",
     "pdf_images": "PDF Images",
     "pdf_export": "PDF Export",
-    "pdf_import": "PDF Import"
+    "pdf_import": "PDF Import",
+    "document_studio": "Document Studio",
+    "document_home": "Overview",
+    "document_split": "Split PDF",
+    "document_merge": "Merge PDF",
+    "document_rasterize": "PDF to Images",
+    "document_images_to_pdf": "Images to PDF",
+    "document_convert": "Convert to PDF",
+    "document_export": "Export",
+    "document_activity": "Activity",
+    "document_settings": "Settings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1653,6 +1663,7 @@
     "description": "Split, merge, rasterize and extract furniture price lists",
     "browser": {
       "selected": "Selected",
+      "unselect": "Deselect",
       "useSource": "Use as source",
       "search": "Filter files...",
       "sort": "Sort",
@@ -1708,11 +1719,13 @@
           "export": "Export document",
           "extract": "Extract data"
         }
-      }
+      },
+      "studioHint": "A simpler flow: choose a document, run one job, save the result — no folder tree.",
+      "openStudio": "Open Document Studio"
     },
     "areas": {
-      "sources": "Source PDFs",
-      "inputs": "Uploaded inputs",
+      "input": "Input",
+      "output": "Output",
       "split": "Split pages",
       "images": "PDF images",
       "merged": "Built PDFs",
@@ -1720,8 +1733,9 @@
       "office": "Word & Excel"
     },
     "library": {
-      "description": "Upload source PDFs, then split or rasterize them",
-      "rootLabel": "PDF storage",
+      "description": "Upload source PDFs and files here, then run a tool on them",
+      "outputDesc": "Everything the tools produce, grouped by tool folder",
+      "rootLabel": "PDF workspace",
       "dropzone": "Drop PDF files here",
       "dropzoneDesc": "PDF only, up to {maxMb} MB per file",
       "emptyArea": "Nothing in this folder yet.",
@@ -1762,7 +1776,7 @@
       "resultSummary": "Extraction started for {name} — {count} product file(s) on disk",
       "configTitle": "Extraction settings",
       "noModelSelected": "No model selected",
-      "formatsHint": "One run writes all five formats; the list is informational.",
+      "formatsHint": "Select which output formats to generate.",
       "cacheHint": "Cached page results are reused by file and page name. Changing the model or preset does not clear the cache."
     },
     "status": {
@@ -1949,7 +1963,8 @@
       "confirmSplit": "Split \"{name}\" into single-page PDFs? They go to the split folder \"{folder}\". If that folder already exists, it is replaced.",
       "confirmMerge": "Merge the pages of \"{name}\" into {output}? It goes to the merged folder.",
       "mergedDesc": "PDFs rebuilt from page folders.",
-      "removeDesc": "Delete \"{name}\"? This cannot be undone."
+      "removeDesc": "Delete \"{name}\"? This cannot be undone.",
+      "resultSummary": "Created {count} page file(s) in {folder}"
     },
     "images": {
       "rasterize": "To images",
@@ -1957,7 +1972,8 @@
       "buildPdf": "Build PDF",
       "confirmRasterize": "Render every page of \"{name}\" to PNG? They go to the images folder \"{folder}\". If that folder already exists, it is replaced.",
       "confirmBuild": "Build {output} from the PNG files in \"{name}\"? It goes to the merged folder.",
-      "removeDesc": "Delete \"{name}\"? This cannot be undone."
+      "removeDesc": "Delete \"{name}\"? This cannot be undone.",
+      "resultSummary": "Processed {name}"
     },
     "export": {
       "sourcePlaceholder": "Select a source PDF",
@@ -3002,5 +3018,227 @@
     "reordered": "Routes reordered",
     "deleteConfirm": "Delete route?",
     "deleteConfirmDesc": "Soft-delete route '{id}'? It will disappear from the menu."
+  },
+  "document": {
+    "home": {
+      "title": "Document Studio",
+      "description": "Pick a document, run one job, save the result.",
+      "search": "Search tools",
+      "active": "{count} running now",
+      "recent": "Recent jobs",
+      "unavailable": "Unavailable here"
+    },
+    "shell": {
+      "stepChoose": "Choose",
+      "stepProcess": "Process",
+      "stepSave": "Save",
+      "summary": "Summary"
+    },
+    "groups": {
+      "pdf": "PDF",
+      "image": "Images",
+      "convert": "Convert",
+      "export": "Export",
+      "extract": "Extract"
+    },
+    "runtime": {
+      "local": "Local runtime",
+      "electron": "Desktop runtime",
+      "vercel": "Cloud runtime",
+      "worker": "Worker runtime"
+    },
+    "input": {
+      "dropSingle": "Drop one file here",
+      "dropMany": "Drop files here",
+      "accepted": "Accepted: {types}",
+      "anyFile": "Any supported file",
+      "browse": "Browse files",
+      "selected": "Selected ({count})",
+      "clear": "Clear",
+      "remove": "Remove file",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
+    },
+    "summary": {
+      "operation": "Operation",
+      "input": "Input",
+      "output": "Output",
+      "files": "{count} files"
+    },
+    "output": {
+      "defaultFolder": "Default output folder",
+      "downloadHint": "Download when finished",
+      "ephemeralHint": "Results are handed back in this response; they are not stored afterwards."
+    },
+    "result": {
+      "title": "Results ({count})",
+      "download": "Download",
+      "downloadAll": "Download all (ZIP)",
+      "preview": "Preview",
+      "openFolder": "Show in folder",
+      "copyPath": "Copy path",
+      "more": "More actions",
+      "deleteTitle": "Delete this result?",
+      "deleteConfirm": "Delete \"{name}\"? The stored copy is removed; a file already saved to your output folder stays on disk."
+    },
+    "progress": {
+      "uploading": "Uploading…",
+      "processing": "Processing…"
+    },
+    "actions": {
+      "run": "Run"
+    },
+    "status": {
+      "created": "Draft",
+      "uploading": "Uploading",
+      "queued": "Queued",
+      "running": "Running",
+      "cancel_requested": "Cancelling",
+      "publishing": "Saving",
+      "completed": "Done",
+      "partial": "Partly done",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "operations": {
+      "split": {
+        "title": "Split PDF",
+        "description": "Turn one PDF into one file per page."
+      },
+      "merge": {
+        "title": "Merge PDFs",
+        "description": "Join several PDFs into one document in the order you choose."
+      },
+      "rasterize": {
+        "title": "PDF to images",
+        "description": "Render every PDF page as a PNG image."
+      },
+      "imagesToPdf": {
+        "title": "Images to PDF",
+        "description": "Combine images into a single PDF in the order you set."
+      },
+      "convert": {
+        "title": "Convert to PDF",
+        "description": "Turn Word, Excel, CSV, JSON, XML or an image into a PDF."
+      },
+      "export": {
+        "title": "Export PDF",
+        "description": "Export pages, text or extracted data to another format."
+      },
+      "extract": {
+        "title": "AI extraction",
+        "description": "Extract product rows from a price-list PDF with the AI relay."
+      }
+    },
+    "split": {
+      "configHint": "Every page becomes its own PDF. Results are saved to the output folder."
+    },
+    "errors": {
+      "DOCUMENT_INPUT_REQUIRED": "Choose at least one file first.",
+      "DOCUMENT_INPUT_COUNT_INVALID": "That number of files is not allowed for this tool.",
+      "DOCUMENT_INPUT_TYPE_NOT_SUPPORTED": "This file type is not supported here.",
+      "DOCUMENT_INPUT_TOO_LARGE": "That file is larger than this runtime allows.",
+      "DOCUMENT_TOTAL_SIZE_EXCEEDED": "The selection is larger than this runtime allows.",
+      "DOCUMENT_UPLOAD_INCOMPLETE": "The upload did not finish. Try again.",
+      "DOCUMENT_UPLOAD_EXPIRED": "The upload expired. Start again.",
+      "DOCUMENT_INPUT_NOT_READY": "The file is still uploading. Wait for it to finish.",
+      "DOCUMENT_JOB_NOT_FOUND": "That job no longer exists.",
+      "DOCUMENT_JOB_NOT_OWNED": "That job belongs to someone else.",
+      "DOCUMENT_JOB_STATE_INVALID": "That job is not in a state that allows this action.",
+      "DOCUMENT_JOB_ALREADY_RUNNING": "A job is already running.",
+      "DOCUMENT_OUTPUT_NOT_READY": "The result is not ready yet.",
+      "DOCUMENT_OUTPUT_EXPIRED": "This result has expired.",
+      "DOCUMENT_OUTPUT_TOO_LARGE": "The result is larger than this runtime allows.",
+      "DOCUMENT_ARTIFACT_EXPIRED": "This result has expired and is no longer downloadable.",
+      "DOCUMENT_STORAGE_UNAVAILABLE": "Storage is unavailable right now. Try again.",
+      "DOCUMENT_STORAGE_NOT_CONFIGURED": "File storage is not configured for this deployment.",
+      "DOCUMENT_DATABASE_NOT_CONFIGURED": "Job storage is not configured for this deployment.",
+      "DOCUMENT_TEMP_CAPACITY_EXCEEDED": "Not enough temporary space for this job.",
+      "DOCUMENT_RUNTIME_NOT_SUPPORTED": "This tool is not available in the current environment.",
+      "DOCUMENT_WORKER_REQUIRED": "This job is too large for the web runtime. Use the desktop app or split it into smaller pieces.",
+      "DOCUMENT_OPERATION_NOT_SUPPORTED": "That tool is not available.",
+      "DOCUMENT_OPERATION_CONFIG_INVALID": "Those options are not valid for this tool.",
+      "DOCUMENT_PROCESSING_TIMEOUT": "Processing took too long and was stopped.",
+      "DOCUMENT_CLEANUP_FAILED": "Cleanup did not finish. Try again.",
+      "generic": "Something went wrong. Try again."
+    },
+    "convert": {
+      "configHint": "Word, Excel and data files are rebuilt as a PDF layout, not converted pixel-for-pixel."
+    },
+    "export": {
+      "formats": "Formats",
+      "rowsHint": "Excel, CSV, JSON and XML come from the rows a previous extraction saved for this document."
+    },
+    "activity": {
+      "title": "Activity",
+      "description": "Every job this account has run, newest first.",
+      "refresh": "Refresh",
+      "empty": "No jobs match this filter yet.",
+      "filters": {
+        "all": "All",
+        "running": "Running",
+        "completed": "Completed",
+        "problem": "Needs attention",
+        "expired": "Expired"
+      },
+      "cancel": "Cancel",
+      "retry": "Run again",
+      "deleteJob": "Delete job",
+      "deleteArtifact": "Delete result",
+      "openOutputFolder": "Open output folder",
+      "copyJobId": "Copy job ID",
+      "deleteJobTitle": "Delete this job?",
+      "deleteJobConfirm": "Deleting \"{operation}\" removes its stored results. Files already saved to your output folder stay on disk.",
+      "deleteArtifactTitle": "Delete this result?",
+      "deleteArtifactConfirm": "Delete \"{name}\"? The stored copy is removed; a file already saved to your output folder stays on disk.",
+      "expiresIn": "expires in {hours}h",
+      "expired": "expired"
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "How this deployment stores, delivers and clears your files.",
+      "storage": {
+        "title": "Storage defaults",
+        "delivery": "Delivery",
+        "folder": "Save to the output folder",
+        "download": "Download when finished",
+        "outputPath": "Default output folder",
+        "saveDialog": "Native save dialog",
+        "cloudNotice": "Cloud results are kept for {days} days, then removed automatically."
+      },
+      "runtime": {
+        "title": "Runtime",
+        "engine": "Environment",
+        "driver": "Storage driver",
+        "database": "Job database",
+        "session": "Sign-in required",
+        "connected": "Connected",
+        "missing": "Not configured",
+        "persistent": "Persistent storage ready",
+        "ephemeral": "Temporary processing only",
+        "durableHint": "Results stay in storage until they expire or are deleted.",
+        "ephemeralHint": "Results are returned in the response; nothing is stored afterwards.",
+        "drivers": {
+          "local": "Local disk",
+          "hub": "TM Hub storage",
+          "r2": "Object storage (R2)",
+          "none": "No persistent storage"
+        }
+      },
+      "limits": {
+        "title": "Processing limits",
+        "file": "Largest single file",
+        "total": "Total input per job",
+        "files": "Files per job",
+        "inline": "Cloud time limit"
+      },
+      "cleanup": {
+        "title": "Cleanup & privacy",
+        "retention": "Results expire after {days} days by default (maximum {max} days).",
+        "deleteNow": "Delete a result now",
+        "deleteHint": "Any result can be deleted from Activity; the stored file is removed immediately."
+      }
+    }
   }
 }

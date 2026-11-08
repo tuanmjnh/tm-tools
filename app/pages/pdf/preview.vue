@@ -7,19 +7,29 @@ definePageMeta({ layout: false })
 
 const { t } = useI18n()
 const route = useRoute()
-const { convertInput } = usePdfStudio()
+const { convertInput, getWorkspaceReport } = usePdfStudio()
 const { fileItems } = usePdfMenus()
 
-const AREAS: PdfFileArea[] = ['sources', 'inputs', 'word', 'split', 'images', 'merged', 'products', 'office']
+const AREAS: PdfFileArea[] = ['input', 'output']
 
 const area = computed<PdfFileArea>(() => {
   const value = String(route.query.area ?? '') as PdfFileArea
-  return AREAS.includes(value) ? value : 'sources'
+  return AREAS.includes(value) ? value : 'input'
 })
 const name = computed(() => String(route.query.name ?? ''))
 const path = computed(() => String(route.query.path ?? '') || undefined)
 const label = computed(() => name.value.split('/').pop() || name.value)
 const converting = ref(false)
+const convertFolder = ref('merged')
+
+onMounted(async () => {
+  try {
+    const report = await getWorkspaceReport()
+    convertFolder.value = report.outputMapping.convertInput ?? convertFolder.value
+  } catch {
+    // The default folder still resolves for the common case.
+  }
+})
 
 useHead({ title: computed(() => label.value || t('pdf.preview.title')) })
 
@@ -28,7 +38,7 @@ async function convert() {
   const created = await convertInput(name.value)
   converting.value = false
   if (created) {
-    await navigateTo({ query: { area: 'merged', name: created.name } }, { replace: true })
+    await navigateTo({ query: { area: 'output', name: `${convertFolder.value}/${created.name}` } }, { replace: true })
   }
 }
 
@@ -56,7 +66,7 @@ const menu = computed(() => fileItems({
 </script>
 
 <template>
-  <PdfContextMenu :items="menu" class="flex h-screen w-screen flex-col bg-default overflow-hidden select-text">
+  <AppContextMenu :items="menu" class="flex h-screen w-screen flex-col bg-default overflow-hidden select-text">
     <div v-if="!name" class="flex flex-1 flex-col items-center justify-center gap-2 text-center p-6">
       <UIcon name="i-lucide-file-question" class="size-8 text-dimmed" />
       <p class="text-sm font-medium">
@@ -82,5 +92,5 @@ const menu = computed(() => fileItems({
         {{ t('pdf.preview.converting') }}
       </p>
     </template>
-  </PdfContextMenu>
+  </AppContextMenu>
 </template>

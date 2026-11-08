@@ -17,10 +17,11 @@ after(() => {
 describe('workspace repair', () => {
   it('recreates every missing area root', () => {
     const before = workspace.workspaceReport()
+    assert.deepEqual(before.areas.map(area => area.area), ['input', 'output'])
     assert.equal(before.needsRepair, true)
 
     const result = workspace.repairWorkspace()
-    assert.ok(result.created.length > 0)
+    assert.deepEqual(result.created, ['input', 'output'])
     for (const area of result.created) {
       assert.ok(existsSync(join(dataRoot, area)))
     }
@@ -34,13 +35,14 @@ describe('workspace repair', () => {
     assert.equal(result.needsRepair, false)
   })
 
-  it('never touches existing files', () => {
-    const sample = join(dataRoot, 'sources', 'keep-me.pdf')
+  it('recreates a missing tool folder without touching existing files', () => {
+    const sample = join(dataRoot, 'input', 'keep-me.pdf')
     writeFileSync(sample, 'pdf')
-    rmSync(join(dataRoot, 'split'), { recursive: true, force: true })
+    rmSync(join(dataRoot, 'output', 'split'), { recursive: true, force: true })
 
     const result = workspace.repairWorkspace()
-    assert.deepEqual(result.created, ['split'])
+    assert.deepEqual(result.created, [])
+    assert.ok(existsSync(join(dataRoot, 'output', 'split')))
     assert.ok(existsSync(sample))
   })
 })

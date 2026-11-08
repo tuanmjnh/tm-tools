@@ -13,7 +13,7 @@ withDefaults(defineProps<{
   rootLabel?: string
   lazy?: boolean
 }>(), {
-  area: 'sources',
+  area: 'input',
   loading: false,
   title: undefined,
   selectedKey: undefined,
@@ -95,53 +95,26 @@ const shellStyle = computed(() => ({
 </script>
 
 <template>
-  <div
-    class="pdf-workspace grid grid-cols-1 gap-4 lg:h-[calc(100vh-140px)] lg:min-h-[540px] lg:items-stretch"
-    :style="shellStyle"
-    :data-collapsed="isCollapsed ? 'true' : 'false'"
-    :data-resizing="resizing ? 'true' : 'false'"
-  >
+  <div class="pdf-workspace grid grid-cols-1 gap-4 lg:h-[calc(100vh-140px)] lg:min-h-[540px] lg:items-stretch"
+    :style="shellStyle" :data-collapsed="isCollapsed ? 'true' : 'false'" :data-resizing="resizing ? 'true' : 'false'">
     <aside class="flex flex-col lg:h-full lg:min-h-0">
-      <button
-        v-if="isCollapsed"
-        type="button"
+      <button v-if="isCollapsed" type="button"
         class="hidden h-full w-full items-center justify-center rounded-lg border border-default bg-elevated/40 text-muted transition-colors hover:text-default lg:flex"
-        :title="$t('pdf.explorer.expand')"
-        :aria-label="$t('pdf.explorer.expand')"
-        @click="toggleCollapsed"
-      >
+        :title="$t('pdf.explorer.expand')" :aria-label="$t('pdf.explorer.expand')" @click="toggleCollapsed">
         <UIcon name="i-lucide-panel-left-open" class="size-4" />
       </button>
-      <PdfFolderTree
-        v-else
-        :tree="tree"
-        :current-folder="currentFolder"
-        :area="area"
-        :loading="loading"
-        :title="title"
-        :selected-key="selectedKey"
-        :can-create="canCreate"
-        :root-label="rootLabel"
-        :lazy="lazy"
-        class="h-full min-h-0"
+      <PdfFolderTree v-else :tree="tree" :current-folder="currentFolder" :area="area" :loading="loading" :title="title"
+        :selected-key="selectedKey" :can-create="canCreate" :root-label="rootLabel" :lazy="lazy" class="h-full min-h-0"
         @select="(folder, nodeArea) => emit('select', folder, nodeArea)"
-        @create="(folder, nodeArea) => emit('create', folder, nodeArea)"
-        @rename="folder => emit('rename', folder)"
-        @delete="folder => emit('delete', folder)"
-        @expand="folder => emit('expand', folder)"
-        @search="term => emit('search', term)"
-        @collapse="toggleCollapsed"
-      />
+        @create="(folder, nodeArea) => emit('create', folder, nodeArea)" @rename="folder => emit('rename', folder)"
+        @delete="folder => emit('delete', folder)" @expand="folder => emit('expand', folder)"
+        @search="term => emit('search', term)" @collapse="toggleCollapsed" />
     </aside>
 
-    <div
-      v-if="!isCollapsed"
+    <div v-if="!isCollapsed"
       class="pdf-splitter hidden cursor-col-resize items-center justify-center rounded-full bg-elevated/50 transition-colors hover:bg-primary/40 lg:flex"
-      role="separator"
-      aria-orientation="vertical"
-      :aria-label="$t('pdf.explorer.resize')"
-      @pointerdown.prevent="startResize"
-    >
+      role="separator" aria-orientation="vertical" :aria-label="$t('pdf.explorer.resize')"
+      @pointerdown.prevent="startResize">
       <span class="h-8 w-px bg-default" />
     </div>
 

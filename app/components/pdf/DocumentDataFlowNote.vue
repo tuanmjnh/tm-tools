@@ -8,6 +8,7 @@ const props = withDefaults(defineProps<{
   input: {
     label: string
     detail?: string
+    clearable?: boolean
   }
   output: {
     areaLabel: string
@@ -22,7 +23,7 @@ const props = withDefaults(defineProps<{
   state: 'empty'
 })
 
-const emit = defineEmits<{ openOutput: [] }>()
+const emit = defineEmits<{ openOutput: [], clearInput: [] }>()
 
 const { t } = useI18n()
 
@@ -49,10 +50,22 @@ const stateTone = computed(() => {
       <span class="w-16 shrink-0 pt-0.5 text-[10px] font-semibold tracking-wide text-muted uppercase">
         {{ t('pdf.flow.input') }}
       </span>
-      <span class="min-w-0 space-y-0.5">
+      <span class="min-w-0 flex-1 space-y-0.5">
         <span class="block truncate font-medium" :title="input.label">{{ input.label }}</span>
         <span v-if="input.detail" class="mono block truncate text-[11px] text-muted">{{ input.detail }}</span>
       </span>
+      <UButton
+        v-if="input.clearable"
+        icon="i-lucide-x"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        square
+        class="shrink-0 self-center"
+        :aria-label="t('pdf.browser.unselect')"
+        :title="t('pdf.browser.unselect')"
+        @click="emit('clearInput')"
+      />
     </div>
 
     <UIcon name="i-lucide-arrow-right" class="hidden size-4 shrink-0 text-dimmed md:block" />

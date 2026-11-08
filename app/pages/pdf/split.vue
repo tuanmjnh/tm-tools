@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfFileArea, PdfFileInfo, PdfFolderInfo } from '#shared/types/pdf'
-import { pdfParentPath } from '~/utils/pdfStudio'
+import { pdfInFolder, pdfIsPdf, pdfParentPath } from '~/utils/pdfStudio'
 import { pdfDocumentStem, pdfMergeOutputName, pdfOperation } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
@@ -52,6 +52,7 @@ function exportItem(name: string): DropdownMenuItem {
 }
 
 function sourceMenu(file: PdfFileInfo): DropdownMenuItem[] {
+  if (!pdfIsPdf(file.name)) return []
   return [exportItem(file.relativePath || file.name)]
 }
 
@@ -67,7 +68,7 @@ const confirmTitle = computed(() =>
 const confirmDescription = computed(() => {
   const item = pending.value
   if (!item) return ''
-  return item.area === 'sources'
+  return item.area === 'input'
     ? t('pdf.library.deleteDesc', { name: item.name })
     : t('pdf.split.removeDesc', { name: item.name })
 })
@@ -114,6 +115,36 @@ function askMerge(folder: PdfFolderInfo) {
 
 const merging = ref('')
 
+/** Last finished action, so its output can be reviewed and revealed on disk. */
+const lastRun = ref<{ kind: 'split' | 'merge', name: string, target: string } | null>(null)
+const lastRunFiles = ref<PdfFileInfo[]>([])
+
+/** Folder the last run wrote into, relative to `output/`. */
+const lastRunFolder = computed(() => {
+  const run = lastRun.value
+  if (!run) return ''
+  const base = explorer.outputFolder(run.kind === 'merge' ? 'merge' : 'split') ?? ''
+  return run.kind === 'merge' ? base : `${base}/${run.target}`
+})
+
+const lastRunPath = computed(() => {
+  const folder = lastRunFolder.value
+  return folder ? explorer.absolutePath('output', folder) : undefined
+})
+
+async function recordRun(kind: 'split' | 'merge', name: string, target: string, tool: string) {
+  lastRun.value = { kind, name, target }
+  const folder = explorer.outputFolder(tool)
+  if (!folder) {
+    lastRunFiles.value = []
+    return
+  }
+  const files = kind === 'merge'
+    ? await explorer.listFolder('output', folder)
+    : await explorer.listFolder('output', `${folder}/${target}`)
+  lastRunFiles.value = kind === 'merge' ? files.filter(file => file.name === target) : files
+}
+
 async function runAction() {
   const action = pendingAction.value
   actionOpen.value = false
@@ -123,21 +154,32 @@ async function runAction() {
     const ok = await splitSource(action.path, overwrite.value)
     activeSource.value = ''
     await reloadAll()
-    if (ok) await openOutput('split')
+    if (ok) {
+      await recordRun('split', action.name, pdfDocumentStem(action.name), 'split')
+      await openOutput('split')
+    }
   } else {
     merging.value = action.name
     const ok = await mergeFolder(action.path, overwrite.value)
     merging.value = ''
     await reloadAll()
-    if (ok) await openOutput('merge')
+    if (ok) {
+      await recordRun('merge', action.name, pdfMergeOutputName(action.name), 'merge')
+      await openOutput('merge')
+    }
   }
   pendingAction.value = null
 }
 
-/** Operation the active area drives; the output area comes from the server mapping. */
+/** Output subfolder that holds the page folders to merge back. */
+const mergeOutputFolder = computed(() => explorer.outputFolder('split') ?? 'split')
+
+/** Split reads `input/`; merge consumes folders created below `output/split`. */
 const activeOperation = computed(() => {
-  if (explorer.activeArea.value === 'sources') return pdfOperation('split')
-  if (explorer.activeArea.value === 'split') return pdfOperation('merge')
+  if (explorer.activeArea.value === 'input') return pdfOperation('split')
+  if (explorer.activeArea.value === 'output' && pdfInFolder(explorer.currentFolder.value, mergeOutputFolder.value)) {
+    return pdfOperation('merge')
+  }
   return null
 })
 
@@ -145,26 +187,26 @@ const flowInput = computed(() => {
   if (activeSource.value) {
     return { label: activeSource.value.split('/').pop() ?? activeSource.value, detail: activeSource.value }
   }
-  if (explorer.activeArea.value === 'split') {
+  if (explorer.activeArea.value === 'output') {
     return { label: t('pdf.flow.browsing', { folder: explorer.currentFolder.value || '/' }) }
   }
   return { label: t('pdf.flow.none') }
 })
 
-const flowOutputArea = computed(() => {
+const flowOutputFolder = computed(() => {
   const operation = activeOperation.value
-  return operation ? explorer.outputArea(operation.output.mappingKey) : null
+  return operation ? explorer.outputFolder(operation.output.mappingKey) : null
 })
 
 async function openOutput(tool: string) {
-  const area = explorer.outputArea(tool)
-  if (area) await explorer.select('', area)
+  const folder = explorer.outputFolder(tool)
+  if (folder) await explorer.select(folder, 'output')
 }
 </script>
 
 <template>
   <BasePage id="pdf-split" :title="t('pdf.workspaces.split.title')" :description="t('pdf.workspaces.split.desc')">
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <PdfWorkspaceShell
         :tree="explorer.tree.value"
         :current-folder="explorer.currentFolder.value"
@@ -194,10 +236,10 @@ async function openOutput(tool: string) {
           :upload-accept="PDF_UPLOAD_ACCEPT"
           :upload-label="t('pdf.library.dropzone')"
           :upload-description="t('pdf.library.dropzoneDesc', { maxMb: maxUploadMb })"
-          :readonly="explorer.activeArea.value !== 'sources'"
+          :readonly="explorer.activeArea.value !== 'input'"
           :folders-writable="explorer.foldersWritable.value"
           :deletable="explorer.fileDeletable.value"
-          :file-menu="explorer.activeArea.value === 'sources' ? sourceMenu : undefined"
+          :file-menu="explorer.activeArea.value === 'input' ? sourceMenu : undefined"
           list-class="max-h-[46vh]"
           @upload="handleUpload"
           @refresh="reloadAll"
@@ -214,16 +256,18 @@ async function openOutput(tool: string) {
               :operation="t(activeOperation.titleKey)"
               :input="flowInput"
               :output="{
-                areaLabel: flowOutputArea ? t(`pdf.areas.${flowOutputArea}`) : '—',
-                openable: Boolean(flowOutputArea)
+                areaLabel: flowOutputFolder ? t('pdf.areas.output') : '—',
+                relativePath: flowOutputFolder ?? undefined,
+                openable: Boolean(flowOutputFolder)
               }"
-              :state="flowOutputArea ? 'partial' : 'empty'"
+              :state="flowOutputFolder ? 'partial' : 'empty'"
               @open-output="activeOperation && openOutput(activeOperation.output.mappingKey)"
             />
           </template>
 
-          <template v-if="explorer.activeArea.value === 'sources'" #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'input'" #file-actions="{ file }">
             <UButton
+              v-if="pdfIsPdf(file.name)"
               icon="i-lucide-scissors"
               :label="t('pdf.split.splitToPages')"
               color="neutral"
@@ -234,8 +278,9 @@ async function openOutput(tool: string) {
             />
           </template>
 
-          <template v-if="explorer.activeArea.value === 'split'" #folder-actions="{ folder }">
+          <template v-if="explorer.activeArea.value === 'output'" #folder-actions="{ folder }">
             <UButton
+              v-if="pdfInFolder(folder.relativePath || folder.name, mergeOutputFolder)"
               icon="i-lucide-layers"
               :label="t('pdf.split.mergeToPdf')"
               color="primary"
@@ -246,6 +291,19 @@ async function openOutput(tool: string) {
             />
           </template>
         </PdfFileBrowser>
+
+        <PdfOperationResult
+          v-if="lastRun"
+          :status="lastRunFiles.length ? 'success' : 'failed'"
+          :summary="t('pdf.split.resultSummary', { count: lastRunFiles.length, folder: lastRun.target })"
+          :output-area="t('pdf.areas.output')"
+          :output-folder="lastRunFolder"
+          :openable="true"
+          :files="lastRunFiles"
+          area="output"
+          :folder-path="lastRunPath"
+          @open-output="openOutput(lastRun.kind === 'merge' ? 'merge' : 'split')"
+        />
       </PdfWorkspaceShell>
 
       <BaseConfirmModal
@@ -278,6 +336,6 @@ async function openOutput(tool: string) {
         :is-folder="explorer.renameTarget.value?.isFolder"
         @submit="explorer.handleRename"
       />
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

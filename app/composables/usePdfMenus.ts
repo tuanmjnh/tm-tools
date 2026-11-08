@@ -1,5 +1,6 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { isPdfDesktop, openLocalPath, openPdfPreview, pdfFileUrl, revealLocalPath, type PdfFileArea } from '~/utils/pdfStudio'
+import { openPdfPreview, pdfFileUrl, type PdfFileArea } from '~/utils/pdfStudio'
+import { isDesktopRuntime, openLocalPath, revealLocalPath } from '~/utils/desktop'
 
 /** Workspace order used by the overview page and every context menu. */
 export const PDF_WORKSPACES = [
@@ -85,7 +86,7 @@ export function usePdfMenus() {
     const groups: DropdownMenuItem[][] = primary.length ? [primary] : []
 
     const disk: DropdownMenuItem[] = []
-    if (options.path && isPdfDesktop()) {
+    if (options.path && isDesktopRuntime()) {
       disk.push({
         label: t('pdf.actions.openFolder'),
         icon: 'i-lucide-folder-search',

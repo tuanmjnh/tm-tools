@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PdfFileArea, PdfLibrary } from '#shared/types/pdf'
+import type { PdfFileArea } from '#shared/types/pdf'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfOperationMeta } from '~/utils/pdfOperations'
 import { PDF_OPERATIONS, PDF_OPERATION_GROUPS } from '~/utils/pdfOperations'
@@ -55,24 +55,27 @@ async function repair() {
 }
 
 /** Every card counts what the operation consumes, so the numbers stay comparable. */
-const AREA_COUNTS: Record<PdfFileArea, (library: PdfLibrary) => number> = {
-  sources: current => current.sources.length,
-  inputs: current => current.inputs.length,
-  word: current => current.word.length,
-  split: current => current.split.length,
-  images: current => current.images.length,
-  merged: current => current.merged.length,
-  products: current => current.products.length,
-  office: current => current.office.length
-}
-
 function operationArea(operation: PdfOperationMeta): PdfFileArea {
-  return operation.input.areas[0] ?? 'sources'
+  return operation.input.areas[0] ?? 'input'
 }
 
 function operationCount(operation: PdfOperationMeta): number | null {
   const current = library.value
-  return current ? AREA_COUNTS[operationArea(operation)](current) : null
+  if (!current) return null
+  if (operation.id === 'merge') return current.split.length
+  if (operation.id === 'imagesToPdf') return current.images.length
+  if (operation.id === 'convertInput') return current.inputs.length
+  return current.sources.length
+}
+
+function operationAreaLabel(operation: PdfOperationMeta): string {
+  if (operationArea(operation) === 'input') return t('pdf.areas.input')
+  const folder = outputMapping.value[operation.output.mappingKey]
+  return folder ? t(`pdf.areas.${folder}`) : t('pdf.areas.output')
+}
+
+function mappingLabel(folder: string): string {
+  return `${t('pdf.areas.output')} / ${t(`pdf.areas.${folder}`)}`
 }
 
 const searchTerm = computed(() => searchInput.value.trim().toLowerCase())
@@ -136,8 +139,27 @@ function routeMenu(route: string): DropdownMenuItem[] {
       />
     </template>
 
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <div class="space-y-4 pb-6">
+        <UAlert
+          color="primary"
+          variant="soft"
+          icon="i-lucide-sparkles"
+          :title="t('document.home.title')"
+          :description="t('pdf.overview.studioHint')"
+        >
+          <template #actions>
+            <UButton
+              :to="'/document-studio'"
+              color="primary"
+              variant="soft"
+              size="xs"
+              icon="i-lucide-arrow-right"
+              :label="t('pdf.overview.openStudio')"
+            />
+          </template>
+        </UAlert>
+
         <section
           v-if="needsRepair"
           class="panel flex flex-wrap items-center justify-between gap-3 p-4"
@@ -194,7 +216,7 @@ function routeMenu(route: string): DropdownMenuItem[] {
               {{ t(`pdf.overview.groups.${entry.group}`) }}
             </h2>
 
-            <PdfContextMenu
+            <AppContextMenu
               v-for="operation in entry.operations"
               :key="operation.id"
               :items="[routeMenu(operation.route)]"
@@ -208,7 +230,7 @@ function routeMenu(route: string): DropdownMenuItem[] {
                     <UIcon :name="operation.icon" class="size-4" />
                   </div>
                   <span class="flex items-baseline gap-1.5">
-                    <span class="text-[11px] text-muted">{{ t(`pdf.areas.${operationArea(operation)}`) }}</span>
+                    <span class="text-[11px] text-muted">{{ operationAreaLabel(operation) }}</span>
                     <span class="mono text-lg font-semibold tabular-nums">
                       {{ operationCount(operation) ?? '—' }}
                     </span>
@@ -223,11 +245,11 @@ function routeMenu(route: string): DropdownMenuItem[] {
                   </p>
                 </div>
               </NuxtLink>
-            </PdfContextMenu>
+            </AppContextMenu>
           </section>
         </div>
 
-        <PdfContextMenu :items="[routeMenu('/pdf/library')]">
+        <AppContextMenu :items="[routeMenu('/pdf/library')]">
           <NuxtLink
             to="/pdf/library"
             class="panel flex flex-wrap items-center justify-between gap-3 p-4 transition hover:border-(--ui-primary)"
@@ -246,10 +268,10 @@ function routeMenu(route: string): DropdownMenuItem[] {
               </div>
             </div>
             <span class="mono text-lg font-semibold tabular-nums">
-              {{ library ? library.sources.length : '—' }}
+              {{ library ? library.input.length : '—' }}
             </span>
           </NuxtLink>
-        </PdfContextMenu>
+        </AppContextMenu>
 
         <details class="panel p-4 text-xs">
           <summary class="cursor-pointer text-sm font-medium">
@@ -302,7 +324,7 @@ function routeMenu(route: string): DropdownMenuItem[] {
                   </dt>
                   <dd class="shrink-0">
                     <UBadge color="neutral" variant="subtle" size="xs">
-                      {{ t(`pdf.areas.${area}`) }}
+                      {{ mappingLabel(area) }}
                     </UBadge>
                   </dd>
                 </div>
@@ -311,6 +333,6 @@ function routeMenu(route: string): DropdownMenuItem[] {
           </div>
         </details>
       </div>
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

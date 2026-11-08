@@ -81,6 +81,10 @@ export async function exportSource(
 
       const files = await writeProducts(outputDir('extract'), `${stem}_products`, rows)
       const written = files[format as 'csv' | 'json' | 'xlsx' | 'docx' | 'xml']
+      if (!written) {
+        results.push({ format, ok: false, error: 'PDF_EXPORT_FAILED' })
+        continue
+      }
       recordAudit({ action: 'output', area: 'products', target: basename(written), tool: 'export' })
       results.push({
         format,

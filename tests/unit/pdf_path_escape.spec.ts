@@ -10,7 +10,7 @@ const dataRoot = join(root, 'pdf')
 const outside = join(root, 'outside')
 process.env.PDF_DATA_DIR = dataRoot
 
-mkdirSync(join(dataRoot, 'sources'), { recursive: true })
+mkdirSync(join(dataRoot, 'input'), { recursive: true })
 mkdirSync(outside, { recursive: true })
 writeFileSync(join(outside, 'secret.pdf'), 'TOP-SECRET')
 
@@ -21,7 +21,7 @@ const { resolveAreaFile } = await import('../../server/modules/pdf/inspect')
 const linkType = process.platform === 'win32' ? 'junction' : 'dir'
 const linked = (() => {
   try {
-    symlinkSync(outside, join(dataRoot, 'sources', 'escape'), linkType)
+    symlinkSync(outside, join(dataRoot, 'input', 'escape'), linkType)
     return true
   } catch {
     return false
@@ -34,29 +34,29 @@ after(() => {
 
 describe('directory links cannot escape the area root', { skip: linked ? false : 'symlink not permitted on this host' }, () => {
   it('refuses to resolve a file reached through a link', () => {
-    assert.throws(() => resolveAreaFile('sources', 'escape/secret.pdf'), /PDF_INVALID_PATH/)
+    assert.throws(() => resolveAreaFile('input', 'escape/secret.pdf'), /PDF_INVALID_PATH/)
   })
 
   it('does not list the link as a folder', () => {
-    const listing = listAreaDirectory('sources')
+    const listing = listAreaDirectory('input')
     assert.deepEqual(listing.folders.map(folder => folder.name), [])
   })
 
   it('does not build a tree node for the link', () => {
-    assert.deepEqual(getAreaFolderTree('sources'), [])
+    assert.deepEqual(getAreaFolderTree('input'), [])
   })
 
   it('refuses to read the link as a folder', () => {
-    assert.throws(() => listAreaDirectory('sources', 'escape'), /PDF_INVALID_PATH/)
+    assert.throws(() => listAreaDirectory('input', 'escape'), /PDF_INVALID_PATH/)
   })
 
   it('refuses to rename or delete through the link', () => {
-    assert.throws(() => renameAreaItem('sources', 'escape/secret.pdf', 'stolen.pdf'), /PDF_INVALID_PATH/)
-    assert.throws(() => deleteAreaItem('sources', 'escape/secret.pdf'), /PDF_INVALID_PATH/)
+    assert.throws(() => renameAreaItem('input', 'escape/secret.pdf', 'stolen.pdf'), /PDF_INVALID_PATH/)
+    assert.throws(() => deleteAreaItem('input', 'escape/secret.pdf'), /PDF_INVALID_PATH/)
   })
 
   it('still resolves a real file inside the area', () => {
-    writeFileSync(join(dataRoot, 'sources', 'real.pdf'), 'pdf')
-    assert.equal(resolveAreaFile('sources', 'real.pdf').name, 'real.pdf')
+    writeFileSync(join(dataRoot, 'input', 'real.pdf'), 'pdf')
+    assert.equal(resolveAreaFile('input', 'real.pdf').name, 'real.pdf')
   })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { PdfFileArea, PdfFileInfo } from '#shared/types/pdf'
-import { PDF_INPUT_FORMAT_META, pdfParentPath } from '~/utils/pdfStudio'
+import { PDF_INPUT_FORMAT_META, pdfIsConvertible, pdfIsPdf, pdfParentPath } from '~/utils/pdfStudio'
 import { pdfConvertOutputName, pdfOperation } from '~/utils/pdfOperations'
 
 const { t } = useI18n()
@@ -70,21 +70,21 @@ async function runConvert() {
 }
 
 const activeOperation = computed(() =>
-  explorer.activeArea.value === 'inputs' ? pdfOperation('convertInput') : null
+  explorer.activeArea.value === 'input' ? pdfOperation('convertInput') : null
 )
 
 const flowInput = computed(() =>
   t('pdf.flow.browsing', { folder: explorer.currentFolder.value || '/' })
 )
 
-const flowOutputArea = computed(() => {
+const flowOutputFolder = computed(() => {
   const operation = activeOperation.value
-  return operation ? explorer.outputArea(operation.output.mappingKey) : null
+  return operation ? explorer.outputFolder(operation.output.mappingKey) : null
 })
 
 async function openOutput(tool: string) {
-  const area = explorer.outputArea(tool)
-  if (area) await explorer.select('', area)
+  const folder = explorer.outputFolder(tool)
+  if (folder) await explorer.select(folder, 'output')
 }
 
 function askDelete(item: { name: string, path: string, relativePath?: string }, area = explorer.activeArea.value) {
@@ -108,14 +108,18 @@ async function confirmDelete() {
 const deleteDescription = computed(() => {
   const item = pendingDelete.value
   if (!item) return ''
-  if (item.area === 'sources') return t('pdf.library.deleteDesc', { name: item.name })
-  return t('pdf.import.removeDesc', { name: item.name })
+  if (item.area === 'input') {
+    return pdfIsPdf(item.name)
+      ? t('pdf.library.deleteDesc', { name: item.name })
+      : t('pdf.import.removeDesc', { name: item.name })
+  }
+  return t('pdf.library.deletePlain', { name: item.name })
 })
 </script>
 
 <template>
   <BasePage id="pdf-import" :title="t('pdf.workspaces.import.title')" :description="t('pdf.workspaces.import.desc')">
-    <PdfContextMenu :items="pageMenu">
+    <AppContextMenu :items="pageMenu">
       <PdfWorkspaceShell
         :tree="explorer.tree.value"
         :current-folder="explorer.currentFolder.value"
@@ -145,8 +149,8 @@ const deleteDescription = computed(() => {
           :upload-accept="PDF_INPUT_ACCEPT"
           :upload-label="t('pdf.import.dropzone')"
           :upload-description="t('pdf.import.dropzoneDesc')"
-          :trash-count="explorer.activeArea.value === 'inputs' ? trashCount : 0"
-          :readonly="explorer.activeArea.value !== 'inputs'"
+          :trash-count="explorer.activeArea.value === 'input' ? trashCount : 0"
+          :readonly="explorer.activeArea.value !== 'input'"
           :folders-writable="explorer.foldersWritable.value"
           :deletable="explorer.fileDeletable.value"
           list-class="max-h-[52vh]"
@@ -166,16 +170,18 @@ const deleteDescription = computed(() => {
               :operation="t(activeOperation.titleKey)"
               :input="{ label: flowInput }"
               :output="{
-                areaLabel: flowOutputArea ? t(`pdf.areas.${flowOutputArea}`) : '—',
-                openable: Boolean(flowOutputArea)
+                areaLabel: flowOutputFolder ? t('pdf.areas.output') : '—',
+                relativePath: flowOutputFolder ?? undefined,
+                openable: Boolean(flowOutputFolder)
               }"
-              :state="flowOutputArea ? 'partial' : 'empty'"
+              :state="flowOutputFolder ? 'partial' : 'empty'"
               @open-output="activeOperation && openOutput(activeOperation.output.mappingKey)"
             />
           </template>
 
-          <template v-if="explorer.activeArea.value === 'inputs'" #file-actions="{ file }">
+          <template v-if="explorer.activeArea.value === 'input'" #file-actions="{ file }">
             <UButton
+              v-if="pdfIsConvertible(file.name)"
               icon="i-lucide-file-text"
               :label="t('pdf.import.convert')"
               color="neutral"
@@ -232,6 +238,6 @@ const deleteDescription = computed(() => {
       />
 
       <LazyPdfTrashModal v-model:open="explorer.trashOpen.value" @restored="reloadAll" />
-    </PdfContextMenu>
+    </AppContextMenu>
   </BasePage>
 </template>

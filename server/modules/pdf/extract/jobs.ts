@@ -19,6 +19,8 @@ import { normalizeTo25Columns } from './normalize'
 import { extractPageWithRetry, extractTextWithRetry } from './provider'
 import { resolveExtractTarget, type PdfExtractTarget } from './models'
 import type { PdfExtractInstructions } from './presets'
+import { checkpointFingerprint, fingerprintDir, type CheckpointFingerprint } from './checkpoint'
+import { extractJobStore } from './job-store'
 
 interface JobEntry {
   state: PdfExtractJobState
@@ -26,6 +28,10 @@ interface JobEntry {
   pages: PdfExtractPage[]
   /** Preset guidance captured when the job was started. */
   instructions: PdfExtractInstructions | null
+  /** Identity of the inputs that produced the checkpoints this run may reuse. */
+  fingerprint: CheckpointFingerprint | null
+  /** Selected output formats to write (defaults to all if empty). */
+  formats?: string[] | null
 }
 
 /** One unit of work: a PDF page, or a text chunk of a Word document. */
@@ -59,14 +65,20 @@ function pruneJobs(): void {
 }
 
 export function listJobs(): PdfExtractJobState[] {
-  return [...jobs.values()]
-    .map(entry => ({ ...entry.state }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const live = new Map(extractJobStore.list().map(state => [state.id, state]))
+  // A live entry is newer than anything on disk, because the store is written
+  // after each state change.
+  for (const entry of jobs.values()) live.set(entry.state.id, { ...entry.state })
+  return [...live.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 export function getJob(id: string): PdfExtractJobSummary | null {
   const entry = jobs.get(id)
-  if (!entry) return null
+  if (!entry) {
+    // The job may have finished in a previous process; history still answers.
+    const persisted = extractJobStore.get(id)
+    return persisted ? { ...persisted, available: false, rows: [] } : null
+  }
 
   return {
     ...entry.state,
@@ -85,22 +97,37 @@ export function cancelJob(id: string): boolean {
 /**
  * Reads the per-page checkpoints a source already produced, so the export
  * workspace can regenerate table formats without paying for another AI run.
+ *
+ * Two layouts exist: the flat `checkpoints/<stem>/*.json` from before
+ * fingerprinting, and `checkpoints/<stem>/v<n>-<hash>/*.json` after it. Both are
+ * read; a fingerprinted run wins when present, because it is the newest and the
+ * one whose inputs still match.
  */
 export function readCachedRows(rawSource: string): PdfExportRow[] {
   const stem = splitDirName(rawSource)
   const dir = join(pdfDirs.checkpoints, stem)
   if (!existsSync(dir)) return []
 
-  const pages = readdirSync(dir)
-    .filter(file => file.endsWith('.json'))
+  const readPages = (target: string): PdfExtractPage[] => readdirSync(target, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+    .map(entry => entry.name)
     .sort(naturalCompare)
     .flatMap((file) => {
       try {
-        return [JSON.parse(readFileSync(join(dir, file), 'utf8')) as PdfExtractPage]
+        return [JSON.parse(readFileSync(join(target, file), 'utf8')) as PdfExtractPage]
       } catch {
         return []
       }
     })
+
+  const fingerprints = readdirSync(dir, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && /^v\d+-[0-9a-f]+$/.test(entry.name))
+    .map(entry => entry.name)
+    .sort()
+
+  const pages = fingerprints.length
+    ? readPages(join(dir, fingerprints[fingerprints.length - 1]!))
+    : readPages(dir)
 
   return pages.length ? normalizeTo25Columns(pages) : []
 }
@@ -122,12 +149,13 @@ export async function startExtraction(
   force = false,
   requested?: Partial<PdfExtractTarget> | null,
   instructions?: PdfExtractInstructions | null,
-  overwrite = true
+  overwrite = true,
+  formats?: string[] | null
 ): Promise<PdfExtractJobState> {
   const source = safeRelativePath(rawSource)
   anySourcePath(source)
 
-  if (!overwrite && hasProductFiles(pdfDirs.products, `${splitDirName(source)}_products`)) {
+  if (!overwrite && hasProductFiles(pdfDirs.products, `${splitDirName(source)}_products`, formats ?? undefined)) {
     throw new Error('PDF_FILE_ALREADY_EXISTS')
   }
 
@@ -160,16 +188,20 @@ export async function startExtraction(
     cancelRequested: false
   }
 
-  const entry: JobEntry = { state, rows: [], pages: [], instructions: instructions ?? null }
+  const entry: JobEntry = { state, rows: [], pages: [], instructions: instructions ?? null, fingerprint: null, formats }
   jobs.set(state.id, entry)
   pruneJobs()
+  extractJobStore.save(state)
 
   void runJob(entry, force, target)
 
   return { ...state }
 }
 
-function checkpointPath(stem: string, page: string): string {
+function checkpointPath(stem: string, fingerprint: CheckpointFingerprint | null, page: string): string {
+  // A fingerprinted run keeps its pages in its own directory, so a changed
+  // preset/model/source cannot read another run's rows.
+  if (fingerprint) return join(fingerprintDir(stem, fingerprint), `${page}.json`)
   return join(pdfDirs.checkpoints, stem, `${page}.json`)
 }
 
@@ -245,16 +277,30 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
 
   try {
     entry.state.status = 'running'
+    extractJobStore.save(entry.state)
     const resolved = anySourcePath(entry.state.source)
     ensureDir(join(pdfDirs.checkpoints, stem))
 
     const units = await buildUnits(entry, resolved.path, resolved.kind, target, stem)
     entry.state.totalPages = units.length
 
+    // The fingerprint needs the page count, which only the split knows, so it is
+    // computed here rather than at create time. It pins input bytes, schema,
+    // prompt, preset, model and connection: any change produces a new directory
+    // and therefore no stale reuse (completion guide §7.4).
+    entry.fingerprint = checkpointFingerprint({
+      sourcePath: resolved.path,
+      totalPages: units.length,
+      target,
+      instructions: entry.instructions
+    })
+    ensureDir(fingerprintDir(stem, entry.fingerprint))
+    extractJobStore.save(entry.state)
+
     for (const [index, unit] of units.entries()) {
       if (entry.state.cancelRequested) break
 
-      const cachedFile = checkpointPath(stem, unit.id)
+      const cachedFile = checkpointPath(stem, entry.fingerprint, unit.id)
 
       if (!force && existsSync(cachedFile)) {
         const cached = JSON.parse(readFileSync(cachedFile, 'utf8')) as PdfExtractPage
@@ -283,6 +329,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
 
       entry.state.processedPages++
       entry.state.currentPage = null
+      extractJobStore.save(entry.state)
 
       if (index < units.length - 1 && !entry.state.cancelRequested) {
         await delay(config.pdf.extract.pageDelayMs)
@@ -291,7 +338,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
 
     entry.rows = normalizeTo25Columns(entry.pages)
     entry.state.rowCount = entry.rows.length
-    await writeProducts(pdfDirs.products, `${stem}_products`, entry.rows)
+    await writeProducts(pdfDirs.products, `${stem}_products`, entry.rows, entry.formats ?? undefined)
     recordAudit({ action: 'output', area: 'products', target: `${stem}_products`, tool: 'extract' })
 
     if (entry.state.cancelRequested) {
@@ -307,5 +354,6 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
   } finally {
     entry.state.currentPage = null
     entry.state.finishedAt = new Date().toISOString()
+    extractJobStore.save(entry.state)
   }
 }

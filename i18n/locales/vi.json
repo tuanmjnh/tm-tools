@@ -261,7 +261,17 @@
     "pdf_split": "Tách & Ghép",
     "pdf_images": "Ảnh PDF",
     "pdf_export": "Xuất PDF",
-    "pdf_import": "Nhập PDF"
+    "pdf_import": "Nhập PDF",
+    "document_studio": "Document Studio",
+    "document_home": "Tổng quan",
+    "document_split": "Tách PDF",
+    "document_merge": "Ghép PDF",
+    "document_rasterize": "PDF sang ảnh",
+    "document_images_to_pdf": "Ảnh sang PDF",
+    "document_convert": "Chuyển sang PDF",
+    "document_export": "Xuất tài liệu",
+    "document_activity": "Hoạt động",
+    "document_settings": "Cài đặt"
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -1653,6 +1663,7 @@
     "description": "Tách, ghép, chuyển ảnh và bóc tách bảng giá nội thất",
     "browser": {
       "selected": "Đang chọn",
+      "unselect": "Bỏ chọn",
       "useSource": "Dùng làm nguồn",
       "search": "Lọc tệp...",
       "sort": "Sắp xếp",
@@ -1708,11 +1719,13 @@
           "export": "Xuất tài liệu",
           "extract": "Trích xuất dữ liệu"
         }
-      }
+      },
+      "studioHint": "Luồng đơn giản hơn: chọn tài liệu, chạy một việc, lưu kết quả — không cần cây thư mục.",
+      "openStudio": "Mở Document Studio"
     },
     "areas": {
-      "sources": "PDF gốc",
-      "inputs": "Tệp đầu vào",
+      "input": "Đầu vào",
+      "output": "Đầu ra",
       "split": "Trang tách",
       "images": "Ảnh PDF",
       "merged": "PDF ghép",
@@ -1720,8 +1733,9 @@
       "office": "Word & Excel"
     },
     "library": {
-      "description": "Tải PDF gốc lên, sau đó tách trang hoặc chuyển thành ảnh",
-      "rootLabel": "Kho PDF",
+      "description": "Tải PDF gốc và tệp đầu vào lên đây, sau đó chạy công cụ trên chúng",
+      "outputDesc": "Mọi kết quả công cụ tạo ra, gom theo thư mục công cụ",
+      "rootLabel": "Không gian PDF",
       "dropzone": "Kéo thả file PDF vào đây",
       "dropzoneDesc": "Chỉ nhận PDF, tối đa {maxMb} MB mỗi file",
       "emptyArea": "Thư mục này chưa có tệp.",
@@ -1762,7 +1776,7 @@
       "resultSummary": "Đã bắt đầu bóc tách {name} — {count} tệp kết quả trên đĩa",
       "configTitle": "Cấu hình bóc tách",
       "noModelSelected": "Chưa chọn model",
-      "formatsHint": "Mỗi lần chạy ghi đủ cả năm định dạng; danh sách chỉ để tham khảo.",
+      "formatsHint": "Chọn các định dạng tệp cần xuất ra.",
       "cacheHint": "Kết quả cache dùng lại theo tên tệp/trang. Đổi model hoặc preset không tự xoá cache."
     },
     "status": {
@@ -1949,7 +1963,8 @@
       "confirmSplit": "Tách \"{name}\" thành các trang PDF? Kết quả vào thư mục trang \"{folder}\". Nếu thư mục đó đã có, nó bị thay thế.",
       "confirmMerge": "Ghép các trang của \"{name}\" thành {output}? Kết quả vào thư mục merged.",
       "mergedDesc": "PDF được dựng lại từ các thư mục trang.",
-      "removeDesc": "Xoá \"{name}\"? Không thể hoàn tác."
+      "removeDesc": "Xoá \"{name}\"? Không thể hoàn tác.",
+      "resultSummary": "Đã tạo {count} tệp trang trong {folder}"
     },
     "images": {
       "rasterize": "Xuất ảnh",
@@ -1957,7 +1972,8 @@
       "buildPdf": "Tạo PDF",
       "confirmRasterize": "Xuất mọi trang của \"{name}\" thành PNG? Kết quả vào thư mục ảnh \"{folder}\". Nếu thư mục đó đã có, nó bị thay thế.",
       "confirmBuild": "Dựng {output} từ các file PNG trong \"{name}\"? Kết quả vào thư mục merged.",
-      "removeDesc": "Xoá \"{name}\"? Không thể hoàn tác."
+      "removeDesc": "Xoá \"{name}\"? Không thể hoàn tác.",
+      "resultSummary": "Đã xử lý {name}"
     },
     "export": {
       "sourcePlaceholder": "Chọn PDF nguồn",
@@ -3002,5 +3018,227 @@
     "reordered": "Đã sắp xếp lại route",
     "deleteConfirm": "Xóa route?",
     "deleteConfirmDesc": "Xóa mềm route '{id}'? Route sẽ biến mất khỏi menu."
+  },
+  "document": {
+    "home": {
+      "title": "Document Studio",
+      "description": "Chọn tài liệu, chạy một việc, lưu kết quả.",
+      "search": "Tìm công cụ",
+      "active": "{count} đang chạy",
+      "recent": "Việc gần đây",
+      "unavailable": "Không khả dụng ở môi trường này"
+    },
+    "shell": {
+      "stepChoose": "Chọn",
+      "stepProcess": "Xử lý",
+      "stepSave": "Lưu",
+      "summary": "Tóm tắt"
+    },
+    "groups": {
+      "pdf": "PDF",
+      "image": "Hình ảnh",
+      "convert": "Chuyển đổi",
+      "export": "Xuất file",
+      "extract": "Trích xuất"
+    },
+    "runtime": {
+      "local": "Máy cục bộ",
+      "electron": "Ứng dụng desktop",
+      "vercel": "Cloud",
+      "worker": "Worker"
+    },
+    "input": {
+      "dropSingle": "Kéo một file vào đây",
+      "dropMany": "Kéo các file vào đây",
+      "accepted": "Hỗ trợ: {types}",
+      "anyFile": "Mọi định dạng được hỗ trợ",
+      "browse": "Chọn file",
+      "selected": "Đã chọn ({count})",
+      "clear": "Xoá hết",
+      "remove": "Bỏ file",
+      "moveUp": "Lên trên",
+      "moveDown": "Xuống dưới"
+    },
+    "summary": {
+      "operation": "Công việc",
+      "input": "Đầu vào",
+      "output": "Đầu ra",
+      "files": "{count} file"
+    },
+    "output": {
+      "defaultFolder": "Thư mục kết quả mặc định",
+      "downloadHint": "Tải về khi hoàn tất",
+      "ephemeralHint": "Kết quả trả về ngay trong lần chạy này và không được lưu lại sau đó."
+    },
+    "result": {
+      "title": "Kết quả ({count})",
+      "download": "Tải về",
+      "downloadAll": "Tải tất cả (ZIP)",
+      "preview": "Xem trực tiếp",
+      "openFolder": "Mở thư mục chứa",
+      "copyPath": "Sao chép đường dẫn",
+      "more": "Thêm thao tác",
+      "deleteTitle": "Xóa kết quả này?",
+      "deleteConfirm": "Xóa \"{name}\"? Bản lưu trữ bị gỡ; tệp đã lưu vào thư mục đầu ra vẫn còn trên đĩa."
+    },
+    "progress": {
+      "uploading": "Đang tải lên…",
+      "processing": "Đang xử lý…"
+    },
+    "actions": {
+      "run": "Chạy"
+    },
+    "status": {
+      "created": "Bản nháp",
+      "uploading": "Đang tải lên",
+      "queued": "Đang chờ",
+      "running": "Đang chạy",
+      "cancel_requested": "Đang huỷ",
+      "publishing": "Đang lưu",
+      "completed": "Hoàn tất",
+      "partial": "Hoàn tất một phần",
+      "failed": "Thất bại",
+      "cancelled": "Đã huỷ",
+      "expired": "Hết hạn"
+    },
+    "operations": {
+      "split": {
+        "title": "Tách PDF",
+        "description": "Tách một PDF thành mỗi trang một file."
+      },
+      "merge": {
+        "title": "Ghép PDF",
+        "description": "Ghép nhiều PDF thành một tài liệu theo thứ tự bạn chọn."
+      },
+      "rasterize": {
+        "title": "PDF sang ảnh",
+        "description": "Xuất từng trang PDF thành ảnh PNG."
+      },
+      "imagesToPdf": {
+        "title": "Ảnh sang PDF",
+        "description": "Gộp các ảnh thành một PDF theo thứ tự bạn đặt."
+      },
+      "convert": {
+        "title": "Chuyển sang PDF",
+        "description": "Chuyển Word, Excel, CSV, JSON, XML hoặc ảnh thành PDF."
+      },
+      "export": {
+        "title": "Xuất PDF",
+        "description": "Xuất trang, văn bản hoặc dữ liệu đã trích xuất sang định dạng khác."
+      },
+      "extract": {
+        "title": "Trích xuất bằng AI",
+        "description": "Trích xuất dòng sản phẩm từ PDF bảng giá qua AI relay."
+      }
+    },
+    "split": {
+      "configHint": "Mỗi trang thành một PDF riêng. Kết quả được lưu vào thư mục đầu ra."
+    },
+    "errors": {
+      "DOCUMENT_INPUT_REQUIRED": "Hãy chọn ít nhất một file.",
+      "DOCUMENT_INPUT_COUNT_INVALID": "Số lượng file không phù hợp với công cụ này.",
+      "DOCUMENT_INPUT_TYPE_NOT_SUPPORTED": "Định dạng file này không được hỗ trợ.",
+      "DOCUMENT_INPUT_TOO_LARGE": "File vượt quá giới hạn của môi trường hiện tại.",
+      "DOCUMENT_TOTAL_SIZE_EXCEEDED": "Tổng dung lượng vượt quá giới hạn của môi trường hiện tại.",
+      "DOCUMENT_UPLOAD_INCOMPLETE": "Tải lên chưa xong. Hãy thử lại.",
+      "DOCUMENT_UPLOAD_EXPIRED": "Phiên tải lên đã hết hạn. Hãy làm lại.",
+      "DOCUMENT_INPUT_NOT_READY": "File vẫn đang tải lên. Hãy chờ hoàn tất.",
+      "DOCUMENT_JOB_NOT_FOUND": "Công việc này không còn tồn tại.",
+      "DOCUMENT_JOB_NOT_OWNED": "Công việc này thuộc về người khác.",
+      "DOCUMENT_JOB_STATE_INVALID": "Công việc đang ở trạng thái không cho phép thao tác này.",
+      "DOCUMENT_JOB_ALREADY_RUNNING": "Đang có một công việc chạy.",
+      "DOCUMENT_OUTPUT_NOT_READY": "Kết quả chưa sẵn sàng.",
+      "DOCUMENT_OUTPUT_EXPIRED": "Kết quả này đã hết hạn.",
+      "DOCUMENT_OUTPUT_TOO_LARGE": "Kết quả vượt quá giới hạn của môi trường hiện tại.",
+      "DOCUMENT_ARTIFACT_EXPIRED": "Kết quả này đã hết hạn và không thể tải về.",
+      "DOCUMENT_STORAGE_UNAVAILABLE": "Kho lưu trữ tạm thời không khả dụng. Hãy thử lại.",
+      "DOCUMENT_STORAGE_NOT_CONFIGURED": "Kho lưu trữ file chưa được cấu hình cho bản triển khai này.",
+      "DOCUMENT_DATABASE_NOT_CONFIGURED": "Kho lưu trữ công việc chưa được cấu hình cho bản triển khai này.",
+      "DOCUMENT_TEMP_CAPACITY_EXCEEDED": "Không đủ dung lượng tạm cho công việc này.",
+      "DOCUMENT_RUNTIME_NOT_SUPPORTED": "Công cụ này không khả dụng ở môi trường hiện tại.",
+      "DOCUMENT_WORKER_REQUIRED": "Công việc vượt quá giới hạn của môi trường web. Hãy dùng bản desktop hoặc chia nhỏ file.",
+      "DOCUMENT_OPERATION_NOT_SUPPORTED": "Công cụ này không khả dụng.",
+      "DOCUMENT_OPERATION_CONFIG_INVALID": "Tùy chọn này không hợp lệ cho công cụ.",
+      "DOCUMENT_PROCESSING_TIMEOUT": "Xử lý quá lâu nên đã dừng.",
+      "DOCUMENT_CLEANUP_FAILED": "Dọn dẹp chưa xong. Hãy thử lại.",
+      "generic": "Đã có lỗi xảy ra. Hãy thử lại."
+    },
+    "convert": {
+      "configHint": "Word, Excel và file dữ liệu được dựng lại thành bố cục PDF, không phải bản sao từng điểm ảnh."
+    },
+    "export": {
+      "formats": "Định dạng",
+      "rowsHint": "Excel, CSV, JSON và XML lấy từ các dòng mà lần trích xuất trước đã lưu cho tài liệu này."
+    },
+    "activity": {
+      "title": "Hoạt động",
+      "description": "Mọi công việc của tài khoản này, mới nhất trước.",
+      "refresh": "Làm mới",
+      "empty": "Chưa có công việc nào khớp bộ lọc này.",
+      "filters": {
+        "all": "Tất cả",
+        "running": "Đang chạy",
+        "completed": "Hoàn tất",
+        "problem": "Cần chú ý",
+        "expired": "Hết hạn"
+      },
+      "cancel": "Hủy",
+      "retry": "Chạy lại",
+      "deleteJob": "Xóa công việc",
+      "deleteArtifact": "Xóa kết quả",
+      "openOutputFolder": "Mở thư mục đầu ra",
+      "copyJobId": "Sao chép mã công việc",
+      "deleteJobTitle": "Xóa công việc này?",
+      "deleteJobConfirm": "Xóa \"{operation}\" sẽ gỡ các kết quả đã lưu. Tệp đã lưu vào thư mục đầu ra vẫn còn trên đĩa.",
+      "deleteArtifactTitle": "Xóa kết quả này?",
+      "deleteArtifactConfirm": "Xóa \"{name}\"? Bản lưu trữ bị gỡ; tệp đã lưu vào thư mục đầu ra vẫn còn trên đĩa.",
+      "expiresIn": "còn {hours} giờ",
+      "expired": "đã hết hạn"
+    },
+    "settings": {
+      "title": "Cài đặt",
+      "description": "Cách triển khai này lưu, giao kết quả và xoá tệp của bạn.",
+      "storage": {
+        "title": "Lưu trữ mặc định",
+        "delivery": "Cách giao kết quả",
+        "folder": "Lưu vào thư mục kết quả",
+        "download": "Tải về khi hoàn tất",
+        "outputPath": "Thư mục kết quả mặc định",
+        "saveDialog": "Hộp thoại lưu của hệ thống",
+        "cloudNotice": "Kết quả trên cloud được giữ {days} ngày rồi tự động xoá."
+      },
+      "runtime": {
+        "title": "Môi trường chạy",
+        "engine": "Môi trường",
+        "driver": "Trình lưu trữ",
+        "database": "Cơ sở dữ liệu tác vụ",
+        "session": "Yêu cầu đăng nhập",
+        "connected": "Đã kết nối",
+        "missing": "Chưa cấu hình",
+        "persistent": "Lưu trữ bền vững sẵn sàng",
+        "ephemeral": "Chỉ xử lý tạm thời",
+        "durableHint": "Kết quả được giữ trong kho đến khi hết hạn hoặc bị xoá.",
+        "ephemeralHint": "Kết quả trả về ngay trong phản hồi; không lưu lại sau đó.",
+        "drivers": {
+          "local": "Ổ đĩa cục bộ",
+          "hub": "Lưu trữ TM Hub",
+          "r2": "Lưu trữ đối tượng (R2)",
+          "none": "Không có lưu trữ bền vững"
+        }
+      },
+      "limits": {
+        "title": "Giới hạn xử lý",
+        "file": "Tệp đơn lớn nhất",
+        "total": "Tổng đầu vào mỗi tác vụ",
+        "files": "Số tệp mỗi tác vụ",
+        "inline": "Giới hạn thời gian trên cloud"
+      },
+      "cleanup": {
+        "title": "Dọn dẹp & quyền riêng tư",
+        "retention": "Kết quả hết hạn sau {days} ngày mặc định (tối đa {max} ngày).",
+        "deleteNow": "Xoá kết quả ngay",
+        "deleteHint": "Có thể xoá bất kỳ kết quả nào trong Hoạt động; tệp lưu trữ bị xoá ngay."
+      }
+    }
   }
 }

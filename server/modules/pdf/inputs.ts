@@ -8,13 +8,11 @@ import { ensureDir, pdfDirs, writeFileAtomic } from './paths'
 import { recordAudit } from './audit'
 import { isImageName, isWordName, safeFileName, safeRelativePath } from './security'
 import { moveToTrash } from './trash'
-import { assertFileWritable } from './workspace'
 
 /**
  * Inputs are the non-PDF half of the workspace: images and tabular/office files
- * that get converted into PDFs. They live in one folder so the import page has a
- * single list, with the old `word/` folder still read for files uploaded before
- * the folder was introduced.
+ * that get converted into PDFs. They live in the single `input/` root, with the
+ * old `word/` folder still read for files uploaded before the two-root layout.
  */
 export const INPUT_ACCEPT = '.png,.jpg,.jpeg,.docx,.xlsx,.csv,.json,.xml'
 
@@ -30,14 +28,14 @@ export function saveInput(rawName: string, data: Buffer, rawFolder = ''): PdfFil
   if (data.length > config.pdf.maxUploadMb * 1024 * 1024) throw new Error('PDF_UPLOAD_TOO_LARGE')
 
   const folder = safeRelativePath(rawFolder)
-  const targetDir = folder ? join(pdfDirs.inputs, folder) : pdfDirs.inputs
+  const targetDir = folder ? join(pdfDirs.input, folder) : pdfDirs.input
   ensureDir(targetDir)
 
   const target = join(targetDir, name)
   const overwritten = existsSync(target)
   writeFileAtomic(target, data)
   const relativePath = folder ? `${folder}/${name}` : name
-  recordAudit({ action: 'upload', area: 'inputs', target: relativePath, bytes: data.length })
+  recordAudit({ action: 'upload', area: 'input', target: relativePath, bytes: data.length })
 
   return {
     name,
@@ -62,9 +60,9 @@ export function inputPath(rawName: string): string {
   } catch {
     relative = safeFileName(rawName)
   }
-  const current = join(pdfDirs.inputs, relative)
+  const current = join(pdfDirs.input, relative)
   if (existsSync(current)) return current
-  // Files uploaded before `inputs/` existed are still in `word/`.
+  // Files uploaded before the two-root layout are still in `word/`.
   const legacy = legacyPath(relative.split('/').pop() || relative)
   if (legacy) return legacy
   throw new Error('PDF_INPUT_NOT_FOUND')
@@ -82,7 +80,7 @@ export function readInput(rawName: string): { path: string, kind: PdfInputKind, 
 }
 
 export function listInputs(): PdfFileInfo[] {
-  const current = listFiles(pdfDirs.inputs, acceptedInput)
+  const current = listFiles(pdfDirs.input, acceptedInput)
   const legacy = listFiles(pdfDirs.word, name => isWordName(name) && !current.some(entry => entry.name === name))
     .map(file => ({ ...file, legacy: true }))
   return [...current, ...legacy]
@@ -91,10 +89,10 @@ export function listInputs(): PdfFileInfo[] {
 export function removeInput(rawName: string): void {
   const name = safeFileName(rawName)
   const path = inputPath(rawName)
-  // A legacy file physically lives in `word/`, which the registry keeps
-  // read-only; routing the delete through this helper must not bypass that.
-  assertFileWritable(path.startsWith(pdfDirs.inputs) ? 'inputs' : 'word')
-  moveToTrash('inputs', path, name)
+  // A legacy file physically lives in `word/`, which stays read-only; routing
+  // the delete through this helper must not bypass that.
+  if (path.startsWith(pdfDirs.word)) throw new Error('PDF_FILE_IMMUTABLE')
+  moveToTrash('input', path, name)
 }
 
 /** Files that can be previewed/edited as data instead of as a document. */

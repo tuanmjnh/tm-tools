@@ -25,6 +25,18 @@ media/utility workspace, and a read-only view of the AI providers that live in
 
 - 🔐 **[AI & Hub Connections](./ai-and-hub-connections.md)** — tm-tools holds no
   AI keys; the hub owns credentials, catalog and relay.
+- 🔗 **[Hub Storage integration brief](./TM-TOOLS-HUB-STORAGE-INTEGRATION.md)** —
+  how Document Studio uses a Hub storage connection, why `/tmp` is only a
+  one-request fallback on Vercel, and what must never reach the browser.
+- 🧱 **[Document Studio v4](./document-studio/)** —
+  [ARCHITECTURE](./document-studio/ARCHITECTURE-v4.md),
+  [CLOUD_ARCHITECTURE](./document-studio/CLOUD-ARCHITECTURE.md),
+  [STORAGE-RUNTIME-MATRIX](./document-studio/STORAGE-RUNTIME-MATRIX.md),
+  [API_CONTRACTS](./document-studio/API-CONTRACTS.md),
+  [VERCEL_DEPLOYMENT](./document-studio/VERCEL-DEPLOYMENT.md),
+  [TEST_VERIFICATION](./document-studio/TEST-VERIFICATION.md). The operator
+  walkthrough is
+  **[TM-DOCUMENT-STUDIO-V4-COMPLETION-GUIDE](./pdf/TM-DOCUMENT-STUDIO-V4-COMPLETION-GUIDE.md)**.
 - 🌐 **[Browser Platform](./browser-platform/)** —
   [ARCHITECTURE](./browser-platform/ARCHITECTURE.md),
   [BROWSER_ADAPTER](./browser-platform/BROWSER_ADAPTER.md),
@@ -70,6 +82,7 @@ media/utility workspace, and a read-only view of the AI providers that live in
 | AI keys vault | hub-only (`/system/ai-keys` is read-only) |
 | Browser Hub, downloader, FFmpeg, utilities, media | alive in this repo |
 | PDF workspace (`/pdf/*`, `server/modules/pdf`) | new in this repo |
+| Document Studio storage | Hub storage connection → self-owned R2 → ephemeral `/tmp` (one request, inline bytes) |
 | Profiles | Browser Hub at `/browser-hub/*`; the account profile is a Settings tab |
 
 ## Verification

@@ -10,11 +10,10 @@
 scratch
 dist
 
-# Stray tsc emit next to sources: a .js twin shadows its .ts in Nuxt auto-imports
-# and breaks the Nitro module install ("Cannot add property setup").
-/app/**/*.js
-/shared/**/*.js
-/server/**/*.js
+# Only the SFC twin that TypeScript can emit; a broad `*.js` rule would hide real
+# JavaScript sources and let generated pollution accumulate unseen. Everything
+# else is caught by `pnpm check:hygiene` and shows up in `git status`.
+/app/**/*.vue.js
 
 # Electron build outputs
 release

@@ -1,19 +1,13 @@
 import type { Ref } from 'vue'
 import type { PdfDirectoryListing, PdfFileArea, PdfFileInfo, PdfFolderInfo, PdfFolderTreeNode, PdfLibrary } from '#shared/types/pdf'
 
-/** The seven areas the explorer shows; `word` stays served by the API only. */
-export const PDF_EXPLORER_AREAS: PdfFileArea[] = ['sources', 'inputs', 'split', 'images', 'merged', 'products', 'office']
+/** The two roots the explorer shows; tool output folders live below `output/`. */
+export const PDF_EXPLORER_AREAS: PdfFileArea[] = ['input', 'output']
 
 /** What the list holds while that area is active, so no page captions a foreign area. */
 const AREA_DESCRIPTION_KEYS: Record<PdfFileArea, string> = {
-  sources: 'pdf.library.description',
-  inputs: 'pdf.import.inputsDesc',
-  word: 'pdf.library.wordDesc',
-  split: 'pdf.split.foldersDesc',
-  images: 'pdf.images.foldersDesc',
-  merged: 'pdf.split.mergedDesc',
-  products: 'pdf.extract.resultsDesc',
-  office: 'pdf.export.officeDesc'
+  input: 'pdf.library.description',
+  output: 'pdf.library.outputDesc'
 }
 
 interface AreaRule {
@@ -29,7 +23,7 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   const { t } = useI18n()
   const { getDirectory, getExplorerTrees, getExplorerChildren, getWorkspaceReport, createFolder, renameItem, deleteItem } = usePdfStudio()
 
-  const activeArea = ref<PdfFileArea>('sources')
+  const activeArea = ref<PdfFileArea>('input')
   const currentFolder = ref('')
   const directoryListing = ref<PdfDirectoryListing | null>(null)
   const loading = ref(false)
@@ -38,11 +32,13 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   const loadedChildren = ref<Record<string, PdfFolderTreeNode[]>>({})
   const deepTrees = ref<Partial<Record<PdfFileArea, PdfFolderTreeNode[]>> | null>(null)
   const areaRules = ref<Partial<Record<PdfFileArea, AreaRule>>>({})
-  /** Server `outputMapping`: tool key → area, so no page hard-codes a destination. */
-  const outputMapping = ref<Record<string, PdfFileArea>>({})
+  /** Absolute on-disk root of each area, for "show in folder" on desktop. */
+  const areaRoots = ref<Partial<Record<PdfFileArea, string>>>({})
+  /** Server `outputMapping`: tool key → folder below `output/`. */
+  const outputMapping = ref<Record<string, string>>({})
 
   const folderModalOpen = ref(false)
-  const folderTarget = ref<{ parent: string, area: PdfFileArea }>({ parent: '', area: 'sources' })
+  const folderTarget = ref<{ parent: string, area: PdfFileArea }>({ parent: '', area: 'input' })
   const renameModalOpen = ref(false)
   const renameTarget = ref<{ path: string, name: string, isFolder: boolean, area: PdfFileArea } | null>(null)
   const trashOpen = ref(false)
@@ -54,7 +50,7 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
 
   /** Server registry decides what each area allows; the client never re-decides. */
   function rules(area: PdfFileArea): AreaRule {
-    return areaRules.value[area] ?? { files: area !== 'word', folders: area !== 'word' }
+    return areaRules.value[area] ?? { files: true, folders: true }
   }
 
   const foldersWritable = computed(() => rules(activeArea.value).folders)
@@ -79,14 +75,8 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
   const areaCounts = computed<Record<PdfFileArea, number>>(() => {
     const current = library?.value
     return {
-      sources: current?.sources.length ?? 0,
-      inputs: current?.inputs.length ?? 0,
-      word: current?.word.length ?? 0,
-      split: current?.split.length ?? 0,
-      images: current?.images.length ?? 0,
-      merged: current?.merged.length ?? 0,
-      products: current?.products.length ?? 0,
-      office: current?.office.length ?? 0
+      input: current?.input.length ?? 0,
+      output: current?.output.reduce((total, folder) => total + folder.fileCount, 0) ?? 0
     }
   })
 
@@ -191,16 +181,49 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
         if (descriptor) next[area] = { files: descriptor.writableFiles, folders: descriptor.writableFolders }
       }
       areaRules.value = next
+      areaRoots.value = Object.fromEntries(
+        report.areas.map(area => [area.area, area.root])
+      ) as Partial<Record<PdfFileArea, string>>
       outputMapping.value = report.outputMapping
     } catch {
       areaRules.value = {}
+      areaRoots.value = {}
       outputMapping.value = {}
     }
   }
 
-  /** Area a tool writes to, straight from the server mapping. */
+  /** Every tool writes into the single `output` root. */
   function outputArea(tool: string): PdfFileArea | null {
+    return outputMapping.value[tool] ? 'output' : null
+  }
+
+  /** Subfolder of `output/` a tool writes into, e.g. `split` or `merged`. */
+  function outputFolder(tool: string): string | null {
     return outputMapping.value[tool] ?? null
+  }
+
+  /** Files of one folder without moving the explorer there. */
+  async function listFolder(area: PdfFileArea, folder = ''): Promise<PdfFileInfo[]> {
+    try {
+      const listing = await getDirectory(area, folder)
+      return listing?.files ?? []
+    } catch {
+      return []
+    }
+  }
+
+  /** Absolute path of a folder inside an area, so desktop can reveal it. */
+  function absolutePath(area: PdfFileArea, relative = ''): string | undefined {
+    const root = areaRoots.value[area]
+    if (!root) return undefined
+    if (!relative) return root
+    return `${root.replace(/[\\/]+$/, '')}/${relative}`
+  }
+
+  /** Absolute path of a tool's output folder (`output/<tool folder>`). */
+  function outputPath(tool: string): string | undefined {
+    const folder = outputFolder(tool)
+    return folder ? absolutePath('output', folder) : undefined
   }
 
   function openCreateFolder(parentFolderPath = currentFolder.value, area = activeArea.value) {
@@ -265,6 +288,10 @@ export function usePdfExplorer(library?: Ref<PdfLibrary | null>) {
     renameTarget,
     trashOpen,
     outputArea,
+    outputFolder,
+    absolutePath,
+    outputPath,
+    listFolder,
     select,
     reload,
     expand,

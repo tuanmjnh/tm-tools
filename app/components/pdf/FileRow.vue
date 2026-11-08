@@ -49,7 +49,7 @@ const menuItems = computed(() => fileItems({
 </script>
 
 <template>
-  <PdfContextMenu :items="menuItems">
+  <AppContextMenu :items="menuItems">
     <div
       class="flex flex-col gap-3 px-4 transition-colors sm:flex-row sm:items-center sm:justify-between"
       :class="[compact ? 'py-1.5' : 'py-3', selected ? 'bg-primary-50/40 dark:bg-primary-950/20' : '']"
@@ -93,5 +93,5 @@ const menuItems = computed(() => fileItems({
         />
       </div>
     </div>
-  </PdfContextMenu>
+  </AppContextMenu>
 </template>

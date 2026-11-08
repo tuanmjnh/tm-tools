@@ -1162,3 +1162,255 @@ inputs area` fail (1 fail).
 - No signed-in browser pass, so the hidden rename/delete entries were verified
   by reading `FileBrowser` → `PdfFileRow` → `PdfFileActions` rather than by
   opening the import page.
+
+## Phase 33 — Hub Storage driver and ephemeral `/tmp` mode (2026-11-07)
+
+Implements the storage half of
+[`../TM-TOOLS-HUB-STORAGE-INTEGRATION.md`](../TM-TOOLS-HUB-STORAGE-INTEGRATION.md)
+inside the existing v4 document runtime. The completion guide §2.0 now records the
+policy: Hub first when a Storage Connection exists, R2 for a deployment that owns
+its bucket, and an explicit one-request ephemeral mode when neither exists.
+
+### What changed
+
+| Area | Change |
+|---|---|
+| Driver selection | `preferredStorageDriver()` returns `hub` / `r2` / `null` from config only, hub first; `storageMode()` and `isEphemeralRuntime()` derive `durable` vs `ephemeral` |
+| Hub client | `server/utils/hubStorage.ts` speaks the gateway's real routes (`GET /connections`, `POST /uploads/initiate`, `POST /uploads/:id/complete`, `POST /uploads/:id/abort`, `GET /objects/:id`, `POST /objects/:id/download-grant`, `DELETE /objects/:id`) with `X-App-Id` + `X-App-Secret`; a gateway refusal maps to a typed error, nothing is invented |
+| Identity | `server/middleware/auth.ts` keeps the raw bearer in `event.context.authToken` (server-only) so Hub can check the caller's Storage grant; it never enters a response or a log |
+| Redaction | `hubCodeOf()` keeps only the gateway's stable `statusMessage` code, never the raw message, because Hub may echo the signed grant it refused |
+| Provider | `HubStorageProvider` writes opaque hashed keys under `tm-tools/pdf`, stores `objectId` as the durable handle, streams reads through a download grant, and never persists a grant |
+| Upload | `POST …/inputs/intent` returns the gateway's short-lived single-`PUT` grant to the signed-in browser, which uploads straight to the provider (the 4.5 MB body limit stops mattering); `complete` closes the Hub upload session and HEAD-verifies size + objectId. Multipart is refused explicitly — the gateway has no multipart route |
+| Download | `download`/`url` routes use an optional `createDownloadUrl`; Hub and local stream through the authenticated route, only R2 redirects |
+| Ephemeral | `POST /api/v1/documents/run` executes create → stage → run → return inline base64 (≤3 MB); `server/middleware/document-job-scope.ts` refuses every job-id route with `DOCUMENT_RUNTIME_NOT_SUPPORTED` (`use-single-request-run`) |
+| Health | `/api/v1/documents/health` reports `storage.driver` (`hub`/`r2`/`local`/`none`), `mode`, `ephemeral` and `requiresSession` instead of a two-state provider name |
+
+### Gates
+
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| 1 Types | `npx nuxt typecheck` | PASS | `TC_EXIT=0`, `grep -c "error TS"` = 0; `.nuxt/eslint.config.mjs` 25386 bytes at 11:37 |
+| 2 Lint | `npx eslint` on `server/modules/document`, `server/utils/hubStorage.ts`, `server/middleware/{auth,document-job-scope}.ts`, `server/api/v1/documents`, `server/config/index.ts`, `app/utils/zip.ts`, `OperationPageShell.vue`, the document specs and both smoke scripts | PASS | `LINT_EXIT=0`, run after that regeneration |
+| 3 Unit | `pnpm test:unit` | PASS | `38/38 specs passed`, exit 0; `document_hub_storage.spec.ts` runs 29 tests in 3 suites, `document_inline_zip.spec.ts` 3 |
+| 4 Hygiene | `pnpm check:hygiene` | PASS | no emitted `.js` twins |
+| 5 Build | `pnpm build` | PASS | Nitro output 62.5 MB (24.5 MB gzip), 2 m 31 s |
+| 6 Smoke (local) | `document-api-smoke.mts` on :4002 | PASS | `ALL CHECKS PASSED`, including `health lists exactly the executable operations — 6 health / 6 catalogue` |
+| 7 Smoke (ephemeral) | `DOCUMENT_RUNTIME=vercel NUXT_HUB_APP_SECRET= npx nuxt dev --port 4012` + `document-ephemeral-smoke.mts` | PASS | `ALL CHECKS PASSED` — see below |
+| 8 Live Hub read | `GET /api/v1/apps/tm-tools_nttweh/storage/connections` on local tm-hub | PASS (read only) | **200**, `success: true`, **0 connections**; provider then refused with `DOCUMENT_STORAGE_NOT_CONFIGURED` `{"reason":"no-hub-storage-connection"}` |
+| 9 Cloud policy | `DOCUMENT_RUNTIME=vercel` + Hub config on :4012 | PASS | health `driver=hub`, `mode=durable`, `requiresSession=true`, `database.configured=false`; `GET /operations` 200; `POST /jobs` 503 `DOCUMENT_DATABASE_NOT_CONFIGURED` |
+
+The ephemeral smoke proves, against a running server, that:
+
+- `health` reports `runtime=vercel`, `driver=none`, `mode=ephemeral`, and the
+  3 MB inline cap;
+- `GET /jobs` and `POST /jobs` answer 501 `DOCUMENT_RUNTIME_NOT_SUPPORTED`, not a
+  404 for a job that cannot exist;
+- `POST /run` with a 3-page PDF completes inside the request and returns three
+  `inlineBase64` artifacts whose bytes start with `%PDF`;
+- a 3.5 MB body is refused with 413 `DOCUMENT_TOTAL_SIZE_EXCEEDED` before any
+  work starts.
+
+Multi-artifact inline results also keep a "download all": the job archive route
+is refused in ephemeral mode, so `app/utils/zip.ts` builds a store-only ZIP in
+the browser from the bytes already in hand. `document_inline_zip.spec.ts` parses
+the result (central directory, CRC, verbatim bytes, name de-duplication) rather
+than trusting a third-party reader. The button was not opened in a browser — no
+signed-in pass exists in this environment.
+
+### Defects this phase found and fixed
+
+1. A Hub deployment could never receive the user token: the middleware stored the
+   decoded payload in `event.context.auth`, but the client read `auth.token`.
+   Fixed by exporting `authToken`; a spec pins the precedence.
+2. A Hub refusal could leak the signed grant: Hub echoes the request URL in its
+   message, which became `hubCode`. All URLs are now redacted, and the spec
+   asserts neither `X-Amz-Signature` nor the token appears in the error.
+3. `deleteObject` treated "already absent" as a failure. It now returns.
+4. `declareUpload` assumed R2 multipart above 25 MB, which would throw on the Hub
+   provider. The gateway signs a single `PUT` and has no multipart route, so a
+   multipart plan is refused explicitly, and the returned `uploadId` closes the
+   Hub upload session at `complete`.
+5. The upload-intent route was gated on R2-only config, which disabled Hub
+   intents. It now checks the selected driver.
+6. `createUploadTarget` advertised a proxy route that did not exist. The route
+   exists now as a generic body sink, but no cloud adapter points at it: R2
+   returns a presigned `PUT`, Hub returns its own grant to the browser.
+7. `download`/`url` cast every `s3-compatible` artifact to the R2 provider and
+   called `createDownloadUrl`, which the Hub provider does not implement. Both
+   routes now branch on the optional capability and stream for Hub.
+8. `requireJobRoutes()` was written but never called. It is now enforced by
+   `server/middleware/document-job-scope.ts`.
+9. `health` imported a non-existent `isR2Configured` and hid Hub/ephemeral
+   deployments; it now reports the real policy.
+10. `preferredStorageDriver()` preferred R2 over Hub while the documented policy
+    is Hub-first. The order now matches the policy; `DOCUMENT_STORAGE_DRIVER=r2`
+    is the explicit override.
+11. `/health` reported `document.ai-extract` as enabled while `/operations`
+    omitted it (no v4 executor). Health now applies the same `hasExecutor`
+    filter, and the local smoke asserts the two lists match.
+
+### Not proven
+
+- **No Hub Storage Connection exists** (live `GET …/storage/connections` → 200,
+  0 connections), so `uploads/initiate`, `uploads/:id/complete`,
+  `objects/:id/download-grant` and `DELETE /objects/:id` were never exercised
+  against the live gateway. The client parsed the real envelope and the provider
+  refused with `DOCUMENT_STORAGE_NOT_CONFIGURED`; nothing beyond that is claimed.
+- No Neon database, so the Hub driver's Postgres repository path is still
+  fake-backed; cloud-mode `POST /jobs` answers 503
+  `DOCUMENT_DATABASE_NOT_CONFIGURED`.
+- No Vercel deployment: the ephemeral run used `DOCUMENT_RUNTIME=vercel` on a
+  local dev server, not a Function with a 4.5 MB platform body limit.
+- No signed-in browser pass.
+
+## Phase 34 — Supabase probe, v4 menu applied, Settings page (2026-11-07)
+
+The v4 pages were reachable by URL but invisible in the Hub menu: every seeded
+leaf still pointed at the legacy `/pdf/*` surface. The menu now carries the nine
+Document Studio routes (home, split, merge, images, images-to-pdf, convert,
+export, activity, settings) and the legacy pages stay reachable by URL, with
+`pdf_library` and `pdf_extract` still visible until parity.
+
+1. The `admin` role's `allowed_routes` did not name the new leaves; the menu
+   prunes by that list, so a non-root session would have seen an empty group.
+   Both the routes and the role list are seeded now.
+2. `pnpm seed:tools` was applied after a read-only diff reported 9 missing
+   routes and 0 deletions. The seeder also re-syncs the builtin seed passwords;
+   that is its documented behaviour.
+3. `/document-studio/settings` is new. It reads `GET /settings` (delivery,
+   output folder, retention `7 / 90` days) and `GET /health` (runtime, driver,
+   persistence, database, limits) and never renders the cloud scratch path.
+   `/settings` now returns `defaultRetentionDays` and `maxRetentionDays` from one
+   constant (`MAX_RETENTION_DAYS`) instead of a literal in `jobs.post.ts`.
+4. The Home page split operation ids to build i18n keys, so `images-to-pdf`,
+   `convert-to-pdf` and `ai-extract` rendered missing keys. Titles resolve
+   through the catalogue now; `document_studio_ui.spec.ts` guards both the
+   catalogue lookup and the settings labels.
+
+### Evidence
+
+| Check | Result |
+| --- | --- |
+| `npx nuxt typecheck` | exit 0, 0 × `error TS` |
+| scoped `npx eslint` after regeneration | exit 0 |
+| `pnpm test:unit` | 38/38 |
+| `pnpm check:hygiene` | clean |
+| `pnpm build` | exit 0, 62.5 MB (24.5 MB gzip) |
+| `pnpm typecheck:seed` (tm-hub) | exit 0 |
+| `/document-studio`, `/settings`, `/activity`, `/tools/split` | 200 |
+| settings SFC through Vite | 200, compiled |
+| `GET /api/v1/documents/settings` anonymous | 401, expected |
+| Supabase bucket `assets` signed upload → HEAD → download → delete | PASS (account-level) |
+| Hub `GET …/storage/connections` | 200, still 0 connections |
+
+### Not proven
+
+- Signed-in upload/download in the browser; no legitimate session was created.
+- Hub → Supabase upload/download; the Storage Connection still does not exist,
+  and quick connect requires a user session with `connections.write`.
+- Vercel Preview, Neon, R2.
+
+## Phase 35 — Document Studio route sweep, caller identity, `/health` envelope (2026-11-07)
+
+Report: "toàn bộ document-studio đang lỗi load component" after a
+`supabase_storage` connection was added on tm-tools.
+
+1. **Component resolution** — the auto-import-prefix defect from an earlier pass
+   is gone. A CDP sweep of the running Electron window (`http://localhost:4002`,
+   remote debugging `:9222`) loaded all nine routes with **0 console errors** and
+   no `Failed to resolve component` / `dynamically imported module` marker:
+   `/document-studio`, `/activity`, `/settings`, and the six
+   `/tools/{split,merge,images,images-to-pdf,convert,export}` pages.
+2. **Real cause of the empty data** — every document request answered
+   `401 error.tokenMissing` even though the auth middleware had accepted the
+   token. `documentCaller` required `auth.userId`, but Hub-issued access tokens
+   carry `sub` (the dual-shape rule already documented in
+   `server/utils/chatAuth.ts`). It now resolves `auth?.userId || auth?.sub`.
+   Covered by `tests/unit/document_caller.spec.ts` and a new §5 in
+   `tests/smoke/document-api-smoke.mts` that mints a `sub` + `roles[]` token
+   and creates, runs and downloads a job over HTTP.
+3. **`/health` envelope mismatch** — `/api/v1/documents/health` is public and
+   returns its payload directly, while `useDocumentApi.get` always read
+   `res.data`. The Settings page therefore showed `Trình lưu trữ —`, a false
+   ephemeral badge and no limits. `get` now accepts either shape; guarded by
+   `tests/unit/document_api_client.spec.ts`. The page now shows
+   `Ổ đĩa cục bộ`, the durable badge and the runtime limits.
+4. **Live UI round trip** — a 3-page PDF picked through the split page produced
+   `KẾT QUẢ (3)`, each artifact downloaded as `%PDF` (854 B) and the ZIP as
+   `PK` (2 587 B), with the three files written under `.data/pdf/output`.
+5. **Storage driver** — the desktop runtime stays local-first by design:
+   `hubStorageAvailable()` is false for `local`/`electron`, so `/health`
+   reporting `driver: "local"` is expected and not evidence about the Supabase
+   connection. Selecting the Hub gateway still needs a cloud runtime plus
+   Postgres.
+
+### Evidence
+
+| Check | Result |
+| --- | --- |
+| `npx nuxt typecheck` | exit 0, 0 × `error TS` |
+| scoped `npx eslint` after regeneration | exit 0 |
+| `pnpm test:unit` | 40/40 |
+| `pnpm check:hygiene` | clean |
+| `pnpm build` | exit 0, 62.5 MB (24.5 MB gzip) |
+| `document-api-smoke.mts` | all checks passed, including a `sub`-only token |
+| nine Document Studio routes | rendered, 0 console errors |
+| UI split run | 3 artifacts + ZIP, `%PDF` / `PK` verified |
+
+### Not proven
+
+- Hub → Supabase upload/download through the gateway on a cloud runtime.
+- Vercel Preview, Neon, R2.
+
+## Phase 36 — two-root workspace, desktop actions on every page (2026-11-07)
+
+Report: the Activity page needed the full Electron action set, the library and
+extract folder trees had to allow creating folders under the output root, and
+every processing page needed preview, context menu, actions and "open folder".
+
+1. **Two roots only.** `PDF_FILE_AREAS` is `['input', 'output']` and the tool
+   folders (`split`, `images`, `merged`, `products`, `office`) live below
+   `output/`. The six stale specs that still named the old seven-area layout
+   (`pdf_area_guard`, `pdf_audit_output`, `pdf_contract`, `pdf_lazy_tree`,
+   `pdf_path_escape`, `pdf_selection`) were rewritten against the two roots
+   rather than relaxed; `pdf_workspace`, `pdf_workspace_repair` follow the same
+   model.
+2. **Restore path bug.** `restoreTarget` re-added a tool folder for items that
+   were already recorded relative to `output/`, so restoring a delete made from
+   `output/office/x.pdf` produced `output/office/office/x.pdf`. Items whose area
+   is already `output` are now placed as recorded; only items written under a
+   per-tool area get the folder re-added. Guarded by
+   `pdf_audit_output.spec.ts` ("records a restore at its original relative path").
+3. **Activity page (Electron).** Each job and artifact row has a right-click
+   menu and a "…" dropdown: preview in place (`?inline=1`, or the OS handler for
+   a local file), download, retry, cancel, copy path, show in folder, and delete
+   behind a confirmation modal.
+4. **Tool pages (Electron).** The result panel now lists the files a run wrote
+   as real file rows, so each one carries the shared preview/download/copy/
+   rename-free row menu, and the panel itself offers "open output folder" plus
+   "open folder" / "show in folder" for the absolute output folder.
+5. **Folder creation in the tree.** Every workspace page asks the server
+   (`workspaceReport`) whether its area accepts subfolders and passes
+   `can-create` to the tree; both roots report `writableFolders: true`, so the
+   output tree can create folders too. `PdfWorkspaceAreaReport` now carries the
+   absolute `root`, which is what makes the desktop reveal actions possible.
+
+### Evidence
+
+| Check | Result |
+| --- | --- |
+| `npx nuxt typecheck` | exit 0, 0 × `error TS`, `.nuxt/eslint.config.mjs` regenerated 18:23 |
+| scoped `npx eslint` after regeneration | exit 0 |
+| `pnpm test:unit` (via `node ./node_modules/tsx/dist/cli.mjs tests/unit/run-all.mts`) | 40/40 |
+| `pnpm check:hygiene` | clean |
+| `pnpm build` | exit 0; `.nuxt/eslint.config.mjs` unchanged (18:34:44), so the lint result above still stands |
+| two-root API smoke (mock JWT) | all checks: 2 roots, both `writableFolders`, output folder create → list → delete |
+| SFC compile sweep, 13 touched `.vue` files on :4002 | 200, no transform error |
+| six `/pdf/*` routes | 200 |
+
+### Not proven
+
+- Signed-in UI pass. `/pdf/*` redirects to `/login` without a session, and the
+  seed credentials in `tm-hub/scripts/seed` were not used to sign in.
+- Electron runtime behaviour of `openPath` / `showItemInFolder` (browser build
+  only was exercised).

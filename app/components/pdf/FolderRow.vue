@@ -52,7 +52,7 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
 </script>
 
 <template>
-  <PdfContextMenu :items="menuItems">
+  <AppContextMenu :items="menuItems">
     <div
       class="flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/10 transition-colors"
       :class="compact ? 'py-1.5' : 'py-3'"
@@ -99,5 +99,5 @@ const menuItems = computed<DropdownMenuItem[][]>(() => [
         </UDropdownMenu>
       </div>
     </div>
-  </PdfContextMenu>
+  </AppContextMenu>
 </template>

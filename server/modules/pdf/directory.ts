@@ -84,8 +84,8 @@ export function listAreaDirectory(
     }
   }
 
-  // If in root of inputs area, include legacy files from word directory that aren't already present
-  if (area === 'inputs' && !currentFolder && existsSync(pdfDirs.word)) {
+  // The input root also shows files still sitting in the legacy word folder.
+  if (area === 'input' && !currentFolder && existsSync(pdfDirs.word)) {
     const wordEntries = readdirSync(pdfDirs.word, { withFileTypes: true })
     for (const entry of wordEntries) {
       if (entry.isFile() && acceptFile(entry.name) && !files.some(f => f.name === entry.name)) {
@@ -301,33 +301,24 @@ export function deleteAreaItem(area: PdfFileArea, rawRelativePath: string) {
   const relativePath = safeRelativePath(rawRelativePath)
   if (!relativePath) throw new Error('PDF_INVALID_PATH')
 
-  let targetAbs = join(areaRoot, relativePath)
-  // A legacy input physically lives in the read-only `word` area. Containment and
-  // the permission guard both have to follow the file, or deleting it from the
-  // input list would bypass `word` being read-only.
-  let owner = area
+  const targetAbs = join(areaRoot, relativePath)
+  // A legacy input physically lives in the read-only `word` folder. It stays
+  // visible under `input`, but deleting it from there must not bypass that.
   if (!existsSync(targetAbs)) {
-    if (area === 'inputs') {
+    if (area === 'input') {
       const fileName = relativePath.split('/').pop() || relativePath
-      const legacyAbs = join(AREA_DIRS.word, fileName)
-      if (existsSync(legacyAbs)) {
-        targetAbs = legacyAbs
-        owner = 'word'
-      } else {
-        throw new Error('PDF_FILE_NOT_FOUND')
-      }
-    } else {
-      throw new Error('PDF_FILE_NOT_FOUND')
+      if (existsSync(join(pdfDirs.word, fileName))) throw new Error('PDF_FILE_IMMUTABLE')
     }
+    throw new Error('PDF_FILE_NOT_FOUND')
   }
 
-  if (statSync(targetAbs).isDirectory()) assertFolderWritable(owner)
-  else assertFileWritable(owner)
+  if (statSync(targetAbs).isDirectory()) assertFolderWritable(area)
+  else assertFileWritable(area)
 
-  assertInsideRoot(AREA_DIRS[owner], targetAbs)
+  assertInsideRoot(areaRoot, targetAbs)
 
-  const item = moveToTrash(owner, targetAbs, relativePath)
-  if (owner === 'sources') removeDerivedOutputs(relativePath)
-  recordAudit({ action: 'delete', area: owner, target: relativePath, bytes: item.size })
+  const item = moveToTrash(area, targetAbs, relativePath)
+  if (area === 'input') removeDerivedOutputs(relativePath)
+  recordAudit({ action: 'delete', area, target: relativePath, bytes: item.size })
   return item
 }

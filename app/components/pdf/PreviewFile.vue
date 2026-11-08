@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatPdfBytes, openPdfPreview, pdfFileUrl, pdfPreviewKind, type PdfFileArea } from '~/utils/pdfStudio'
+import { formatPdfBytes, openPdfPreview, pdfFileUrl, pdfIsConvertible, pdfPreviewKind, type PdfFileArea } from '~/utils/pdfStudio'
 import { sanitizeHtml } from '~/utils/sanitizeHtml'
 
 interface PdfInspectResult {
@@ -38,8 +38,8 @@ const zoom = ref(1)
 const rotation = ref(0)
 
 const canZoom = computed(() => kind.value === 'image')
-/** Only inputs (and the legacy word area) reach the conversion route. */
-const canConvert = computed(() => props.area === 'inputs' || props.area === 'word')
+/** Conversion only applies to non-PDF inputs under the `input` root. */
+const canConvert = computed(() => props.area === 'input' && pdfIsConvertible(props.name))
 const imageStyle = computed(() => ({
   transform: `rotate(${rotation.value}deg) scale(${zoom.value})`,
   transition: 'transform 150ms ease'

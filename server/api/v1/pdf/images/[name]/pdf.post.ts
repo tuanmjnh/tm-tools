@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { imagesToPdf } from '#server/modules/pdf/images-to-pdf'
-import { areaDir, outputDir } from '#server/modules/pdf/workspace'
+import { outputDir } from '#server/modules/pdf/workspace'
 import { safeFileName } from '#server/modules/pdf/security'
 import { runPdf, pathParam, overwriteFlag } from '#server/utils/pdfApi'
 
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const result = await imagesToPdf(
-      join(areaDir('images'), folder),
+      join(outputDir('rasterize'), folder),
       outputDir('imagesToPdf'),
       outputName
     )

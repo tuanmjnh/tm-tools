@@ -14,14 +14,8 @@ export { PDF_FILE_AREAS } from '#shared/types/pdf'
 export type { PdfFileArea } from '#shared/types/pdf'
 
 export const AREA_DIRS: Record<PdfFileArea, string> = {
-  sources: pdfDirs.sources,
-  inputs: pdfDirs.inputs,
-  word: pdfDirs.word,
-  split: pdfDirs.split,
-  images: pdfDirs.images,
-  merged: pdfDirs.merged,
-  products: pdfDirs.products,
-  office: pdfDirs.office
+  input: pdfDirs.input,
+  output: pdfDirs.output
 }
 
 export const MIME_BY_EXTENSION: Record<string, string> = {
@@ -56,8 +50,8 @@ export function resolveAreaFile(area: PdfFileArea, rawName: string): { path: str
   let filePath = join(AREA_DIRS[area], relative)
   let root = AREA_DIRS[area]!
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
-    // If area is inputs and file not found in inputs, check legacy word folder
-    if (area === 'inputs') {
+    // Files uploaded before the two-root layout still live in the legacy word folder.
+    if (area === 'input') {
       const fileNameOnly = relative.split('/').pop() || relative
       const legacyPath = join(pdfDirs.word, fileNameOnly)
       if (existsSync(legacyPath) && statSync(legacyPath).isFile()) {

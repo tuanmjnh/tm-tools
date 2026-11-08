@@ -1,12 +1,49 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, sep } from 'node:path'
 import type { PdfFileArea, PdfTrashItem } from '#shared/types/pdf'
+import { PDF_OUTPUT_FOLDERS } from '#shared/types/pdf'
 import { recordAudit } from './audit'
 import { ensureDir, pdfDirs, writeFileAtomic } from './paths'
 import { safeFileName } from './security'
 import { assertFileWritable } from './workspace'
 
 const METADATA_FILE = 'trash_metadata.json'
+
+/** Trash written before the two-root layout still names one of the old areas. */
+const LEGACY_AREAS: Record<string, PdfFileArea> = {
+  sources: 'input',
+  inputs: 'input',
+  word: 'input',
+  split: 'output',
+  images: 'output',
+  merged: 'output',
+  products: 'output',
+  office: 'output'
+}
+
+function normalizeArea(area: string): PdfFileArea {
+  return LEGACY_AREAS[area] ?? (area === 'output' ? 'output' : 'input')
+}
+
+/**
+ * Where a trashed item goes back to now that files live under two roots.
+ *
+ * Items deleted under the two-root layout already record `output/…` relative to
+ * the root, so they are placed as-is. Items written under a per-tool area
+ * (`split`, `merged`, …) were relative to that folder and need it re-added.
+ */
+function restoreTarget(item: PdfTrashItem): string {
+  const area = normalizeArea(item.area)
+  if (area === 'input' || item.area === 'output') {
+    return join(area === 'input' ? pdfDirs.input : pdfDirs.output, item.originalRelativePath)
+  }
+  for (const folder of PDF_OUTPUT_FOLDERS) {
+    if (item.originalPath.includes(`${sep}${folder}${sep}`)) {
+      return join(pdfDirs.output, folder, item.originalRelativePath)
+    }
+  }
+  return join(pdfDirs.output, item.originalRelativePath)
+}
 
 function getTrashMetadataPath(): string {
   return join(pdfDirs.trash, METADATA_FILE)
@@ -94,7 +131,7 @@ export function listTrashItems(): PdfTrashItem[] {
   for (const [id, item] of Object.entries(meta)) {
     const itemPath = join(pdfDirs.trash, id)
     if (existsSync(itemPath)) {
-      validItems.push(item)
+      validItems.push({ ...item, area: normalizeArea(item.area) })
     } else {
       hasStale = true
     }
@@ -119,7 +156,8 @@ export function restoreTrashItem(id: string): PdfTrashItem {
     throw new Error('PDF_TRASH_ITEM_NOT_FOUND')
   }
 
-  assertFileWritable(item.area as PdfFileArea)
+  const area = normalizeArea(item.area)
+  assertFileWritable(area)
 
   const trashPath = join(pdfDirs.trash, cleanId)
   if (!existsSync(trashPath)) {
@@ -127,25 +165,26 @@ export function restoreTrashItem(id: string): PdfTrashItem {
     throw new Error('PDF_TRASH_ITEM_NOT_FOUND')
   }
 
-  // Ensure parent directory exists for destination
-  const destDir = dirname(item.originalPath)
+  // Ensure the parent folder exists for the restored location.
+  const finalDestination = restoreTarget(item)
+  const destDir = dirname(finalDestination)
   if (!existsSync(destDir)) {
     mkdirSync(destDir, { recursive: true })
   }
 
-  let finalDestination = item.originalPath
-  if (existsSync(finalDestination)) {
+  let destination = finalDestination
+  if (existsSync(destination)) {
     // If a file with same name already exists, add (restored-timestamp)
     const ext = item.isDirectory ? '' : `.${item.originalName.split('.').pop()}`
     const stem = item.isDirectory ? item.originalName : item.originalName.replace(/\.[^/.]+$/, '')
-    finalDestination = join(destDir, `${stem}_restored_${Date.now()}${ext}`)
+    destination = join(destDir, `${stem}_restored_${Date.now()}${ext}`)
   }
 
-  renameSync(trashPath, finalDestination)
+  renameSync(trashPath, destination)
   writeTrashMetadata(withoutKey(meta, cleanId))
-  recordAudit({ action: 'restore', area: item.area, target: item.originalRelativePath })
+  recordAudit({ action: 'restore', area, target: item.originalRelativePath })
 
-  return item
+  return { ...item, area, originalPath: destination }
 }
 
 export function deleteTrashItemPermanently(id: string): void {
