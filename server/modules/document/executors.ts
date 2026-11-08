@@ -145,11 +145,26 @@ class RasterizeExecutor implements DocumentOperationExecutor {
     return inputs.length === 1 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
-    const result = await rasterizePdf(input.stagedPath, context.workspace.outputDir, config.pdf.imageScale)
+    const rasterConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    const createSubfolder = rasterConfig.createSubfolder !== false
+    const stem = safeStem(input.safeName)
+    const targetDir = createSubfolder ? join(context.workspace.outputDir, stem) : context.workspace.outputDir
+
+    const result = await rasterizePdf(input.stagedPath, targetDir, config.pdf.imageScale)
     await context.onProgress({ totalUnits: result.pages, completedUnits: result.pages })
-    return { files: listFiles(context.workspace.outputDir, name => name.endsWith('.png')) }
+
+    const files = listFiles(targetDir, name => name.endsWith('.png'))
+    if (createSubfolder) {
+      return {
+        files: files.map(file => ({
+          ...file,
+          fileName: `${stem}/${file.fileName}`
+        }))
+      }
+    }
+    return { files }
   }
 }
 

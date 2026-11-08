@@ -48,6 +48,7 @@ const { t } = useI18n()
 const api = useDocumentApi()
 const notify = useNotify()
 const inputRef = ref<HTMLInputElement | null>(null)
+const folderInputRef = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 const desktop = isDesktopRuntime()
 
@@ -66,6 +67,10 @@ function onPick(event: Event) {
 
 function browse() {
   inputRef.value?.click()
+}
+
+function browseFolder() {
+  folderInputRef.value?.click()
 }
 
 const fileIcon = (name: string): string => {
@@ -260,10 +265,12 @@ const progress = computed(() => {
     <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
         <div
-          class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
-          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'" @dragover.prevent="dragging = true"
-          @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
+          class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
+          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
+          @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
           <input ref="inputRef" type="file" class="hidden" :accept="accept || undefined" :multiple="multiple"
+            @change="onPick">
+          <input ref="folderInputRef" type="file" class="hidden" webkitdirectory directory
             @change="onPick">
           <UIcon name="i-lucide-cloud-upload" class="size-7 text-dimmed" />
           <p class="text-sm font-medium">
@@ -272,11 +279,15 @@ const progress = computed(() => {
           <p class="text-xs text-muted">
             {{ accept ? t('document.input.accepted', { types: accept }) : t('document.input.anyFile') }}
           </p>
-          <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-folder-open"
-            :label="t('document.input.browse')" @click="browse" />
+          <div class="flex items-center gap-2">
+            <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-file-plus"
+              :label="t('document.input.browse')" @click="browse" />
+            <UButton v-if="multiple" color="neutral" variant="soft" size="sm" icon="i-lucide-folder-open"
+              :label="t('document.input.browseFolder')" @click="browseFolder" />
+          </div>
         </div>
 
-        <div v-if="files.length" class="panel-flat rounded-lg shrink-0 overflow-hidden">
+        <div v-if="files.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
           <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.input.selected', { count: files.length }) }}
@@ -285,7 +296,8 @@ const progress = computed(() => {
               @click="emit('reset')" />
           </div>
           <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
-            <li v-for="(file, index) in files" :key="file.id" class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
+            <li v-for="(file, index) in files" :key="file.id"
+              class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
               <UIcon :name="fileIcon(file.name)" class="size-4 shrink-0 text-dimmed" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">
@@ -314,7 +326,7 @@ const progress = computed(() => {
           </ul>
         </div>
 
-        <div v-if="artifacts.length" class="panel-flat rounded-lg shrink-0 overflow-hidden">
+        <div v-if="artifacts.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
           <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.result.title', { count: artifacts.length }) }}
@@ -366,7 +378,7 @@ const progress = computed(() => {
       </div>
 
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
-        <UCard :ui="{ root: 'panel-flat', body: 'gap-3 p-4 sm:p-4' }">
+        <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
           <template #header>
             <div class="flex items-center gap-2">
               <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
@@ -376,7 +388,7 @@ const progress = computed(() => {
             </div>
           </template>
 
-          <dl class="space-y-2 text-sm">
+          <dl class="space-y-2 text-sm mb-2">
             <div class="flex items-start justify-between gap-3">
               <dt class="text-muted">
                 {{ t('document.summary.operation') }}

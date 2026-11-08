@@ -3072,6 +3072,7 @@
       "accepted": "Hỗ trợ: {types}",
       "anyFile": "Mọi định dạng được hỗ trợ",
       "browse": "Chọn file",
+      "browseFolder": "Chọn thư mục",
       "selected": "Đã chọn ({count})",
       "clear": "Xoá hết",
       "remove": "Bỏ file",
@@ -3160,6 +3161,11 @@
       "outputNameLabel": "Tên file sau khi ghép",
       "outputNameHint": "Để trống để tự động đặt tên theo thư mục hoặc file đầu tiên được chọn.",
       "configHint": "Ghép nối tất cả các trang PDF đã chọn theo đúng thứ tự hiển thị thành một tài liệu duy nhất."
+    },
+    "rasterize": {
+      "configHint": "Chuyển đổi từng trang của file PDF thành hình ảnh PNG riêng biệt với độ phân giải cao.",
+      "subfolderLabel": "Tạo thư mục theo tên tài liệu",
+      "subfolderDesc": "Gom các hình ảnh đã xuất vào một thư mục riêng (vd: output/document/page_0001.png) để gọn gàng, dễ quản lý."
     },
     "errors": {
       "DOCUMENT_INPUT_REQUIRED": "Hãy chọn ít nhất một file.",

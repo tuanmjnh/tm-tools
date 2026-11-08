@@ -1,5 +1,10 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.rasterize')
+const rasterConfig = ref({ createSubfolder: true })
+
+function runRasterize() {
+  void page.run(rasterConfig.value)
+}
 </script>
 
 <template>
@@ -11,8 +16,12 @@ const page = useDocumentOperationPage('pdf.rasterize')
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
         :accept="page.selection.accept.value" @add="page.addFiles" @remove="page.selection.remove"
-        @move="page.selection.move" @reset="page.selection.clear" @run="page.run()"
-        @deleted="page.session.removeArtifact" />
+        @move="page.selection.move" @reset="page.selection.clear" @run="runRasterize"
+        @deleted="page.session.removeArtifact">
+        <template #config>
+          <DocumentStudioOperationsConfigsRasterizeConfig v-model="rasterConfig" />
+        </template>
+      </DocumentStudioOperationPageShell>
     </div>
   </BasePage>
 </template>

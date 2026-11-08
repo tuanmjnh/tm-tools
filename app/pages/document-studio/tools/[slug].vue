@@ -11,6 +11,7 @@ const exportFormats = ref<PdfSourceExportFormat[]>(['png'])
 const extractConfig = ref<Record<string, unknown>>({})
 const splitConfig = ref({ createSubfolder: true })
 const mergeConfig = ref({ outputName: '' })
+const rasterConfig = ref({ createSubfolder: true })
 
 // Watch for slug changes if navigating between tools
 watch(operationId, (newId) => {
@@ -35,6 +36,8 @@ function handleRun() {
     void page.run(splitConfig.value)
   } else if (operationId.value === 'pdf.merge') {
     void page.run(mergeConfig.value)
+  } else if (operationId.value === 'pdf.rasterize') {
+    void page.run(rasterConfig.value)
   } else {
     void page.run()
   }
@@ -76,6 +79,10 @@ function handleRun() {
           <LazyDocumentStudioOperationsConfigsMergeConfig
             v-else-if="operationId === 'pdf.merge'"
             v-model="mergeConfig"
+          />
+          <LazyDocumentStudioOperationsConfigsRasterizeConfig
+            v-else-if="operationId === 'pdf.rasterize'"
+            v-model="rasterConfig"
           />
           <LazyDocumentStudioOperationsConfigsConvertConfig
             v-else-if="operationId === 'document.convert-to-pdf'"

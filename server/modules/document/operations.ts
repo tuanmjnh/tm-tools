@@ -60,7 +60,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     icon: 'i-lucide-images',
     enabled: true,
     input: { mode: 'single-file', acceptedExtensions: PDF, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: false },
-    configuration: { componentKey: 'none', hasAdvancedOptions: false },
+    configuration: { componentKey: 'rasterize', hasAdvancedOptions: false },
     output: { artifactMode: 'multiple', defaultFileNamePattern: 'page_{index}.png', mimeTypes: ['image/png'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-raster' },
     legacyTool: 'rasterize'
