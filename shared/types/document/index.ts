@@ -6,6 +6,8 @@
  * that would let the renderer address storage directly.
  */
 
+export * from './formats'
+
 export const DOCUMENT_RUNTIMES = ['local', 'electron', 'vercel', 'worker'] as const
 
 export type DocumentRuntimeKind = typeof DOCUMENT_RUNTIMES[number]

@@ -153,6 +153,8 @@ export function useDocumentApi() {
       runtime: string
       capabilities: DocumentRuntimeCapabilities
       operations: (DocumentOperationDefinition & { available: boolean })[]
+      formats?: import('#shared/types/document/formats').DocumentFormatDefinition[]
+      conversions?: import('#shared/types/document/formats').ConversionEdge[]
     }>('/operations'),
     createJob: (operationId: string, config: Record<string, unknown>, retentionDays?: number, idempotencyKey?: string) =>
       post<DocumentJobView>('/jobs', { operationId, config, retentionDays, idempotencyKey }),
