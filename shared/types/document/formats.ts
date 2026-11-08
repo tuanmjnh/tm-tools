@@ -162,3 +162,4 @@ export function formatByExtension(ext: string): DocumentFormatDefinition | null 
 export function allowedTargetsFor(source: DocumentFormatId): ConversionEdge[] {
   return CONVERSION_MATRIX.filter(edge => edge.source === source)
 }
+

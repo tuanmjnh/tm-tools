@@ -7,3 +7,4 @@ const { t } = useI18n()
     {{ t('document.split.configHint') }}
   </p>
 </template>
+

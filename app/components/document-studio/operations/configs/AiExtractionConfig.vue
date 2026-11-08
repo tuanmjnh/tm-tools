@@ -163,3 +163,4 @@ function toggleFormat(fmt: PdfOfficeFormat, checked: boolean) {
     </div>
   </div>
 </template>
+

@@ -169,3 +169,4 @@ export function renameLibraryItem(root: DocumentLibraryRoot, itemPath: string, n
     modifiedAt: stats.mtime.toISOString()
   }
 }
+

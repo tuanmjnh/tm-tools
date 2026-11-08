@@ -290,70 +290,73 @@ const moreActions = computed(() => [
           </div>
         </BaseBentoCard>
 
-        <!-- PDF Studio -->
-        <BaseBentoCard :span="8" :span-sm="6" :title="t('pdf.title')" icon="i-lucide-file-text">
+        <!-- Document Studio -->
+        <BaseBentoCard :span="8" :span-sm="6" :title="t('document.home.title')" icon="i-lucide-file-text">
           <template #action>
-            <UButton to="/pdf" size="xs" color="neutral" variant="ghost" trailing-icon="i-lucide-arrow-right">
+            <UButton to="/document-studio" size="xs" color="neutral" variant="ghost" trailing-icon="i-lucide-arrow-right">
               {{ t('common.open') }}
             </UButton>
           </template>
 
-          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('pdf.description') }}</p>
+          <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('document.home.description') }}</p>
 
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/library')">
+            <button type="button" class="tm-tile text-start" @click="router.push('/document-studio/library')">
               <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
-                <UIcon name="i-lucide-folder-open" class="size-3.5 text-primary" />
-                {{ t('pdf.workspaces.library.title') }}
+                <UIcon name="i-lucide-folder-tree" class="size-3.5 text-primary" />
+                {{ t('nav.document_library') }}
               </span>
               <span class="text-[10px] leading-snug text-muted">
-                {{ library?.sources?.length ?? 0 }} {{ t('pdf.kpi.sources') }}
+                {{ t('document.library.description') }}
               </span>
             </button>
-            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/import')">
+            <button type="button" class="tm-tile text-start" @click="router.push('/document-studio/tools/convert')">
               <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
                 <UIcon name="i-lucide-file-input" class="size-3.5 text-amber-500" />
-                {{ t('pdf.workspaces.import.title') }}
+                {{ t('nav.document_convert') }}
               </span>
               <span class="text-[10px] leading-snug text-muted">
-                {{ library?.inputs?.length ?? 0 }} file (Word, Excel, ảnh)
+                Word, Excel, Images -> PDF
               </span>
             </button>
-            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/split')">
+            <button type="button" class="tm-tile text-start" @click="router.push('/document-studio/tools/split')">
               <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
                 <UIcon name="i-lucide-scissors" class="size-3.5 text-blue-500" />
-                {{ t('pdf.workspaces.split.title') }}
+                {{ t('nav.document_split') }}
               </span>
               <span class="text-[10px] leading-snug text-muted">
-                {{ library?.split?.length ?? 0 }} {{ t('pdf.kpi.split') }}
+                {{ t('document.operations.split.description') }}
               </span>
             </button>
-            <button type="button" class="tm-tile text-start" @click="router.push('/pdf/export')">
+            <button type="button" class="tm-tile text-start" @click="router.push('/document-studio/tools/extract')">
               <span class="flex items-center gap-1.5 text-[11px] font-medium text-highlighted">
-                <UIcon name="i-lucide-share-2" class="size-3.5 text-emerald-500" />
-                {{ t('pdf.workspaces.export.title') }}
+                <UIcon name="i-lucide-scan-text" class="size-3.5 text-emerald-500" />
+                {{ t('nav.document_extract') }}
               </span>
               <span class="text-[10px] leading-snug text-muted">
-                {{ (library?.products?.length ?? 0) + (library?.office?.length ?? 0) }} {{ t('pdf.kpi.products') }}
+                AI Vision & Structure Table
               </span>
             </button>
           </div>
 
           <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-default/60 pt-3">
-            <UButton to="/pdf/import" size="xs" color="neutral" variant="ghost" icon="i-lucide-upload">
-              {{ t('pdf.workspaces.import.title') }}
+            <UButton to="/document-studio/library" size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-tree">
+              {{ t('nav.document_library') }}
             </UButton>
-            <UButton to="/pdf/library" size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-open">
-              {{ t('pdf.workspaces.library.title') }}
+            <UButton to="/document-studio/tools/split" size="xs" color="neutral" variant="ghost" icon="i-lucide-scissors">
+              {{ t('nav.document_split') }}
             </UButton>
-            <UButton to="/pdf/split" size="xs" color="neutral" variant="ghost" icon="i-lucide-scissors">
-              {{ t('pdf.workspaces.split.title') }}
+            <UButton to="/document-studio/tools/merge" size="xs" color="neutral" variant="ghost" icon="i-lucide-layers">
+              {{ t('nav.document_merge') }}
             </UButton>
-            <UButton to="/pdf/export" size="xs" color="neutral" variant="ghost" icon="i-lucide-share-2">
-              {{ t('pdf.workspaces.export.title') }}
+            <UButton to="/document-studio/tools/convert" size="xs" color="neutral" variant="ghost" icon="i-lucide-file-input">
+              {{ t('nav.document_convert') }}
             </UButton>
-            <UButton to="/pdf/extract" size="xs" color="neutral" variant="ghost" icon="i-lucide-scan-text">
-              {{ t('pdf.workspaces.extract.title') }}
+            <UButton to="/document-studio/tools/extract" size="xs" color="neutral" variant="ghost" icon="i-lucide-scan-text">
+              {{ t('nav.document_extract') }}
+            </UButton>
+            <UButton to="/document-studio/activity" size="xs" color="neutral" variant="ghost" icon="i-lucide-history">
+              {{ t('nav.document_activity') }}
             </UButton>
           </div>
         </BaseBentoCard>

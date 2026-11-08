@@ -22,3 +22,4 @@ export default defineEventHandler(async (event) => {
 
   throw new DocumentError('DOCUMENT_OPERATION_NOT_SUPPORTED', { method })
 })
+

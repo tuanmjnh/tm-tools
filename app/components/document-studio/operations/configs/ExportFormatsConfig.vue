@@ -58,3 +58,4 @@ function toggle(format: PdfSourceExportFormat, checked: boolean) {
     </p>
   </div>
 </template>
+
