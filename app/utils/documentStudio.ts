@@ -68,8 +68,7 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     titleKey: 'document.operations.extract.title',
     descriptionKey: 'document.operations.extract.description',
     icon: 'i-lucide-scan-text',
-    // AI extraction is not a v4 job; it keeps its own page and API.
-    route: '/pdf/extract',
+    route: '/document-studio/tools/extract',
     category: 'extract'
   }
 ]
@@ -80,8 +79,36 @@ export function documentStudioOperation(id: string): DocumentStudioOperation | n
   return DOCUMENT_STUDIO_OPERATIONS.find(entry => entry.id === id) ?? null
 }
 
+const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
+  'split': 'pdf.split',
+  'merge': 'pdf.merge',
+  'images': 'pdf.rasterize',
+  'images-to-pdf': 'pdf.images-to-pdf',
+  'convert': 'document.convert-to-pdf',
+  'export': 'pdf.export',
+  'extract': 'document.ai-extract'
+}
+
+export function operationIdFromSlug(slug: string): DocumentOperationId {
+  return SLUG_TO_OPERATION_ID[slug] || (slug as DocumentOperationId)
+}
+
 export function extensionOf(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
+}
+
+export function documentFileIcon(name: string, isFolder = false): string {
+  if (isFolder) return 'i-lucide-folder'
+  const ext = extensionOf(name)
+  if (ext === 'pdf') return 'i-lucide-file-text'
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) return 'i-lucide-image'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return 'i-lucide-table-2'
+  if (['docx', 'doc'].includes(ext)) return 'i-lucide-file-type-2'
+  if (ext === 'json') return 'i-lucide-braces'
+  if (ext === 'xml') return 'i-lucide-code-xml'
+  if (['txt', 'md'].includes(ext)) return 'i-lucide-file-text'
+  if (ext === 'zip') return 'i-lucide-archive'
+  return 'i-lucide-file'
 }
 
 export function formatBytes(bytes: number): string {

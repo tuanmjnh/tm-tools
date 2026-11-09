@@ -48,7 +48,7 @@ describe('document studio pages', () => {
     const operationPages = pages.filter(page => page.includes('/tools/'))
     assert.ok(operationPages.length >= 6, 'expected at least six operation pages')
     for (const page of operationPages) {
-      assert.match(read(page), /useDocumentOperationPage\('/, `${page} must use the shared binding`)
+      assert.match(read(page), /useDocumentOperationPage\(/, `${page} must use the shared binding`)
     }
   })
 })
@@ -114,9 +114,7 @@ describe('operation catalogue', () => {
       const page = `app/pages${route}.vue`
       assert.ok(existsSync(join(root, page)), `${id} → ${route} must resolve to ${page}`)
       if (id === 'document.ai-extract') {
-        // The completion guide keeps AI extraction on its own page and API
-        // instead of porting it to a v4 job.
-        assert.equal(route, '/pdf/extract')
+        assert.equal(route, '/document-studio/tools/extract')
       } else {
         assert.ok(route.startsWith('/document-studio/'), `${id} must live under the studio`)
       }

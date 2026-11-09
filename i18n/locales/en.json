@@ -264,12 +264,14 @@
     "pdf_import": "PDF Import",
     "document_studio": "Document Studio",
     "document_home": "Overview",
+    "document_library": "Document Library",
     "document_split": "Split PDF",
     "document_merge": "Merge PDF",
     "document_rasterize": "PDF to Images",
     "document_images_to_pdf": "Images to PDF",
     "document_convert": "Convert to PDF",
     "document_export": "Export",
+    "document_extract": "AI Extraction",
     "document_activity": "Activity",
     "document_settings": "Settings"
   },
@@ -1750,6 +1752,8 @@
     "convert": {},
     "extract": {
       "model": "Extraction model",
+      "presets": "Extraction presets",
+      "outputFormats": "Export formats",
       "preset": "Extraction preset",
       "presetDefault": "Default rules",
       "presetDelete": "Delete preset",
@@ -3020,6 +3024,23 @@
     "deleteConfirmDesc": "Soft-delete route '{id}'? It will disappear from the menu."
   },
   "document": {
+    "library": {
+      "title": "Document Library",
+      "description": "Unified document library across input sources and output artifacts.",
+      "inputTab": "Input Documents",
+      "outputTab": "Output Artifacts",
+      "searchPlaceholder": "Search files or folders...",
+      "createFolder": "New Folder",
+      "folderName": "Folder Name",
+      "renameTitle": "Rename Item",
+      "newName": "New Name",
+      "deleteTitle": "Delete Item",
+      "deleteFolderDesc": "Are you sure you want to delete folder '{name}' and all its contents?",
+      "deleteFileDesc": "Are you sure you want to delete file '{name}'?",
+      "emptyFolder": "This folder is empty.",
+      "emptySearch": "No documents match your search.",
+      "itemCount": "{count} items"
+    },
     "home": {
       "title": "Document Studio",
       "description": "Pick a document, run one job, save the result.",
@@ -3053,6 +3074,7 @@
       "accepted": "Accepted: {types}",
       "anyFile": "Any supported file",
       "browse": "Browse files",
+      "browseFolder": "Select folder",
       "selected": "Selected ({count})",
       "clear": "Clear",
       "remove": "Remove file",
@@ -3068,13 +3090,18 @@
     "output": {
       "defaultFolder": "Default output folder",
       "downloadHint": "Download when finished",
-      "ephemeralHint": "Results are handed back in this response; they are not stored afterwards."
+      "ephemeralHint": "Results are handed back in this response; they are not stored afterwards.",
+      "changeFolder": "Change folder",
+      "changeFolderTitle": "Change output folder",
+      "changeFolderHint": "Enter directory path on local machine to store exported outputs:",
+      "folderPlaceholder": "e.g. C:\\output or /path/to/output"
     },
     "result": {
       "title": "Results ({count})",
       "download": "Download",
       "downloadAll": "Download all (ZIP)",
       "preview": "Preview",
+      "openWithOs": "Open with default app",
       "openFolder": "Show in folder",
       "copyPath": "Copy path",
       "more": "More actions",
@@ -3132,7 +3159,19 @@
       }
     },
     "split": {
-      "configHint": "Every page becomes its own PDF. Results are saved to the output folder."
+      "configHint": "Every page becomes its own PDF. Results are saved to the output folder.",
+      "subfolderLabel": "Create subfolder by document name",
+      "subfolderDesc": "Group split pages into a dedicated folder (e.g. output/document/page_0001.pdf) for easy management and one-click re-merging."
+    },
+    "merge": {
+      "outputNameLabel": "Merged file name",
+      "outputNameHint": "Leave blank to name automatically based on the selected folder or first file.",
+      "configHint": "Combines all selected PDF pages in the order shown into a single PDF document."
+    },
+    "rasterize": {
+      "configHint": "Renders every page of the PDF into a separate high-resolution PNG image.",
+      "subfolderLabel": "Create subfolder by document name",
+      "subfolderDesc": "Group rendered images into a dedicated folder (e.g. output/document/page_0001.png) for clean organization."
     },
     "errors": {
       "DOCUMENT_INPUT_REQUIRED": "Choose at least one file first.",
@@ -3174,7 +3213,10 @@
       "title": "Activity",
       "description": "Every job this account has run, newest first.",
       "refresh": "Refresh",
+      "searchPlaceholder": "Search by job name, files or job ID...",
       "empty": "No jobs match this filter yet.",
+      "emptySearch": "No jobs match your search.",
+      "artifactsCount": "{count} result files",
       "filters": {
         "all": "All",
         "running": "Running",
@@ -3204,6 +3246,7 @@
         "folder": "Save to the output folder",
         "download": "Download when finished",
         "outputPath": "Default output folder",
+        "outputPathUpdated": "Default output folder updated",
         "saveDialog": "Native save dialog",
         "cloudNotice": "Cloud results are kept for {days} days, then removed automatically."
       },

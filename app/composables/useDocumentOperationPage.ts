@@ -54,10 +54,14 @@ export function useDocumentOperationPage(operationId: string) {
       session.error.value = { code: 'DOCUMENT_INPUT_REQUIRED' }
       return false
     }
+    const executionConfig: Record<string, unknown> = { ...config }
+    if (runtime.isLocal.value && runtime.outputPath.value) {
+      executionConfig.outputDir = runtime.outputPath.value
+    }
     const ok = await session.run({
       operationId,
       files,
-      config,
+      config: executionConfig,
       // Cloud storage is only reachable through a signed plan; the local
       // runtime posts the bytes to its own staging route. An ephemeral cloud
       // has neither, so the whole job goes through one request.
@@ -82,6 +86,7 @@ export function useDocumentOperationPage(operationId: string) {
     selection,
     session,
     runtime,
+    loadDefinition,
     addFiles,
     run,
     errorText: computed(() => session.error.value ? t(`document.errors.${session.error.value.code}`) : '')

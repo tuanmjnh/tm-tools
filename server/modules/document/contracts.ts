@@ -260,6 +260,6 @@ export interface OutputDeliveryAdapter {
    * download route (cloud) or a browser save flow.
    */
   readonly mode: 'folder' | 'download'
-  publish(artifact: DocumentArtifactRecord, localPath: string): Promise<PublishedObject>
+  publish(artifact: DocumentArtifactRecord, localPath: string, customOutputDir?: string): Promise<PublishedObject>
   remove(artifact: DocumentArtifactRecord): Promise<void>
 }

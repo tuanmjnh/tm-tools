@@ -1,4 +1,4 @@
-import { copyFileSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { copyFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { DocumentOperationId } from '#shared/types/document'
 import type {
@@ -11,6 +11,9 @@ import type {
 } from './contracts'
 import { DocumentError } from './operations'
 import { splitPdf } from '../pdf/document'
+import { startExtraction } from '../pdf/extract/jobs'
+import { resolveExtractTarget } from '../pdf/extract/models'
+import { getPreset } from '../pdf/extract/presets'
 import { mergePdfFolder } from '../pdf/merge'
 import { imagesToPdf } from '../pdf/images-to-pdf'
 import { rasterizePdf } from '../pdf/raster'
@@ -84,11 +87,26 @@ class SplitExecutor implements DocumentOperationExecutor {
     return inputs.length === 1 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
-    const result = await splitPdf(input.stagedPath, context.workspace.outputDir)
+    const splitConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    const createSubfolder = splitConfig.createSubfolder !== false
+    const stem = safeStem(input.safeName)
+    const targetDir = createSubfolder ? join(context.workspace.outputDir, stem) : context.workspace.outputDir
+
+    const result = await splitPdf(input.stagedPath, targetDir)
     await context.onProgress({ totalUnits: result.totalPages, completedUnits: result.totalPages })
-    return { files: listFiles(context.workspace.outputDir, name => name.endsWith('.pdf')) }
+
+    const files = listFiles(targetDir, name => name.endsWith('.pdf'))
+    if (createSubfolder) {
+      return {
+        files: files.map(file => ({
+          ...file,
+          fileName: `${stem}/${file.fileName}`
+        }))
+      }
+    }
+    return { files }
   }
 }
 
@@ -99,9 +117,21 @@ class MergeExecutor implements DocumentOperationExecutor {
     return inputs.length >= 2 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const working = orderedFolder(context.inputs, join(context.workspace.workingDir, 'merge'))
-    const outputName = `${safeStem(context.inputs[0]?.safeName ?? 'document')}_merged.pdf`
+    const mergeConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    let outputName = typeof mergeConfig.outputName === 'string' && mergeConfig.outputName.trim()
+      ? mergeConfig.outputName.trim()
+      : ''
+    if (outputName) {
+      if (!outputName.toLowerCase().endsWith('.pdf')) outputName = `${outputName}.pdf`
+      outputName = safeFileName(outputName)
+    } else {
+      const folderCandidate = typeof mergeConfig.folderName === 'string' && mergeConfig.folderName.trim()
+        ? safeStem(mergeConfig.folderName.trim())
+        : safeStem(context.inputs[0]?.safeName ?? 'document')
+      outputName = `${folderCandidate}_merged.pdf`
+    }
     const result = await mergePdfFolder(working, context.workspace.outputDir, outputName)
     await context.onProgress({ totalUnits: result.pages, completedUnits: result.pages })
     return { files: [toProduced(result.output)] }
@@ -115,11 +145,26 @@ class RasterizeExecutor implements DocumentOperationExecutor {
     return inputs.length === 1 ? ok() : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
   }
 
-  async execute(context: OperationExecutionContext): Promise<OperationExecutionResult> {
+  async execute(context: OperationExecutionContext, configSnapshot?: unknown): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
-    const result = await rasterizePdf(input.stagedPath, context.workspace.outputDir, config.pdf.imageScale)
+    const rasterConfig = (configSnapshot && typeof configSnapshot === 'object') ? (configSnapshot as Record<string, unknown>) : {}
+    const createSubfolder = rasterConfig.createSubfolder !== false
+    const stem = safeStem(input.safeName)
+    const targetDir = createSubfolder ? join(context.workspace.outputDir, stem) : context.workspace.outputDir
+
+    const result = await rasterizePdf(input.stagedPath, targetDir, config.pdf.imageScale)
     await context.onProgress({ totalUnits: result.pages, completedUnits: result.pages })
-    return { files: listFiles(context.workspace.outputDir, name => name.endsWith('.png')) }
+
+    const files = listFiles(targetDir, name => name.endsWith('.png'))
+    if (createSubfolder) {
+      return {
+        files: files.map(file => ({
+          ...file,
+          fileName: `${stem}/${file.fileName}`
+        }))
+      }
+    }
+    return { files }
   }
 }
 
@@ -228,13 +273,76 @@ function toProduced(path: string): ProducedFile {
   return { fileName, path, size: statSync(path).size, mimeType: mimeOf(fileName) }
 }
 
+class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unknown>> {
+  readonly operationId: DocumentOperationId = 'document.ai-extract'
+
+  async validateInputs(inputs: VerifiedInput[]): Promise<ValidationResult> {
+    if (inputs.length !== 1) return { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
+    return ok()
+  }
+
+  async execute(context: OperationExecutionContext, options: Record<string, unknown>): Promise<OperationExecutionResult> {
+    const input = single(context.inputs)
+    const force = Boolean(options.force)
+    const target = await resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null)
+    const preset = options.presetId ? getPreset(String(options.presetId)) : null
+    const requestedFormats = Array.isArray(options.formats) ? options.formats.map(String) : null
+
+    const job = await startExtraction(
+      input.safeName,
+      force,
+      target,
+      preset ? { sample: preset.sample, description: preset.description, preset: preset.name } : null,
+      true,
+      requestedFormats
+    )
+
+    // Poll until completion or failure
+    const { getJob } = await import('../pdf/extract/jobs')
+    let current = getJob(job.id)
+    while (current && (current.status === 'running' || current.status === 'queued')) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      current = getJob(job.id)
+      if (current) {
+        await context.onProgress({
+          totalUnits: current.totalPages || 1,
+          completedUnits: current.processedPages + current.cachedPages
+        })
+      }
+    }
+
+    if (current?.status === 'failed') {
+      throw new DocumentError('DOCUMENT_PROCESSING_TIMEOUT', { cause: current.error })
+    }
+
+    // Copy generated products into job workspace outputDir
+    const stem = safeStem(input.safeName)
+    const { pdfDirs } = await import('../pdf/paths')
+    const productsDir = pdfDirs.products
+    const produced: ProducedFile[] = []
+
+    if (existsSync(productsDir)) {
+      const candidates = readdirSync(productsDir).filter(f => f.startsWith(`${stem}_products`))
+      for (const name of candidates) {
+        const src = join(productsDir, name)
+        const dest = join(context.workspace.outputDir, name)
+        copyFileSync(src, dest)
+        produced.push(toProduced(dest))
+      }
+    }
+
+    return { files: produced }
+  }
+}
+
 const EXECUTORS: Record<string, DocumentOperationExecutor<never>> = {
   'pdf.split': new SplitExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.merge': new MergeExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.rasterize': new RasterizeExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.images-to-pdf': new ImagesToPdfExecutor() as unknown as DocumentOperationExecutor<never>,
   'document.convert-to-pdf': new ConvertExecutor() as unknown as DocumentOperationExecutor<never>,
-  'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>
+  'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>,
+  'document.ai-extract': new AiExtractExecutor() as unknown as DocumentOperationExecutor<never>
 }
 
 export function executorFor(operationId: DocumentOperationId): DocumentOperationExecutor<never> {

@@ -108,6 +108,8 @@ export function useDocumentRun() {
  * Runtime facade for the UI: which destination options to offer and the size
  * limits to show next to the dropzone.
  */
+const OUTPUT_PATH_STORAGE_KEY = 'document_studio:custom_output_dir'
+
 export function useDocumentRuntime() {
   const api = useDocumentApi()
   const capabilities = ref<DocumentRuntimeCapabilities | null>(null)
@@ -122,9 +124,21 @@ export function useDocumentRuntime() {
     }
     try {
       const settings = await api.settings()
-      outputPath.value = settings.defaultOutputPath
+      const saved = typeof window !== 'undefined' ? localStorage.getItem(OUTPUT_PATH_STORAGE_KEY) : null
+      outputPath.value = saved || settings.defaultOutputPath
     } catch {
       outputPath.value = ''
+    }
+  }
+
+  function setOutputPath(path: string) {
+    outputPath.value = path
+    if (typeof window !== 'undefined') {
+      if (path) {
+        localStorage.setItem(OUTPUT_PATH_STORAGE_KEY, path)
+      } else {
+        localStorage.removeItem(OUTPUT_PATH_STORAGE_KEY)
+      }
     }
   }
 
@@ -139,5 +153,5 @@ export function useDocumentRuntime() {
     return 'output-folder'
   })
 
-  return { capabilities, outputPath, isLocal, destinationLabel, load }
+  return { capabilities, outputPath, isLocal, destinationLabel, load, setOutputPath }
 }

@@ -1,4 +1,5 @@
 import type { DocumentOperationDefinition } from '#shared/types/document'
+import { DOCUMENT_FORMATS, CONVERSION_MATRIX } from '#shared/types/document/formats'
 import { documentCaller, runDocument } from '#server/utils/documentApi'
 import { operationSupport, runtimeCapabilities } from '#server/modules/document/runtime'
 import { DOCUMENT_OPERATIONS } from '#server/modules/document/operations'
@@ -29,7 +30,9 @@ export default defineEventHandler(async (event) => {
     return {
       runtime: capabilities.runtime,
       capabilities,
-      operations
+      operations,
+      formats: DOCUMENT_FORMATS,
+      conversions: CONVERSION_MATRIX
     }
   })
 })

@@ -6,6 +6,8 @@
  * that would let the renderer address storage directly.
  */
 
+export * from './formats'
+
 export const DOCUMENT_RUNTIMES = ['local', 'electron', 'vercel', 'worker'] as const
 
 export type DocumentRuntimeKind = typeof DOCUMENT_RUNTIMES[number]
@@ -31,7 +33,7 @@ export const DOCUMENT_INPUT_MODES = ['single-file', 'multi-file', 'folder-batch'
 export type DocumentInputMode = typeof DOCUMENT_INPUT_MODES[number]
 
 /** Configuration forms the client is allowed to mount for an operation. */
-export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'export-formats', 'ai-extraction'] as const
+export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'rasterize', 'export-formats', 'ai-extraction'] as const
 
 export type DocumentConfigComponent = typeof DOCUMENT_CONFIG_COMPONENTS[number]
 

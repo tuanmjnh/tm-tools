@@ -42,12 +42,15 @@ const emit = defineEmits<{
   run: []
   reset: []
   deleted: [artifactId: string]
+  'update:outputPath': [path: string]
 }>()
 
 const { t } = useI18n()
 const api = useDocumentApi()
 const notify = useNotify()
+const { pickFolder } = useFileSystem()
 const inputRef = ref<HTMLInputElement | null>(null)
+const folderInputRef = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 const desktop = isDesktopRuntime()
 
@@ -66,6 +69,10 @@ function onPick(event: Event) {
 
 function browse() {
   inputRef.value?.click()
+}
+
+function browseFolder() {
+  folderInputRef.value?.click()
 }
 
 const fileIcon = (name: string): string => {
@@ -117,19 +124,23 @@ function saveInlineArchive() {
   saveBytes(zip, 'document-results.zip', 'application/zip')
 }
 
-/** `?inline=1` only renders PDFs and images; anything else needs the OS handler or a download. */
+/** `?inline=1` renders browser-compatible formats directly; anything else falls back to OS opener or download. */
 const INLINE_MIME = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'text/plain'
+  'image/svg+xml',
+  'text/plain',
+  'text/markdown',
+  'text/html',
+  'application/json'
 ])
 
 function canPreview(artifact: DocumentArtifactView): boolean {
   if (artifact.inlineBase64) return true
-  return desktop || INLINE_MIME.has(artifact.mimeType)
+  return Boolean(artifact.localPath) || INLINE_MIME.has(artifact.mimeType)
 }
 
 function previewArtifact(artifact: DocumentArtifactView) {
@@ -139,15 +150,20 @@ function previewArtifact(artifact: DocumentArtifactView) {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
     return
   }
-  if (desktop && artifact.localPath) {
+  // If the format is inline-renderable by the browser/app, open the preview popup window
+  if (INLINE_MIME.has(artifact.mimeType)) {
     const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
     const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
     window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
     return
   }
-  const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
-  const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
-  window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
+  // Otherwise open via the OS handler (Electron or Local Web)
+  if (artifact.localPath) {
+    openLocalPath(artifact.localPath)
+    return
+  }
+  // Fallback to direct download
+  downloadArtifact(artifact)
 }
 
 function downloadArtifact(artifact: DocumentArtifactView) {
@@ -166,6 +182,30 @@ async function copyValue(value: string) {
 
 function openOutputFolder() {
   openLocalPath(props.outputPath)
+}
+
+const showChangeOutputModal = ref(false)
+const customOutputPathInput = ref(props.outputPath)
+
+watch(() => props.outputPath, (val) => {
+  customOutputPathInput.value = val
+})
+
+async function onPickCustomOutput() {
+  if (desktop) {
+    const picked = await pickFolder({ defaultPath: props.outputPath })
+    if (picked) {
+      customOutputPathInput.value = picked
+      emit('update:outputPath', picked)
+    }
+  } else {
+    showChangeOutputModal.value = true
+  }
+}
+
+function saveCustomOutput() {
+  emit('update:outputPath', customOutputPathInput.value.trim())
+  showChangeOutputModal.value = false
 }
 
 const pendingDelete = ref<DocumentArtifactView | null>(null)
@@ -212,7 +252,7 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
   })
   groups.push(primary)
 
-  if (desktop && artifact.localPath) {
+  if (artifact.localPath) {
     const localPath = artifact.localPath
     groups.push([
       {
@@ -257,13 +297,15 @@ const progress = computed(() => {
     <DocumentStudioOperationStepHeader :operation="operation"
       :step="running ? 'process' : artifacts.length ? 'save' : 'choose'" :loading="running" />
 
-    <div class="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <div class="flex min-h-0 flex-col gap-3">
+    <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
         <div
-          class="panel flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center transition-colors"
-          :class="dragging ? 'border-primary bg-primary/5' : 'border-default'" @dragover.prevent="dragging = true"
-          @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
+          class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
+          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
+          @dragover.prevent="dragging = true" @dragleave.prevent="dragging = false" @drop.prevent="onDrop">
           <input ref="inputRef" type="file" class="hidden" :accept="accept || undefined" :multiple="multiple"
+            @change="onPick">
+          <input ref="folderInputRef" type="file" class="hidden" webkitdirectory directory
             @change="onPick">
           <UIcon name="i-lucide-cloud-upload" class="size-7 text-dimmed" />
           <p class="text-sm font-medium">
@@ -272,12 +314,16 @@ const progress = computed(() => {
           <p class="text-xs text-muted">
             {{ accept ? t('document.input.accepted', { types: accept }) : t('document.input.anyFile') }}
           </p>
-          <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-folder-open"
-            :label="t('document.input.browse')" @click="browse" />
+          <div class="flex items-center gap-2">
+            <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-file-plus"
+              :label="t('document.input.browse')" @click="browse" />
+            <UButton v-if="multiple" color="neutral" variant="soft" size="sm" icon="i-lucide-folder-open"
+              :label="t('document.input.browseFolder')" @click="browseFolder" />
+          </div>
         </div>
 
-        <div v-if="files.length" class="rounded-lg border border-default/70">
-          <div class="flex items-center justify-between border-b border-default/60 px-3 py-2">
+        <div v-if="files.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
+          <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.input.selected', { count: files.length }) }}
             </p>
@@ -285,7 +331,8 @@ const progress = computed(() => {
               @click="emit('reset')" />
           </div>
           <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
-            <li v-for="(file, index) in files" :key="file.id" class="flex items-center gap-2 px-3 py-2">
+            <li v-for="(file, index) in files" :key="file.id"
+              class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
               <UIcon :name="fileIcon(file.name)" class="size-4 shrink-0 text-dimmed" />
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">
@@ -314,8 +361,8 @@ const progress = computed(() => {
           </ul>
         </div>
 
-        <div v-if="artifacts.length" class="rounded-lg border border-default/70">
-          <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2">
+        <div v-if="artifacts.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
+          <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.result.title', { count: artifacts.length }) }}
             </p>
@@ -325,7 +372,7 @@ const progress = computed(() => {
               <UButton v-else-if="artifacts.length > 1 && artifacts[0]" color="neutral" variant="ghost" size="xs"
                 icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
                 @click="triggerDownload(archivePath(artifacts[0].jobId))" />
-              <UButton v-if="desktop && outputPath" color="neutral" variant="ghost" size="xs"
+              <UButton v-if="outputPath" color="neutral" variant="ghost" size="xs"
                 icon="i-lucide-folder-open" :label="t('document.activity.openOutputFolder')"
                 @click="openOutputFolder" />
               <span class="text-xs text-muted">{{ destinationText }}</span>
@@ -334,7 +381,7 @@ const progress = computed(() => {
           <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
             <li v-for="artifact in artifacts" :key="artifact.id">
               <AppContextMenu :items="artifactMenu(artifact)">
-                <div class="flex items-center gap-2 px-3 py-2">
+                <div class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
                   <UIcon :name="fileIcon(artifact.fileName)" class="size-4 shrink-0 text-dimmed" />
                   <div class="min-w-0 flex-1">
                     <button v-if="canPreview(artifact)" type="button"
@@ -365,8 +412,8 @@ const progress = computed(() => {
         </div>
       </div>
 
-      <div class="flex min-h-0 flex-col gap-3">
-        <UCard :ui="{ root: 'panel', body: 'gap-3 p-4 sm:p-4' }">
+      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+        <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
           <template #header>
             <div class="flex items-center gap-2">
               <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
@@ -376,7 +423,7 @@ const progress = computed(() => {
             </div>
           </template>
 
-          <dl class="space-y-2 text-sm">
+          <dl class="space-y-2 text-sm mb-2">
             <div class="flex items-start justify-between gap-3">
               <dt class="text-muted">
                 {{ t('document.summary.operation') }}
@@ -397,14 +444,17 @@ const progress = computed(() => {
               <dt class="text-muted">
                 {{ t('document.summary.output') }}
               </dt>
-              <dd class="break-all text-end font-medium">
-                {{ destinationText || '—' }}
+              <dd class="flex flex-col items-end gap-1">
+                <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                <UButton v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
+                  color="neutral" variant="ghost" size="xs" icon="i-lucide-folder-cog"
+                  :label="t('document.output.changeFolder')" @click="onPickCustomOutput" />
               </dd>
             </div>
           </dl>
 
           <slot name="config" />
-
+          <USeparator color="primary" class="py-2 opacity-30" />
           <div v-if="running" class="space-y-1">
             <UProgress :model-value="progress" size="xs" />
             <p class="text-xs text-muted">
@@ -426,5 +476,22 @@ const progress = computed(() => {
     <BaseConfirmModal v-model:open="deleteOpen" :title="t('document.result.deleteTitle')"
       :description="pendingDelete ? t('document.result.deleteConfirm', { name: pendingDelete.fileName }) : ''"
       :loading="deleting" :confirm-label="t('global.delete')" @confirm="confirmDelete" @cancel="pendingDelete = null" />
+
+    <LazyBaseResponsiveModal v-model:open="showChangeOutputModal" :title="t('document.output.changeFolderTitle')">
+      <template #body>
+        <div class="space-y-3 p-4">
+          <p class="text-xs text-muted">
+            {{ t('document.output.changeFolderHint') }}
+          </p>
+          <UInput v-model="customOutputPathInput" class="w-full" :placeholder="t('document.output.folderPlaceholder')" />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex items-center justify-end gap-2 p-3">
+          <UButton color="neutral" variant="ghost" :label="t('global.cancel')" @click="showChangeOutputModal = false" />
+          <UButton color="primary" variant="soft" :label="t('global.save')" @click="saveCustomOutput" />
+        </div>
+      </template>
+    </LazyBaseResponsiveModal>
   </div>
 </template>

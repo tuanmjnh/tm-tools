@@ -31,30 +31,14 @@ function runExport() {
         :ready="page.selection.ready.value && formats.length > 0" :running="page.session.running.value"
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
-        :accept="page.selection.accept.value" @add="page.addFiles" @remove="page.selection.remove"
+        :accept="page.selection.accept.value"
+        @update:output-path="page.runtime.setOutputPath" @add="page.addFiles" @remove="page.selection.remove"
         @move="page.selection.move" @reset="page.selection.clear" @run="runExport"
         @deleted="page.session.removeArtifact">
         <template #config>
-          <div class="space-y-1.5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-              {{ t('document.export.formats') }}
-            </p>
-            <label v-for="entry in formatEntries" :key="entry.format"
-              class="flex cursor-pointer items-start gap-2 rounded-md p-1.5 hover:bg-muted/10">
-              <input type="checkbox" class="mt-0.5 size-3.5" :checked="formats.includes(entry.format)"
-                @change="toggle(entry.format, ($event.target as HTMLInputElement).checked)">
-              <span class="min-w-0">
-                <span class="flex items-center gap-1.5 text-sm font-medium">
-                  <UIcon :name="entry.icon" class="size-4 text-dimmed" />
-                  {{ t(entry.labelKey) }}
-                </span>
-                <span class="block text-xs text-muted">{{ t(entry.hintKey) }}</span>
-              </span>
-            </label>
-            <p class="text-xs text-muted">
-              {{ t('document.export.rowsHint') }}
-            </p>
-          </div>
+          <DocumentStudioOperationsConfigsExportFormatsConfig
+            v-model="formats"
+          />
         </template>
       </DocumentStudioOperationPageShell>
     </div>

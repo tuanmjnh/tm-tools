@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { DocumentArtifactView, DocumentJobView } from '#shared/types/document'
-import { DOCUMENT_STUDIO_OPERATIONS, formatBytes } from '~/utils/documentStudio'
+import { DOCUMENT_STUDIO_OPERATIONS, documentFileIcon, formatBytes } from '~/utils/documentStudio'
 import {
   copyToClipboard,
   inlinePreviewPath,
@@ -17,11 +17,13 @@ const { t, locale } = useI18n()
 const api = useDocumentApi()
 const notify = useNotify()
 const { outputPath, load: loadRuntime } = useDocumentRuntime()
+const { viewMode } = useAdminGridView('document-activity-view-mode')
 
 const jobs = ref<DocumentJobView[]>([])
 const loading = ref(true)
 const error = ref('')
 const filter = ref<Filter>('all')
+const search = ref('')
 const busy = ref('')
 
 const desktop = isDesktopRuntime()
@@ -53,11 +55,22 @@ onMounted(() => {
   void loadRuntime()
 })
 
-const visible = computed(() => {
-  if (filter.value === 'all') return jobs.value
-  const allowed = FILTER_STATUS[filter.value]
-  return jobs.value.filter(job => allowed.includes(job.status))
+const filteredJobs = computed(() => {
+  let list = jobs.value
+  if (filter.value !== 'all') {
+    const allowed = FILTER_STATUS[filter.value]
+    list = list.filter(job => allowed.includes(job.status))
+  }
+  const q = search.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(job =>
+    job.id.toLowerCase().includes(q)
+    || operationLabel(job.operationId).toLowerCase().includes(q)
+    || job.artifacts.some(a => a.fileName.toLowerCase().includes(q))
+  )
 })
+
+const visible = computed(() => filteredJobs.value)
 
 const counts = computed(() => ({
   all: jobs.value.length,
@@ -115,18 +128,30 @@ function downloadableArtifacts(job: DocumentJobView): DocumentArtifactView[] {
   return job.artifacts.filter(downloadable)
 }
 
-/** `?inline=1` only renders PDFs and images; everything else needs the OS handler. */
+/** `?inline=1` renders browser-compatible formats directly; anything else falls back to OS opener or download. */
 const INLINE_MIME = new Set([
   'application/pdf',
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'text/plain'
+  'image/svg+xml',
+  'text/plain',
+  'text/markdown',
+  'text/html',
+  'application/json'
 ])
 
+function canOpenWithOs(artifact: DocumentArtifactView): boolean {
+  return Boolean(artifact.localPath)
+}
+
+function canPreviewInApp(artifact: DocumentArtifactView): boolean {
+  return downloadable(artifact) && INLINE_MIME.has(artifact.mimeType)
+}
+
 function canPreview(artifact: DocumentArtifactView): boolean {
-  return downloadable(artifact) && (desktop || INLINE_MIME.has(artifact.mimeType))
+  return canOpenWithOs(artifact) || canPreviewInApp(artifact)
 }
 
 function archivePath(jobId: string): string {
@@ -138,6 +163,16 @@ function previewArtifact(artifact: DocumentArtifactView) {
   const width = Math.min(1400, Math.max(900, Math.round(window.innerWidth * 0.8)))
   const height = Math.min(980, Math.max(640, Math.round(window.innerHeight * 0.85)))
   window.open(inlinePreviewPath(artifact.downloadPath), '_blank', `popup=yes,width=${width},height=${height}`)
+}
+
+function handleArtifactClick(artifact: DocumentArtifactView) {
+  if (canOpenWithOs(artifact) && artifact.localPath) {
+    openLocalPath(artifact.localPath)
+  } else if (canPreviewInApp(artifact)) {
+    previewArtifact(artifact)
+  } else {
+    triggerDownload(artifact.downloadPath)
+  }
 }
 
 async function copyValue(value: string) {
@@ -275,7 +310,14 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
 
   if (downloadable(artifact)) {
     const primary: DropdownMenuItem[] = []
-    if (canPreview(artifact)) {
+    if (canOpenWithOs(artifact) && artifact.localPath) {
+      primary.push({
+        label: t('document.result.openWithOs'),
+        icon: 'i-lucide-app-window',
+        onSelect: () => openLocalPath(artifact.localPath!)
+      })
+    }
+    if (canPreviewInApp(artifact)) {
       primary.push({
         label: t('document.result.preview'),
         icon: 'i-lucide-external-link',
@@ -323,17 +365,32 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
   <BasePage id="document-studio-activity" :title="t('document.activity.title')"
     :description="t('document.activity.description')">
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 sm:p-6">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex flex-wrap gap-1">
-          <UButton v-for="entry in FILTERS" :key="entry" size="xs" :color="filter === entry ? 'primary' : 'neutral'"
-            :variant="filter === entry ? 'soft' : 'ghost'"
-            :label="`${t(`document.activity.filters.${entry}`)} (${counts[entry]})`" @click="filter = entry" />
+      <!-- Search, filter and actions toolbar -->
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-1 items-center gap-2 max-w-md">
+          <UInput
+            v-model="search"
+            icon="i-lucide-search"
+            class="w-full"
+            size="sm"
+            :placeholder="t('document.activity.searchPlaceholder')"
+          />
         </div>
-        <div class="flex items-center gap-1">
-          <UButton v-if="desktop && outputPath" icon="i-lucide-folder-open" color="neutral" variant="ghost" size="xs"
-            :label="t('document.activity.openOutputFolder')" @click="openOutputFolder" />
-          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="xs" :loading="loading"
-            :label="t('document.activity.refresh')" @click="load" />
+
+        <div class="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
+          <div class="flex flex-wrap items-center gap-1">
+            <UButton v-for="entry in FILTERS" :key="entry" size="xs" :color="filter === entry ? 'primary' : 'neutral'"
+              :variant="filter === entry ? 'soft' : 'ghost'"
+              :label="`${t(`document.activity.filters.${entry}`)} (${counts[entry]})`" @click="filter = entry" />
+          </div>
+
+          <div class="flex items-center gap-1.5 shrink-0">
+            <AdminViewModeToggle v-model="viewMode" />
+            <UButton v-if="desktop && outputPath" icon="i-lucide-folder-open" color="neutral" variant="ghost" size="xs"
+              :label="t('document.activity.openOutputFolder')" @click="openOutputFolder" />
+            <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="xs" :loading="loading"
+              :label="t('document.activity.refresh')" @click="load" />
+          </div>
         </div>
       </div>
 
@@ -345,20 +402,99 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
       </div>
 
       <p v-else-if="!visible.length"
-        class="rounded-lg border border-dashed border-default p-6 text-center text-sm text-muted">
-        {{ t('document.activity.empty') }}
+        class="panel-flat rounded-lg border border-dashed border-default/70 p-6 text-center text-sm text-muted">
+        {{ search ? t('document.activity.emptySearch') : t('document.activity.empty') }}
       </p>
 
-      <ul v-else
-        class="panel max-h-[calc(100vh-14rem)] divide-y divide-default/50 overflow-auto rounded-lg border border-default/70">
-        <li v-for="job in visible" :key="job.id" class="p-3">
+      <!-- Grid / Cards View -->
+      <div v-else-if="viewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div v-for="job in visible" :key="job.id" class="panel-flat flex flex-col rounded-lg p-3.5 space-y-3">
           <AppContextMenu :items="jobMenu(job)">
-            <div class="space-y-2">
+            <div class="flex flex-col h-full space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <UBadge :color="statusColor(job.status)" variant="soft" size="sm">
+                    {{ t(`document.status.${job.status}`) }}
+                  </UBadge>
+                  <span class="truncate text-sm font-semibold text-foreground">
+                    {{ operationLabel(job.operationId) }}
+                  </span>
+                </div>
+                <UDropdownMenu :items="jobMenu(job)">
+                  <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
+                    :aria-label="t('document.result.more')" />
+                </UDropdownMenu>
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-muted">
+                <span>{{ formatWhen(job.createdAt) }}</span>
+                <span>{{ t('document.summary.files', { count: job.inputCount }) }} · {{ formatBytes(job.totalInputBytes) }}</span>
+              </div>
+
+              <div v-if="job.status === 'running' || job.status === 'publishing' || job.status === 'queued'"
+                class="flex items-center gap-2">
+                <UProgress :model-value="job.progress.totalUnits
+                  ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
+                  : 0" size="xs" class="flex-1" />
+                <span class="text-xs text-muted">
+                  {{ job.progress.completedUnits }}/{{ job.progress.totalUnits }}
+                </span>
+              </div>
+
+              <div v-if="job.errorCode" class="text-xs text-error">
+                {{ t(`document.errors.${job.errorCode}`) }}
+              </div>
+
+              <!-- Artifacts in card: max-height with scroll -->
+              <div v-if="job.artifacts.length" class="flex-1 min-h-0 border-t border-default/40 pt-2">
+                <div class="flex items-center justify-between text-xs text-muted mb-1.5">
+                  <span class="font-medium uppercase tracking-wider text-[10px]">
+                    {{ t('document.activity.artifactsCount', { count: job.artifacts.length }) }}
+                  </span>
+                  <UButton v-if="downloadableArtifacts(job).length > 1" color="neutral" variant="ghost" size="xs"
+                    icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
+                    @click="triggerDownload(archivePath(job.id))" />
+                </div>
+                <ul class="max-h-40 overflow-y-auto space-y-1 pr-1">
+                  <li v-for="artifact in job.artifacts" :key="artifact.id">
+                    <AppContextMenu :items="artifactMenu(job, artifact)">
+                      <div class="flex items-center justify-between gap-2 rounded-md bg-elevated/40 px-2 py-1.5 transition-colors hover:bg-muted/20">
+                        <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                          <UIcon :name="documentFileIcon(artifact.fileName)" class="size-3.5 shrink-0 text-dimmed" />
+                          <button v-if="canPreview(artifact)" type="button"
+                            class="truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
+                            :title="artifact.fileName" @click="handleArtifactClick(artifact)">
+                            {{ artifact.fileName }}
+                          </button>
+                          <span v-else class="truncate text-xs" :title="artifact.fileName">
+                            {{ artifact.fileName }}
+                          </span>
+                        </div>
+                        <span class="text-[11px] text-muted shrink-0">{{ formatBytes(artifact.size) }}</span>
+                        <UDropdownMenu :items="artifactMenu(job, artifact)">
+                          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
+                            :aria-label="t('document.result.more')" />
+                        </UDropdownMenu>
+                      </div>
+                    </AppContextMenu>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </AppContextMenu>
+        </div>
+      </div>
+
+      <!-- List View: each job is its own panel-flat with bounded height -->
+      <div v-else class="space-y-3">
+        <div v-for="job in visible" :key="job.id" class="panel-flat rounded-lg p-3.5">
+          <AppContextMenu :items="jobMenu(job)">
+            <div class="space-y-2.5">
               <div class="flex flex-wrap items-center gap-2">
                 <UBadge :color="statusColor(job.status)" variant="soft" size="sm">
                   {{ t(`document.status.${job.status}`) }}
                 </UBadge>
-                <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                <span class="min-w-0 flex-1 truncate text-sm font-semibold">
                   {{ operationLabel(job.operationId) }}
                 </span>
                 <span class="text-xs text-muted">
@@ -387,56 +523,53 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                 {{ t(`document.errors.${job.errorCode}`) }}
               </div>
 
-              <ul v-if="job.artifacts.length" class="space-y-1">
-                <li v-for="artifact in job.artifacts" :key="artifact.id">
-                  <AppContextMenu :items="artifactMenu(job, artifact)">
-                    <div class="flex flex-wrap items-center gap-2 rounded-md bg-elevated/40 px-2 py-1">
-                      <UIcon name="i-lucide-file-text" class="size-3.5 shrink-0 text-dimmed" />
-                      <button v-if="canPreview(artifact)" type="button"
-                        class="min-w-0 flex-1 truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
-                        :title="artifact.fileName" @click="previewArtifact(artifact)">
-                        {{ artifact.fileName }}
-                      </button>
-                      <span v-else class="min-w-0 flex-1 truncate text-xs" :title="artifact.fileName">
-                        {{ artifact.fileName }}
-                      </span>
-                      <span class="text-xs text-muted">{{ formatBytes(artifact.size) }}</span>
-                      <span v-if="downloadable(artifact)" class="text-xs text-muted">
-                        {{ t('document.activity.expiresIn', { hours: hoursLeft(artifact.expiresAt) }) }}
-                      </span>
-                      <span v-else class="text-xs text-warning">
-                        {{ t('document.activity.expired') }}
-                      </span>
-                      <UButton v-if="canPreview(artifact)" color="neutral" variant="ghost" size="xs"
-                        icon="i-lucide-external-link" :aria-label="t('document.result.preview')"
-                        @click="previewArtifact(artifact)" />
-                      <UButton v-if="downloadable(artifact)" color="neutral" variant="ghost" size="xs"
-                        icon="i-lucide-download" :label="t('document.result.download')"
-                        @click="triggerDownload(artifact.downloadPath)" />
-                      <UDropdownMenu :items="artifactMenu(job, artifact)">
-                        <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
-                          :aria-label="t('document.result.more')" />
-                      </UDropdownMenu>
-                    </div>
-                  </AppContextMenu>
-                </li>
-              </ul>
-
-              <div class="flex flex-wrap items-center gap-1">
-                <UButton v-if="downloadableArtifacts(job).length > 1" color="neutral" variant="ghost" size="xs"
-                  icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
-                  @click="triggerDownload(archivePath(job.id))" />
-                <UButton v-if="canCancel(job)" color="neutral" variant="ghost" size="xs" icon="i-lucide-square"
-                  :label="t('document.activity.cancel')" :loading="busy === job.id" @click="cancelJob(job)" />
-                <UButton v-if="canRetry(job)" color="primary" variant="ghost" size="xs" icon="i-lucide-rotate-ccw"
-                  :label="t('document.activity.retry')" @click="retryJob(job)" />
-                <UButton v-if="deletable(job)" color="neutral" variant="ghost" size="xs" icon="i-lucide-trash-2"
-                  :label="t('document.activity.deleteJob')" @click="askDeleteJob(job)" />
+              <!-- Artifacts in list: bounded max-height with scroll -->
+              <div v-if="job.artifacts.length" class="border-t border-default/40 pt-2">
+                <div class="flex items-center justify-between text-xs text-muted mb-1.5">
+                  <span class="font-medium uppercase tracking-wider text-[10px]">
+                    {{ t('document.activity.artifactsCount', { count: job.artifacts.length }) }}
+                  </span>
+                  <UButton v-if="downloadableArtifacts(job).length > 1" color="neutral" variant="ghost" size="xs"
+                    icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
+                    @click="triggerDownload(archivePath(job.id))" />
+                </div>
+                <ul class="max-h-48 overflow-y-auto space-y-1 pr-1">
+                  <li v-for="artifact in job.artifacts" :key="artifact.id">
+                    <AppContextMenu :items="artifactMenu(job, artifact)">
+                      <div class="flex items-center justify-between gap-2 rounded-md bg-elevated/40 px-2 py-1.5 transition-colors hover:bg-muted/20">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                          <UIcon :name="documentFileIcon(artifact.fileName)" class="size-3.5 shrink-0 text-dimmed" />
+                          <button v-if="canPreview(artifact)" type="button"
+                            class="truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
+                            :title="artifact.fileName" @click="handleArtifactClick(artifact)">
+                            {{ artifact.fileName }}
+                          </button>
+                          <span v-else class="truncate text-xs" :title="artifact.fileName">
+                            {{ artifact.fileName }}
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          <span class="text-xs text-muted">{{ formatBytes(artifact.size) }}</span>
+                          <span v-if="downloadable(artifact)" class="text-xs text-muted hidden sm:inline">
+                            {{ t('document.activity.expiresIn', { hours: hoursLeft(artifact.expiresAt) }) }}
+                          </span>
+                          <span v-else class="text-xs text-warning">
+                            {{ t('document.activity.expired') }}
+                          </span>
+                          <UDropdownMenu :items="artifactMenu(job, artifact)">
+                            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
+                              :aria-label="t('document.result.more')" />
+                          </UDropdownMenu>
+                        </div>
+                      </div>
+                    </AppContextMenu>
+                  </li>
+                </ul>
               </div>
             </div>
           </AppContextMenu>
-        </li>
-      </ul>
+        </div>
+      </div>
 
       <BaseConfirmModal v-model:open="deleteOpen" :title="deleteTitle" :description="deleteDescription"
         :loading="deleting" :confirm-label="t('global.delete')" @confirm="confirmDelete"

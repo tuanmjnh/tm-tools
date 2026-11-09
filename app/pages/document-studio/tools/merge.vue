@@ -1,5 +1,10 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.merge')
+const mergeConfig = ref({ outputName: '' })
+
+function runMerge() {
+  void page.run(mergeConfig.value)
+}
 </script>
 
 <template>
@@ -10,9 +15,14 @@ const page = useDocumentOperationPage('pdf.merge')
         :ready="page.selection.ready.value" :running="page.session.running.value"
         :uploading="page.session.uploading.value" :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value" :artifacts="page.session.artifacts.value"
-        :accept="page.selection.accept.value" multiple @add="page.addFiles" @remove="page.selection.remove"
-        @move="page.selection.move" @reset="page.selection.clear" @run="page.run()"
-        @deleted="page.session.removeArtifact" />
+        :accept="page.selection.accept.value" multiple
+        @update:output-path="page.runtime.setOutputPath" @add="page.addFiles" @remove="page.selection.remove"
+        @move="page.selection.move" @reset="page.selection.clear" @run="runMerge"
+        @deleted="page.session.removeArtifact">
+        <template #config>
+          <DocumentStudioOperationsConfigsMergeConfig v-model="mergeConfig" />
+        </template>
+      </DocumentStudioOperationPageShell>
     </div>
   </BasePage>
 </template>

@@ -1,4 +1,4 @@
-/** Desktop-only helpers; they no-op in the browser build. */
+/** Desktop-only helpers; they no-op in the browser build unless on local server. */
 export function isDesktopRuntime(): boolean {
   return typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron)
 }
@@ -7,21 +7,37 @@ function normalizeLocalPath(path: string): string {
   return window.electronAPI?.platform === 'win32' ? path.replace(/\//g, '\\') : path
 }
 
-/** Opens a file or folder with the OS default handler. */
+/** Opens a file or folder with the OS default handler. In Electron, invokes IPC; in local web, delegates to API. */
 export function openLocalPath(path?: string | null): void {
-  if (!path || !isDesktopRuntime() || !window.electronAPI?.openPath) return
-  void window.electronAPI.openPath(normalizeLocalPath(path)).catch(() => undefined)
+  if (!path) return
+  if (isDesktopRuntime() && window.electronAPI?.openPath) {
+    void window.electronAPI.openPath(normalizeLocalPath(path)).catch(() => undefined)
+    return
+  }
+  // Local Web fallback: call server endpoint to open on local host
+  void $fetch('/api/v1/documents/open-local', {
+    method: 'POST',
+    body: { path }
+  }).catch(() => undefined)
 }
 
 /** Reveals a file (or opens its folder) in Explorer/Finder. */
 export function revealLocalPath(path?: string | null): void {
-  if (!path || !isDesktopRuntime()) return
-  const normalized = normalizeLocalPath(path)
-  if (window.electronAPI?.showItemInFolder) {
-    void window.electronAPI.showItemInFolder(normalized).catch(() => undefined)
+  if (!path) return
+  if (isDesktopRuntime()) {
+    const normalized = normalizeLocalPath(path)
+    if (window.electronAPI?.showItemInFolder) {
+      void window.electronAPI.showItemInFolder(normalized).catch(() => undefined)
+      return
+    }
+    void window.electronAPI?.openPath(normalized).catch(() => undefined)
     return
   }
-  void window.electronAPI?.openPath(normalized).catch(() => undefined)
+  // Local Web fallback: call server endpoint to reveal on local host
+  void $fetch('/api/v1/documents/open-local', {
+    method: 'POST',
+    body: { path, reveal: true }
+  }).catch(() => undefined)
 }
 
 /** Authenticated route plus the flag that lets the preview tab render in place. */

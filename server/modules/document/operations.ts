@@ -32,7 +32,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     icon: 'i-lucide-scissors',
     enabled: true,
     input: { mode: 'single-file', acceptedExtensions: PDF, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: false },
-    configuration: { componentKey: 'none', hasAdvancedOptions: false },
+    configuration: { componentKey: 'split', hasAdvancedOptions: false },
     output: { artifactMode: 'multiple', defaultFileNamePattern: 'page_{index}.pdf', mimeTypes: ['application/pdf'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-split' },
     legacyTool: 'split'
@@ -46,7 +46,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     icon: 'i-lucide-layers',
     enabled: true,
     input: { mode: 'multi-file', acceptedExtensions: PDF, minFiles: 2, maxFiles: 50, ordered: true, allowFromInputLibrary: false },
-    configuration: { componentKey: 'none', hasAdvancedOptions: false },
+    configuration: { componentKey: 'merge', hasAdvancedOptions: false },
     output: { artifactMode: 'single', defaultFileNamePattern: 'merged.pdf', mimeTypes: ['application/pdf'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-merge' },
     legacyTool: 'merge'
@@ -60,7 +60,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     icon: 'i-lucide-images',
     enabled: true,
     input: { mode: 'single-file', acceptedExtensions: PDF, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: false },
-    configuration: { componentKey: 'none', hasAdvancedOptions: false },
+    configuration: { componentKey: 'rasterize', hasAdvancedOptions: false },
     output: { artifactMode: 'multiple', defaultFileNamePattern: 'page_{index}.png', mimeTypes: ['image/png'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-raster' },
     legacyTool: 'rasterize'
