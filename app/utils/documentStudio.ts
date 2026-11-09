@@ -110,11 +110,3 @@ export function documentFileIcon(name: string, isFolder = false): string {
   if (ext === 'zip') return 'i-lucide-archive'
   return 'i-lucide-file'
 }
-
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / 1024 ** exponent
-  return `${value >= 10 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`
-}

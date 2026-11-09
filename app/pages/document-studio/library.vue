@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { documentFileIcon, formatBytes } from '~/utils/documentStudio'
+import { documentFileIcon } from '~/utils/documentStudio'
+import { formatBytes } from '~/utils/formatBytes'
 
 const { t } = useI18n()
 const library = useDocumentLibrary()

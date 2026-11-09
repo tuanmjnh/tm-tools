@@ -22,13 +22,6 @@ export function sanitizeEmailHtml(html: string): string {
   return out
 }
 
-export function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
-}
-
 export function getInitials(name: string): string {
   if (!name) return '?'
   const clean = name.replace(/['"]/g, '').trim()

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DocumentJobView, DocumentRuntimeCapabilities } from '#shared/types/document'
 import type { DocumentStudioOperation } from '~/utils/documentStudio'
-import { DOCUMENT_STUDIO_OPERATIONS, DOCUMENT_STUDIO_GROUPS, documentStudioOperation, formatBytes } from '~/utils/documentStudio'
+import { DOCUMENT_STUDIO_OPERATIONS, DOCUMENT_STUDIO_GROUPS, documentStudioOperation } from '~/utils/documentStudio'
+import { formatBytes } from '~/utils/formatBytes'
 
 const { t } = useI18n()
 const api = useDocumentApi()

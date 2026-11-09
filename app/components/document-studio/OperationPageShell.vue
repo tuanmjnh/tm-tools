@@ -2,7 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { DocumentArtifactView, DocumentOperationDefinition, DocumentRuntimeCapabilities } from '#shared/types/document'
 import type { DocumentErrorPayload } from '~/composables/useDocumentApi'
-import { formatBytes } from '~/utils/documentStudio'
+import { formatBytes } from '~/utils/formatBytes'
 import { createInlineZip } from '~/utils/zip'
 import {
   copyToClipboard,

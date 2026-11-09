@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { DocumentArtifactView, DocumentJobView } from '#shared/types/document'
-import { DOCUMENT_STUDIO_OPERATIONS, documentFileIcon, formatBytes } from '~/utils/documentStudio'
+import { DOCUMENT_STUDIO_OPERATIONS, documentFileIcon } from '~/utils/documentStudio'
+import { formatBytes } from '~/utils/formatBytes'
 import {
   copyToClipboard,
   inlinePreviewPath,

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { format } from 'date-fns'
 import type { InboxDetail } from '~/types/inbox'
-import { parseAddress, sanitizeEmailHtml, formatBytes, getInitials, getAttachmentIcon } from '~/utils/inboxHtml'
+import { parseAddress, sanitizeEmailHtml, getInitials, getAttachmentIcon } from '~/utils/inboxHtml'
+import { formatBytes } from '~/utils/formatBytes'
 
 const { t } = useI18n()
 
