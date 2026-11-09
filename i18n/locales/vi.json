@@ -3029,6 +3029,7 @@
       "description": "Thư viện tài liệu chuẩn hóa thống nhất giữa đầu vào (Input) và kết quả (Output).",
       "inputTab": "Tài liệu Đầu vào",
       "outputTab": "Kết quả Đầu ra",
+      "searchPlaceholder": "Tìm kiếm tài liệu hoặc thư mục...",
       "createFolder": "Thư mục Mới",
       "folderName": "Tên Thư mục",
       "renameTitle": "Đổi Tên",
@@ -3037,6 +3038,7 @@
       "deleteFolderDesc": "Bạn có chắc muốn xóa thư mục '{name}' và toàn bộ nội dung bên trong?",
       "deleteFileDesc": "Bạn có chắc muốn xóa tài liệu '{name}'?",
       "emptyFolder": "Thư mục này đang trống.",
+      "emptySearch": "Không tìm thấy tài liệu nào khớp từ khóa.",
       "itemCount": "{count} mục"
     },
     "home": {
@@ -3211,7 +3213,10 @@
       "title": "Hoạt động",
       "description": "Mọi công việc của tài khoản này, mới nhất trước.",
       "refresh": "Làm mới",
+      "searchPlaceholder": "Tìm kiếm theo tên công việc, file hoặc mã job...",
       "empty": "Chưa có công việc nào khớp bộ lọc này.",
+      "emptySearch": "Không tìm thấy công việc nào khớp từ khóa.",
+      "artifactsCount": "{count} tệp kết quả",
       "filters": {
         "all": "Tất cả",
         "running": "Đang chạy",

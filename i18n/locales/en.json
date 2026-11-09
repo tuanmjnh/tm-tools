@@ -3029,6 +3029,7 @@
       "description": "Unified document library across input sources and output artifacts.",
       "inputTab": "Input Documents",
       "outputTab": "Output Artifacts",
+      "searchPlaceholder": "Search files or folders...",
       "createFolder": "New Folder",
       "folderName": "Folder Name",
       "renameTitle": "Rename Item",
@@ -3037,6 +3038,7 @@
       "deleteFolderDesc": "Are you sure you want to delete folder '{name}' and all its contents?",
       "deleteFileDesc": "Are you sure you want to delete file '{name}'?",
       "emptyFolder": "This folder is empty.",
+      "emptySearch": "No documents match your search.",
       "itemCount": "{count} items"
     },
     "home": {
@@ -3211,7 +3213,10 @@
       "title": "Activity",
       "description": "Every job this account has run, newest first.",
       "refresh": "Refresh",
+      "searchPlaceholder": "Search by job name, files or job ID...",
       "empty": "No jobs match this filter yet.",
+      "emptySearch": "No jobs match your search.",
+      "artifactsCount": "{count} result files",
       "filters": {
         "all": "All",
         "running": "Running",

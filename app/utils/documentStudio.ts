@@ -97,6 +97,20 @@ export function extensionOf(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
 }
 
+export function documentFileIcon(name: string, isFolder = false): string {
+  if (isFolder) return 'i-lucide-folder'
+  const ext = extensionOf(name)
+  if (ext === 'pdf') return 'i-lucide-file-text'
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(ext)) return 'i-lucide-image'
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return 'i-lucide-table-2'
+  if (['docx', 'doc'].includes(ext)) return 'i-lucide-file-type-2'
+  if (ext === 'json') return 'i-lucide-braces'
+  if (ext === 'xml') return 'i-lucide-code-xml'
+  if (['txt', 'md'].includes(ext)) return 'i-lucide-file-text'
+  if (ext === 'zip') return 'i-lucide-archive'
+  return 'i-lucide-file'
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
