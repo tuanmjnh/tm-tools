@@ -76,6 +76,10 @@ export function useDocumentOperationPage(operationId: string) {
     await Promise.all([loadDefinition(), runtime.load()])
   })
 
+  async function reload() {
+    await Promise.all([loadDefinition(), runtime.load()])
+  }
+
   return {
     definition,
     operationMeta,
@@ -87,6 +91,7 @@ export function useDocumentOperationPage(operationId: string) {
     session,
     runtime,
     loadDefinition,
+    reload,
     addFiles,
     run,
     errorText: computed(() => session.error.value ? t(`document.errors.${session.error.value.code}`) : '')

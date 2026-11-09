@@ -38,7 +38,11 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Server-only: proves tm-tools to the hub AI relay (X-App-Secret). The
     // renderer never holds it — chat goes through local /api/v1/chat routes.
-    hubAppSecret: process.env.NUXT_HUB_APP_SECRET || '',
+    // The default MUST stay empty: reading the env here would bake the secret
+    // into `.output` and ship it inside the public installer. Nitro applies
+    // `NUXT_HUB_APP_SECRET` from the runtime environment instead (host env on
+    // the web, userData/config.env in the desktop app).
+    hubAppSecret: '',
     public: {
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
       hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
@@ -109,6 +113,9 @@ export default defineNuxtConfig({
       dedupe: [
         'vue'
       ]
+    },
+    build: {
+      chunkSizeWarningLimit: 1500
     }
   },
 

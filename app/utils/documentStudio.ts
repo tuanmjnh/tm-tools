@@ -110,3 +110,12 @@ export function documentFileIcon(name: string, isFolder = false): string {
   if (ext === 'zip') return 'i-lucide-archive'
   return 'i-lucide-file'
 }
+
+/**
+ * The local server cannot verify a session until this device holds the same
+ * shared secret TM Hub signs with. Both codes mean "finish the device setup",
+ * not "this operation failed", so the pages point at the Hub settings.
+ */
+export function isDocumentConnectionError(code: string | null | undefined): boolean {
+  return code === 'error.authNotConfigured' || code === 'error.invalidToken'
+}

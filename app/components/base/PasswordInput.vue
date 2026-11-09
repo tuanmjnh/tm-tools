@@ -2,14 +2,16 @@
 const model = defineModel<string>({ default: '' })
 
 const show = ref(false)
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   placeholder?: string
   size?: 'sm' | 'md' | 'lg'
   ariaLabel?: string
+  disabled?: boolean
 }>(), {
   placeholder: '',
   size: 'md',
-  ariaLabel: ''
+  ariaLabel: '',
+  disabled: false
 })
 
 const { t } = useI18n()
@@ -21,6 +23,7 @@ const { t } = useI18n()
     :placeholder="placeholder"
     :size="size"
     :type="show ? 'text' : 'password'"
+    :disabled="disabled"
     :ui="{ trailing: 'pe-1' }"
   >
     <template #trailing>

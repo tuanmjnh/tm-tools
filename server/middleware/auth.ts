@@ -1,3 +1,4 @@
+import { config } from '../config/index'
 import { verifyAccessToken } from '../utils/jwt'
 
 const publicRoutes = [
@@ -6,6 +7,9 @@ const publicRoutes = [
   '/api/auth/refresh',
   '/api/health',
   '/api/system/network',
+  // Connection diagnostics: names what is configured, never a credential.
+  // The desktop setup page has no session before the shared secret exists.
+  '/api/system/connection',
   // Deployment health: names the runtime and whether a provider is configured,
   // never a credential. A monitor cannot hold a user session.
   '/api/v1/documents/health',
@@ -34,14 +38,29 @@ export default defineEventHandler(async (event) => {
   if (!token) {
     throw createError({ statusCode: 401, statusMessage: 'error.tokenMissing', message: 'Missing authorization token' })
   }
+
+  // A fresh desktop install has no shared secret yet. Verifying against an
+  // empty key would report every token as invalid and hide the real cause,
+  // so the missing configuration is named instead.
+  if (!config.auth.accessTokenSecret) {
+    throw createError({
+      statusCode: 503,
+      statusMessage: 'error.authNotConfigured',
+      message: 'Hub connection is not configured on this device'
+    })
+  }
+
   const payload = await verifyAccessToken(token)
 
   if (!payload) {
     throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid or expired token' })
   }
 
-  // Security constraint: Token must match tm-tools appId (except root / cross-app)
-  const currentAppId = process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
+  // Security constraint: Token must match tm-tools appId (except root / cross-app).
+  // The desktop vault can override the id at runtime, so the live env wins over
+  // the public build-time default. An unset id means this deployment is not
+  // bound to one app, so there is nothing to compare against.
+  const currentAppId = config.hub.appId || String(useRuntimeConfig(event).public.hubAppId || '')
   const rawPayload = payload as unknown as Record<string, unknown>
   const capabilities = Array.isArray(rawPayload.capabilities) ? rawPayload.capabilities as string[] : []
   const isRootOrCrossApp = payload.role === 'root'
@@ -51,7 +70,7 @@ export default defineEventHandler(async (event) => {
     || capabilities.includes('*')
     || capabilities.includes('platform.crossapp.read')
 
-  if (payload.appId && payload.appId !== currentAppId && !isRootOrCrossApp) {
+  if (currentAppId && payload.appId && payload.appId !== currentAppId && !isRootOrCrossApp) {
     throw createError({ statusCode: 403, statusMessage: 'error.forbidden', message: 'Token not issued for this application' })
   }
 

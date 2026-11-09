@@ -178,10 +178,12 @@ interface HubRuntimeConfig {
  */
 function hubSettings(event: H3Event): { url: string, appId: string, secret: string } {
   const runtime = useRuntimeConfig(event) as unknown as HubRuntimeConfig
+  // `config.hub` reads process.env per call, so a secret saved from the desktop
+  // settings page is used without restarting the embedded server.
   return {
-    url: String(runtime.public?.hubUrl ?? '').replace(/\/+$/, ''),
-    appId: String(runtime.public?.hubAppId ?? 'tm-tools').trim(),
-    secret: String(runtime.hubAppSecret ?? '').trim()
+    url: String(config.hub.url || runtime.public?.hubUrl || '').replace(/\/+$/, ''),
+    appId: String(config.hub.appId || runtime.public?.hubAppId || 'tm-tools').trim(),
+    secret: String(config.hub.appSecret || runtime.hubAppSecret || '').trim()
   }
 }
 

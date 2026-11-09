@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { PdfOfficeFormat } from '#shared/types/pdf'
-import type { AvailableModel } from '~/types/chat'
 
 interface ExtractModel {
   connectionId: string
@@ -9,6 +8,14 @@ interface ExtractModel {
   modelId: string
   displayName: string
   isDefault: boolean
+}
+
+interface ExtractModelValue {
+  model?: string
+  connectionId?: string
+  presetId?: string
+  formats?: PdfOfficeFormat[]
+  force?: boolean
 }
 
 interface ExtractPreset {
@@ -20,17 +27,11 @@ interface ExtractPreset {
 }
 
 const props = defineProps<{
-  modelValue?: {
-    model?: string
-    connectionId?: string
-    presetId?: string
-    formats?: PdfOfficeFormat[]
-    force?: boolean
-  }
+  modelValue?: ExtractModelValue
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': [val: any]
+  'update:modelValue': [val: ExtractModelValue]
 }>()
 
 const { t } = useI18n()
@@ -111,17 +112,28 @@ function toggleFormat(fmt: PdfOfficeFormat) {
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
-      <USelect v-else :model-value="selectedModel"
+      <USelect
+        v-else-if="modelList.length"
+        :model-value="selectedModel"
         :items="modelList.map(m => ({ label: `${m.displayName} (${m.connectionName})`, value: m.modelId }))"
-        class="w-full" @update:model-value="onModelSelected" />
+        class="w-full"
+        @update:model-value="onModelSelected"
+      />
+      <p v-else class="text-xs text-muted">
+        {{ t('pdf.extract.noModelSelected') }}
+      </p>
     </UFormField>
 
     <!-- Preset selection -->
     <UFormField :label="t('pdf.extract.presets')">
-      <USelect v-model="selectedPresetId" :items="[
-        { label: t('pdf.extract.presetDefault'), value: '__none__' },
-        ...presets.map(p => ({ label: p.name, value: p.id }))
-      ]" class="w-full" />
+      <USelect
+        v-model="selectedPresetId"
+        :items="[
+          { label: t('pdf.extract.presetDefault'), value: '__none__' },
+          ...presets.map(p => ({ label: p.name, value: p.id }))
+        ]"
+        class="w-full"
+      />
     </UFormField>
 
     <!-- Export formats -->
@@ -135,29 +147,44 @@ function toggleFormat(fmt: PdfOfficeFormat) {
         </span>
       </div>
       <div class="flex flex-col gap-2">
-        <button v-for="item in formatOptions" :key="item.format" type="button"
-          class="panel-flat flex items-start gap-3 rounded-lg p-3 text-start transition-all cursor-pointer" :class="[
+        <button
+          v-for="item in formatOptions"
+          :key="item.format"
+          type="button"
+          class="panel-flat flex items-start gap-3 rounded-lg p-3 text-start transition-all cursor-pointer"
+          :class="[
             selectedFormats.includes(item.format)
               ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
               : 'hover:border-primary/50 hover:bg-muted/10'
-          ]" :aria-pressed="selectedFormats.includes(item.format)" @click="toggleFormat(item.format)">
-          <div class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors"
+          ]"
+          :aria-pressed="selectedFormats.includes(item.format)"
+          @click="toggleFormat(item.format)"
+        >
+          <div
+            class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors"
             :class="[
               selectedFormats.includes(item.format)
                 ? 'border-primary/40 bg-primary/10 text-primary'
                 : 'border-default/60 bg-muted/15 text-muted'
-            ]">
-            <UIcon :name="selectedFormats.includes(item.format) ? 'i-lucide-check-circle-2' : item.icon"
-              class="size-4" />
+            ]"
+          >
+            <UIcon
+              :name="selectedFormats.includes(item.format) ? 'i-lucide-check-circle-2' : item.icon"
+              class="size-4"
+            />
           </div>
           <div class="min-w-0 flex-1 space-y-0.5">
             <div class="flex items-center justify-between gap-2">
-              <span class="text-xs font-semibold text-highlighted"
-                :class="{ 'text-primary': selectedFormats.includes(item.format) }">
+              <span
+                class="text-xs font-semibold text-highlighted"
+                :class="{ 'text-primary': selectedFormats.includes(item.format) }"
+              >
                 {{ item.label }}
               </span>
-              <span v-if="selectedFormats.includes(item.format)"
-                class="text-[10px] font-medium uppercase tracking-wider text-primary">
+              <span
+                v-if="selectedFormats.includes(item.format)"
+                class="text-[10px] font-medium uppercase tracking-wider text-primary"
+              >
                 {{ t('pdf.browser.selected') }}
               </span>
             </div>
@@ -171,7 +198,12 @@ function toggleFormat(fmt: PdfOfficeFormat) {
 
     <!-- Force re-extract checkbox -->
     <div class="flex items-center gap-2 pt-1 pb-2">
-      <input id="force-check" v-model="force" type="checkbox" class="size-3.5">
+      <input
+        id="force-check"
+        v-model="force"
+        type="checkbox"
+        class="size-3.5"
+      >
       <label for="force-check" class="text-xs text-muted cursor-pointer">
         {{ t('pdf.extract.force') }}
       </label>

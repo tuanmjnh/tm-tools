@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import { config } from '#server/config'
 
 export interface RelayAttachment {
   mimeType: string
@@ -55,9 +56,12 @@ export class RelayNotConfiguredError extends Error {
  */
 function relayTarget(event?: H3Event): { url: string, headers: Record<string, string> } {
   const runtime = useRuntimeConfig(event)
-  const hubUrl = String(runtime.public.hubUrl || '').replace(/\/+$/, '')
-  const hubAppId = String(runtime.public.hubAppId || '')
-  const hubAppSecret = String(runtime.hubAppSecret || '')
+  // `config.hub` reads process.env on every call, so a secret saved in the
+  // desktop settings applies without a restart. The runtime config snapshot
+  // only carries whatever the process started with.
+  const hubUrl = String(config.hub.url || runtime.public.hubUrl || '').replace(/\/+$/, '')
+  const hubAppId = String(config.hub.appId || runtime.public.hubAppId || '')
+  const hubAppSecret = String(config.hub.appSecret || runtime.hubAppSecret || '')
   if (!hubUrl || !hubAppId || !hubAppSecret) throw new RelayNotConfiguredError()
 
   return {

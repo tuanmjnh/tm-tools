@@ -1,5 +1,6 @@
 import type { DocumentArtifactView, DocumentJobView, DocumentRuntimeCapabilities } from '#shared/types/document'
 import type { DocumentErrorPayload } from './useDocumentApi'
+import { isDocumentConnectionError } from '~/utils/documentStudio'
 
 /**
  * Runs one job: create draft → upload the picked bytes → start → keep the
@@ -114,13 +115,19 @@ export function useDocumentRuntime() {
   const api = useDocumentApi()
   const capabilities = ref<DocumentRuntimeCapabilities | null>(null)
   const outputPath = ref('')
+  const connectionError = ref<string | null>(null)
 
   async function load() {
     try {
       const catalog = await api.operations()
       capabilities.value = catalog.capabilities
-    } catch {
+      connectionError.value = null
+    } catch (caught) {
       capabilities.value = null
+      // A missing or mismatched shared secret is a device setup problem, not
+      // a broken page: keep the code so the UI can point at the Hub settings
+      // instead of showing an empty catalogue with no explanation.
+      connectionError.value = (caught as DocumentErrorPayload)?.code || 'DOCUMENT_STORAGE_UNAVAILABLE'
     }
     try {
       const settings = await api.settings()
@@ -153,5 +160,7 @@ export function useDocumentRuntime() {
     return 'output-folder'
   })
 
-  return { capabilities, outputPath, isLocal, destinationLabel, load, setOutputPath }
+  const needsSetup = computed(() => isDocumentConnectionError(connectionError.value))
+
+  return { capabilities, outputPath, isLocal, destinationLabel, connectionError, needsSetup, load, setOutputPath }
 }

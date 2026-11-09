@@ -17,8 +17,10 @@ export default defineEventHandler(async () => {
   const capabilities = runtimeCapabilities()
   const local = capabilities.runtime === 'local' || capabilities.runtime === 'electron'
   const driver = preferredStorageDriver()
+  // Local/Electron keep job metadata in the filesystem job repository, so the
+  // job store is usable even though no Postgres deployment is configured.
   const database = local
-    ? { configured: false, connected: false }
+    ? { configured: true, connected: true }
     : {
         configured: isDatabaseConfigured(),
         connected: isDatabaseConfigured() ? (await databaseHealth()).ok : false

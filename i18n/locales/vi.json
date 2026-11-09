@@ -1022,6 +1022,40 @@
     "accessibleRoutesHint": "Được tính toán dựa trên phân quyền của vai trò — không lưu trực tiếp routes trên vai trò."
   },
   "settings": {
+    "hub": {
+      "title": "Kết nối Hub",
+      "description": "Kết nối thiết bị này với TM Hub để máy chủ cục bộ xác minh được phiên đăng nhập.",
+      "statusConfigured": "Kết nối sẵn sàng",
+      "statusConfiguredDesc": "Đã có secret chia sẻ. Document Studio và các module đồng bộ khác có thể xác minh phiên Hub của bạn.",
+      "statusMissing": "Thiếu secret chia sẻ",
+      "statusMissingDesc": "Nếu thiếu, mọi API cục bộ đều trả về \"chưa cấu hình\" và Document Studio trống. Hãy dán đúng giá trị AUTH_JWT_SECRET mà TM Hub đang dùng.",
+      "runtime": "Runtime",
+      "appId": "App ID",
+      "appIdDesc": "Id vệ tinh đã đăng ký, ví dụ tm-tools_xxxxxx. Đây là giá trị công khai, không phải thông tin xác thực.",
+      "appSecret": "App Secret",
+      "appSecretDesc": "Secret chỉ dùng ở máy chủ cho Hub AI relay và Hub Storage. Để trống nếu không dùng các tính năng đó.",
+      "loadFailed": "Không đọc được trạng thái kết nối",
+      "loadFailedDesc": "Máy chủ cục bộ không trả lời. Hãy khởi động lại ứng dụng rồi thử lại.",
+      "credentials": "Thông tin xác thực của thiết bị",
+      "vaultHint": "Secret được mã hoá bằng keychain của hệ điều hành trước khi ghi xuống thiết bị và không bao giờ trả về renderer dạng rõ. Mặt nạ đã lưu nghĩa là giữ nguyên giá trị đang có.",
+      "hubUrl": "Hub URL",
+      "hubUrlDesc": "Địa chỉ gốc của phiên bản TM Hub mà thiết bị này đăng nhập.",
+      "sharedSecret": "Secret JWT chia sẻ",
+      "sharedSecretDesc": "Phải giống hệt AUTH_JWT_SECRET trên TM Hub, nếu không mọi token đều bị coi là không hợp lệ.",
+      "secretPlaceholder": "Dán giá trị, hoặc giữ mặt nạ để không thay đổi",
+      "clearSecret": "Xoá secret đã lưu",
+      "restartRequired": "Cần khởi động lại cho giá trị công khai",
+      "restartRequiredDesc": "Hub URL và App ID chỉ đọc một lần lúc khởi động. Secret có hiệu lực ngay; hãy khởi động lại ứng dụng để áp dụng hai giá trị này.",
+      "clearPending": "Một secret đã lưu sẽ bị xoá",
+      "clearPendingDesc": "Khi lưu, secret được đánh dấu sẽ bị xoá khỏi thiết bị. Module cần nó sẽ ngừng hoạt động cho tới khi bạn đặt giá trị mới.",
+      "secretsApplyImmediately": "Thay đổi secret có hiệu lực từ yêu cầu tiếp theo.",
+      "save": "Lưu kết nối",
+      "saved": "Đã lưu kết nối Hub",
+      "saveFailed": "Không lưu được kết nối",
+      "vaultUnavailable": "Không truy cập được kho lưu của thiết bị",
+      "webTitle": "Cấu hình bằng môi trường máy chủ",
+      "webDesc": "Trên bản web, các giá trị này lấy từ môi trường máy chủ chứ không phải trình duyệt. Hãy đặt chúng ở nơi host ứng dụng:"
+    },
     "appearance": "Hiển thị",
     "theme": "Giao diện",
     "systemTheme": "Theo hệ thống",
@@ -3024,6 +3058,12 @@
     "deleteConfirmDesc": "Xóa mềm route '{id}'? Route sẽ biến mất khỏi menu."
   },
   "document": {
+    "connection": {
+      "title": "Thiết bị này chưa kết nối với Hub",
+      "notConfigured": "Máy chủ cục bộ chưa có secret JWT chia sẻ nên không xác minh được phiên đăng nhập, danh sách công cụ vì thế trống. Hãy mở cài đặt kết nối Hub và dán đúng giá trị AUTH_JWT_SECRET mà TM Hub đang dùng.",
+      "invalidToken": "Máy chủ cục bộ đã từ chối token phiên của bạn. Nhiều khả năng secret JWT chia sẻ trên thiết bị khác với secret TM Hub dùng để ký. Hãy cập nhật trong cài đặt kết nối Hub rồi đăng nhập lại.",
+      "openSettings": "Cài đặt kết nối Hub"
+    },
     "library": {
       "title": "Thư viện Tài liệu",
       "description": "Thư viện tài liệu chuẩn hóa thống nhất giữa đầu vào (Input) và kết quả (Output).",

@@ -42,6 +42,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const isRoot = user.role === 'root' || user.permissions?.includes('*')
   if (isRoot) return
 
+  // Device configuration, not a Hub module: the local server cannot serve any
+  // tool until the shared secret is set, so any signed-in user on this install
+  // has to be able to open the page that sets it.
+  if (to.path === '/system/settings/hub') return
+
   const nav = useNavMenu()
   const routes = await nav.fetchRoutes()
 

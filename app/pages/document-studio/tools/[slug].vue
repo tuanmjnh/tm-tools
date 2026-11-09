@@ -55,6 +55,7 @@ function handleRun() {
       <DocumentStudioOperationPageShell
         :operation="page.definition.value"
         :capabilities="page.runtime.capabilities.value"
+        :connection-code="page.runtime.connectionError.value"
         :files="page.selection.files.value"
         :ready="isReady"
         :running="page.session.running.value"
@@ -69,6 +70,7 @@ function handleRun() {
         @remove="page.selection.remove"
         @move="page.selection.move"
         @reset="page.selection.clear"
+        @reload="page.reload"
         @run="handleRun"
         @deleted="page.session.removeArtifact"
       >

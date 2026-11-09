@@ -20,7 +20,8 @@
     "check:hygiene": "tsx tools/check-source-hygiene.mts",
     "test:unit": "tsx tests/unit/run-all.mts",
     "build:electron:main": "esbuild electron/src/index.ts --bundle --platform=node --target=node20 --outfile=electron/dist/index.cjs --external:electron --external:better-sqlite3",
-    "build:electron": "pnpm build:electron:main && nuxt build && electron-builder --win --config electron-builder.yml",
+    "dereference:output": "node electron/tools/dereference-links.cjs .output",
+    "build:electron": "pnpm build:electron:main && nuxt build && pnpm dereference:output && electron-builder --win --config electron-builder.yml",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
@@ -111,7 +112,7 @@
     "concurrently": "^10.0.4",
     "drizzle-kit": "^0.31.10",
     "electron": "^44.9.1",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.8.0",
     "tsx": "^4.23.1",

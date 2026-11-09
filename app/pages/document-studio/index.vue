@@ -12,6 +12,7 @@ const available = ref<Set<string>>(new Set())
 const jobs = ref<DocumentJobView[]>([])
 const loading = ref(true)
 const search = ref('')
+const connectionError = ref<string | null>(null)
 
 async function load() {
   loading.value = true
@@ -21,9 +22,11 @@ async function load() {
     // The server decides which operations it can actually execute, so a card
     // with no executor never reaches the page in the first place.
     available.value = new Set(catalog.operations.filter(operation => operation.available).map(operation => operation.id))
-  } catch {
+    connectionError.value = null
+  } catch (caught) {
     capabilities.value = null
     available.value = new Set()
+    connectionError.value = (caught as { code?: string })?.code || null
   }
   try {
     jobs.value = await api.jobs({ limit: '5' })
@@ -60,7 +63,7 @@ const activeJobs = computed(() =>
 
 const runtimeLabel = computed(() => {
   const runtime = capabilities.value?.runtime
-  return runtime ? t(`document.runtime.${runtime}`) : t('document.runtime.local')
+  return runtime ? t(`document.runtime.${runtime}`) : ''
 })
 
 function statusColor(status: DocumentJobView['status']): 'neutral' | 'info' | 'success' | 'warning' | 'error' {
@@ -82,17 +85,29 @@ function operationLabel(operationId: string): string {
   <BasePage id="document-studio" :title="t('document.home.title')" :description="t('document.home.description')">
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 sm:p-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <UInput v-model="search" icon="i-lucide-search" :placeholder="t('document.home.search')"
-          class="w-full sm:max-w-xs" />
+        <UInput
+          v-model="search"
+          icon="i-lucide-search"
+          :placeholder="t('document.home.search')"
+          class="w-full sm:max-w-xs"
+        />
         <div class="flex items-center gap-2">
-          <UButton to="/document-studio/activity" icon="i-lucide-history" color="neutral" variant="soft" size="sm"
-            :label="t('document.activity.title')" />
-          <div class="flex items-center gap-2 text-xs text-muted">
+          <UButton
+            to="/document-studio/activity"
+            icon="i-lucide-history"
+            color="neutral"
+            variant="soft"
+            size="sm"
+            :label="t('document.activity.title')"
+          />
+          <div v-if="runtimeLabel" class="flex items-center gap-2 text-xs text-muted">
             <UIcon name="i-lucide-cpu" class="size-4" />
             <span>{{ runtimeLabel }}</span>
           </div>
         </div>
       </div>
+
+      <DocumentStudioConnectionAlert :code="connectionError" @retry="load" />
 
       <div v-if="activeJobs.length" class="rounded-lg border border-info/40 bg-info/5 p-3">
         <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-info">
@@ -119,8 +134,12 @@ function operationLabel(operationId: string): string {
             {{ t(`document.groups.${entry.group}`) }}
           </h2>
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <NuxtLink v-for="operation in entry.operations" :key="operation.id" :to="operation.route"
-              class="panel-flat flex items-start gap-3 p-4 transition-colors hover:border-primary/60">
+            <NuxtLink
+              v-for="operation in entry.operations"
+              :key="operation.id"
+              :to="operation.route"
+              class="panel-flat flex items-start gap-3 p-4 transition-colors hover:border-primary/60"
+            >
               <div class="rounded-md bg-primary/10 p-2">
                 <UIcon :name="operation.icon" class="size-5 text-primary" />
               </div>

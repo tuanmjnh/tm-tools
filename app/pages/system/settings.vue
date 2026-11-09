@@ -6,6 +6,7 @@ const { t } = useI18n()
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: t('settings.appearance'), icon: 'i-lucide-palette', to: '/system/settings/appearance' },
   { label: t('nav.system'), icon: 'i-lucide-cpu', to: '/system/settings/system' },
+  { label: t('settings.hub.title'), icon: 'i-lucide-plug-zap', to: '/system/settings/hub' },
   { label: t('profile.info'), icon: 'i-lucide-user-circle', to: '/system/settings/profile' },
   { label: t('profile.security'), icon: 'i-lucide-shield', to: '/system/settings/security' },
   { label: t('profile.sessions'), icon: 'i-lucide-monitor-smartphone', to: '/system/settings/sessions' },

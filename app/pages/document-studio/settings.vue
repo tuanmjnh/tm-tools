@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { isDocumentConnectionError } from '~/utils/documentStudio'
+
 const { t } = useI18n()
 const api = useDocumentApi()
 const { pickFolder } = useFileSystem()
@@ -12,11 +14,13 @@ const settings = ref<Settings | null>(null)
 const health = ref<Health | null>(null)
 const loading = ref(true)
 const error = ref('')
+const errorCode = ref<string | null>(null)
 const customOutputPath = ref('')
 
 async function load() {
   loading.value = true
   error.value = ''
+  errorCode.value = null
   try {
     const [nextSettings, nextHealth] = await Promise.all([api.settings(), api.health()])
     settings.value = nextSettings
@@ -25,7 +29,8 @@ async function load() {
       const saved = localStorage.getItem(OUTPUT_PATH_STORAGE_KEY)
       customOutputPath.value = saved || nextSettings.defaultOutputPath
     }
-  } catch {
+  } catch (caught) {
+    errorCode.value = (caught as { code?: string })?.code || null
     error.value = t('document.errors.generic')
   } finally {
     loading.value = false
@@ -83,15 +88,30 @@ const limits = computed(() => health.value?.limits ?? null)
 </script>
 
 <template>
-  <BasePage id="document-studio-settings" :title="t('document.settings.title')"
-    :description="t('document.settings.description')">
+  <BasePage
+    id="document-studio-settings"
+    :title="t('document.settings.title')"
+    :description="t('document.settings.description')"
+  >
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 sm:p-6">
       <div v-if="loading" class="flex items-center gap-2 text-sm text-muted">
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
 
-      <UAlert v-else-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="error" />
+      <DocumentStudioConnectionAlert
+        v-else-if="isDocumentConnectionError(errorCode)"
+        :code="errorCode"
+        @retry="load"
+      />
+
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-lucide-circle-alert"
+        :title="error"
+      />
 
       <template v-else>
         <section class="panel-flat rounded-lg p-4">
@@ -104,8 +124,10 @@ const limits = computed(() => health.value?.limits ?? null)
                 {{ t('document.settings.storage.delivery') }}
               </dt>
               <dd class="mt-0.5 flex items-center gap-2 text-sm">
-                <UIcon :name="folderDelivery ? 'i-lucide-folder-output' : 'i-lucide-download'"
-                  class="size-4 text-primary" />
+                <UIcon
+                  :name="folderDelivery ? 'i-lucide-folder-output' : 'i-lucide-download'"
+                  class="size-4 text-primary"
+                />
                 {{ folderDelivery ? t('document.settings.storage.folder') : t('document.settings.storage.download') }}
               </dd>
             </div>
@@ -117,12 +139,30 @@ const limits = computed(() => health.value?.limits ?? null)
               <dd class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <UInput v-model="customOutputPath" class="w-full flex-1 font-mono text-xs" />
                 <div class="flex items-center gap-2 shrink-0">
-                  <UButton color="neutral" variant="soft" size="xs" icon="i-lucide-folder-open"
-                    :label="t('document.input.browseFolder')" @click="handleBrowseFolder" />
-                  <UButton color="primary" variant="soft" size="xs" icon="i-lucide-save"
-                    :label="t('global.save')" @click="saveOutputPath" />
-                  <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-rotate-ccw"
-                    :label="t('global.reset')" @click="resetOutputPath" />
+                  <UButton
+                    color="neutral"
+                    variant="soft"
+                    size="xs"
+                    icon="i-lucide-folder-open"
+                    :label="t('document.input.browseFolder')"
+                    @click="handleBrowseFolder"
+                  />
+                  <UButton
+                    color="primary"
+                    variant="soft"
+                    size="xs"
+                    icon="i-lucide-save"
+                    :label="t('global.save')"
+                    @click="saveOutputPath"
+                  />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-rotate-ccw"
+                    :label="t('global.reset')"
+                    @click="resetOutputPath"
+                  />
                 </div>
               </dd>
             </div>
@@ -184,8 +224,8 @@ const limits = computed(() => health.value?.limits ?? null)
             <UBadge :color="driverReady ? 'success' : 'warning'" variant="soft" size="sm">
               {{ driverReady ? t('document.settings.runtime.persistent') : t('document.settings.runtime.ephemeral') }}
             </UBadge>
-            <span>{{ health?.storage.mode === 'durable' ? t('document.settings.runtime.durableHint') :
-              t('document.settings.runtime.ephemeralHint') }}</span>
+            <span>{{ health?.storage.mode === 'durable' ? t('document.settings.runtime.durableHint')
+              : t('document.settings.runtime.ephemeralHint') }}</span>
           </p>
         </section>
 
@@ -235,12 +275,19 @@ const limits = computed(() => health.value?.limits ?? null)
           </h2>
           <p class="mt-3 text-sm">
             {{ t('document.settings.cleanup.retention', {
-              days: settings.defaultRetentionDays, max:
+              days: settings.defaultRetentionDays,
+              max:
                 settings.maxRetentionDays }) }}
           </p>
           <div class="mt-3 flex flex-wrap items-center gap-2">
-            <UButton to="/document-studio/activity" icon="i-lucide-history" color="neutral" variant="soft" size="sm"
-              :label="t('document.settings.cleanup.deleteNow')" />
+            <UButton
+              to="/document-studio/activity"
+              icon="i-lucide-history"
+              color="neutral"
+              variant="soft"
+              size="sm"
+              :label="t('document.settings.cleanup.deleteNow')"
+            />
             <span class="text-xs text-muted">{{ t('document.settings.cleanup.deleteHint') }}</span>
           </div>
         </section>

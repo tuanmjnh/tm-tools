@@ -1022,6 +1022,40 @@
     "accessibleRoutesHint": "Calculated from this role’s permissions — routes are not saved on the role."
   },
   "settings": {
+    "hub": {
+      "title": "Hub connection",
+      "description": "Connect this device to TM Hub so the local server can verify your session.",
+      "statusConfigured": "Connection ready",
+      "statusConfiguredDesc": "The shared secret is set. Document Studio and the other synced modules can verify your Hub session.",
+      "statusMissing": "Shared secret missing",
+      "statusMissingDesc": "Without it every local API answer is \"not configured\" and Document Studio stays empty. Paste the same AUTH_JWT_SECRET value TM Hub uses.",
+      "runtime": "Runtime",
+      "appId": "App ID",
+      "appIdDesc": "The registered satellite id, for example tm-tools_xxxxxx. It is public, not a credential.",
+      "appSecret": "App Secret",
+      "appSecretDesc": "Server-only secret for the Hub AI relay and Hub Storage grants. Leave empty to keep those features off.",
+      "loadFailed": "Connection status unavailable",
+      "loadFailedDesc": "The local server did not answer. Restart the app and try again.",
+      "credentials": "Device credentials",
+      "vaultHint": "Secrets are encrypted with the operating system keychain before they are written to this device, and they are never sent to the renderer in clear text. A saved mask means the stored value is kept unchanged.",
+      "hubUrl": "Hub URL",
+      "hubUrlDesc": "Base address of the TM Hub instance this device signs in to.",
+      "sharedSecret": "Shared JWT secret",
+      "sharedSecretDesc": "Must match AUTH_JWT_SECRET on TM Hub exactly, otherwise every token is rejected as invalid.",
+      "secretPlaceholder": "Paste the value, or leave the mask to keep it",
+      "clearSecret": "Remove stored secret",
+      "restartRequired": "Restart needed for the public values",
+      "restartRequiredDesc": "Hub URL and App ID are read once at startup. Secrets apply immediately; restart the app to apply these two.",
+      "clearPending": "A stored secret will be removed",
+      "clearPendingDesc": "Saving deletes the marked secret from this device. Modules that need it stop working until you set a new value.",
+      "secretsApplyImmediately": "Secret changes take effect on the next request.",
+      "save": "Save connection",
+      "saved": "Hub connection saved",
+      "saveFailed": "Could not save the connection",
+      "vaultUnavailable": "Device vault unavailable",
+      "webTitle": "Configured by the host environment",
+      "webDesc": "On a web deployment these values come from the server environment, not from the browser. Set them where the app is hosted:"
+    },
     "appearance": "Appearance",
     "theme": "Theme",
     "systemTheme": "System",
@@ -3024,6 +3058,12 @@
     "deleteConfirmDesc": "Soft-delete route '{id}'? It will disappear from the menu."
   },
   "document": {
+    "connection": {
+      "title": "This device is not connected to Hub",
+      "notConfigured": "The local server has no shared JWT secret, so it cannot verify your session and every tool list stays empty. Open the Hub connection settings and paste the same AUTH_JWT_SECRET value TM Hub uses.",
+      "invalidToken": "The local server rejected your session token. The shared JWT secret on this device probably differs from the one TM Hub signs with. Update it in the Hub connection settings, then sign in again.",
+      "openSettings": "Hub connection settings"
+    },
     "library": {
       "title": "Document Library",
       "description": "Unified document library across input sources and output artifacts.",

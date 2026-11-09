@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { DocumentArtifactView, DocumentJobView } from '#shared/types/document'
-import { DOCUMENT_STUDIO_OPERATIONS, documentFileIcon } from '~/utils/documentStudio'
+import { DOCUMENT_STUDIO_OPERATIONS, documentFileIcon, isDocumentConnectionError } from '~/utils/documentStudio'
 import { formatBytes } from '~/utils/formatBytes'
 import {
   copyToClipboard,
@@ -23,6 +23,7 @@ const { viewMode } = useAdminGridView('document-activity-view-mode')
 const jobs = ref<DocumentJobView[]>([])
 const loading = ref(true)
 const error = ref('')
+const errorCode = ref<string | null>(null)
 const filter = ref<Filter>('all')
 const search = ref('')
 const busy = ref('')
@@ -41,9 +42,11 @@ const FILTER_STATUS: Record<Exclude<Filter, 'all'>, DocumentJobView['status'][]>
 async function load() {
   loading.value = true
   error.value = ''
+  errorCode.value = null
   try {
     jobs.value = await api.jobs({ limit: '50' })
-  } catch {
+  } catch (caught) {
+    errorCode.value = (caught as { code?: string })?.code || null
     error.value = t('document.errors.generic')
     jobs.value = []
   } finally {
@@ -363,8 +366,11 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
 </script>
 
 <template>
-  <BasePage id="document-studio-activity" :title="t('document.activity.title')"
-    :description="t('document.activity.description')">
+  <BasePage
+    id="document-studio-activity"
+    :title="t('document.activity.title')"
+    :description="t('document.activity.description')"
+  >
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 sm:p-6">
       <!-- Search, filter and actions toolbar -->
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -380,30 +386,63 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
 
         <div class="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
           <div class="flex flex-wrap items-center gap-1">
-            <UButton v-for="entry in FILTERS" :key="entry" size="xs" :color="filter === entry ? 'primary' : 'neutral'"
+            <UButton
+              v-for="entry in FILTERS"
+              :key="entry"
+              size="xs"
+              :color="filter === entry ? 'primary' : 'neutral'"
               :variant="filter === entry ? 'soft' : 'ghost'"
-              :label="`${t(`document.activity.filters.${entry}`)} (${counts[entry]})`" @click="filter = entry" />
+              :label="`${t(`document.activity.filters.${entry}`)} (${counts[entry]})`"
+              @click="filter = entry"
+            />
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0">
             <AdminViewModeToggle v-model="viewMode" />
-            <UButton v-if="desktop && outputPath" icon="i-lucide-folder-open" color="neutral" variant="ghost" size="xs"
-              :label="t('document.activity.openOutputFolder')" @click="openOutputFolder" />
-            <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="xs" :loading="loading"
-              :label="t('document.activity.refresh')" @click="load" />
+            <UButton
+              v-if="desktop && outputPath"
+              icon="i-lucide-folder-open"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :label="t('document.activity.openOutputFolder')"
+              @click="openOutputFolder"
+            />
+            <UButton
+              icon="i-lucide-refresh-cw"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              :loading="loading"
+              :label="t('document.activity.refresh')"
+              @click="load"
+            />
           </div>
         </div>
       </div>
 
-      <UAlert v-if="error" color="error" variant="soft" icon="i-lucide-circle-alert" :title="error" />
+      <DocumentStudioConnectionAlert
+        v-if="isDocumentConnectionError(errorCode)"
+        :code="errorCode"
+        @retry="load"
+      />
+      <UAlert
+        v-else-if="error"
+        color="error"
+        variant="soft"
+        icon="i-lucide-circle-alert"
+        :title="error"
+      />
 
       <div v-if="loading" class="flex items-center gap-2 text-sm text-muted">
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
 
-      <p v-else-if="!visible.length"
-        class="panel-flat rounded-lg border border-dashed border-default/70 p-6 text-center text-sm text-muted">
+      <p
+        v-else-if="!visible.length"
+        class="panel-flat rounded-lg border border-dashed border-default/70 p-6 text-center text-sm text-muted"
+      >
         {{ search ? t('document.activity.emptySearch') : t('document.activity.empty') }}
       </p>
 
@@ -422,8 +461,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                   </span>
                 </div>
                 <UDropdownMenu :items="jobMenu(job)">
-                  <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
-                    :aria-label="t('document.result.more')" />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-ellipsis-vertical"
+                    :aria-label="t('document.result.more')"
+                  />
                 </UDropdownMenu>
               </div>
 
@@ -432,11 +476,17 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                 <span>{{ t('document.summary.files', { count: job.inputCount }) }} · {{ formatBytes(job.totalInputBytes) }}</span>
               </div>
 
-              <div v-if="job.status === 'running' || job.status === 'publishing' || job.status === 'queued'"
-                class="flex items-center gap-2">
-                <UProgress :model-value="job.progress.totalUnits
-                  ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
-                  : 0" size="xs" class="flex-1" />
+              <div
+                v-if="job.status === 'running' || job.status === 'publishing' || job.status === 'queued'"
+                class="flex items-center gap-2"
+              >
+                <UProgress
+                  :model-value="job.progress.totalUnits
+                    ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
+                    : 0"
+                  size="xs"
+                  class="flex-1"
+                />
                 <span class="text-xs text-muted">
                   {{ job.progress.completedUnits }}/{{ job.progress.totalUnits }}
                 </span>
@@ -452,9 +502,15 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                   <span class="font-medium uppercase tracking-wider text-[10px]">
                     {{ t('document.activity.artifactsCount', { count: job.artifacts.length }) }}
                   </span>
-                  <UButton v-if="downloadableArtifacts(job).length > 1" color="neutral" variant="ghost" size="xs"
-                    icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
-                    @click="triggerDownload(archivePath(job.id))" />
+                  <UButton
+                    v-if="downloadableArtifacts(job).length > 1"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-folder-down"
+                    :label="t('document.result.downloadAll')"
+                    @click="triggerDownload(archivePath(job.id))"
+                  />
                 </div>
                 <ul class="max-h-40 overflow-y-auto space-y-1 pr-1">
                   <li v-for="artifact in job.artifacts" :key="artifact.id">
@@ -462,9 +518,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                       <div class="flex items-center justify-between gap-2 rounded-md bg-elevated/40 px-2 py-1.5 transition-colors hover:bg-muted/20">
                         <div class="flex items-center gap-1.5 min-w-0 flex-1">
                           <UIcon :name="documentFileIcon(artifact.fileName)" class="size-3.5 shrink-0 text-dimmed" />
-                          <button v-if="canPreview(artifact)" type="button"
+                          <button
+                            v-if="canPreview(artifact)"
+                            type="button"
                             class="truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
-                            :title="artifact.fileName" @click="handleArtifactClick(artifact)">
+                            :title="artifact.fileName"
+                            @click="handleArtifactClick(artifact)"
+                          >
                             {{ artifact.fileName }}
                           </button>
                           <span v-else class="truncate text-xs" :title="artifact.fileName">
@@ -473,8 +533,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                         </div>
                         <span class="text-[11px] text-muted shrink-0">{{ formatBytes(artifact.size) }}</span>
                         <UDropdownMenu :items="artifactMenu(job, artifact)">
-                          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
-                            :aria-label="t('document.result.more')" />
+                          <UButton
+                            color="neutral"
+                            variant="ghost"
+                            size="xs"
+                            icon="i-lucide-ellipsis-vertical"
+                            :aria-label="t('document.result.more')"
+                          />
                         </UDropdownMenu>
                       </div>
                     </AppContextMenu>
@@ -505,16 +570,27 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                   {{ t('document.summary.files', { count: job.inputCount }) }} · {{ formatBytes(job.totalInputBytes) }}
                 </span>
                 <UDropdownMenu :items="jobMenu(job)">
-                  <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
-                    :aria-label="t('document.result.more')" />
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-ellipsis-vertical"
+                    :aria-label="t('document.result.more')"
+                  />
                 </UDropdownMenu>
               </div>
 
-              <div v-if="job.status === 'running' || job.status === 'publishing' || job.status === 'queued'"
-                class="flex items-center gap-2">
-                <UProgress :model-value="job.progress.totalUnits
-                  ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
-                  : 0" size="xs" class="flex-1" />
+              <div
+                v-if="job.status === 'running' || job.status === 'publishing' || job.status === 'queued'"
+                class="flex items-center gap-2"
+              >
+                <UProgress
+                  :model-value="job.progress.totalUnits
+                    ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
+                    : 0"
+                  size="xs"
+                  class="flex-1"
+                />
                 <span class="text-xs text-muted">
                   {{ job.progress.completedUnits }}/{{ job.progress.totalUnits }}
                 </span>
@@ -530,9 +606,15 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                   <span class="font-medium uppercase tracking-wider text-[10px]">
                     {{ t('document.activity.artifactsCount', { count: job.artifacts.length }) }}
                   </span>
-                  <UButton v-if="downloadableArtifacts(job).length > 1" color="neutral" variant="ghost" size="xs"
-                    icon="i-lucide-folder-down" :label="t('document.result.downloadAll')"
-                    @click="triggerDownload(archivePath(job.id))" />
+                  <UButton
+                    v-if="downloadableArtifacts(job).length > 1"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-folder-down"
+                    :label="t('document.result.downloadAll')"
+                    @click="triggerDownload(archivePath(job.id))"
+                  />
                 </div>
                 <ul class="max-h-48 overflow-y-auto space-y-1 pr-1">
                   <li v-for="artifact in job.artifacts" :key="artifact.id">
@@ -540,9 +622,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                       <div class="flex items-center justify-between gap-2 rounded-md bg-elevated/40 px-2 py-1.5 transition-colors hover:bg-muted/20">
                         <div class="flex items-center gap-2 min-w-0 flex-1">
                           <UIcon :name="documentFileIcon(artifact.fileName)" class="size-3.5 shrink-0 text-dimmed" />
-                          <button v-if="canPreview(artifact)" type="button"
+                          <button
+                            v-if="canPreview(artifact)"
+                            type="button"
                             class="truncate text-start text-xs font-medium text-foreground hover:underline hover:text-primary cursor-pointer"
-                            :title="artifact.fileName" @click="handleArtifactClick(artifact)">
+                            :title="artifact.fileName"
+                            @click="handleArtifactClick(artifact)"
+                          >
                             {{ artifact.fileName }}
                           </button>
                           <span v-else class="truncate text-xs" :title="artifact.fileName">
@@ -558,8 +644,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                             {{ t('document.activity.expired') }}
                           </span>
                           <UDropdownMenu :items="artifactMenu(job, artifact)">
-                            <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-ellipsis-vertical"
-                              :aria-label="t('document.result.more')" />
+                            <UButton
+                              color="neutral"
+                              variant="ghost"
+                              size="xs"
+                              icon="i-lucide-ellipsis-vertical"
+                              :aria-label="t('document.result.more')"
+                            />
                           </UDropdownMenu>
                         </div>
                       </div>
@@ -572,9 +663,15 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
         </div>
       </div>
 
-      <BaseConfirmModal v-model:open="deleteOpen" :title="deleteTitle" :description="deleteDescription"
-        :loading="deleting" :confirm-label="t('global.delete')" @confirm="confirmDelete"
-        @cancel="pendingDelete = null" />
+      <BaseConfirmModal
+        v-model:open="deleteOpen"
+        :title="deleteTitle"
+        :description="deleteDescription"
+        :loading="deleting"
+        :confirm-label="t('global.delete')"
+        @confirm="confirmDelete"
+        @cancel="pendingDelete = null"
+      />
     </div>
   </BasePage>
 </template>

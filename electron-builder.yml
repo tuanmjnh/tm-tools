@@ -24,9 +24,15 @@ extraResources:
       - "**/*.exe"
       - "**/*.json"
       - "**/*.node"
+afterPack: electron/tools/brand-exe.cjs
 win:
   icon: public/icon.ico
   executableName: TM Tools
+  # electron-builder edits the freshly written exe resources with no retry, and an
+  # external scanner can hold the 235 MB file briefly. brand-exe.cjs applies the
+  # same branding through the same resedit helper with an EBUSY retry loop.
+  # Asar integrity is written earlier (ElectronFramework.beforeCopyExtraFiles).
+  signAndEditExecutable: false
   target:
     - nsis
 nsis:

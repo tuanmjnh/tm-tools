@@ -5,7 +5,7 @@
 .nitro
 .cache
 .playwright-mcp
-.tmp-design
+.tmp-*
 .superpowers
 scratch
 dist
