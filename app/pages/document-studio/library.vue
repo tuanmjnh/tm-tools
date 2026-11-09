@@ -83,177 +83,112 @@ function fileIcon(name: string, isFolder: boolean): string {
 </script>
 
 <template>
-  <BasePage
-    id="document-library"
-    :title="t('document.library.title')"
-    :description="t('document.library.description')"
-  >
+  <BasePage id="document-library" :title="t('document.library.title')" :description="t('document.library.description')">
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 sm:p-6">
       <!-- Top controls, search & tabs -->
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex flex-wrap items-center gap-3">
-          <UTabs
-            :items="tabs"
-            :model-value="library.root.value"
-            @update:model-value="onTabChange"
-          />
+          <UTabs :items="tabs" :model-value="library.root.value" size="xs" :ui="{ root: 'gap-0' }"
+            @update:model-value="onTabChange" />
           <div class="w-full sm:w-64">
-            <UInput
-              v-model="search"
-              icon="i-lucide-search"
-              size="sm"
-              class="w-full"
-              :placeholder="t('document.library.searchPlaceholder')"
-            />
+            <UInput v-model="search" icon="i-lucide-search" size="md" class="w-full"
+              :placeholder="t('document.library.searchPlaceholder')" />
           </div>
         </div>
 
         <div class="flex items-center gap-2">
           <AdminViewModeToggle v-model="viewMode" />
-          <UButton
-            icon="i-lucide-folder-plus"
-            color="neutral"
-            variant="soft"
-            size="sm"
-            :label="t('document.library.createFolder')"
-            @click="openCreateFolder"
-          />
-          <UButton
-            icon="i-lucide-refresh-cw"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :loading="library.loading.value"
-            @click="() => library.load()"
-          />
+          <UButton icon="i-lucide-folder-plus" color="neutral" variant="soft" size="sm"
+            :label="t('document.library.createFolder')" @click="openCreateFolder" />
+          <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" size="sm" :loading="library.loading.value"
+            @click="() => library.load()" />
         </div>
       </div>
 
       <!-- Breadcrumbs -->
       <nav class="flex items-center gap-1.5 text-xs text-muted">
         <template v-for="(crumb, idx) in library.breadcrumbs.value" :key="crumb.path">
-          <button
-            class="hover:text-primary hover:underline"
+          <button class="hover:text-primary hover:underline"
             :class="{ 'font-semibold text-foreground': idx === library.breadcrumbs.value.length - 1 }"
-            @click="library.navigateToFolder(crumb.path)"
-          >
+            @click="library.navigateToFolder(crumb.path)">
             {{ crumb.name }}
           </button>
-          <UIcon
-            v-if="idx < library.breadcrumbs.value.length - 1"
-            name="i-lucide-chevron-right"
-            class="size-3 text-dimmed"
-          />
+          <UIcon v-if="idx < library.breadcrumbs.value.length - 1" name="i-lucide-chevron-right"
+            class="size-3 text-dimmed" />
         </template>
       </nav>
 
       <!-- Content listing -->
-      <div v-if="library.loading.value && !library.items.value.length" class="flex items-center gap-2 text-sm text-muted">
+      <div v-if="library.loading.value && !library.items.value.length"
+        class="flex items-center gap-2 text-sm text-muted">
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
 
-      <div v-else-if="!filteredItems.length" class="panel-flat rounded-lg border border-dashed border-default/70 p-8 text-center text-muted">
+      <div v-else-if="!filteredItems.length"
+        class="panel-flat rounded-lg border border-dashed border-default/70 p-8 text-center text-muted">
         <UIcon name="i-lucide-folder-open" class="mx-auto mb-2 size-8 text-dimmed" />
-        <p class="text-sm font-medium">{{ search ? t('document.library.emptySearch') : t('document.library.emptyFolder') }}</p>
+        <p class="text-sm font-medium">{{ search ? t('document.library.emptySearch') : t('document.library.emptyFolder')
+          }}
+        </p>
       </div>
 
       <!-- Grid Mode -->
       <div v-else-if="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-        <div
-          v-for="item in filteredItems"
-          :key="item.relativePath"
-          class="panel-flat rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors hover:border-primary/50 group"
-        >
-          <div
-            class="flex items-start gap-2.5 cursor-pointer min-w-0"
-            @click="item.isFolder ? library.navigateToFolder(item.relativePath) : null"
-          >
-            <UIcon
-              :name="documentFileIcon(item.name, item.isFolder)"
-              class="size-6 shrink-0 mt-0.5"
-              :class="item.isFolder ? 'text-amber-500' : 'text-primary'"
-            />
+        <div v-for="item in filteredItems" :key="item.relativePath"
+          class="panel-flat rounded-lg p-3.5 flex flex-col justify-between gap-3 transition-colors hover:border-primary/50 group">
+          <div class="flex items-start gap-2.5 cursor-pointer min-w-0"
+            @click="item.isFolder ? library.navigateToFolder(item.relativePath) : null">
+            <UIcon :name="documentFileIcon(item.name, item.isFolder)" class="size-6 shrink-0 mt-0.5"
+              :class="item.isFolder ? 'text-amber-500' : 'text-primary'" />
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-foreground group-hover:text-primary transition-colors" :title="item.name">
+              <p class="truncate text-sm font-medium text-foreground group-hover:text-primary transition-colors"
+                :title="item.name">
                 {{ item.name }}
               </p>
               <p class="text-xs text-muted mt-0.5">
-                {{ item.isFolder ? t('document.library.itemCount', { count: item.fileCount || 0 }) : formatBytes(item.size) }}
+                {{ item.isFolder ? t('document.library.itemCount', { count: item.fileCount || 0 }) :
+                  formatBytes(item.size) }}
               </p>
             </div>
           </div>
 
           <div class="flex items-center justify-end gap-1 border-t border-default/40 pt-2">
-            <UButton
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              @click="openRename(item)"
-            />
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="xs"
-              @click="openDelete(item)"
-            />
+            <UButton icon="i-lucide-pencil" color="neutral" variant="ghost" size="xs" @click="openRename(item)" />
+            <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" @click="openDelete(item)" />
           </div>
         </div>
       </div>
 
       <!-- List Mode -->
       <div v-else class="panel-flat divide-y divide-default/50 rounded-lg">
-        <div
-          v-for="item in filteredItems"
-          :key="item.relativePath"
-          class="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-muted/10 group"
-        >
-          <div
-            class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
-            @click="item.isFolder ? library.navigateToFolder(item.relativePath) : null"
-          >
-            <UIcon
-              :name="documentFileIcon(item.name, item.isFolder)"
-              class="size-5 shrink-0"
-              :class="item.isFolder ? 'text-amber-500' : 'text-primary'"
-            />
+        <div v-for="item in filteredItems" :key="item.relativePath"
+          class="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-muted/10 group">
+          <div class="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+            @click="item.isFolder ? library.navigateToFolder(item.relativePath) : null">
+            <UIcon :name="documentFileIcon(item.name, item.isFolder)" class="size-5 shrink-0"
+              :class="item.isFolder ? 'text-amber-500' : 'text-primary'" />
             <div class="min-w-0 flex-1">
               <p class="truncate text-sm font-medium group-hover:text-primary transition-colors">{{ item.name }}</p>
               <p class="text-xs text-muted">
-                {{ item.isFolder ? t('document.library.itemCount', { count: item.fileCount || 0 }) : formatBytes(item.size) }}
+                {{ item.isFolder ? t('document.library.itemCount', { count: item.fileCount || 0 }) :
+                  formatBytes(item.size) }}
               </p>
             </div>
           </div>
 
           <div class="flex items-center gap-1">
-            <UButton
-              icon="i-lucide-pencil"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              @click="openRename(item)"
-            />
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="xs"
-              @click="openDelete(item)"
-            />
+            <UButton icon="i-lucide-pencil" color="neutral" variant="ghost" size="xs" @click="openRename(item)" />
+            <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" @click="openDelete(item)" />
           </div>
         </div>
       </div>
     </div>
 
     <!-- Modals -->
-    <LazyBaseConfirmModal
-      v-model:open="confirmDeleteModal"
-      :title="t('document.library.deleteTitle')"
+    <LazyBaseConfirmModal v-model:open="confirmDeleteModal" :title="t('document.library.deleteTitle')"
       :description="deleteTarget?.isFolder ? t('document.library.deleteFolderDesc', { name: deleteTarget.name }) : t('document.library.deleteFileDesc', { name: deleteTarget?.name })"
-      @confirm="handleDelete"
-    />
+      @confirm="handleDelete" />
 
     <UModal v-model:open="newFolderModal" :title="t('document.library.createFolder')">
       <template #body>
@@ -288,4 +223,3 @@ function fileIcon(name: string, isFolder: boolean): string {
     </UModal>
   </BasePage>
 </template>
-
