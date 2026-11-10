@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import type { PdfOfficeFormat } from '#shared/types/pdf'
+import type { DropdownMenuItem } from '@nuxt/ui'
+import { getErrorMessage, getPresetErrorMessage } from '~/shared/utils/errors'
+import type { PdfExtractPreset, PdfOfficeFormat } from '#shared/types/pdf'
+import {
+  PRESET_MAX_COUNT,
+  mergePresets,
+  parsePresetFile,
+  presetFileName,
+  serializePresetFile,
+  type PresetTransferEntry
+} from '#shared/utils/presetTransfer'
 
 interface ExtractModel {
   connectionId: string
@@ -18,14 +28,6 @@ interface ExtractModelValue {
   force?: boolean
 }
 
-interface ExtractPreset {
-  id: string
-  name: string
-  description: string
-  sample: string
-  updatedAt: string
-}
-
 const props = defineProps<{
   modelValue?: ExtractModelValue
 }>()
@@ -35,6 +37,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const notify = useNotify()
 
 const selectedModel = ref(props.modelValue?.model || '')
 const selectedConnectionId = ref(props.modelValue?.connectionId || '')
@@ -44,7 +47,54 @@ const force = ref(Boolean(props.modelValue?.force))
 
 const modelList = ref<ExtractModel[]>([])
 const modelsLoading = ref(true)
-const presets = ref<ExtractPreset[]>([])
+const modelsError = ref('')
+const presets = ref<PdfExtractPreset[]>([])
+
+const presetEditorOpen = ref(false)
+const editingPreset = ref<PdfExtractPreset | null>(null)
+const presetDeleteOpen = ref(false)
+const presetDeleting = ref(false)
+const presetDeleteTarget = ref<PdfExtractPreset | null>(null)
+const presetFileInput = ref<HTMLInputElement | null>(null)
+const presetImporting = ref(false)
+
+const selectedPreset = computed(() => presets.value.find(preset => preset.id === selectedPresetId.value) || null)
+
+const presetMenu = computed<DropdownMenuItem[][]>(() => [
+  [{
+    label: t('pdf.extract.presetNewTitle'),
+    icon: 'i-lucide-plus',
+    onSelect: () => openPresetEditor()
+  }],
+  [
+    {
+      label: t('pdf.extract.presetEditTitle'),
+      icon: 'i-lucide-pencil',
+      disabled: !selectedPreset.value,
+      onSelect: () => openPresetEditor(selectedPreset.value || undefined)
+    },
+    {
+      label: t('pdf.extract.presetDelete'),
+      icon: 'i-lucide-trash-2',
+      color: 'error',
+      disabled: !selectedPreset.value,
+      onSelect: () => askDeletePreset()
+    }
+  ],
+  [
+    {
+      label: t('pdf.extract.presetExport'),
+      icon: 'i-lucide-download',
+      disabled: !selectedPreset.value,
+      onSelect: () => exportSelectedPreset()
+    },
+    {
+      label: t('pdf.extract.presetImportMany'),
+      icon: 'i-lucide-upload',
+      onSelect: () => pickPresetFile()
+    }
+  ]
+])
 
 const formatOptions: { format: PdfOfficeFormat, label: string, icon: string, hintKey: string }[] = [
   { format: 'csv', label: 'CSV', icon: 'i-lucide-table-2', hintKey: 'pdf.formats.csvHint' },
@@ -66,34 +116,47 @@ function emitUpdate() {
 
 watch([selectedModel, selectedConnectionId, selectedPresetId, selectedFormats, force], emitUpdate, { deep: true })
 
-onMounted(async () => {
+function selectDefaultModel() {
+  const fallback = modelList.value.find(model => model.isDefault) ?? modelList.value[0]
+  if (!fallback) return
+  selectedModel.value = fallback.modelId
+  selectedConnectionId.value = fallback.connectionId
+}
+
+async function fetchModels(reload = false) {
+  modelsLoading.value = true
+  modelsError.value = ''
   try {
-    const res = await $fetch<{ data: ExtractModel[] }>('/api/v1/pdf/extract/models')
+    const res = await $fetch<{ data: ExtractModel[] }>(
+      reload ? '/api/v1/pdf/extract/models?refresh=1' : '/api/v1/pdf/extract/models'
+    )
     modelList.value = res.data || []
-    if (!selectedModel.value && modelList.value.length > 0) {
-      const defaultModel = modelList.value.find(m => m.isDefault) || modelList.value[0]
-      if (defaultModel) {
-        selectedModel.value = defaultModel.modelId
-        selectedConnectionId.value = defaultModel.connectionId
-      }
-    }
-  } catch {
+    const stillListed = modelList.value.some(model =>
+      model.modelId === selectedModel.value && model.connectionId === selectedConnectionId.value)
+    if (!stillListed) selectDefaultModel()
+  } catch (err: unknown) {
     modelList.value = []
+    modelsError.value = getErrorMessage(err, key => t(key))
   } finally {
     modelsLoading.value = false
   }
+}
 
+async function fetchPresets() {
   try {
-    const res = await $fetch<{ data: ExtractPreset[] }>('/api/v1/pdf/extract/presets')
+    const res = await $fetch<{ data: PdfExtractPreset[] }>('/api/v1/pdf/extract/presets')
     presets.value = res.data || []
   } catch {
     presets.value = []
   }
-})
+  if (selectedPresetId.value !== '__none__' && !presets.value.some(preset => preset.id === selectedPresetId.value)) {
+    selectedPresetId.value = '__none__'
+  }
+}
 
 function onModelSelected(modelId: string) {
   selectedModel.value = modelId
-  const match = modelList.value.find(m => m.modelId === modelId)
+  const match = modelList.value.find(model => model.modelId === modelId)
   if (match) selectedConnectionId.value = match.connectionId
 }
 
@@ -102,6 +165,146 @@ function toggleFormat(fmt: PdfOfficeFormat) {
     ? selectedFormats.value.filter(f => f !== fmt)
     : [...selectedFormats.value, fmt]
 }
+
+function openPresetEditor(preset?: PdfExtractPreset) {
+  editingPreset.value = preset || null
+  presetEditorOpen.value = true
+}
+
+async function onPresetSaved(id: string) {
+  await fetchPresets()
+  selectedPresetId.value = id
+}
+
+function askDeletePreset() {
+  if (!selectedPreset.value) return
+  presetDeleteTarget.value = selectedPreset.value
+  presetDeleteOpen.value = true
+}
+
+async function removePreset() {
+  const target = presetDeleteTarget.value
+  if (!target) return
+  presetDeleting.value = true
+  try {
+    await $fetch(`/api/v1/pdf/extract/presets/${encodeURIComponent(target.id)}`, { method: 'DELETE' })
+    presetDeleteOpen.value = false
+    presetDeleteTarget.value = null
+    if (selectedPresetId.value === target.id) selectedPresetId.value = '__none__'
+    await fetchPresets()
+    notify.success(t('pdf.extract.presetDeleted'))
+  } catch (err: unknown) {
+    presetDeleteOpen.value = false
+    notify.error(t('pdf.extract.presetDelete'), getPresetErrorMessage(err, key => t(key)))
+  } finally {
+    presetDeleting.value = false
+  }
+}
+
+function saveJsonFile(content: string, fileName: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportSelectedPreset() {
+  const preset = selectedPreset.value
+  if (!preset) return
+  saveJsonFile(
+    serializePresetFile([{
+      id: preset.id,
+      name: preset.name,
+      description: preset.description,
+      sample: preset.sample
+    }]),
+    presetFileName(preset.name)
+  )
+  notify.success(t('pdf.extract.presetExported'), preset.name)
+}
+
+function pickPresetFile() {
+  presetFileInput.value?.click()
+}
+
+async function onPresetFileChosen(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  const parsed = parsePresetFile(await file.text())
+  if (!parsed.ok) {
+    presetImportFailure(parsed.error)
+    return
+  }
+  await importPresetList(parsed.entries)
+}
+
+function presetImportFailure(reason: 'not-json' | 'invalid-shape' | 'empty') {
+  const message = reason === 'not-json'
+    ? t('pdf.extract.presetImportNotJson')
+    : reason === 'empty'
+      ? t('pdf.extract.presetImportEmpty')
+      : t('pdf.extract.presetImportBadShape')
+  notify.error(t('pdf.extract.presetImportMany'), message)
+}
+
+async function importPresetList(entries: PresetTransferEntry[]) {
+  const plan = mergePresets(presets.value, entries)
+  if (!plan.added.length) {
+    notify.warning(
+      t('pdf.extract.presetImportMany'),
+      plan.skipped ? t('pdf.extract.presetImportNothingNew', { skipped: plan.skipped }) : t('pdf.extract.presetLimit')
+    )
+    return
+  }
+
+  presetImporting.value = true
+  const failures: string[] = []
+  let imported = 0
+  let firstId = ''
+  try {
+    for (const entry of plan.added) {
+      try {
+        const res = await $fetch<{ data: PdfExtractPreset }>('/api/v1/pdf/extract/presets', {
+          method: 'POST',
+          body: {
+            ...(entry.id ? { id: entry.id } : {}),
+            name: entry.name,
+            description: entry.description ?? '',
+            sample: entry.sample ?? ''
+          }
+        })
+        if (res?.data?.id) {
+          imported++
+          firstId ||= res.data.id
+        }
+      } catch (err: unknown) {
+        failures.push(`${entry.name}: ${getPresetErrorMessage(err, key => t(key))}`)
+      }
+    }
+    await fetchPresets()
+    if (firstId) selectedPresetId.value = firstId
+
+    const skipped = plan.skipped + plan.overflow + (plan.added.length - imported)
+    if (imported) {
+      notify.success(
+        t('pdf.extract.presetImportMany'),
+        t('pdf.extract.presetImportResult', { imported, skipped, cap: PRESET_MAX_COUNT })
+      )
+    }
+    if (failures.length) notify.error(t('pdf.extract.presetImportMany'), failures.slice(0, 3).join(' · '))
+  } finally {
+    presetImporting.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetchModels(), fetchPresets()])
+})
 </script>
 
 <template>
@@ -112,28 +315,100 @@ function toggleFormat(fmt: PdfOfficeFormat) {
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
         {{ t('common.loading') }}
       </div>
+      <UAlert
+        v-else-if="modelsError"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        :title="t('pdf.extract.modelsUnavailable')"
+        :description="modelsError"
+      >
+        <template #actions>
+          <UButton
+            size="sm"
+            color="primary"
+            variant="soft"
+            icon="i-lucide-refresh-cw"
+            :label="t('common.refresh')"
+            :loading="modelsLoading"
+            @click="fetchModels(true)"
+          />
+          <UButton
+            size="sm"
+            to="/system/settings/hub"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-plug"
+            :label="t('settings.hub.title')"
+          />
+        </template>
+      </UAlert>
       <USelect
         v-else-if="modelList.length"
         :model-value="selectedModel"
-        :items="modelList.map(m => ({ label: `${m.displayName} (${m.connectionName})`, value: m.modelId }))"
+        :items="modelList.map(model => ({ label: `${model.displayName} (${model.connectionName})`, value: model.modelId }))"
         class="w-full"
         @update:model-value="onModelSelected"
       />
-      <p v-else class="text-xs text-muted">
-        {{ t('pdf.extract.noModelSelected') }}
-      </p>
+      <div v-else class="space-y-2">
+        <p class="text-xs text-muted">
+          {{ t('pdf.extract.noModelSelected') }}
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+          <UButton
+            size="sm"
+            color="primary"
+            variant="soft"
+            icon="i-lucide-refresh-cw"
+            :label="t('common.refresh')"
+            :loading="modelsLoading"
+            @click="fetchModels(true)"
+          />
+          <UButton
+            size="sm"
+            to="/system/settings/hub"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-plug"
+            :label="t('settings.hub.title')"
+          />
+        </div>
+      </div>
     </UFormField>
 
     <!-- Preset selection -->
     <UFormField :label="t('pdf.extract.presets')">
-      <USelect
-        v-model="selectedPresetId"
-        :items="[
-          { label: t('pdf.extract.presetDefault'), value: '__none__' },
-          ...presets.map(p => ({ label: p.name, value: p.id }))
-        ]"
-        class="w-full"
-      />
+      <div class="flex items-center gap-2">
+        <USelect
+          v-model="selectedPresetId"
+          :items="[
+            { label: t('pdf.extract.presetDefault'), value: '__none__' },
+            ...presets.map(preset => ({ label: preset.name, value: preset.id }))
+          ]"
+          class="w-full min-w-0"
+        />
+        <UDropdownMenu :items="presetMenu">
+          <UButton
+            icon="i-lucide-ellipsis-vertical"
+            color="neutral"
+            variant="ghost"
+            square
+            class="shrink-0"
+            :loading="presetImporting"
+            :aria-label="t('pdf.extract.presets')"
+          />
+        </UDropdownMenu>
+        <input
+          ref="presetFileInput"
+          type="file"
+          accept=".json,application/json"
+          class="hidden"
+          @change="onPresetFileChosen"
+        >
+      </div>
+      <p v-if="selectedPreset?.description" class="mt-1 text-[11px] leading-relaxed text-muted">
+        {{ selectedPreset.description }}
+      </p>
     </UFormField>
 
     <!-- Export formats -->
@@ -208,5 +483,20 @@ function toggleFormat(fmt: PdfOfficeFormat) {
         {{ t('pdf.extract.force') }}
       </label>
     </div>
+
+    <LazyDocumentStudioOperationsConfigsExtractPresetModal
+      v-model:open="presetEditorOpen"
+      :preset="editingPreset"
+      @saved="onPresetSaved"
+    />
+
+    <BaseConfirmModal
+      v-model:open="presetDeleteOpen"
+      :title="t('pdf.extract.presetDelete')"
+      :description="t('pdf.extract.presetDeleteConfirm', { name: presetDeleteTarget?.name || '' })"
+      :confirm-label="t('pdf.extract.presetDelete')"
+      :loading="presetDeleting"
+      @confirm="removePreset"
+    />
   </div>
 </template>

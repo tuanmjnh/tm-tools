@@ -11,7 +11,7 @@ import type {
 } from './contracts'
 import { DocumentError } from './operations'
 import { splitPdf } from '../pdf/document'
-import { startExtraction } from '../pdf/extract/jobs'
+import { readCachedRows, startExtraction } from '../pdf/extract/jobs'
 import { resolveExtractTarget } from '../pdf/extract/models'
 import { getPreset } from '../pdf/extract/presets'
 import { mergePdfFolder } from '../pdf/merge'
@@ -20,7 +20,6 @@ import { rasterizePdf } from '../pdf/raster'
 import { inputBufferToPdf } from '../pdf/convert'
 import { pdfToDocx } from '../pdf/office/pdfToDocx'
 import { writeProducts } from '../pdf/extract/export'
-import { readCachedRows } from '../pdf/extract/jobs'
 import { ensureDir, writeFileAtomic } from '../pdf/paths'
 import { documentStem, naturalCompare, safeFileName, safeStem } from '../pdf/security'
 import { config } from '#server/config'
@@ -294,7 +293,8 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
       target,
       preset ? { sample: preset.sample, description: preset.description, preset: preset.name } : null,
       true,
-      requestedFormats
+      requestedFormats,
+      { path: input.stagedPath, kind: input.extension === 'pdf' ? 'pdf' : 'word' }
     )
 
     // Poll until completion or failure

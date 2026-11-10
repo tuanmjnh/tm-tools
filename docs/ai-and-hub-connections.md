@@ -27,12 +27,45 @@ new AI keys locally.
 3. **Use** — product code calls the model through the hub relay or a granted
    connection; the decrypted credential stays inside the hub process.
 
+## Relay catalog and chat/extraction model lists
+
+Both `/api/v1/chat/models` and `/api/v1/pdf/extract/models` derive their options
+from the same hub relay catalogue (`GET /api/v1/apps/:id/ai/relay/catalog`) and
+the same server-side filter in `server/utils/relayModels.ts`:
+
+- connections without a key are skipped;
+- non-text models (TTS, audio, live, image, embedding, imagen, veo, AQA) are
+  dropped, so neither picker can offer a model that cannot answer a prompt;
+- `displayName` falls back to the bare model id when the catalogue omits it;
+- extraction marks `config.pdf.extract.model` as the suggested entry.
+
+The relay accepts a device credential (`X-Device-Id` / `X-Device-Secret`) before
+falling back to `X-App-Id` / `X-App-Secret`. An Electron build therefore needs no
+App Secret at all — it needs an enrolled device.
+
+## Failure copy in the packaged app
+
+`fetchRelayCatalog` raises `error.aiRelayNotConfigured` (503) when no identity can
+reach the hub at all, and `error.aiRelayUnauthorized` (502) when the hub rejects
+the credential. Both surfaces show that text instead of an empty picker:
+
+- chat shows the message in a `UAlert` with **Refresh** and **Hub connection**
+  (`/system/settings/hub`) actions;
+- extraction shows the same alert in the model field, and its **Refresh** button
+  re-requests the catalogue with `?refresh=1` to bypass the five-minute cache.
+
+Neither string may instruct desktop users to set `NUXT_HUB_APP_SECRET`; that
+variable is a server-deployment mechanism, not something a packaged app holds.
+
 ## Screens
 
 - `/system/ai-keys` — read-only dashboard: providers, connections, models,
   health, discovery, import/export. Editing a credential opens the hub
   connection wizard (`/resources/connections`) which posts to the hub.
 - `/resources/connections` — hub-backed credential wizard.
+- `/system/settings/hub` — device enrollment: issues this device an encrypted
+  credential and reports connection health. Linked from the chat and extraction
+  empty/error states.
 
 ## Rules for contributors
 

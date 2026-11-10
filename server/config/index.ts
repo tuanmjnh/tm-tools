@@ -11,6 +11,13 @@ export interface AppConfig {
     appId: string
     /** Server-only App Secret; must never be exposed through `runtimeConfig.public`. */
     appSecret: string
+    /** P4 per-device credential; replaces `appSecret` on enrolled desktops. */
+    deviceId: string
+    deviceSecret: string
+    deviceUserId: string
+    deviceAppId: string
+    deviceExpiresAt: string
+    deviceScopes: string[]
   }
   mongodb: {
     uri: string
@@ -175,6 +182,9 @@ export function loadConfig(): AppConfig {
       get accessTokenSecret() {
         return readEnv('AUTH_JWT_SECRET')
       },
+      get accessTokenPublicKeys() {
+        return readEnv('AUTH_JWT_PUBLIC_KEYS')
+      },
       get refreshTokenSecret() {
         return readEnv('AUTH_REFRESH_TOKEN_SECRET')
       },
@@ -188,6 +198,24 @@ export function loadConfig(): AppConfig {
       },
       get appSecret() {
         return readEnv('NUXT_HUB_APP_SECRET')
+      },
+      get deviceId() {
+        return readEnv('HUB_DEVICE_ID')
+      },
+      get deviceSecret() {
+        return readEnv('HUB_DEVICE_SECRET')
+      },
+      get deviceUserId() {
+        return readEnv('HUB_DEVICE_USER_ID')
+      },
+      get deviceAppId() {
+        return readEnv('HUB_DEVICE_APP_ID')
+      },
+      get deviceExpiresAt() {
+        return readEnv('HUB_DEVICE_EXPIRES_AT')
+      },
+      get deviceScopes(): string[] {
+        return readEnv('HUB_DEVICE_SCOPES').split(',').map(s => s.trim()).filter(Boolean)
       }
     },
     mongodb: {

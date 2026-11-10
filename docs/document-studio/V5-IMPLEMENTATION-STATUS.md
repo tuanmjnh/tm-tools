@@ -3,9 +3,9 @@
 **Date**: 2026-11-09  
 **Branch**: `feat/document-studio-v5`  
 **Quality Verification Gates (All Passed)**:
-- `pnpm test:unit`: 43/43 tests PASSED (100% green)
+- `pnpm test:unit`: 43/43 tests PASSED at the time of this report; 51/51 after the 2026-11-09 relay and tool-layout passes (§7)
 - `pnpm check:hygiene`: CLEAN (no rogue `.js` emitted files)
-- `pnpm typecheck`: PASSED (0 errors via `vue-tsc --noEmit`)
+- `pnpm typecheck`: PASSED (0 errors)
 - `pnpm build` + `electron-builder --win`: PASSED (client, Nitro server, `win-unpacked` and NSIS installer)
 
 ---
@@ -58,10 +58,10 @@
 
 ## 4. Verification Evidence
 
-- `pnpm test:unit`: 43/43 test suites passing.
+- `pnpm test`: 55/55 specs passing (latest run 2026-11-10).
 - `pnpm check:hygiene`: Clean tree.
-- `npx vue-tsc --noEmit`: 0 TypeScript errors across frontend and backend (`tsconfig.app.json` and `tsconfig.server.json`).
-- `pnpm build`: Successful production build (`node .output/server/index.mjs`).
+- `npx nuxt typecheck`: exit 0, 0 `error TS` across frontend and backend.
+- `nuxt build` (via `pnpm build:electron`): successful production build (`node .output/server/index.mjs`), followed by the pdfjs runtime copy step.
 - `electron-builder --win`: `release/win-unpacked` and `release/tm-tools-1.0.0-setup.exe` built; `app.asar` carries 0 link records; exe branding applied with asar integrity preserved.
 
 ---
@@ -116,3 +116,349 @@ Console noise limited to the stub's 404 on `/apps/:id/routes` and `/apps/:id/not
 
 - A legitimately signed-in UI pass still requires a human sign-in; the harness cannot substitute for it.
 - Electron `openPath` / `showItemInFolder` click-through was not exercised (buttons render, IPC not triggered).
+
+---
+
+## 7. Relay catalogue, preset editor and failure copy (2026-11-09)
+
+Audit follow-up on chat and extraction provider/model handling for the packaged
+Electron build. P5 of that audit (verify `NUXT_PUBLIC_HUB_URL` and the JWKS kid
+before packaging) is **not** part of this pass.
+
+| Item | Change |
+| :--- | :--- |
+| Shared filter | `server/utils/relayModels.ts` — one `isTextModel()` / `chatModelsFromCatalog()` used by both `/api/v1/chat/models` and `server/modules/pdf/extract/models.ts`; drops TTS/audio/live/transcribe/image/video/embedding/imagen/veo/AQA/lyria/nano-banana/diffusion/clip and keyless connections. `/` counts as a token boundary and compound ids (`embedqa`, `diffusiongemma`) are matched, so vendor-prefixed catalogue entries (`nvidia/embed-qa-4`, `google/diffusiongemma-*`) no longer reach either picker |
+| Extract failure surface | `AiExtractionConfig.vue` renders a `UAlert` with the relay reason, a forced refresh (`?refresh=1`) and a link to `/system/settings/hub`; the empty state keeps the same actions |
+| Preset CRUD | Create/edit modal over `GET/POST /api/v1/pdf/extract/presets`, delete through `BaseConfirmModal` + `DELETE .../presets/:id`; inline `PDF_PRESET_NAME_REQUIRED` / `PDF_PRESET_LIMIT`; selected preset description shown under the select |
+| Preset actions | The three inline icon buttons were replaced by one `UDropdownMenu` (new / edit / delete) next to the preset select, so the actions are never clipped in the narrow configuration column |
+| Tool page layout | `OperationPageShell` now declares `lg:grid-rows-[minmax(0,1fr)]` and hides grid overflow at `lg`, so both columns scroll independently instead of an auto row growing past the panel; the run button moved into a `shrink-0` action bar below the scrolling config area, together with progress and error, so it is always visible |
+| Preset hint | `pdf.extract.cacheHint` now states that rows are reused per file/model/preset and a different pick starts a fresh run, matching the checkpoint fingerprint |
+| Chat failure surface | `modelsError` alert and the no-models welcome state both link to `/system/settings/hub` alongside the existing AI Key Vault button |
+| Error copy | `error.aiRelayNotConfigured` / `error.aiRelayUnauthorized` now describe device enrollment in Settings → Hub connection and no longer tell desktop users to set `NUXT_HUB_APP_SECRET` (en + vi) |
+
+### Evidence
+
+| Gate | Command | Result |
+| :--- | :--- | :--- |
+| Unit | `pnpm test` | 52/52 specs passed, exit 0 (re-run after the catalogue filter widening and the staged-source fix) |
+| New specs | `relay_model_filter.spec.ts`, `pdf_presets.spec.ts`, `ai_relay_ui.spec.ts`, `document_tool_layout.spec.ts`, `pdf_extract_staged_source.spec.ts` | 6/6, 4/4, 8/8, 4/4, 4/4 |
+| Typecheck | `npx nuxt typecheck` | exit 0, 0 `error TS` |
+| Lint | `npx eslint` on every touched file, after the last `.nuxt/eslint.config.mjs` regeneration (16:54 local, unchanged by the final build) | exit 0 |
+| Build | `npx nuxt build` | exit 0, all SFC templates compiled (re-run after the filter change and the staged-source fix, 2m31s) |
+
+`ai_relay_ui.spec.ts` locks the contracts by reading the sources: the chat route
+must call `chatModelsFromCatalog`, the extract config must surface
+`modelsError` / `getErrorMessage` / `/system/settings/hub` / `refresh=1` and use
+the preset endpoints, `chat.vue` must link `/system/settings/hub`, and the en/vi
+relay strings must not mention `NUXT_HUB_APP_SECRET`. `document_tool_layout.spec.ts`
+locks the shell layout (explicit 1fr grid row, mobile scroll, run action outside
+the scrolling config area) and the single preset dropdown.
+`relay_model_filter.spec.ts` pins the vendor-prefixed and compound non-chat ids
+(`nvidia/embed-qa-4`, `nvidia/nv-embedqa-*`, `nvidia/nvclip`, `models/lyria-*`,
+`models/gemini-nano-banana-*`, `google/diffusiongemma-*`, `transcribe`,
+`OmniVoice`, `ai-synthetic-video-detector`) that the live local catalogue
+actually serves.
+
+Formatting note: `chat.vue` and `AiExtractionConfig.vue` already carried 243
+pre-existing `vue/max-attributes-per-line` problems against the regenerated
+ESLint config before this pass; `eslint --fix` reflowed attributes in those two
+files only. No behaviour changed and the full suite was re-run afterwards.
+
+### Signed-in local pass (2026-11-09)
+
+Run in Chrome DevTools against the local stack — tm-hub `http://localhost:4000`,
+tm-tools `http://localhost:4002` — with a session issued by the local login form.
+No credential was read or typed by the harness; the browser's own autofill
+submitted the form.
+
+| Check | Observed |
+| :--- | :--- |
+| Extract route | `/document-studio/tools/extract` loads signed in; model select live from the relay catalogue (`Gemini 3.5 Flash (google_ai-main)`); no `modelsError` |
+| Preset create | Dropdown → New → fill name/description → Save: `POST /api/v1/pdf/extract/presets` 200, list refreshed `GET` 200, new preset auto-selected and its description rendered under the select |
+| Preset edit | Dropdown → Edit opens prefilled name + description; Save: `POST` 200, select value became `Verify gate preset (edited)` |
+| Preset delete | Dropdown → Delete → confirm ("Jobs that already used it keep their output."): `DELETE .../presets/:id` 200, selection fell back to `Default rules`; probe preset removed, no test data left |
+| Dropdown clipping | Menu teleports above the card and renders in full; New enabled, Edit/Delete disabled while no user preset is selected, enabled after create |
+| Run action bar | Disabled at 0 files; after staging one PDF (`Browse files`) it became enabled and stayed outside the scrolling card. Measured at 1920×953: grid `overflow-y:hidden`, row `800px`, config scroller `scrollHeight 789 / clientHeight 729`, run button `top 883 bottom 915`, inside the scroller = false. At 1280×700 and 1280×560 the button stayed visible (`490–522`) while the right column stayed scrollable |
+| Column scroll | Scrolling the right column to the end revealed the last format card and the cache checkbox with the run bar unmoved |
+| Chat route | `/chat` loads signed in with a live model (`GLM-5.3-Flash`, `Amd_radeon`); `/api/v1/chat/models` 200 |
+| Filter fix | The live catalogue exposed `nvidia/embed-qa-4`, `nvidia/nv-embedqa-*`, `nvidia/nvclip`, `models/lyria-*`, `models/gemini-nano-banana-*`, `google/diffusiongemma-*`, `models/gemini-3.5-transcribe`, `OmniVoice`, `nvidia/ai-synthetic-video-detector`. After widening the shared filter, chat and extract both return **116** entries (from 130) and **zero** ids match the non-text rule |
+| Console | No runtime errors, no Vue warnings, no failed requests on either page; one pre-existing DevTools a11y issue ("No label associated with a form field") from the hidden file input in the shared shell |
+
+### Real extraction run and staged-source fix (2026-11-09)
+
+The first live run exposed a pipeline bug: `POST .../start` returned **503
+`DOCUMENT_STORAGE_UNAVAILABLE`** after 7 ms. The manifest showed the job failed
+before any page was split, and `.data/pdf/input` was empty.
+
+Root cause: `AiExtractExecutor` called `startExtraction(input.safeName, …)`, and
+`runJob` resolved that name through `anySourcePath()`, which only reads
+`pdfDirs.input`. A document job stages its upload inside the job workspace
+(`…/.system/jobs/<jobId>/input/<inputId>/<name>`) and deliberately never copies it
+into the input library, so `sourcePath()` threw a plain `PDF_SOURCE_NOT_FOUND`,
+which `startDocumentJob` normalized to `DOCUMENT_STORAGE_UNAVAILABLE`. The
+normalization also hid the real code from the HTTP body.
+
+Fix:
+
+- `server/modules/pdf/extract/jobs.ts` — new exported `resolveExtractSource(source,
+  stagedSource)` plus an optional `PdfExtractStagedSource` argument on
+  `startExtraction`. The logical `source` name still drives products and
+  checkpoints; only the bytes come from the staged path. `runJob` uses the same
+  resolver, so the create-time check and the run agree. A missing staged file
+  still throws `PDF_SOURCE_NOT_FOUND`.
+- `server/modules/document/executors.ts` — the AI-extract executor passes
+  `{ path: input.stagedPath, kind: … }`. The library flow is unchanged: callers
+  without a staged source fall through to `anySourcePath()`.
+- `tests/unit/pdf_extract_staged_source.spec.ts` — RED first (`resolveExtractSource
+  is not a function`), now 4/4: job-staged file, library fallback, unknown bare
+  name, and missing staged bytes.
+
+Live result (Chrome DevTools, same signed-in session, tm-hub local relay):
+
+| Step | Observed |
+| :--- | :--- |
+| Upload + config | `price-list-probe.pdf` (1.9 KB, 5 hardware rows) staged as `1 files`; model `Gemini 3.5 Flash (google_ai-main)`; CSV selected; cache ignored |
+| Requests | `POST /api/v1/documents/jobs` 200, `POST .../inputs` 200, `POST .../start` **200** (was 503) |
+| Job `82701bda-cb24-4f2c-8869-13f705ee4418` | `status: completed`, 1/1 units, 0 failed, 23 s wall time, 1 artifact |
+| Artifact | `price-list-probe_products.csv`, 1974 bytes, published to `.data/pdf/output/` and job output |
+| Content | 5 rows with the source SKUs and prices (`HW-1001` 1 890 000 … `HW-1005` 120 000), 25 normalized columns, UTF-8 BOM |
+| UI | Step moved to **Save**, `RESULTS (1)` row with `Open output folder`, `Preview`, `Download`, `More actions` |
+
+`Preview` for `text/csv` resolves through `openLocalPath()` (OS opener), so it is
+inert in a plain browser and only testable in Electron. All probe artifacts
+(output CSV, products CSV, split pages, checkpoints, temp PDF) were removed after
+verification; the completed job manifest remains until retention cleanup.
+
+Known gap, not changed here: `startDocumentJob` normalizes every non-`DocumentError`
+to `DOCUMENT_STORAGE_UNAVAILABLE`, so an executor-side plain error reads as a
+retryable storage failure and its real code never reaches the client. That is why
+this bug surfaced as a 503 instead of `PDF_SOURCE_NOT_FOUND`. Adding a generic
+processing-failure code is a contract change, so it is recorded for the next
+taxonomy revision rather than bundled into this fix.
+
+Not exercised: the `modelsError` / no-models states (need a broken relay) and the
+Electron window. Those remain contract-locked by `ai_relay_ui.spec.ts` and
+`relay_model_filter.spec.ts` only.
+
+---
+
+## 8. Packaged rasterize failure — pdfjs runtime not traced (2026-11-09)
+
+The packaged build answered every **PDF to images** run with the generic banner
+"Storage is unavailable right now. Try again." Five job manifests
+(`d455f49a…`, `81ec1432…`, `1ebbfc9c…`, `852b9729…`, `4c50cccb…`) in
+`%APPDATA%\tm-tools\pdf\.system\jobs` all showed `operationId: pdf.rasterize`,
+`status: failed`, `errorCode: DOCUMENT_STORAGE_UNAVAILABLE` and a 9 ms lifetime
+— the job died before rendering a single page.
+
+Root cause: `pdf-to-img` drives `pdfjs-dist` in its "fake worker" mode. The
+statically imported `legacy/build/pdf.mjs` dynamically imports
+`legacy/build/pdf.worker.mjs` from its own directory and `require`s
+`@napi-rs/canvas` for the raster surface. Nitro's file tracer only follows
+static imports, so `.output/server/node_modules/pdf-to-img/node_modules/pdfjs-dist`
+contained `pdf.mjs` alone: no worker, no `standard_fonts` / `cmaps` / `wasm` /
+`iccs` / `image_decoders`, and no canvas package. Running the built tree's own
+`pdf-to-img` reproduced the executor failure in isolation with
+`Setting up fake worker failed: Cannot find module ...pdf.worker.mjs`. The
+runner then normalized that plain error to `DOCUMENT_STORAGE_UNAVAILABLE`
+(see the §7 known gap), which is why the UI spoke about storage.
+
+Fix: `electron/tools/copy-pdf-runtime.cjs` resolves the runtime from the
+project tree (`pdf-to-img` → `pdfjs-dist`, `@napi-rs/canvas` optional platform
+packages) and copies it into `.output/server/node_modules` after `nuxt build`:
+the legacy worker, the five pdfjs data directories, and
+`@napi-rs/canvas` + `@napi-rs/canvas-win32-x64-msvc` (`skia.win32-x64-msvc.node`).
+It is exposed as `pnpm copy:pdf-runtime` and wired into `build:electron` ahead of
+`dereference:output`, so the copies are real directories in the archive. The
+generic `build` script stays deploy-agnostic: a Vercel build has no
+`.output/server` to patch, and the script refuses to run without it rather than
+package a broken tree.
+
+| Gate | Command | Result |
+| :--- | :--- | :--- |
+| New specs | `pnpm test` → `pdf_runtime_copy.spec.ts` | 3/3: resolver finds the legacy worker + data dirs + canvas platform binary; copy places them under `server/node_modules`; a missing `.output` throws |
+| Unit suite | `pnpm test` | 53/53 specs passed, exit 0 |
+| Typecheck | `npx nuxt typecheck` | exit 0, 0 `error TS` (19:00 local) |
+| Lint | `npx eslint electron/tools/copy-pdf-runtime.cjs tests/unit/pdf_runtime_copy.spec.ts`, after the 18:59 regeneration of `.nuxt/eslint.config.mjs` | exit 0 |
+| Build | `pnpm build:electron` | exit 0; 38 links replaced / 19 targets removed; `release/tm-tools-1.0.0-setup.exe` 466 613 001 bytes |
+| Built tree | `.output`, then `app.asar.unpacked/.output` | worker, five data dirs, `@napi-rs/canvas` and the `.node` binary present in both |
+
+Packaged end-to-end run (`release/win-unpacked/TM Tools.exe`, signed in, tm-hub
+local relay, no harness stub):
+
+| Step | Observed |
+| :--- | :--- |
+| Tool page | `/document-studio/tools/images` reached from the Document Studio sidebar; `Browse files` opened the native picker at the folder holding the failing input |
+| Input + run | `20261109044915416.pdf` (439 138 bytes) staged as `1 files`; `Run` enabled |
+| Job `cc6dcfcd-8d91-4af1-887c-15f63f0b5bd9` | `status: completed`, runtime `electron`, 1/1 units, 0 failed, 944 ms (was 9 ms / failed) |
+| Artifact | `20261109044915416/page_0001.png`, 767 003 bytes on disk, real PNG header, 1190 × 1683 RGBA |
+| UI | Step moved to **Save**, `RESULTS (1)` with `Open output folder` / `Preview` / `Download` / `More actions`; no storage banner |
+
+Pre-existing noise, unchanged by this fix: pdfjs logs
+`Unable to load font data at: standard_fonts/FoxitSerif.pfb` and
+`LiberationSans-Bold.ttf` in dev and packaged runs alike. The warning does not
+change output: dev, the repaired `.output` and the packaged tree each rendered
+`private/pdf/page_0005.pdf` at scale 2 to exactly 541 609 bytes, so the fallback
+fonts resolve and the warning is cosmetic.
+
+Still open: the §7 normalization means any future executor exception will again
+present as a retryable storage failure. Logging the cause to `logs/app.log`
+before normalizing (without changing the public error contract) is the
+suggested next step and was not bundled into this fix.
+
+---
+
+## 9. Artifact preview and where extraction presets live (2026-11-09)
+
+Two packaged-only reports.
+
+### Preview forced a download
+
+`electron/main.cjs` turned every same-origin `/api/` popup into
+`webContents.downloadURL`, and the artifact preview route is
+`/api/v1/documents/jobs/:jobId/artifacts/:artifactId/download?inline=1` — so
+"Preview" always saved the file. The route itself was correct: it answers
+`content-disposition: inline` when `inline=1` and only for inline-renderable
+MIME types.
+
+Fix: the decision moved to `electron/tools/window-open.cjs`
+(`decideWindowOpen`), which returns one of `external` / `download` / `popup` /
+`allow`. `?inline=1` (or `=true`) on a same-origin `/api/` link returns `popup`
+with `pdfPlugins: true`, which enables Electron's built-in PDF viewer; a plain
+API link still downloads. An unknown caller origin (destroyed window) is
+treated as "maybe same origin" and never forced into a download. OAuth hosts
+and external links keep their previous behaviour.
+
+`tests/unit/window_open.spec.ts` — 8 checks written RED first (module missing),
+now green: inline preview vs. plain download, `inline=0`, OAuth popup, external
+browser, internal route, unknown origin, unparsable URL.
+
+### Presets "missing" in the packaged build
+
+Not a code defect: the two runtimes keep separate data roots. Presets are a
+plain JSON file, `join(pdfDirs.root, 'presets.json')`
+(`server/modules/pdf/extract/presets.ts`), and `pdfDirs.root` comes from
+`config.pdf.dir` = `PDF_DATA_DIR` or `TOOLS_DATA_DIR/pdf`:
+
+| Runtime | Data root | Presets file |
+| :--- | :--- | :--- |
+| `pnpm dev` / local web | `<project>/.data` | `D:\Applications\tm-tools\.data\pdf\presets.json` |
+| Packaged Electron | Electron `userData` (`electron/main.cjs` sets `TOOLS_DATA_DIR`) | `%APPDATA%\tm-tools\pdf\presets.json` |
+
+The packaged file did not exist, so the picker only offered "Default rules".
+The route and the UI were fine — a packaged install simply starts with an empty
+library. Carrying the existing preset across is a file copy into the packaged
+root (only when that file is absent; the dev file is left untouched):
+
+```powershell
+Copy-Item 'D:\Applications\tm-tools\.data\pdf\presets.json' `
+  "$env:APPDATA\tm-tools\pdf\presets.json"
+```
+
+Verified in the packaged window: after the copy, the Extraction presets select
+lists "Ghế lãnh đạo — Hòa Phát (The One)" and selecting it renders its
+description. Presets created inside the packaged app already persist to the
+`%APPDATA%` file across restarts.
+
+### Evidence
+
+| Gate | Result |
+| :--- | :--- |
+| Unit | 54/54 specs passed (`window_open.spec.ts` 8/8, RED first) |
+| Typecheck | `nuxt typecheck` exit 0, 0 `error TS` |
+| Lint | exit 0 on `electron/main.cjs`, `electron/tools/window-open.cjs`, `tests/unit/window_open.spec.ts`, after config regeneration |
+| Build | `pnpm build:electron` exit 0, installer rebuilt |
+| Packaged preview (PNG) | PDF to images → 1 artifact → **Preview** opened a window titled `download (1190×1683)` rendering the PNG; no file appeared in `~/Downloads` or `~/AppData/Roaming/tm-tools/downloads` |
+| Packaged preview (PDF) | Split PDF → 1 artifact → **Preview** opened Chromium's PDF viewer (`mhjfbmdgcfjbbpaeojofohoefgiehjai`) with page 1/1 at 96%, thumbnail bar and Download/Print — i.e. `plugins: true` took effect |
+| Packaged presets | Preset select lists the imported preset and shows its description |
+
+---
+
+## 10. Preset JSON export / import (2026-11-10)
+
+Presets were trapped in one machine's `presets.json`, so moving rules between
+`pnpm dev` and the packaged app meant a manual file copy (§9). Both entry points
+now speak JSON.
+
+| Surface | Action | Behaviour |
+| :--- | :--- | :--- |
+| Preset dropdown (`UDropdownMenu`) | **Export preset** | Downloads only the currently selected preset, disabled while no user preset is selected; there is no export-all action |
+| Preset dropdown | **Import presets** | Merges every entry in the file, then selects the first newly created preset |
+| Add modal | **Import JSON** | Loads the first preset in the file into the form for review; nothing is saved until **Save preset** |
+| Edit modal | **Export JSON** | Downloads the preset currently in the form, filename derived from its name |
+
+The add/edit modal lives in its own component,
+`app/components/document-studio/operations/configs/ExtractPresetModal.vue`
+(props `open` / `preset`, emits `update:open` / `saved`); the host
+`AiExtractionConfig.vue` keeps the select, dropdown, delete confirm and list
+import. The modal shows **Import** only when adding (`v-if="!isEditing"`) and
+**Export** only when editing (`v-else`), so a new preset is never offered an
+export of nothing and an edit never offers an import that would clobber the form.
+
+`shared/utils/presetTransfer.ts` owns the format so the browser bundle and the
+specs share one implementation:
+
+- **Accepted shapes** — a preset object, a bare array (exactly what the server
+  writes to `presets.json`, so an exported file re-imports unchanged), or
+  `{ "version": 1, "exportedAt": …, "presets": [ … ] }` (what this UI exports).
+- **Normalization** — `\\r\\n` → `\\n`, trim, then clamp to the server limits
+  (name 80, description 6000, sample 16000). Entries with no usable name are
+  skipped and counted.
+- **Merge** — an incoming `id` that already exists on this device is skipped,
+  never overwritten; ids the file omits stay absent so the server mints one;
+  the plan stops at `MAX_PRESETS` (40) and reports the overflow.
+- **File name** — `presetFileName()` NFD-strips and slugifies, so
+  `Ghế lãnh đạo — Hòa Phát (The One)` becomes
+  `extraction-preset-ghe-lanh-dao-hoa-phat-the-one.json`.
+
+Failures are user-facing: `presetImportNotJson`, `presetImportEmpty` and
+`presetImportBadShape` (en + vi; the copy avoids literal braces because
+`@intlify` reads them as interpolation — the first build failed on exactly that).
+
+### Evidence
+
+| Gate | Result |
+| :--- | :--- |
+| Unit (feature) | `preset_transfer.spec.ts` 11/11 — RED first (`Cannot find module ... presetTransfer`), then GREEN; the last case drives the real `savePreset` / `listPresets` store and proves a second import of the same ids adds nothing and leaves the existing preset's name untouched |
+| Unit (UI contract) | `ai_relay_ui.spec.ts` 12/12 — locks the dedicated `ExtractPresetModal`, the conditional new→import / edit→export surfaces, dropdown export-selected (never all), one `.json` file input per surface, and that the import path performs no `DELETE` |
+| Unit suite | `pnpm test` → **55/55 specs passed**, exit 0 |
+| Typecheck | `npx nuxt typecheck` exit 0, 0 `error TS` |
+| Lint | exit 0 on `ExtractPresetModal.vue`, `AiExtractionConfig.vue`, `app/shared/utils/errors.ts`, `shared/utils/presetTransfer.ts`, after `.nuxt/eslint.config.mjs` regeneration (26 449 bytes, 10:15); one `eslint --fix` pass reflowed the SFC templates, then re-linted clean |
+| Build | `pnpm build:electron` exit 0 → `release/win-unpacked/TM Tools.exe` (10:26) and `release/tm-tools-1.0.0-setup.exe` (10:28, 466 626 113 bytes); 38 links dereferenced, exe branding integrity preserved |
+| Packaged bundle | `.output/public/_nuxt` carries `extraction-preset-` (single-preset export) and **zero** hits for `extraction-presets.json` or `presetExportAll` — export-all is gone from the shipped client |
+| Interactive packaged pass | **Not performed** — no legitimately issued session was available; signing in with repository seed credentials is out of bounds. Button-level behaviour rests on the specs above, not on a click-through |
+
+---
+
+## 11. Legacy `pdf` component retirement (2026-11-10)
+
+After the v5 cutover the old `app/components/pdf/` tree was dead weight: a
+tree-wide search across `app/`, `shared/`, `server/`, `tests/` and `electron/`
+found no live consumer. `app/pages/pdf/` had already been removed, and the only
+`<Pdf…>` tags left were the components referencing each other. Nothing needed
+moving into `document-studio`, so the whole folder was deleted.
+
+| Removed | Reason |
+| :--- | :--- |
+| `app/components/pdf/` (17 SFCs: `ConfirmAction`, `DocumentDataFlowNote`, `ExportFormatPicker`, `FileActions`, `FileBrowser`, `FileRow`, `FolderModal`, `FolderRow`, `FolderTree`, `OperationResult`, `PresetSampleEditor`, `PreviewFile`, `PreviewTable`, `PreviewText`, `RenameModal`, `TrashModal`, `WorkspaceShell`) | Orphans — no page or `document-studio` component imports or tags them |
+| `app/composables/usePdfMenus.ts` | Consumed only by `pdf/FileRow`, `pdf/FileActions`, `pdf/FolderRow`; dead once the folder is gone |
+| `pdf_contract.spec.ts` → "desktop actions in the PDF workspaces" block | Pinned the deleted `pdf/OperationResult.vue`; removed with the component |
+
+Kept: `usePdfStudio` (live in `app/pages/index.vue`), `usePdfExplorer` and
+`usePdfSelection` (composables outside the component-cleanup scope; the
+"lazy explorer reload" contract still reads `usePdfExplorer`). The shared
+`getPresetErrorMessage` helper now centralizes the `PDF_PRESET_*` error copy for
+both the modal and the host.
+
+### Evidence
+
+| Gate | Command | Result |
+| :--- | :--- | :--- |
+| Typecheck | `npx nuxt typecheck` | exit 0, 0 `error TS` (config regenerated 10:15) |
+| Lint | `npx eslint` on the four touched source files, after regeneration | exit 0 |
+| Unit suite | `pnpm test` | **55/55 specs passed**, exit 0 (`pdf_contract` green without the removed block) |
+| Build | `pnpm build:electron` | exit 0; installer rebuilt 10:28 |
+| Packaged bundle | grep `.output/public/_nuxt` | 0 hits for `PdfWorkspaceShell` / `PdfFileBrowser` / `PdfOperationResult` — the deleted components are absent from the shipped client |
+
+
+

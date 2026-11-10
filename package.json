@@ -21,8 +21,10 @@
     "test:unit": "tsx tests/unit/run-all.mts",
     "build:electron:main": "esbuild electron/src/index.ts --bundle --platform=node --target=node20 --outfile=electron/dist/index.cjs --external:electron --external:better-sqlite3",
     "dereference:output": "node electron/tools/dereference-links.cjs .output",
-    "build:electron": "pnpm build:electron:main && nuxt build && pnpm dereference:output && electron-builder --win --config electron-builder.yml",
-    "db:generate": "drizzle-kit generate"
+    "copy:pdf-runtime": "node electron/tools/copy-pdf-runtime.cjs .output",
+    "build:electron": "pnpm bake:public-config && pnpm build:electron:main && nuxt build && pnpm copy:pdf-runtime && pnpm dereference:output && electron-builder --win --config electron-builder.yml",
+    "db:generate": "drizzle-kit generate",
+    "bake:public-config": "node electron/tools/public-config.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1162.0",

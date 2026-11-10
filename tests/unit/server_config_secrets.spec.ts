@@ -23,7 +23,7 @@ const SECRET_ENV = [
 
 const saved = new Map<string, string | undefined>()
 beforeEach(() => {
-  for (const key of [...SECRET_ENV, 'NUXT_PUBLIC_HUB_APP_ID']) {
+  for (const key of [...SECRET_ENV, 'AUTH_JWT_PUBLIC_KEYS', 'NUXT_PUBLIC_HUB_APP_ID']) {
     saved.set(key, process.env[key])
     Reflect.deleteProperty(process.env, key)
   }
@@ -56,6 +56,13 @@ describe('server config — no baked credentials', () => {
 
   it('the app id has no invented literal default', () => {
     assert.equal(loadConfig().hub.appId, '')
+  })
+
+  it('RS256 public keys are public config, read live, with no baked default', () => {
+    const config = loadConfig()
+    assert.equal(config.auth.accessTokenPublicKeys, '')
+    process.env.AUTH_JWT_PUBLIC_KEYS = '[{"kty":"RSA"}]'
+    assert.equal(config.auth.accessTokenPublicKeys, '[{"kty":"RSA"}]')
   })
 
   it('secrets are read live, so saving desktop settings applies without a restart', () => {

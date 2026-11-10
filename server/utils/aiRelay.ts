@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { config } from '#server/config'
+import { hubBaseUrl, resolveHubCaller } from './hubIdentity'
 
 export interface RelayAttachment {
   mimeType: string
@@ -44,7 +44,7 @@ interface RelayErrorBody {
 
 export class RelayNotConfiguredError extends Error {
   constructor() {
-    super('AI relay is not configured on this server (NUXT_HUB_APP_SECRET missing)')
+    super('AI relay is not configured on this server (no Hub device credential or App Secret)')
     this.name = 'RelayNotConfiguredError'
   }
 }
@@ -55,18 +55,14 @@ export class RelayNotConfiguredError extends Error {
  * runtime config without a live event.
  */
 function relayTarget(event?: H3Event): { url: string, headers: Record<string, string> } {
-  const runtime = useRuntimeConfig(event)
-  // `config.hub` reads process.env on every call, so a secret saved in the
-  // desktop settings applies without a restart. The runtime config snapshot
-  // only carries whatever the process started with.
-  const hubUrl = String(config.hub.url || runtime.public.hubUrl || '').replace(/\/+$/, '')
-  const hubAppId = String(config.hub.appId || runtime.public.hubAppId || '')
-  const hubAppSecret = String(config.hub.appSecret || runtime.hubAppSecret || '')
-  if (!hubUrl || !hubAppId || !hubAppSecret) throw new RelayNotConfiguredError()
+  // Device credential first, App Secret second (hubIdentity); both are resolved
+  // per call, so a credential saved in desktop settings needs no restart.
+  const caller = resolveHubCaller(event)
+  if (!caller) throw new RelayNotConfiguredError()
 
   return {
-    url: `${hubUrl}/api/v1/apps/${hubAppId}/ai/relay`,
-    headers: { 'X-App-Id': hubAppId, 'X-App-Secret': hubAppSecret }
+    url: `${hubBaseUrl(event)}/api/v1/apps/${caller.appId}/ai/relay`,
+    headers: caller.headers
   }
 }
 

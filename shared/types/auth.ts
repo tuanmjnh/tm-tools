@@ -117,6 +117,8 @@ export interface TokenPayload {
 export interface AuthConfig {
   provider: AuthProvider
   accessTokenSecret: string
+  /** JSON array of Hub public JWKs for RS256 verification. Public, never secret. */
+  accessTokenPublicKeys: string
   refreshTokenSecret: string
   accessTokenExpiry: number
   refreshTokenExpiry: number

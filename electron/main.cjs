@@ -12,14 +12,27 @@ const { registerProfilesController } = require('./tools/profiles.controller.cjs'
 // API-key slots are encrypted AT REST with the OS keychain (safeStorage:
 // DPAPI/Keychain/libsecret). decrypt() passes plaintext through, so files
 // written before encryption existed keep working.
-const { encrypt, decrypt, isEncryptionAvailable } = require('./tools/ai-secure.cjs')
+const { decrypt } = require('./tools/ai-secure.cjs')
 // One config.env parser for startup, get-config and set-config: "file
 // missing" can never be read differently by two handlers.
-const { readConfigFile } = require('./tools/config-file.cjs')
+const { readConfigFile, writeConfigValues } = require('./tools/config-file.cjs')
+// P5: Hub URL, app id and PUBLIC JWKs baked at build time. Applied after
+// config.env, as defaults only, so a fresh install verifies Hub tokens without
+// any hand configuration while a per-user config still wins.
+const { applyPublicConfig } = require('./tools/public-config.cjs')
 const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.cjs')
 // Secret config slots: ONE definition shared by the masking and encryption
 // paths below, so no arbitrary key name qualifies for at-rest encryption.
 const { SECRET_SLOT_RE } = require('./tools/secret-slots.cjs')
+// P4: per-device Hub enrollment (RFC 8628). The issued credential is stored in
+// the same keychain vault and never returned to the renderer.
+const { registerDeviceController } = require('./tools/device-enroll.cjs')
+// window.open policy: same-origin API links download, `?inline=1` previews.
+const { decideWindowOpen } = require('./tools/window-open.cjs')
+// P1: the device-config admin gate verifies the caller's Hub token locally.
+// P3: RS256 public keys join the check, so a Hub that no longer shares a
+// secret can still authorize a root to repair this device's configuration.
+const { isRootAccessToken } = require('./tools/root-token.cjs')
 
 let initializePlatform
 try {
@@ -70,6 +83,11 @@ function loadUserConfig() {
 
 async function startServer() {
   loadUserConfig()
+  applyPublicConfig(
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'resources', 'public-config.json')
+      : path.join(__dirname, '..', 'resources', 'public-config.json')
+  )
 
   process.env.NITRO_PORT = String(PORT)
   process.env.NITRO_HOST = '127.0.0.1'
@@ -186,49 +204,43 @@ async function createWindow() {
     win.show()
   })
 
-  // Handle window.open() calls - allow popups for OAuth flows
+  // Handle window.open() calls - allow popups for OAuth flows.
+  // The decision itself lives in tools/window-open.cjs so it stays testable:
+  // same-origin `/api/` links download EXCEPT the `?inline=1` preview route,
+  // which opens a window with Electron's built-in PDF viewer enabled.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    // Allow OAuth providers (Google, etc.) to open in Electron popup
-    // so the session cookie is preserved for the callback validation
-    const allowedOAuthHosts = [
-      'accounts.google.com',
-      'github.com',
-      'login.microsoftonline.com'
-    ]
-    try {
-      const parsed = new URL(url)
-      if (allowedOAuthHosts.some(host => parsed.hostname.includes(host))) {
-        // Open OAuth URLs in Electron popup (shares session cookies)
-        return {
-          action: 'allow',
-          overrideBrowserWindowOptions: {
-            width: 540,
-            height: 680,
-            webPreferences: {
-              nodeIntegration: false,
-              contextIsolation: true
-            }
+    const decision = decideWindowOpen({
+      url,
+      currentUrl: win && !win.isDestroyed() ? win.webContents.getURL() : null
+    })
+
+    if (decision.action === 'external') {
+      const { shell } = require('electron')
+      shell.openExternal(url).catch(() => {})
+      return { action: 'deny' }
+    }
+
+    if (decision.action === 'download') {
+      win.webContents.downloadURL(url)
+      return { action: 'deny' }
+    }
+
+    if (decision.action === 'popup') {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: decision.pdfPlugins ? 1100 : 540,
+          height: decision.pdfPlugins ? 900 : 680,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            plugins: Boolean(decision.pdfPlugins)
           }
         }
       }
-      // Other external URLs → system browser
-      if (url.startsWith('http') && !url.includes('localhost') && !url.includes('127.0.0.1')) {
-        const { shell } = require('electron')
-        shell.openExternal(url).catch(() => {})
-        return { action: 'deny' }
-      }
-    } catch { /* ignore URL parse errors */ }
+    }
 
-    // Same-origin API links are downloads (PDF exports). Run them in this
-    // window instead of opening a popup that is left open doing nothing.
-    try {
-      const parsed = new URL(url)
-      const current = win && !win.isDestroyed() ? new URL(win.webContents.getURL()) : null
-      if (current && parsed.origin === current.origin && parsed.pathname.startsWith('/api/')) {
-        win.webContents.downloadURL(url)
-        return { action: 'deny' }
-      }
-    } catch { /* ignore URL parse errors */ }
+    if (decision.action === 'deny') return { action: 'deny' }
 
     // Internal URLs (e.g. the PDF preview window) → new window sized by the
     // window.open features, so the preview keeps its requested dimensions.
@@ -289,28 +301,49 @@ ipcMain.handle('get-config', (event) => {
   return result
 })
 
-ipcMain.handle('set-config', (event, values) => {
+ipcMain.handle('set-config', async (event, values, accessToken) => {
   if (!isTrustedSender(event)) return { success: false }
   const configFile = userConfigPath()
   const existing = readConfigFile(configFile)
   const incoming = values && typeof values === 'object' ? values : {}
+
+  // Device configuration is root-only once the device has been provisioned.
+  // A fresh install is exempt: the local server cannot verify any token before
+  // the shared secret exists, so demanding a root session there would deadlock
+  // the bootstrap. Verification is local (same HS256 rule as the server), so a
+  // wrong Hub URL cannot lock a root out of repairing its own config.
+  if (existing.exists) {
+    const storedSecret = decrypt(existing.values.AUTH_JWT_SECRET || '') || ''
+    const publicKeys = existing.values.AUTH_JWT_PUBLIC_KEYS || process.env.AUTH_JWT_PUBLIC_KEYS || ''
+    if ((storedSecret || publicKeys) && !isRootAccessToken(accessToken, { secret: storedSecret, publicKeys })) {
+      return { success: false, code: 'notRoot' }
+    }
+  }
+
   const merged = { ...existing.values, ...incoming }
-  const lines = Object.entries(merged)
-    // A masked value coming BACK from get-config ('********') means the UI
-    // echoed the placeholder — keep the stored token.
-    .filter(([k, v]) => !(SECRET_SLOT_RE.test(k) && String(v) === '********'))
-    .map(([k, v]) => {
-      // Secret slots go to the file as keychain tokens; every other value
-      // is written verbatim.
-      const stored = SECRET_SLOT_RE.test(k) && isEncryptionAvailable() ? encrypt(String(v)) : String(v)
-      return `${k}=${stored}`
-    })
-  fs.writeFileSync(configFile, lines.join('\n') + '\n', 'utf8')
+  // One writer for set-config and device enrollment: secret slots are encrypted
+  // with the OS keychain and a '********' echo never overwrites the stored token.
+  writeConfigValues(configFile, merged)
   for (const [key, value] of Object.entries(incoming)) {
     if (SECRET_SLOT_RE.test(key) && String(value) === '********') continue
     process.env[key] = String(value)
   }
   return { success: true, path: configFile }
+})
+
+// P4: device enrollment writes the per-device credential itself (never handed
+// to the renderer), so a public build needs no App Secret on first run.
+registerDeviceController({
+  ipcMain,
+  isTrustedSender,
+  configFile: userConfigPath,
+  readConfigFile,
+  writeConfigValues,
+  isRootAccessToken,
+  openExternal: url => require('electron').shell.openExternal(url).catch(() => false),
+  onProgress: (payload) => {
+    if (win && !win.isDestroyed()) win.webContents.send('device:enroll-progress', payload)
+  }
 })
 
 ipcMain.handle('open-path', async (event, fullPath) => {

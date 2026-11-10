@@ -32,6 +32,31 @@ interface JobEntry {
   fingerprint: CheckpointFingerprint | null
   /** Selected output formats to write (defaults to all if empty). */
   formats?: string[] | null
+  /** Bytes staged for one document job instead of the persistent input library. */
+  stagedSource: PdfExtractStagedSource | null
+}
+
+/** A source file that already lives in a job workspace, not in `pdfDirs.input`. */
+export interface PdfExtractStagedSource {
+  path: string
+  kind: 'pdf' | 'word'
+}
+
+/**
+ * Extraction normally reads from the input library, but a document job stages
+ * its upload inside the job workspace and never copies it into the library.
+ * `source` stays the logical name (it names products and checkpoints); only the
+ * bytes come from the staged path.
+ */
+export function resolveExtractSource(
+  source: string,
+  stagedSource?: PdfExtractStagedSource | null
+): { path: string, kind: 'pdf' | 'word' } {
+  if (stagedSource) {
+    if (!existsSync(stagedSource.path)) throw new Error('PDF_SOURCE_NOT_FOUND')
+    return { path: stagedSource.path, kind: stagedSource.kind }
+  }
+  return anySourcePath(source)
 }
 
 /** One unit of work: a PDF page, or a text chunk of a Word document. */
@@ -150,10 +175,11 @@ export async function startExtraction(
   requested?: Partial<PdfExtractTarget> | null,
   instructions?: PdfExtractInstructions | null,
   overwrite = true,
-  formats?: string[] | null
+  formats?: string[] | null,
+  stagedSource?: PdfExtractStagedSource | null
 ): Promise<PdfExtractJobState> {
   const source = safeRelativePath(rawSource)
-  anySourcePath(source)
+  resolveExtractSource(source, stagedSource)
 
   if (!overwrite && hasProductFiles(pdfDirs.products, `${splitDirName(source)}_products`, formats ?? undefined)) {
     throw new Error('PDF_FILE_ALREADY_EXISTS')
@@ -188,7 +214,15 @@ export async function startExtraction(
     cancelRequested: false
   }
 
-  const entry: JobEntry = { state, rows: [], pages: [], instructions: instructions ?? null, fingerprint: null, formats }
+  const entry: JobEntry = {
+    state,
+    rows: [],
+    pages: [],
+    instructions: instructions ?? null,
+    fingerprint: null,
+    formats,
+    stagedSource: stagedSource ?? null
+  }
   jobs.set(state.id, entry)
   pruneJobs()
   extractJobStore.save(state)
@@ -278,7 +312,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
   try {
     entry.state.status = 'running'
     extractJobStore.save(entry.state)
-    const resolved = anySourcePath(entry.state.source)
+    const resolved = resolveExtractSource(entry.state.source, entry.stagedSource)
     ensureDir(join(pdfDirs.checkpoints, stem))
 
     const units = await buildUnits(entry, resolved.path, resolved.kind, target, stem)

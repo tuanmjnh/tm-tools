@@ -8,14 +8,21 @@ const props = defineProps<{
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useI18n()
+const auth = useAuth()
+
+const canConfigure = computed(() => {
+  const user = auth.user.value
+  return !!user && (user.permissions?.includes('*') === true || user.role === 'root')
+})
 
 const visible = computed(() => isDocumentConnectionError(props.code))
 
-const description = computed(() =>
-  props.code === 'error.invalidToken'
+const description = computed(() => {
+  if (!canConfigure.value) return t('document.connection.contactAdminDesc')
+  return props.code === 'error.invalidToken'
     ? t('document.connection.invalidToken')
     : t('document.connection.notConfigured')
-)
+})
 </script>
 
 <template>
@@ -29,6 +36,7 @@ const description = computed(() =>
   >
     <template #actions>
       <UButton
+        v-if="canConfigure"
         to="/system/settings/hub"
         color="warning"
         variant="soft"
@@ -36,6 +44,9 @@ const description = computed(() =>
         icon="i-lucide-settings-2"
         :label="t('document.connection.openSettings')"
       />
+      <span v-else class="text-xs font-medium text-toned">
+        {{ t('document.connection.contactAdmin') }}
+      </span>
       <UButton
         color="neutral"
         variant="ghost"

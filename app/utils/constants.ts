@@ -61,7 +61,7 @@ export const PROFILE_DEFAULTS = {
   startUrl: 'https://whoer.net'
 } as const
 
-export const FALLBACK_AVATAR = 'https://api.dicebear.com/7.x/bottts/svg'
+export const FALLBACK_AVATAR = '/icon.png'
 
 export const STORAGE_KEYS = {
   downloadSettings: 'tools:download:settings',

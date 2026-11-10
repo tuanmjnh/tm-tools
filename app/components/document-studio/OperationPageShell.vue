@@ -306,8 +306,8 @@ const progress = computed(() => {
 
     <DocumentStudioConnectionAlert v-if="connectionCode" :code="connectionCode" @retry="emit('reload')" />
 
-    <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+    <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+      <div class="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
         <div
           class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
           :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
@@ -519,55 +519,61 @@ const progress = computed(() => {
         </div>
       </div>
 
-      <div class="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
-        <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
-          <template #header>
-            <div class="flex items-center gap-2">
-              <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
-              <p class="text-sm font-semibold">
-                {{ t('document.shell.summary') }}
-              </p>
-            </div>
-          </template>
+      <div class="flex min-h-0 flex-col gap-3">
+        <div class="min-h-0 flex-1 flex-col overflow-y-auto space-y-3 lg:pr-1">
+          <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
+                <p class="text-sm font-semibold">
+                  {{ t('document.shell.summary') }}
+                </p>
+              </div>
+            </template>
 
-          <dl class="space-y-2 text-sm mb-2">
-            <div class="flex items-start justify-between gap-3">
-              <dt class="text-muted">
-                {{ t('document.summary.operation') }}
-              </dt>
-              <dd class="text-end font-medium">
-                {{ operation ? t(operation.titleKey) : '—' }}
-              </dd>
-            </div>
-            <div class="flex items-start justify-between gap-3">
-              <dt class="text-muted">
-                {{ t('document.summary.input') }}
-              </dt>
-              <dd class="text-end font-medium">
-                {{ t('document.summary.files', { count: files.filter(file => file.status === 'selected').length }) }}
-              </dd>
-            </div>
-            <div class="flex items-start justify-between gap-3">
-              <dt class="text-muted">
-                {{ t('document.summary.output') }}
-              </dt>
-              <dd class="flex flex-col items-end gap-1">
-                <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
-                <UButton
-                  v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  icon="i-lucide-folder-cog"
-                  :label="t('document.output.changeFolder')"
-                  @click="onPickCustomOutput"
-                />
-              </dd>
-            </div>
-          </dl>
+            <dl class="space-y-2 text-sm mb-2">
+              <div class="flex items-start justify-between gap-3">
+                <dt class="text-muted">
+                  {{ t('document.summary.operation') }}
+                </dt>
+                <dd class="text-end font-medium">
+                  {{ operation ? t(operation.titleKey) : '—' }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-3">
+                <dt class="text-muted">
+                  {{ t('document.summary.input') }}
+                </dt>
+                <dd class="text-end font-medium">
+                  {{ t('document.summary.files', { count: files.filter(file => file.status === 'selected').length }) }}
+                </dd>
+              </div>
+              <div class="flex items-start justify-between gap-3">
+                <dt class="text-muted">
+                  {{ t('document.summary.output') }}
+                </dt>
+                <dd class="flex flex-col items-end gap-1">
+                  <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                  <UButton
+                    v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    icon="i-lucide-folder-cog"
+                    :label="t('document.output.changeFolder')"
+                    @click="onPickCustomOutput"
+                  />
+                </dd>
+              </div>
+            </dl>
 
-          <slot name="config" />
-          <USeparator color="primary" class="py-2 opacity-30" />
+            <slot name="config" />
+          </UCard>
+
+          <slot name="advanced" />
+        </div>
+
+        <div class="shrink-0 space-y-2 rounded-md border border-default/60 bg-elevated/40 p-3">
           <div v-if="running" class="space-y-1">
             <UProgress :model-value="progress" size="xs" />
             <p class="text-xs text-muted">
@@ -593,9 +599,7 @@ const progress = computed(() => {
             :disabled="!canRun && !running"
             @click="emit('run')"
           />
-        </UCard>
-
-        <slot name="advanced" />
+        </div>
       </div>
     </div>
 

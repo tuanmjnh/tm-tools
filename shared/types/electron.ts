@@ -510,6 +510,38 @@ export interface AppUpdaterNamespace {
   quitAndInstall(): Promise<{ status: boolean, message?: string }>
   onStatusChanged(callback: (status: AppUpdateStatus) => void): () => void
 }
+
+/**
+ * P4 device enrollment. Every answer is identity metadata: the issued
+ * credential stays in the main process and is never part of this surface.
+ */
+export interface DeviceStatus {
+  enrolled: boolean
+  deviceId: string
+  appId: string
+  userId: string
+  expiresAt: string
+  scopes: string[]
+}
+
+export interface DeviceEnrollProgress {
+  phase: 'authorizing' | 'pending' | 'issued' | 'denied' | 'expired'
+  userCode?: string
+  verificationUri?: string
+  expiresAt?: string
+}
+
+export type DeviceEnrollResult
+  = | { success: true, enrolled: true, deviceId: string, appId: string, expiresAt: string, scopes: string[] }
+    | { success: false, code: 'notRoot' | 'notConfigured' | 'unreachable' | 'rejected' | 'denied' | 'expired' | 'busy' | 'untrusted', hubCode?: string }
+
+export interface DeviceNamespace {
+  status(): Promise<DeviceStatus>
+  enroll(accessToken?: string): Promise<DeviceEnrollResult>
+  forget(accessToken?: string): Promise<{ success: boolean, enrolled?: boolean, code?: 'notRoot' | 'untrusted' }>
+  onProgress(callback: (progress: DeviceEnrollProgress) => void): () => void
+}
+
 export interface ProfileGroup {
   id: string
   name: string
@@ -662,7 +694,13 @@ export interface ElectronAPI {
   /** External file drop (roadmap G-2): dropped File → absolute path (Electron 32+ removed File.path). */
   getPathForFile(file: File): string
   getConfig(): Promise<Record<string, string>>
-  setConfig(values: Record<string, string>): Promise<{ success: boolean, path: string }>
+  /**
+   * `accessToken` is the caller's Hub session. Main verifies it before writing
+   * when this device is already configured; first-run provisioning is allowed
+   * so a fresh install can be connected without a session that the local
+   * server cannot verify yet.
+   */
+  setConfig(values: Record<string, string>, accessToken?: string): Promise<{ success: boolean, path?: string, code?: 'notRoot' }>
   verifyPath(filePath: string, type: 'ytDlp' | 'ffmpeg' | 'ffprobe' | 'ffplay'): Promise<{ status: boolean }>
   openPath(fullPath: string): Promise<boolean>
   openExternal(url: string): Promise<boolean>
@@ -677,6 +715,7 @@ export interface ElectronAPI {
   dialog: DialogNamespace
   fileManager: FileManagerNamespace
   appUpdater?: AppUpdaterNamespace
+  device?: DeviceNamespace
   system: {
     getInfo(): Promise<ApiResponse<SystemInfoResponse>>
     openDirectory(input: OpenDirectoryInput): Promise<ApiResponse<void>>

@@ -25,6 +25,7 @@ import { r2StorageProvider } from './r2-storage'
 import { HubStorageProvider } from './hub-storage'
 import { DocumentError } from './operations'
 import { config } from '#server/config'
+import { hubStorageNamespace } from '#server/utils/hubIdentity'
 
 export interface DocumentRuntime {
   capabilities: DocumentRuntimeCapabilities
@@ -101,7 +102,9 @@ async function hubRuntimeSet(event: H3Event): Promise<DocumentRuntime> {
     throw new DocumentError('DOCUMENT_STORAGE_NOT_CONFIGURED', { reason: 'hub-storage-unavailable' })
   }
 
-  const storage = new HubStorageProvider(event, config.document.hub.namespace)
+  // A device credential may only touch users/{enrolling userId}; Hub enforces
+  // the same rule, so naming the app namespace here would just 403 every call.
+  const storage = new HubStorageProvider(event, hubStorageNamespace(config.document.hub.namespace, event))
   return {
     capabilities: runtimeCapabilities(),
     storage,

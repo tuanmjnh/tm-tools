@@ -1,5 +1,6 @@
 import { config } from '#server/config'
 import { fetchRelayCatalog } from '../../../utils/aiRelay'
+import { bareModelId, isTextModel } from '../../../utils/relayModels'
 
 export interface PdfExtractModel {
   connectionId: string
@@ -23,18 +24,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000
 let cache: { at: number, models: PdfExtractModel[] } | null = null
 
 /**
- * Models that cannot answer a vision prompt: they emit audio, images, video or
- * embeddings, or they are retrieval-only. Everything else the connection
- * exposes is selectable — there is no per-model allowlist.
- */
-const NON_TEXT_OUTPUT = /(?:^|-)(tts|audio|live|image|embedding|embed|imagen|veo|aqa)(?:-|$)/i
-
-/** `models/gemini-3.5-flash` -> `gemini-3.5-flash`; the relay adds the prefix. */
-export function bareModelId(modelId: string): string {
-  return modelId.replace(/^models\//, '').trim()
-}
-
-/**
  * Every model of every AI connection this app may use, straight from the hub
  * catalogue. Nothing is hard-coded here, so connecting another provider (or a
  * newer model at the same provider) shows up in the picker without a deploy.
@@ -48,7 +37,7 @@ export async function listExtractModels(force = false): Promise<PdfExtractModel[
   const models: PdfExtractModel[] = connections
     .filter(connection => connection.hasKey && connection.models?.length)
     .flatMap(connection => connection.models
-      .filter(entry => entry.modelId && !NON_TEXT_OUTPUT.test(bareModelId(entry.modelId)))
+      .filter(entry => entry.modelId && isTextModel(entry.modelId))
       .map(entry => ({
         connectionId: connection.connectionId,
         connectionName: connection.name,

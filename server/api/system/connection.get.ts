@@ -1,13 +1,18 @@
 import { config } from '#server/config'
+import { requireRootAuth } from '#server/utils/authz'
+import { getHubPublicKeys } from '#server/utils/jwt'
 import { detectRuntime } from '#server/modules/document/runtime'
 
 /**
- * Setup diagnostics for the desktop Hub-connection page. Public by necessity:
- * before the shared secret exists there is no session to authenticate with.
- * It answers with booleans and the two PUBLIC identifiers only — never a key,
- * a token or a connection string.
+ * Full connection diagnostics. Root only: these are the device's
+ * administrative settings, and the UI that renders them is itself root-only.
+ * Public callers get `/api/system/connection/status`, which answers with
+ * runtime and a single configured boolean — never an identifier, never a
+ * credential.
  */
 export default defineEventHandler((event) => {
+  requireRootAuth(event)
+
   const runtime = useRuntimeConfig(event)
   return {
     success: true,
@@ -17,8 +22,16 @@ export default defineEventHandler((event) => {
       hubUrl: config.hub.url || String(runtime.public.hubUrl || ''),
       appId: config.hub.appId || String(runtime.public.hubAppId || ''),
       sharedSecretConfigured: Boolean(config.auth.accessTokenSecret),
+      publicKeysConfigured: getHubPublicKeys().length,
       refreshSecretConfigured: Boolean(config.auth.refreshTokenSecret),
-      appSecretConfigured: Boolean(config.hub.appSecret)
+      appSecretConfigured: Boolean(config.hub.appSecret),
+      // P4: device identity is metadata only; the secret itself never leaves
+      // the main-process vault or the local server's process.env.
+      deviceEnrolled: Boolean(config.hub.deviceId && config.hub.deviceSecret),
+      deviceId: config.hub.deviceId,
+      deviceUserId: config.hub.deviceUserId,
+      deviceExpiresAt: config.hub.deviceExpiresAt,
+      deviceScopes: config.hub.deviceScopes
     }
   }
 })

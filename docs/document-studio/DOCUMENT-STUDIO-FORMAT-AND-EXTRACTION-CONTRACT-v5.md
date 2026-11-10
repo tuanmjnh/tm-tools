@@ -173,6 +173,17 @@ Use stable ID `document.ai-extract`, slug `extract`, route `/document-studio/too
 
 Input format support must be explicit. Current legacy engine supports PDF page/vision extraction and DOCX text-chunk extraction through `server/modules/pdf/extract/jobs.ts`; audit actual `anySourcePath()` and allowed areas before enabling both in the new operation. Do not claim image OCR or XLSX extraction until there is a corresponding tested executor.
 
+Source resolution: a Document Job must read the file staged in its own workspace
+(`VerifiedInput.stagedPath`, produced by the stage-once upload). It must not copy
+that upload into `input/`: the job input is use-once data, not a library entry.
+The logical source name (`VerifiedInput.safeName`) is still what names products
+and checkpoint directories, while checkpoint identity hashes the source bytes, so
+two uploads with the same name but different content never share checkpoints. A
+caller without a staged source (the legacy `/pdf` tool pages) keeps resolving
+through `anySourcePath()` against `input/`. `resolveExtractSource()` is the single
+place that decides between the two, and a missing file throws
+`PDF_SOURCE_NOT_FOUND` either way.
+
 ### 5.2 Model choice
 
 Recommended config:
@@ -200,6 +211,14 @@ Use the connected Hub provider catalogue. The picker must display:
 - model display name,
 - optional recommended/default marker.
 
+Only text-capable models are offered: the server filters the relay catalogue
+through `isTextModel()` in `server/utils/relayModels.ts`, shared with
+`/api/v1/chat/models`, so TTS, audio, live, image and embedding models never
+appear in either picker. When the catalogue cannot be fetched, the field shows
+the relay error (`error.aiRelayNotConfigured` / `error.aiRelayUnauthorized`) with
+a forced-refresh button (`?refresh=1`) and a link to `/system/settings/hub` for
+device enrollment, rather than an empty dropdown.
+
 Internally store `connectionId` and stable model ID; display label is not an identifier. Revalidate on server before dispatch. If the selected connection/model was removed or revoked, return a typed error and ask the user to choose another; do not silently fall back to another provider for a deliberate explicit selection. A fallback may be offered only for an unset/default model.
 
 Never store AI API keys in tm-tools.
@@ -216,6 +235,19 @@ Existing preset fields and limits are the compatibility baseline:
 | Number of presets | 40 |
 
 Support list/create/update/delete. The page must allow selecting, creating, editing and deleting presets. Do not force users to edit JSON source code.
+
+Implemented in `AiExtractionConfig.vue`: the preset row exposes select, create,
+edit and delete actions; the editor is a modal over the existing
+`GET/POST /api/v1/pdf/extract/presets` and `DELETE /api/v1/pdf/extract/presets/:id`
+endpoints, and surfaces `PDF_PRESET_NAME_REQUIRED` / `PDF_PRESET_LIMIT` inline.
+Presets are stored in `presets.json` under the deployment pdf root, which in the
+packaged app resolves to the Electron userData directory. Delete asks for
+confirmation and leaves already-produced job output untouched.
+
+Because the checkpoint fingerprint includes the preset and its prompt content,
+selecting a different preset starts fresh rows instead of reusing cached ones.
+The picker hint must say so; it must not claim that changing the model or preset
+keeps the cache.
 
 Use versioned config internally:
 

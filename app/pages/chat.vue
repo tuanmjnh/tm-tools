@@ -547,7 +547,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <BasePage id="ai-chat" :title="title" :description="description" :flush="true">
+  <BasePage
+    id="ai-chat"
+    :title="title"
+    :description="description"
+    :flush="true"
+  >
     <template #right>
       <BaseHeaderActions :actions="headerActions" :max-inline="1" />
     </template>
@@ -555,16 +560,24 @@ onMounted(async () => {
     <div class="flex flex-1 min-h-0 overflow-hidden bg-background">
       <!-- SIDEBAR: Conversation History -->
       <aside
-        class="hidden md:flex flex-col min-h-0 w-72 lg:w-80 border-r border-(--ui-border) bg-(--ui-bg-muted)/30 shrink-0 select-none">
+        class="hidden md:flex flex-col min-h-0 w-72 lg:w-80 border-r border-(--ui-border) bg-(--ui-bg-muted)/30 shrink-0 select-none"
+      >
         <div class="px-3 py-4 border-b border-(--ui-border) flex items-center justify-between shrink-0">
           <span class="text-xs font-medium text-muted">{{ t('chat.conversations') }}</span>
           <span class="text-[10px] text-dimmed">{{ conversations.length }}</span>
         </div>
 
         <!-- Conversations List -->
-        <ChatConversationList :conversations="conversations" :loading="loadingConversations"
-          :current-id="currentConversationId" @select="selectConversation" @remove="openDeleteConfirm"
-          @rename="openRename" @archive="handleArchive" @color="handleColor" />
+        <ChatConversationList
+          :conversations="conversations"
+          :loading="loadingConversations"
+          :current-id="currentConversationId"
+          @select="selectConversation"
+          @remove="openDeleteConfirm"
+          @rename="openRename"
+          @archive="handleArchive"
+          @color="handleColor"
+        />
 
         <!-- Bottom Link to Settings -->
         <div class="p-3 border-t border-(--ui-border) text-xs flex items-center justify-between text-muted shrink-0">
@@ -583,21 +596,38 @@ onMounted(async () => {
       <main class="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden relative">
         <!-- Top Toolbar: Model Selector & Status -->
         <header
-          class="px-4 py-2.5 border-b border-(--ui-border) bg-(--ui-bg)/60 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+          class="px-4 py-2.5 border-b border-(--ui-border) bg-(--ui-bg)/60 backdrop-blur-md flex items-center justify-between gap-3 shrink-0"
+        >
           <div class="flex items-center gap-2 min-w-0">
             <!-- Mobile sidebar trigger -->
-            <UButton class="md:hidden" icon="i-lucide-history" color="neutral" variant="ghost" size="sm"
-              :aria-label="t('chat.conversations')" @click="historyOpen = true" />
+            <UButton
+              class="md:hidden"
+              icon="i-lucide-history"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :aria-label="t('chat.conversations')"
+              @click="historyOpen = true"
+            />
 
             <div class="flex items-center gap-2 min-w-0">
               <span class="text-xs text-muted hidden sm:inline">{{ t('chat.selectModel') }}:</span>
-              <AiProvidersModelSelect v-model="selectedModelKey" :models="availableModels" :loading="loadingModels"
-                :disabled="availableModels.length === 0" />
+              <AiProvidersModelSelect
+                v-model="selectedModelKey"
+                :models="availableModels"
+                :loading="loadingModels"
+                :disabled="availableModels.length === 0"
+              />
             </div>
 
             <!-- Provider Badge -->
-            <UBadge v-if="selectedModel" color="neutral" variant="subtle" size="sm"
-              class="hidden sm:inline-flex items-center gap-1 capitalize">
+            <UBadge
+              v-if="selectedModel"
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              class="hidden sm:inline-flex items-center gap-1 capitalize"
+            >
               <UIcon :name="getProviderIcon(selectedModel.provider)" class="text-xs" />
               <span>{{ selectedModel.provider }}</span>
             </UBadge>
@@ -605,10 +635,14 @@ onMounted(async () => {
         </header>
 
         <!-- System Prompt Drawer/Card (Collapsible) -->
-        <transition enter-active-class="transition duration-200 ease-out"
-          enter-from-class="transform -translate-y-4 opacity-0" enter-to-class="transform translate-y-0 opacity-100"
-          leave-active-class="transition duration-150 ease-in" leave-from-class="transform translate-y-0 opacity-100"
-          leave-to-class="transform -translate-y-4 opacity-0">
+        <transition
+          enter-active-class="transition duration-200 ease-out"
+          enter-from-class="transform -translate-y-4 opacity-0"
+          enter-to-class="transform translate-y-0 opacity-100"
+          leave-active-class="transition duration-150 ease-in"
+          leave-from-class="transform translate-y-0 opacity-100"
+          leave-to-class="transform -translate-y-4 opacity-0"
+        >
           <div v-if="showSystemPrompt" class="p-3 bg-(--ui-bg-muted)/40 border-b border-(--ui-border) shrink-0">
             <div class="max-w-3xl mx-auto flex flex-col gap-1.5">
               <div class="flex items-center justify-between text-xs">
@@ -618,26 +652,63 @@ onMounted(async () => {
                 </span>
                 <span class="text-muted hidden sm:inline">{{ t('chat.systemPromptDesc') }}</span>
               </div>
-              <UTextarea v-model="systemPrompt" name="system-prompt" :rows="2" size="sm" class="w-full"
-                :placeholder="t('chat.systemPromptPlaceholder')" />
+              <UTextarea
+                v-model="systemPrompt"
+                name="system-prompt"
+                :rows="2"
+                size="sm"
+                class="w-full"
+                :placeholder="t('chat.systemPromptPlaceholder')"
+              />
             </div>
           </div>
         </transition>
 
         <!-- MESSAGES FEED -->
-        <div ref="scrollContainer" class="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6"
-          @scroll.passive="handleMessagesScroll">
+        <div
+          ref="scrollContainer"
+          class="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-6 space-y-6"
+          @scroll.passive="handleMessagesScroll"
+        >
           <!-- Empty State / Welcome Screen -->
-          <div v-if="messages.length === 0 && !loadingMessages"
-            class="flex flex-col items-center justify-center max-w-2xl mx-auto text-center px-4 py-12 animate-fade-in">
+          <div
+            v-if="messages.length === 0 && !loadingMessages"
+            class="flex flex-col items-center justify-center max-w-2xl mx-auto text-center px-4 py-12 animate-fade-in"
+          >
             <div v-if="modelsError" class="w-full max-w-md">
-              <UAlert color="error" variant="subtle" icon="i-lucide-circle-alert" :title="t('chat.modelsUnavailable')"
-                :description="modelsError">
+              <UAlert
+                color="error"
+                variant="subtle"
+                icon="i-lucide-circle-alert"
+                :title="t('chat.modelsUnavailable')"
+                :description="modelsError"
+              >
                 <template #actions>
-                  <UButton color="primary" variant="soft" size="sm" icon="i-lucide-refresh-cw"
-                    :label="t('common.refresh')" :loading="loadingModels" @click="fetchModels()" />
-                  <UButton to="/system/ai-keys" color="neutral" variant="ghost" size="sm" icon="i-lucide-cpu"
-                    :label="t('chat.configureAi')" />
+                  <UButton
+                    color="primary"
+                    variant="soft"
+                    size="sm"
+                    icon="i-lucide-refresh-cw"
+                    :label="t('common.refresh')"
+                    :loading="loadingModels"
+                    @click="fetchModels()"
+                  />
+                  <UButton
+                    to="/system/settings/hub"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-lucide-plug"
+                    :label="t('settings.hub.title')"
+                  />
+                  <UButton
+                    to="/system/ai-keys"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-lucide-cpu"
+                    :label="t('chat.configureAi')"
+                  />
                 </template>
               </UAlert>
             </div>
@@ -653,17 +724,32 @@ onMounted(async () => {
                 {{ availableModels.length === 0 && !loadingModels ? t('chat.noModels') : t('chat.welcomeSubtitle') }}
               </p>
 
-              <div v-if="availableModels.length === 0 && !loadingModels" class="mb-6">
-                <UButton to="/system/ai-keys" icon="i-lucide-cpu" color="primary" variant="soft"
-                  :label="t('chat.configureAi')" />
+              <div v-if="availableModels.length === 0 && !loadingModels" class="mb-6 flex flex-wrap items-center justify-center gap-2">
+                <UButton
+                  to="/system/settings/hub"
+                  icon="i-lucide-plug"
+                  color="primary"
+                  variant="soft"
+                  :label="t('settings.hub.title')"
+                />
+                <UButton
+                  to="/system/ai-keys"
+                  icon="i-lucide-cpu"
+                  color="neutral"
+                  variant="ghost"
+                  :label="t('chat.configureAi')"
+                />
               </div>
 
               <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg text-left">
                 <button
                   class="p-3 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
-                  @click="applyQuickPrompt(t('chat.quickPrompts.summary'))">
-                  <UIcon name="i-lucide-file-text"
-                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  @click="applyQuickPrompt(t('chat.quickPrompts.summary'))"
+                >
+                  <UIcon
+                    name="i-lucide-file-text"
+                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform"
+                  />
                   <div>
                     <div class="text-xs font-semibold text-foreground">
                       {{ t('chat.quickPrompts.summary') }}
@@ -676,9 +762,12 @@ onMounted(async () => {
 
                 <button
                   class="p-3 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
-                  @click="applyQuickPrompt(t('chat.quickPrompts.code'))">
-                  <UIcon name="i-lucide-code-2"
-                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  @click="applyQuickPrompt(t('chat.quickPrompts.code'))"
+                >
+                  <UIcon
+                    name="i-lucide-code-2"
+                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform"
+                  />
                   <div>
                     <div class="text-xs font-semibold text-foreground">
                       {{ t('chat.quickPrompts.code') }}
@@ -691,9 +780,12 @@ onMounted(async () => {
 
                 <button
                   class="p-3 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
-                  @click="applyQuickPrompt(t('chat.quickPrompts.brainstorm'))">
-                  <UIcon name="i-lucide-lightbulb"
-                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  @click="applyQuickPrompt(t('chat.quickPrompts.brainstorm'))"
+                >
+                  <UIcon
+                    name="i-lucide-lightbulb"
+                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform"
+                  />
                   <div>
                     <div class="text-xs font-semibold text-foreground">
                       {{ t('chat.quickPrompts.brainstorm') }}
@@ -706,9 +798,12 @@ onMounted(async () => {
 
                 <button
                   class="p-3 rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) hover:border-primary/50 hover:bg-primary/5 transition-all text-left flex items-start gap-2.5 group cursor-pointer"
-                  @click="applyQuickPrompt(t('chat.quickPrompts.explain'))">
-                  <UIcon name="i-lucide-compass"
-                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                  @click="applyQuickPrompt(t('chat.quickPrompts.explain'))"
+                >
+                  <UIcon
+                    name="i-lucide-compass"
+                    class="text-lg text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform"
+                  />
                   <div>
                     <div class="text-xs font-semibold text-foreground">
                       {{ t('chat.quickPrompts.explain') }}
@@ -731,27 +826,41 @@ onMounted(async () => {
           <!-- Messages Stream -->
           <div v-else class="max-w-6xl mx-auto space-y-6">
             <div v-if="hasOlderMessages || loadingOlderMessages" class="flex justify-center">
-              <UButton icon="i-lucide-history" color="neutral" variant="ghost" size="xs" :loading="loadingOlderMessages"
-                :label="t('chat.loadOlder')" @click="loadOlderMessages" />
+              <UButton
+                icon="i-lucide-history"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :loading="loadingOlderMessages"
+                :label="t('chat.loadOlder')"
+                @click="loadOlderMessages"
+              />
             </div>
 
             <UContextMenu v-for="msg in messages" :key="msg.id" :items="messageMenuItems(msg)">
               <div class="flex gap-3 animate-slide-up" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
                 <!-- Assistant Avatar -->
-                <div v-if="msg.role === 'assistant'"
-                  class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-1 ring-1 ring-primary/20">
+                <div
+                  v-if="msg.role === 'assistant'"
+                  class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-1 ring-1 ring-primary/20"
+                >
                   <UIcon name="i-lucide-bot" class="text-lg" />
                 </div>
 
                 <!-- Message Bubble -->
-                <div class="relative max-w-[85%] sm:max-w-[78%] rounded-2xl px-4 py-3 shadow-sm transition-all" :class="[
-                  msg.role === 'user'
-                    ? 'bg-primary text-white rounded-tr-none'
-                    : 'bg-(--ui-bg-elevated) border border-(--ui-border) text-foreground rounded-tl-none'
-                ]">
+                <div
+                  class="relative max-w-[85%] sm:max-w-[78%] rounded-2xl px-4 py-3 shadow-sm transition-all"
+                  :class="[
+                    msg.role === 'user'
+                      ? 'bg-primary text-white rounded-tr-none'
+                      : 'bg-(--ui-bg-elevated) border border-(--ui-border) text-foreground rounded-tl-none'
+                  ]"
+                >
                   <!-- Header / Model Label -->
-                  <div v-if="msg.role === 'assistant' && msg.model"
-                    class="flex items-center gap-2 mb-1.5 text-[11px] text-muted">
+                  <div
+                    v-if="msg.role === 'assistant' && msg.model"
+                    class="flex items-center gap-2 mb-1.5 text-[11px] text-muted"
+                  >
                     <span class="font-medium text-foreground">{{ msg.model }}</span>
                     <span v-if="msg.outputTokens" class="text-dimmed">
                       • {{ msg.outputTokens }} {{ t('chat.tokens') }}
@@ -765,19 +874,28 @@ onMounted(async () => {
 
                   <!-- Attachments -->
                   <div v-if="msg.attachments?.length" class="mt-2 flex flex-wrap gap-1.5">
-                    <div v-for="att in msg.attachments" :key="att.name"
+                    <div
+                      v-for="att in msg.attachments"
+                      :key="att.name"
                       class="flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-[10px]"
-                      :class="msg.role === 'user' ? 'border-white/30 text-white/90' : 'border-(--ui-border) text-muted'">
-                      <img v-if="att.kind === 'image' && att.url" :src="att.url" alt=""
-                        class="h-5 w-5 rounded object-cover">
+                      :class="msg.role === 'user' ? 'border-white/30 text-white/90' : 'border-(--ui-border) text-muted'"
+                    >
+                      <img
+                        v-if="att.kind === 'image' && att.url"
+                        :src="att.url"
+                        alt=""
+                        class="h-5 w-5 rounded object-cover"
+                      >
                       <UIcon v-else name="i-lucide-file-text" class="text-xs" />
                       <span class="max-w-40 truncate">{{ att.name }}</span>
                     </div>
                   </div>
 
                   <!-- Timestamp -->
-                  <div class="mt-2 pt-1 border-t border-(--ui-border)/40 text-[11px]"
-                    :class="msg.role === 'user' ? 'text-white/80' : 'text-muted'">
+                  <div
+                    class="mt-2 pt-1 border-t border-(--ui-border)/40 text-[11px]"
+                    :class="msg.role === 'user' ? 'text-white/80' : 'text-muted'"
+                  >
                     <span class="text-[10px] opacity-75">
                       {{ new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
                     </span>
@@ -785,8 +903,10 @@ onMounted(async () => {
                 </div>
 
                 <!-- User Avatar -->
-                <div v-if="msg.role === 'user'"
-                  class="w-8 h-8 rounded-lg bg-neutral-800 text-white flex items-center justify-center shrink-0 mt-1 shadow-sm">
+                <div
+                  v-if="msg.role === 'user'"
+                  class="w-8 h-8 rounded-lg bg-neutral-800 text-white flex items-center justify-center shrink-0 mt-1 shadow-sm"
+                >
                   <UIcon name="i-lucide-user" class="text-lg" />
                 </div>
               </div>
@@ -795,11 +915,13 @@ onMounted(async () => {
             <!-- Assistant Typing Indicator -->
             <div v-if="sending" class="flex gap-3 justify-start animate-fade-in">
               <div
-                class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/20">
+                class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 ring-1 ring-primary/20"
+              >
                 <UIcon name="i-lucide-bot" class="text-lg animate-pulse" />
               </div>
               <div
-                class="rounded-2xl rounded-tl-none px-4 py-3 bg-(--ui-bg-elevated) border border-(--ui-border) text-foreground flex items-center gap-1.5">
+                class="rounded-2xl rounded-tl-none px-4 py-3 bg-(--ui-bg-elevated) border border-(--ui-border) text-foreground flex items-center gap-1.5"
+              >
                 <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
                 <span class="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
                 <span class="w-2 h-2 rounded-full bg-primary animate-bounce" />
@@ -811,53 +933,108 @@ onMounted(async () => {
         <!-- INPUT BOX -->
         <footer class="py-0 border-t border-(--ui-border) bg-(--ui-bg)/80 backdrop-blur-md shrink-0">
           <div class="max-w-full mx-auto flex flex-col gap-2">
-            <UAlert v-if="sendError" color="error" variant="subtle" icon="i-lucide-circle-alert"
-              :title="t('chat.errorGeneric')" :description="sendError" class="mx-2 mt-2">
+            <UAlert
+              v-if="sendError"
+              color="error"
+              variant="subtle"
+              icon="i-lucide-circle-alert"
+              :title="t('chat.errorGeneric')"
+              :description="sendError"
+              class="mx-2 mt-2"
+            >
               <template #actions>
-                <UButton v-if="lastFailedPrompt" color="primary" variant="soft" size="sm" icon="i-lucide-rotate-ccw"
-                  :label="t('chat.retry')" @click="retrySend" />
+                <UButton
+                  v-if="lastFailedPrompt"
+                  color="primary"
+                  variant="soft"
+                  size="sm"
+                  icon="i-lucide-rotate-ccw"
+                  :label="t('chat.retry')"
+                  @click="retrySend"
+                />
               </template>
             </UAlert>
 
             <div
-              class="relative flex flex-col gap-2 bg-(--ui-bg-elevated) rounded-xs border border-(--ui-border) p-2 shadow-sm ">
+              class="relative flex flex-col gap-2 bg-(--ui-bg-elevated) rounded-xs border border-(--ui-border) p-2 shadow-sm "
+            >
               <!-- Selected attachments -->
               <div v-if="attachments.length" class="flex flex-wrap gap-2">
-                <div v-for="(att, index) in attachments" :key="`${att.name}-${index}`"
-                  class="flex items-center gap-2 rounded-sm border border-(--ui-border) bg-(--ui-bg-muted)/50 px-2 py-1.5 text-xs max-w-full">
-                  <img v-if="att.kind === 'image' && att.url" :src="att.url" alt=""
-                    class="w-8 h-8 rounded object-cover">
+                <div
+                  v-for="(att, index) in attachments"
+                  :key="`${att.name}-${index}`"
+                  class="flex items-center gap-2 rounded-sm border border-(--ui-border) bg-(--ui-bg-muted)/50 px-2 py-1.5 text-xs max-w-full"
+                >
+                  <img
+                    v-if="att.kind === 'image' && att.url"
+                    :src="att.url"
+                    alt=""
+                    class="w-8 h-8 rounded object-cover"
+                  >
                   <UIcon v-else name="i-lucide-file-text" class="text-muted" />
                   <span class="max-w-40 truncate">{{ att.name }}</span>
-                  <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" square
-                    :aria-label="t('chat.removeAttachment')" @click="removeAttachment(index)" />
+                  <UButton
+                    icon="i-lucide-x"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    square
+                    :aria-label="t('chat.removeAttachment')"
+                    @click="removeAttachment(index)"
+                  />
                 </div>
               </div>
 
               <div class="flex items-end gap-2">
-                <UTextarea v-model="promptInput" name="message" :placeholder="t('chat.placeholder')" :rows="1"
-                  :maxrows="5" :autoresize="true"
+                <UTextarea
+                  v-model="promptInput"
+                  name="message"
+                  :placeholder="t('chat.placeholder')"
+                  :rows="1"
+                  :maxrows="5"
+                  :autoresize="true"
                   class="w-full border-0 focus:ring-0 shadow-none bg-transparent resize-none text-sm leading-relaxed"
                   :disabled="sending || loadingModels || availableModels.length === 0"
                   :ui="{ base: 'rounded-sm focus-visible:outline-2' }"
-                  @keydown.enter.exact.prevent="handleSendMessage" />
+                  @keydown.enter.exact.prevent="handleSendMessage"
+                />
 
                 <div class="flex items-center gap-1 shrink-0 pr-1">
-                  <UButton icon="i-lucide-paperclip" color="neutral" variant="ghost" size="sm" square
+                  <UButton
+                    icon="i-lucide-paperclip"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    square
                     class="rounded-sm w-8 h-8 p-0 flex items-center justify-center"
                     :disabled="sending || uploadingAttachment || attachments.length >= CHAT_ATTACHMENT_LIMIT"
-                    :loading="uploadingAttachment" :aria-label="t('chat.attachFiles')" :title="t('chat.attachFiles')"
-                    @click="triggerAttachmentPicker" />
-                  <UButton icon="i-lucide-arrow-up" color="primary" variant="soft" size="sm"
+                    :loading="uploadingAttachment"
+                    :aria-label="t('chat.attachFiles')"
+                    :title="t('chat.attachFiles')"
+                    @click="triggerAttachmentPicker"
+                  />
+                  <UButton
+                    icon="i-lucide-arrow-up"
+                    color="primary"
+                    variant="soft"
+                    size="sm"
                     class="rounded-sm w-8 h-8 p-0 flex items-center justify-center"
-                    :disabled="!canSend || availableModels.length === 0" :loading="sending" :aria-label="t('chat.send')"
-                    @click="handleSendMessage" />
+                    :disabled="!canSend || availableModels.length === 0"
+                    :loading="sending"
+                    :aria-label="t('chat.send')"
+                    @click="handleSendMessage"
+                  />
                 </div>
               </div>
 
-              <input ref="attachmentInput" type="file" multiple class="hidden"
+              <input
+                ref="attachmentInput"
+                type="file"
+                multiple
+                class="hidden"
                 accept="image/*,text/*,.md,.json,.csv,.log,.yml,.yaml,.xml,.html,.css,.js,.ts,.tsx,.jsx,.vue,.py,.sql,.sh"
-                @change="handleAttachmentSelect">
+                @change="handleAttachmentSelect"
+              >
             </div>
 
             <!-- Footer Meta (desktop only) -->
@@ -874,32 +1051,68 @@ onMounted(async () => {
     </div>
 
     <!-- Mobile conversation history (the sidebar is desktop-only) -->
-    <LazyBaseResponsiveSlideover v-model:open="historyOpen" :title="t('chat.conversations')"
-      icon="i-lucide-message-square" side="left" :ui="{ content: 'w-screen max-w-sm' }">
+    <LazyBaseResponsiveSlideover
+      v-model:open="historyOpen"
+      :title="t('chat.conversations')"
+      icon="i-lucide-message-square"
+      side="left"
+      :ui="{ content: 'w-screen max-w-sm' }"
+    >
       <template #body>
-        <ChatConversationList :conversations="conversations" :loading="loadingConversations"
-          :current-id="currentConversationId" @select="selectConversation" @remove="openDeleteConfirm"
-          @rename="openRename" @archive="handleArchive" @color="handleColor" />
+        <ChatConversationList
+          :conversations="conversations"
+          :loading="loadingConversations"
+          :current-id="currentConversationId"
+          @select="selectConversation"
+          @remove="openDeleteConfirm"
+          @rename="openRename"
+          @archive="handleArchive"
+          @color="handleColor"
+        />
       </template>
     </LazyBaseResponsiveSlideover>
 
     <!-- Confirmation Modal for Deleting Conversation -->
-    <LazyBaseConfirmModal v-model:open="confirmModalOpen" :title="confirmModalTitle" :description="confirmModalDesc"
-      color="error" icon="i-lucide-trash-2" :loading="isDeleting" @confirm="handleConfirmDelete"
-      @cancel="confirmModalOpen = false" />
+    <LazyBaseConfirmModal
+      v-model:open="confirmModalOpen"
+      :title="confirmModalTitle"
+      :description="confirmModalDesc"
+      color="error"
+      icon="i-lucide-trash-2"
+      :loading="isDeleting"
+      @confirm="handleConfirmDelete"
+      @cancel="confirmModalOpen = false"
+    />
 
     <!-- Rename Conversation Modal -->
     <LazyUModal v-model:open="renameModalOpen" :title="t('chat.rename')" :ui="{ footer: 'justify-end' }">
       <template #body>
         <UFormField :label="t('chat.renamePlaceholder')">
-          <UInput v-model="renameInput" name="conversation-title" class="w-full" :maxlength="200" autofocus
-            @keydown.enter.prevent="handleConfirmRename" />
+          <UInput
+            v-model="renameInput"
+            name="conversation-title"
+            class="w-full"
+            :maxlength="200"
+            autofocus
+            @keydown.enter.prevent="handleConfirmRename"
+          />
         </UFormField>
       </template>
       <template #footer>
-        <UButton :label="t('common.cancel')" color="neutral" variant="ghost" @click="renameModalOpen = false" />
-        <UButton :label="t('common.save')" color="primary" variant="soft" :loading="isRenaming"
-          :disabled="!renameInput.trim()" @click="handleConfirmRename" />
+        <UButton
+          :label="t('common.cancel')"
+          color="neutral"
+          variant="ghost"
+          @click="renameModalOpen = false"
+        />
+        <UButton
+          :label="t('common.save')"
+          color="primary"
+          variant="soft"
+          :loading="isRenaming"
+          :disabled="!renameInput.trim()"
+          @click="handleConfirmRename"
+        />
       </template>
     </LazyUModal>
   </BasePage>

@@ -44,7 +44,17 @@ function harness(initialCookies: Record<string, string> = {}) {
     logout: 0
   }
   const redirects: unknown[] = []
-  const http = { refresh: async (): Promise<RefreshReply> => successReply(), meStatuses: [] as number[], appStatuses: [] as number[] }
+  const http = {
+    refresh: async (): Promise<RefreshReply> => successReply(),
+    meStatuses: [] as number[],
+    appStatuses: [] as number[],
+    mePayload: {
+      userId: 'test-user',
+      email: 'user@example.invalid',
+      name: 'Test User',
+      avatarUrl: 'https://cdn.invalid/avatar.png'
+    } as Record<string, unknown>
+  }
   const appPayload = { ok: true, jobId: 'rj_test' }
   let hooks: FetchHooks | undefined
 
@@ -71,7 +81,7 @@ function harness(initialCookies: Record<string, string> = {}) {
       if (status !== 200) {
         throw Object.assign(new Error(`Mock /me HTTP ${status}`), { statusCode: status })
       }
-      return { success: true, data: { userId: 'test-user', email: 'user@example.invalid', name: 'Test User' } }
+      return { success: true, data: http.mePayload }
     }
     requests.app.push({ url, auth: headers.get('Authorization') })
     if (status !== 200) {
@@ -364,6 +374,29 @@ async function main() {
     await assert.rejects(() => h.call('/api/v1/media/render'))
     assert.equal(h.requests.app.length, 1)
     assert.equal(h.requests.refresh.length, 0)
+  })
+
+  await check('fetchUser maps avatarUrl and keeps it after a token refresh', async () => {
+    const h = harness({ accessToken: 'fresh-access', refreshToken: 'cookie-refresh' })
+    await h.auth.fetchUser()
+    assert.equal(h.auth.user.value?.avatar, 'https://cdn.invalid/avatar.png')
+    assert.equal(await h.auth.refresh(), true)
+    assert.equal(h.auth.user.value?.avatar, 'https://cdn.invalid/avatar.png')
+  })
+
+  await check('a missing avatarUrl maps to undefined so the menu uses its bundled fallback', async () => {
+    const h = harness({ accessToken: 'fresh-access', refreshToken: 'cookie-refresh' })
+    h.http.mePayload = { userId: 'test-user', email: 'user@example.invalid', name: 'Test User', avatarUrl: null }
+    await h.auth.fetchUser()
+    assert.equal(h.auth.user.value?.avatar, undefined)
+  })
+
+  await check('the account menu never falls back to a third-party avatar host', () => {
+    const menu = readFileSync(fileURLToPath(new URL('../../app/components/dashboard/UserMenu.vue', import.meta.url)), 'utf8')
+    const constants = readFileSync(fileURLToPath(new URL('../../app/utils/constants.ts', import.meta.url)), 'utf8')
+    assert.match(menu, /auth\.user\.value\?\.avatar \|\| '\/icon\.png'/)
+    assert.doesNotMatch(menu, /github\.com|avatars\.githubusercontent\.com|dicebear/)
+    assert.match(constants, /FALLBACK_AVATAR = '\/icon\.png'/)
   })
 
   console.log(`\n${passed} auth refresh checks passed; ${failed} FAILED`)

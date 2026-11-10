@@ -1,14 +1,18 @@
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { config } from '#server/config'
+import { hubBaseUrl, resolveHubCaller } from './hubIdentity'
 
 /**
  * Server-only client for the TM Hub Storage Gateway (`/api/v1/apps/:id/storage`).
  *
  * The Hub owns provider credentials (R2/S3/Supabase Storage) and the object
- * manifest; tm-tools never sees them. Every call carries the app identity
- * (`X-App-Id` + `X-App-Secret`). The signed-in user's bearer rides along for
- * attribution, but the gateway authorizes the app, not the user.
+ * manifest; tm-tools never sees them. Every call carries an app identity:
+ * the Hub App Secret (`X-App-Id` + `X-App-Secret`) on server deployments, or
+ * an enrolled device credential (`X-Device-Id` + `X-Device-Secret`) — a
+ * device is confined to `users/{userId}`. The signed-in user's bearer rides
+ * along for attribution, but the gateway authorizes the app identity, not the
+ * user.
  *
  * Hub answers `{ success: true, data }` / `{ error: true, statusMessage }`. The
  * object identity is `objectId`: tm-tools stores that, never a bucket or key.
@@ -167,26 +171,6 @@ function mapStatus(status: number, requestId: string, body?: HubEnvelope<unknown
   return new HubStorageError('integrations.hubStorageFailed', status, detail)
 }
 
-interface HubRuntimeConfig {
-  public?: { hubUrl?: string, hubAppId?: string }
-  hubAppSecret?: string
-}
-
-/**
- * Resolved per call from the Nitro runtime config. `runtimeConfig.hubAppSecret`
- * is the deployment value and never appears in `runtimeConfig.public`.
- */
-function hubSettings(event: H3Event): { url: string, appId: string, secret: string } {
-  const runtime = useRuntimeConfig(event) as unknown as HubRuntimeConfig
-  // `config.hub` reads process.env per call, so a secret saved from the desktop
-  // settings page is used without restarting the embedded server.
-  return {
-    url: String(config.hub.url || runtime.public?.hubUrl || '').replace(/\/+$/, ''),
-    appId: String(config.hub.appId || runtime.public?.hubAppId || 'tm-tools').trim(),
-    secret: String(config.hub.appSecret || runtime.hubAppSecret || '').trim()
-  }
-}
-
 /**
  * Read from the event per call: one identity can never be served from a cache.
  * `context.authToken` is the raw bearer the middleware verified; `auth.token`
@@ -200,16 +184,15 @@ function callerToken(event: H3Event): string {
 }
 
 export function hubTarget(event: H3Event): HubTarget {
-  const { url: hubUrl, appId: hubAppId, secret } = hubSettings(event)
+  const caller = resolveHubCaller(event)
   const requestId = randomUUID()
 
-  if (!hubUrl || !hubAppId || !secret) {
+  if (!caller) {
     throw new HubStorageError('integrations.hubStorageNotConfigured', 503, { requestId })
   }
 
   const headers: Record<string, string> = {
-    'X-App-Id': hubAppId,
-    'X-App-Secret': secret,
+    ...caller.headers,
     'X-Request-Id': requestId,
     'Accept': 'application/json'
   }
@@ -217,7 +200,7 @@ export function hubTarget(event: H3Event): HubTarget {
   if (token) headers.Authorization = `Bearer ${token}`
 
   return {
-    baseUrl: `${hubUrl}/api/v1/apps/${encodeURIComponent(hubAppId)}/storage`,
+    baseUrl: `${hubBaseUrl(event)}/api/v1/apps/${encodeURIComponent(caller.appId)}/storage`,
     headers,
     timeoutMs: config.document.hub.timeoutMs,
     requestId

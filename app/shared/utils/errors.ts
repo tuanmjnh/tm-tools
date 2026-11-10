@@ -110,3 +110,12 @@ export function getErrorMessage(err: unknown, t: (key: string) => string): strin
   // 4. Fallback status-code-based key
   return t(getErrorKey(err))
 }
+
+/** Preset CRUD sends PDF_* codes that have dedicated copy instead of the generic map. */
+export function getPresetErrorMessage(err: unknown, t: (key: string) => string): string {
+  const e = err as ApiErrorPayload
+  const code = String(e?.data?.statusMessage || e?.statusMessage || e?.data?.message || e?.message || '')
+  if (code.includes('PDF_PRESET_NAME_REQUIRED')) return t('pdf.extract.presetNameRequired')
+  if (code.includes('PDF_PRESET_LIMIT')) return t('pdf.extract.presetLimit')
+  return getErrorMessage(err, t)
+}

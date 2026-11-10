@@ -1,5 +1,6 @@
 import { config } from '../config/index'
-import { verifyAccessToken } from '../utils/jwt'
+import { hasAccessTokenVerificationMaterial, verifyAccessToken } from '../utils/jwt'
+import { isRootClaims } from '../utils/authz'
 
 const publicRoutes = [
   '/api/auth/login',
@@ -7,9 +8,10 @@ const publicRoutes = [
   '/api/auth/refresh',
   '/api/health',
   '/api/system/network',
-  // Connection diagnostics: names what is configured, never a credential.
-  // The desktop setup page has no session before the shared secret exists.
-  '/api/system/connection',
+  // Connection STATUS only: runtime plus one configured boolean. The full
+  // diagnostics moved behind a root session (`/api/system/connection`), so
+  // this surface must never carry an identifier or a credential.
+  '/api/system/connection/status',
   // Deployment health: names the runtime and whether a provider is configured,
   // never a credential. A monitor cannot hold a user session.
   '/api/v1/documents/health',
@@ -39,10 +41,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'error.tokenMissing', message: 'Missing authorization token' })
   }
 
-  // A fresh desktop install has no shared secret yet. Verifying against an
-  // empty key would report every token as invalid and hide the real cause,
-  // so the missing configuration is named instead.
-  if (!config.auth.accessTokenSecret) {
+  // A fresh desktop install has no verification material yet. Verifying
+  // against nothing would report every token as invalid and hide the real
+  // cause, so the missing configuration is named instead. RS256 public keys
+  // are enough on their own; the legacy shared secret is the fallback.
+  if (!hasAccessTokenVerificationMaterial()) {
     throw createError({
       statusCode: 503,
       statusMessage: 'error.authNotConfigured',
@@ -63,8 +66,7 @@ export default defineEventHandler(async (event) => {
   const currentAppId = config.hub.appId || String(useRuntimeConfig(event).public.hubAppId || '')
   const rawPayload = payload as unknown as Record<string, unknown>
   const capabilities = Array.isArray(rawPayload.capabilities) ? rawPayload.capabilities as string[] : []
-  const isRootOrCrossApp = payload.role === 'root'
-    || (payload.permissions || []).includes('*')
+  const isRootOrCrossApp = isRootClaims(payload)
     || (payload.permissions || []).includes('platform.crossapp.read')
     || (payload.permissions || []).includes('platform.crossapp.write')
     || capabilities.includes('*')

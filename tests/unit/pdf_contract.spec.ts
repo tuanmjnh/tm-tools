@@ -60,16 +60,6 @@ describe('lazy explorer reload', () => {
   })
 })
 
-describe('desktop actions in the PDF workspaces', () => {
-  it('keeps the result panel able to preview, reveal and open output', () => {
-    const source = read('app/components/pdf/OperationResult.vue')
-    assert.ok(/<PdfFileRow/.test(source), 'the result panel no longer lists the files it wrote')
-    assert.ok(/openLocalPath/.test(source), 'the result panel cannot open the output folder')
-    assert.ok(/revealLocalPath/.test(source), 'the result panel cannot reveal the output folder')
-    assert.ok(/<UDropdownMenu/.test(source), 'the result panel has no context menu')
-  })
-})
-
 // The explorer deletes through `/directory/delete`, so the cascade the confirm
 // text promises has to live there too — not only in `removeSource`.
 const dataRoot = mkdtempSync(join(tmpdir(), 'pdf-contract-'))

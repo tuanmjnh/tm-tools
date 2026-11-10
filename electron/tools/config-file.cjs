@@ -16,6 +16,8 @@
 'use strict'
 
 const fs = require('fs')
+const { SECRET_SLOT_RE } = require('./secret-slots.cjs')
+const { encrypt, isEncryptionAvailable } = require('./ai-secure.cjs')
 
 function readConfigFile(file) {
   const result = { exists: false, values: {} }
@@ -40,4 +42,20 @@ function readConfigFile(file) {
   return result
 }
 
-module.exports = { readConfigFile }
+/**
+ * Rewrite the whole file from `values`. Secret slots go to disk as keychain
+ * tokens; every other value is verbatim. A masked placeholder echoed back from
+ * get-config ('********') means "keep what is stored", so the caller must merge
+ * first and never pass the mask as a real value.
+ */
+function writeConfigValues(file, values) {
+  const lines = Object.entries(values)
+    .filter(([key, value]) => !(SECRET_SLOT_RE.test(key) && String(value) === '********'))
+    .map(([key, value]) => {
+      const stored = SECRET_SLOT_RE.test(key) && isEncryptionAvailable() ? encrypt(String(value)) : String(value)
+      return `${key}=${stored}`
+    })
+  fs.writeFileSync(file, lines.join('\n') + '\n', 'utf8')
+}
+
+module.exports = { readConfigFile, writeConfigValues }

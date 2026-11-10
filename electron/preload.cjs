@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
+  'device:enroll-progress',
   'tools:profiles:statusChanged',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
@@ -102,6 +103,19 @@ const fileManager = exposeNamespace('tools:file-manager', {
   on: []
 })
 
+// P4 device enrollment. The issued credential stays in Main: `enroll` answers
+// identity metadata only, and nothing here can read HUB_DEVICE_SECRET.
+const device = {
+  status: () => ipcRenderer.invoke('device:status'),
+  enroll: accessToken => ipcRenderer.invoke('device:enroll', { accessToken }),
+  forget: accessToken => ipcRenderer.invoke('device:forget', { accessToken }),
+  onProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('device:enroll-progress', listener)
+    return () => ipcRenderer.removeListener('device:enroll-progress', listener)
+  }
+}
+
 const appUpdater = {
   getStatus: () => ipcRenderer.invoke('app-updater:getStatus'),
   checkForUpdates: () => ipcRenderer.invoke('app-updater:checkForUpdates'),
@@ -126,7 +140,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // to its absolute path (File.path was removed in Electron 32).
   getPathForFile: file => webUtils.getPathForFile(file),
   getConfig: () => ipcRenderer.invoke('get-config'),
-  setConfig: values => ipcRenderer.invoke('set-config', values),
+  setConfig: (values, accessToken) => ipcRenderer.invoke('set-config', values, accessToken),
   verifyPath: (filePath, type) => ipcRenderer.invoke('verify-path', { filePath, type }),
   openPath: fullPath => ipcRenderer.invoke('open-path', fullPath),
   openExternal: url => ipcRenderer.invoke('open-external', url),
@@ -154,6 +168,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog,
   fileManager,
   appUpdater,
+  device,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),
     openDirectory: input => ipcRenderer.invoke('system:openDirectory', input),

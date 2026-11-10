@@ -120,7 +120,8 @@ export function hasObjectStorageConfig(): boolean {
  * capability question and not a verdict on the current caller.
  */
 export function hasHubStorageConfig(): boolean {
-  return Boolean(config.hub.url && config.hub.appSecret)
+  const enrolledDevice = Boolean(config.hub.deviceId && config.hub.deviceSecret)
+  return Boolean(config.hub.url && (config.hub.appSecret || enrolledDevice))
 }
 
 // Which adapter auto settles on, from deployment config alone. Hub comes first
