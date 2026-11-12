@@ -1,6 +1,10 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('document.ai-extract')
 const extractOptions = ref<Record<string, unknown>>({})
+
+function runExtract() {
+  void page.run(extractOptions.value)
+}
 </script>
 
 <template>
@@ -21,17 +25,26 @@ const extractOptions = ref<Record<string, unknown>>({})
         :uploading="page.session.uploading.value"
         :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value"
-        :artifacts="page.session.artifacts.value"
+        :artifacts="page.resultArtifacts.value"
         :accept="page.selection.accept.value"
         :multiple="page.multiple.value"
+        :batch="page.batchViewModel.value"
         @update:output-path="page.runtime.setOutputPath"
         @add="page.addFiles"
         @remove="page.selection.remove"
         @move="page.selection.move"
         @reset="page.selection.clear"
         @reload="page.reload"
-        @run="page.run(extractOptions)"
-        @deleted="page.session.removeArtifact"
+        @run="runExtract"
+        @deleted="page.removeArtifact"
+        @batch-start="runExtract"
+        @batch-pause="page.batch.pause"
+        @batch-resume="page.batch.resume"
+        @batch-stop="page.batch.stop"
+        @batch-retry="page.batch.retryItem"
+        @update:concurrency="page.batch.setConcurrency"
+        @update:pause-ms="page.batch.setPauseMs"
+        @update:max-retry="page.batch.setMaxRetry"
       >
         <template #config>
           <DocumentStudioOperationsConfigsAiExtractionConfig

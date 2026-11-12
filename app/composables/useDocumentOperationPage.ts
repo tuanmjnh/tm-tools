@@ -41,6 +41,16 @@ export function useDocumentOperationPage(operationId: string) {
   const isPerFileBatch = computed(() => definition.value?.batch?.mode === 'per-file')
   const multiple = computed(() => definition.value?.input.mode !== 'single-file' || isPerFileBatch.value)
 
+  // Per-file ops run through the batch pool, so the shell must render the batch
+  // view model and results; combine ops keep the single-session job.
+  const batchViewModel = computed(() => isPerFileBatch.value ? batch.viewModel.value : null)
+  const resultArtifacts = computed(() => isPerFileBatch.value ? batch.artifacts.value : session.artifacts.value)
+
+  function removeArtifact(artifactId: string) {
+    if (isPerFileBatch.value) batch.removeArtifact(artifactId)
+    else session.removeArtifact(artifactId)
+  }
+
   function addFiles(files: File[]) {
     const overflow = selection.add(files)
     if (overflow > 0) {
@@ -96,6 +106,8 @@ export function useDocumentOperationPage(operationId: string) {
     description,
     multiple,
     isPerFileBatch,
+    batchViewModel,
+    resultArtifacts,
     loading: computed(() => loadingDefinition.value),
     selection,
     session,
@@ -104,6 +116,7 @@ export function useDocumentOperationPage(operationId: string) {
     loadDefinition,
     reload,
     addFiles,
+    removeArtifact,
     run,
     errorText: computed(() => session.error.value ? t(`document.errors.${session.error.value.code}`) : '')
   }

@@ -64,3 +64,54 @@ describe('shell batch mode', () => {
     assert.match(page, /@batch-start/)
   })
 })
+
+// The friendly routes (/tools/extract, /split, …) resolve to these STATIC pages,
+// which shadow [slug].vue. They are the real contract surface: a per-file run is
+// routed to batch.start() + selection.clear() by the funnel, so each page MUST
+// hand the shell the batch view model or the run executes invisibly.
+describe('live per-file tool pages wire batch', () => {
+  for (const name of ['extract', 'split', 'convert', 'export', 'images']) {
+    const src = read(`app/pages/document-studio/tools/${name}.vue`)
+    it(`${name} passes the batch view model to the shell`, () => {
+      assert.match(src, /:batch="page\.batchViewModel\.value"/)
+    })
+    it(`${name} renders batch results, not single-session artifacts`, () => {
+      assert.match(src, /:artifacts="page\.resultArtifacts\.value"/)
+    })
+    it(`${name} wires batch start and lifecycle controls`, () => {
+      assert.match(src, /@batch-start/)
+      assert.match(src, /@batch-pause="page\.batch\.pause"/)
+      assert.match(src, /@batch-resume="page\.batch\.resume"/)
+      assert.match(src, /@batch-stop="page\.batch\.stop"/)
+      assert.match(src, /@batch-retry="page\.batch\.retryItem"/)
+    })
+    it(`${name} forwards concurrency, pause and retry settings`, () => {
+      assert.match(src, /@update:concurrency="page\.batch\.setConcurrency"/)
+      assert.match(src, /@update:pause-ms="page\.batch\.setPauseMs"/)
+      assert.match(src, /@update:max-retry="page\.batch\.setMaxRetry"/)
+    })
+    it(`${name} allows multi-file selection`, () => {
+      assert.match(src, /:multiple="page\.multiple\.value"/)
+    })
+    it(`${name} routes artifact deletion through the funnel`, () => {
+      assert.match(src, /@deleted="page\.removeArtifact"/)
+    })
+  }
+})
+
+describe('operation funnel exposes batch view helpers', () => {
+  const src = read('app/composables/useDocumentOperationPage.ts')
+  it('derives a batch view model only for per-file ops', () => {
+    assert.match(src, /batchViewModel/)
+    assert.match(src, /isPerFileBatch\.value \? batch\.viewModel\.value : null/)
+  })
+  it('routes results to batch or session by operation kind', () => {
+    assert.match(src, /resultArtifacts/)
+    assert.match(src, /isPerFileBatch\.value \? batch\.artifacts\.value : session\.artifacts\.value/)
+  })
+  it('dispatches artifact deletion to batch or session', () => {
+    assert.match(src, /function removeArtifact/)
+    assert.match(src, /batch\.removeArtifact/)
+    assert.match(src, /session\.removeArtifact/)
+  })
+})

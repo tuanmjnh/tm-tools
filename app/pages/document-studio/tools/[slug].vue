@@ -42,14 +42,6 @@ function handleRun() {
     void page.run()
   }
 }
-
-const batchViewModel = computed(() => page.isPerFileBatch.value ? page.batch.viewModel.value : null)
-const resultArtifacts = computed(() => page.isPerFileBatch.value ? page.batch.artifacts.value : page.session.artifacts.value)
-
-function onDeleted(artifactId: string) {
-  if (page.isPerFileBatch.value) page.batch.removeArtifact(artifactId)
-  else page.session.removeArtifact(artifactId)
-}
 </script>
 
 <template>
@@ -70,10 +62,10 @@ function onDeleted(artifactId: string) {
         :uploading="page.session.uploading.value"
         :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value"
-        :artifacts="resultArtifacts"
+        :artifacts="page.resultArtifacts.value"
         :accept="page.selection.accept.value"
         :multiple="page.multiple.value"
-        :batch="batchViewModel"
+        :batch="page.batchViewModel.value"
         @update:output-path="page.runtime.setOutputPath"
         @add="page.addFiles"
         @remove="page.selection.remove"
@@ -81,7 +73,7 @@ function onDeleted(artifactId: string) {
         @reset="page.selection.clear"
         @reload="page.reload"
         @run="handleRun"
-        @deleted="onDeleted"
+        @deleted="page.removeArtifact"
         @batch-start="handleRun"
         @batch-pause="page.batch.pause"
         @batch-resume="page.batch.resume"

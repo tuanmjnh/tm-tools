@@ -1,5 +1,9 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('document.convert-to-pdf')
+
+function runConvert() {
+  void page.run()
+}
 </script>
 
 <template>
@@ -20,16 +24,26 @@ const page = useDocumentOperationPage('document.convert-to-pdf')
         :uploading="page.session.uploading.value"
         :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value"
-        :artifacts="page.session.artifacts.value"
+        :artifacts="page.resultArtifacts.value"
         :accept="page.selection.accept.value"
+        :multiple="page.multiple.value"
+        :batch="page.batchViewModel.value"
         @update:output-path="page.runtime.setOutputPath"
         @add="page.addFiles"
         @remove="page.selection.remove"
         @reload="page.reload"
         @move="page.selection.move"
         @reset="page.selection.clear"
-        @run="page.run()"
-        @deleted="page.session.removeArtifact"
+        @run="runConvert"
+        @deleted="page.removeArtifact"
+        @batch-start="runConvert"
+        @batch-pause="page.batch.pause"
+        @batch-resume="page.batch.resume"
+        @batch-stop="page.batch.stop"
+        @batch-retry="page.batch.retryItem"
+        @update:concurrency="page.batch.setConcurrency"
+        @update:pause-ms="page.batch.setPauseMs"
+        @update:max-retry="page.batch.setMaxRetry"
       >
         <template #config>
           <p class="rounded-md bg-muted/20 p-2 text-xs text-muted">
