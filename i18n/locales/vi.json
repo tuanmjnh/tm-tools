@@ -3200,6 +3200,29 @@
     "actions": {
       "run": "Chạy"
     },
+    "batch": {
+      "title": "Xử lý hàng loạt",
+      "concurrency": "Số file song song",
+      "concurrencyHint": "Số file chạy cùng lúc (1–{max}).",
+      "pauseBetween": "Nghỉ giữa các file (ms)",
+      "maxRetry": "Số lần thử lại mỗi file",
+      "start": "Bắt đầu batch",
+      "pause": "Tạm dừng",
+      "resume": "Tiếp tục",
+      "stop": "Dừng",
+      "retry": "Thử lại",
+      "overall": "{done}/{total} file",
+      "empty": "Chưa có file trong batch.",
+      "extractLocked": "AI extraction chạy từng file một.",
+      "status": {
+        "waiting": "Chờ",
+        "running": "Đang chạy",
+        "done": "Xong",
+        "failed": "Lỗi",
+        "cancelled": "Đã hủy",
+        "retrying": "Thử lại"
+      }
+    },
     "status": {
       "created": "Bản nháp",
       "uploading": "Đang tải lên",

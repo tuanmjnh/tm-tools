@@ -3200,6 +3200,29 @@
     "actions": {
       "run": "Run"
     },
+    "batch": {
+      "title": "Batch processing",
+      "concurrency": "Parallel files",
+      "concurrencyHint": "How many files run at once (1–{max}).",
+      "pauseBetween": "Pause between files (ms)",
+      "maxRetry": "Retries per file",
+      "start": "Start batch",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "retry": "Retry",
+      "overall": "{done}/{total} files",
+      "empty": "No files in the batch yet.",
+      "extractLocked": "AI extraction runs one file at a time.",
+      "status": {
+        "waiting": "Waiting",
+        "running": "Running",
+        "done": "Done",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "retrying": "Retrying"
+      }
+    },
     "status": {
       "created": "Draft",
       "uploading": "Uploading",
