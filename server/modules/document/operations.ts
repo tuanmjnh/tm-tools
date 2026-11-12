@@ -35,6 +35,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     configuration: { componentKey: 'split', hasAdvancedOptions: false },
     output: { artifactMode: 'multiple', defaultFileNamePattern: 'page_{index}.pdf', mimeTypes: ['application/pdf'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-split' },
+    batch: { mode: 'per-file', maxFiles: 50 },
     legacyTool: 'split'
   },
   {
@@ -63,6 +64,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     configuration: { componentKey: 'rasterize', hasAdvancedOptions: false },
     output: { artifactMode: 'multiple', defaultFileNamePattern: 'page_{index}.png', mimeTypes: ['image/png'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'pdf-raster' },
+    batch: { mode: 'per-file', maxFiles: 50 },
     legacyTool: 'rasterize'
   },
   {
@@ -91,6 +93,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     configuration: { componentKey: 'none', hasAdvancedOptions: false },
     output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.pdf', mimeTypes: ['application/pdf'] },
     execution: { mode: 'inline', supportsProgress: false, supportsCancel: false, supportsPartial: false, resourceProfile: 'convert-input' },
+    batch: { mode: 'per-file', maxFiles: 50 },
     legacyTool: 'convertInput'
   },
   {
@@ -105,6 +108,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     configuration: { componentKey: 'export-formats', hasAdvancedOptions: false },
     output: { artifactMode: 'variable', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: EXPORT_OUTPUT_MIME },
     execution: { mode: 'inline', supportsProgress: false, supportsCancel: false, supportsPartial: true, resourceProfile: 'pdf-export' },
+    batch: { mode: 'per-file', maxFiles: 50 },
     legacyTool: 'export'
   },
   {
@@ -119,6 +123,7 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     configuration: { componentKey: 'ai-extraction', hasAdvancedOptions: true },
     output: { artifactMode: 'multiple', defaultFileNamePattern: '{stem}_products.{ext}', mimeTypes: EXPORT_OUTPUT_MIME },
     execution: { mode: 'async-function', supportsProgress: true, supportsCancel: true, supportsPartial: true, resourceProfile: 'ai-extract' },
+    batch: { mode: 'per-file', maxFiles: 50, maxConcurrency: 1 },
     legacyTool: 'extract'
   }
 ]

@@ -55,6 +55,12 @@ export interface DocumentOperationInputSpec {
   allowFromInputLibrary: boolean
 }
 
+export interface DocumentOperationBatchSpec {
+  mode: 'per-file' | 'combine'
+  maxFiles: number
+  maxConcurrency?: number
+}
+
 export interface DocumentOperationConfigSpec {
   schemaId?: string
   componentKey: DocumentConfigComponent
@@ -90,6 +96,8 @@ export interface DocumentOperationDefinition {
   configuration: DocumentOperationConfigSpec
   output: DocumentOperationOutputSpec
   execution: DocumentOperationExecutionSpec
+  /** Client-side batch selection/pool metadata; per-job cardinality stays in input. */
+  batch?: DocumentOperationBatchSpec
   /** v3 tool this definition replaces, used by the compatibility adapter. */
   legacyTool?: string
 }
