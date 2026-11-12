@@ -21,6 +21,7 @@ export function useDocumentOperationPage(operationId: string) {
 
   const selection = useDocumentFiles(() => definition.value)
   const session = useDocumentRun()
+  const batch = useDocumentBatch(operationId, () => definition.value)
 
   async function loadDefinition() {
     loadingDefinition.value = true
@@ -37,7 +38,8 @@ export function useDocumentOperationPage(operationId: string) {
   const operationMeta = computed(() => documentStudioOperation(operationId))
   const title = computed(() => operationMeta.value ? t(operationMeta.value.titleKey) : '')
   const description = computed(() => operationMeta.value ? t(operationMeta.value.descriptionKey) : '')
-  const multiple = computed(() => definition.value?.input.mode !== 'single-file')
+  const isPerFileBatch = computed(() => definition.value?.batch?.mode === 'per-file')
+  const multiple = computed(() => definition.value?.input.mode !== 'single-file' || isPerFileBatch.value)
 
   function addFiles(files: File[]) {
     const overflow = selection.add(files)
@@ -58,15 +60,22 @@ export function useDocumentOperationPage(operationId: string) {
     if (runtime.isLocal.value && runtime.outputPath.value) {
       executionConfig.outputDir = runtime.outputPath.value
     }
+    // Cloud storage is only reachable through a signed plan; the local
+    // runtime posts the bytes to its own staging route. An ephemeral cloud
+    // has neither, so the whole job goes through one request.
+    const directUpload = !runtime.isLocal.value && !runtime.capabilities.value?.ephemeralResults
+    const inline = runtime.capabilities.value?.ephemeralResults === true
+    if (isPerFileBatch.value) {
+      batch.start(files, executionConfig, { directUpload, inline })
+      selection.clear()
+      return true
+    }
     const ok = await session.run({
       operationId,
       files,
       config: executionConfig,
-      // Cloud storage is only reachable through a signed plan; the local
-      // runtime posts the bytes to its own staging route. An ephemeral cloud
-      // has neither, so the whole job goes through one request.
-      directUpload: !runtime.isLocal.value && !runtime.capabilities.value?.ephemeralResults,
-      inline: runtime.capabilities.value?.ephemeralResults === true
+      directUpload,
+      inline
     })
     if (ok) selection.clear()
     return ok
@@ -86,9 +95,11 @@ export function useDocumentOperationPage(operationId: string) {
     title,
     description,
     multiple,
+    isPerFileBatch,
     loading: computed(() => loadingDefinition.value),
     selection,
     session,
+    batch,
     runtime,
     loadDefinition,
     reload,

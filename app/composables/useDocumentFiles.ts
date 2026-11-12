@@ -15,7 +15,7 @@ export function useDocumentFiles(operation: MaybeRefOrGetter<DocumentOperationDe
   const spec = computed(() => toValue(operation) ?? null)
   const accept = computed(() => spec.value?.input.acceptedExtensions.map(ext => `.${ext}`).join(',') ?? '')
   const ordered = computed(() => spec.value?.input.ordered ?? false)
-  const maxFiles = computed(() => spec.value?.input.maxFiles ?? 1)
+  const maxFiles = computed(() => spec.value?.batch?.maxFiles ?? spec.value?.input.maxFiles ?? 1)
 
   function describe(file: File, status: SelectedDocumentFile['status'], errorCode?: SelectedDocumentFile['errorCode']): SelectedDocumentFile {
     return {
@@ -89,8 +89,9 @@ export function useDocumentFiles(operation: MaybeRefOrGetter<DocumentOperationDe
   const ready = computed(() => {
     const current = spec.value
     if (!current) return false
+    const cap = current.batch?.maxFiles ?? current.input.maxFiles
     return valid.value.length >= current.input.minFiles
-      && valid.value.length <= current.input.maxFiles
+      && valid.value.length <= cap
       && invalid.value.length === 0
   })
 
