@@ -537,5 +537,62 @@ contract specs, and clean dev-runtime compilation of all batch modules. To captu
 the live UI evidence, sign in to `:4002` in the browser and re-run the golden path;
 the tm-hub local stack on `:4000` is up.
 
+---
+
+## 13. Fix: per-file tools ran the batch invisibly (2026-11-12)
+
+**Symptom (live report).** On `extract`, clicking Run cleared the selected-file
+list, showed no progress, produced no visible result and no notification. The same
+held for `split`, `convert`, `export` and `images` (rasterize).
+
+**Root cause — route shadowing.** Every friendly route in
+`DOCUMENT_STUDIO_OPERATIONS` (`/tools/extract`, `/split`, `/images`, `/convert`,
+`/export`, `/merge`, `/images-to-pdf`) resolves to a **static** page file. Nuxt
+gives static routes precedence over the dynamic `tools/[slug].vue`, so `[slug].vue`
+is unreachable dead code. Task 7 (§12) wired batch mode into `[slug].vue` and the
+shell only — never the static pages that actually render. Those pages passed no
+`:batch` prop and bound `:running`/`:artifacts` to the single-job `session`.
+
+The funnel `useDocumentOperationPage.run()` routes every `per-file` operation to
+`batch.start(...)` followed by `selection.clear()`. The shell renders the batch
+panel, progress and pool controls only `v-if="batch"`. With no `:batch` prop the
+batch ran in module-global `useDocumentBatch` state the page never displayed: the
+list cleared, jobs executed invisibly, and `session.artifacts` stayed empty.
+`convert`/`export`/`images` also omitted `:multiple`, so multi-select was disabled
+there (shell default `multiple: false`).
+
+**Why the §12 gate was falsely green.** `document_batch_ui.spec.ts` asserted the
+page wiring against `tools/[slug].vue` — the dead page. The contract tested a file
+that never renders, so it passed while every live page was unwired.
+
+**Fix.**
+
+| File | Change |
+| :--- | :--- |
+| `app/composables/useDocumentOperationPage.ts` | Added `batchViewModel` (`isPerFileBatch ? batch.viewModel : null`), `resultArtifacts` (`isPerFileBatch ? batch.artifacts : session.artifacts`) and a `removeArtifact(id)` dispatcher; exposed all three. Single source of truth for batch-vs-session routing. |
+| `tools/extract.vue`, `split.vue`, `convert.vue`, `export.vue`, `images.vue` | Pass `:batch="page.batchViewModel.value"`, `:artifacts="page.resultArtifacts.value"`, `:multiple="page.multiple.value"`, `@deleted="page.removeArtifact"` and the eight pool events (`batch-start`→run handler, pause/resume/stop/retry + concurrency/pause-ms/max-retry→`page.batch.*`). |
+| `tools/[slug].vue` | Refactored to the same funnel helpers (removed local duplicates) so the fallback stays consistent. |
+| `tests/unit/document_batch_ui.spec.ts` | Repointed the page contract to the five **live** per-file pages and added funnel-helper guards. The existing `[slug].vue` assertion is kept, not weakened. |
+
+Combine ops (`merge`, `images-to-pdf`) were already correct (`isPerFileBatch`
+false → `session.run`, `multiple` set) and are unchanged.
+
+### Evidence
+
+| Gate | Command | Result |
+| :--- | :--- | :--- |
+| Contract RED | `node --import tsx --test document_batch_ui.spec.ts` (before fix) | 45 tests, **31 fail** — missing `:batch`, pool controls, `:multiple`, funnel helpers |
+| Contract GREEN | same, after fix | **45/45 pass**, exit 0 |
+| Typecheck | `npx nuxt typecheck` | exit 0, 0 `error TS`; config regenerated 12:50:07 (27488 bytes) |
+| Lint | `npx eslint` on 8 touched files, after regen | exit 0; `[slug].vue` confirmed processed via `--format json` (1 file, 0/0) — the bracket path needs the `[[]slug]` literal-bracket glob |
+| Unit suite | `pnpm test` | **65/65 specs passed**, exit 0 |
+| Dev runtime compile | running `:4002`, `curl -g /_nuxt/@fs/…` | all five pages → HTTP 200 `text/javascript` with `batchViewModel`, `resultArtifacts`, `onBatchStart` markers; funnel exposes helpers; HMR applied, 0 transform errors |
+
+**Live click-through.** Not recorded by the agent: the user was actively testing in
+their own signed-in browser, and driving it would create server-side jobs/output
+during their session. The fix is applied via HMR on the running `:4002`; reload
+`extract` and Run to confirm the batch panel, per-file progress and results now
+appear. No signed-in UI pass is claimed beyond the runtime-compile evidence above.
+
 
 
