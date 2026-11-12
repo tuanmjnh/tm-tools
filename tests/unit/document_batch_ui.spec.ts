@@ -24,14 +24,22 @@ describe('batch i18n', () => {
 
 describe('BatchPanel component', () => {
   const src = read('app/components/document-studio/BatchPanel.vue')
-  it('caps concurrency at the operation limit', () => { assert.match(src, /concurrencyCap/) })
-  it('locks concurrency to 1 for AI-extract with a hint', () => { assert.match(src, /extractLocked/) })
+  it('caps concurrency at the operation limit', () => {
+    assert.match(src, /concurrencyCap/)
+  })
+  it('locks concurrency to 1 for AI-extract with a hint', () => {
+    assert.match(src, /extractLocked/)
+  })
   it('shows a per-item status badge and progress', () => {
     assert.match(src, /UBadge/)
     assert.match(src, /UProgress/)
   })
-  it('offers retry on failed items', () => { assert.match(src, /emit\('retry'/) })
-  it('caps the item scroll height', () => { assert.match(src, /max-h-64/) })
+  it('offers retry on failed items', () => {
+    assert.match(src, /emit\('retry'/)
+  })
+  it('caps the item scroll height', () => {
+    assert.match(src, /max-h-64/)
+  })
   it('uses only token-based motion (no stray animate-*)', () => {
     const stray = [...src.matchAll(/animate-(?!pulse)/g)]
     assert.equal(stray.length, 0)
@@ -40,7 +48,9 @@ describe('BatchPanel component', () => {
 
 describe('shell batch mode', () => {
   const shell = read('app/components/document-studio/OperationPageShell.vue')
-  it('mounts the batch panel in the advanced slot', () => { assert.match(shell, /DocumentStudioBatchPanel/) })
+  it('mounts the batch panel in the advanced slot', () => {
+    assert.match(shell, /DocumentStudioBatchPanel/)
+  })
   it('replaces the fake progress with real batch progress', () => {
     assert.match(shell, /batch\.overallProgress|batchOverallProgress/)
     assert.doesNotMatch(shell, /uploading \? 15 : 60/)
