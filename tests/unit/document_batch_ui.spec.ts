@@ -37,3 +37,20 @@ describe('BatchPanel component', () => {
     assert.equal(stray.length, 0)
   })
 })
+
+describe('shell batch mode', () => {
+  const shell = read('app/components/document-studio/OperationPageShell.vue')
+  it('mounts the batch panel in the advanced slot', () => { assert.match(shell, /DocumentStudioBatchPanel/) })
+  it('replaces the fake progress with real batch progress', () => {
+    assert.match(shell, /batch\.overallProgress|batchOverallProgress/)
+    assert.doesNotMatch(shell, /uploading \? 15 : 60/)
+  })
+  it('renders start/pause/resume/stop controls', () => {
+    for (const e of ['batch-start', 'batch-pause', 'batch-resume', 'batch-stop']) assert.match(shell, new RegExp(e))
+  })
+  const page = read('app/pages/document-studio/tools/[slug].vue')
+  it('wires batch state and actions', () => {
+    assert.match(page, /page\.batch/)
+    assert.match(page, /@batch-start/)
+  })
+})

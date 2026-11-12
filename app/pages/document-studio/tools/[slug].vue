@@ -42,6 +42,14 @@ function handleRun() {
     void page.run()
   }
 }
+
+const batchViewModel = computed(() => page.isPerFileBatch.value ? page.batch.viewModel.value : null)
+const resultArtifacts = computed(() => page.isPerFileBatch.value ? page.batch.artifacts.value : page.session.artifacts.value)
+
+function onDeleted(artifactId: string) {
+  if (page.isPerFileBatch.value) page.batch.removeArtifact(artifactId)
+  else page.session.removeArtifact(artifactId)
+}
 </script>
 
 <template>
@@ -62,9 +70,10 @@ function handleRun() {
         :uploading="page.session.uploading.value"
         :error="page.session.error.value"
         :output-path="page.runtime.outputPath.value"
-        :artifacts="page.session.artifacts.value"
+        :artifacts="resultArtifacts"
         :accept="page.selection.accept.value"
         :multiple="page.multiple.value"
+        :batch="batchViewModel"
         @update:output-path="page.runtime.setOutputPath"
         @add="page.addFiles"
         @remove="page.selection.remove"
@@ -72,7 +81,15 @@ function handleRun() {
         @reset="page.selection.clear"
         @reload="page.reload"
         @run="handleRun"
-        @deleted="page.session.removeArtifact"
+        @deleted="onDeleted"
+        @batch-start="handleRun"
+        @batch-pause="page.batch.pause"
+        @batch-resume="page.batch.resume"
+        @batch-stop="page.batch.stop"
+        @batch-retry="page.batch.retryItem"
+        @update:concurrency="page.batch.setConcurrency"
+        @update:pause-ms="page.batch.setPauseMs"
+        @update:max-retry="page.batch.setMaxRetry"
       >
         <template #config>
           <LazyDocumentStudioOperationsConfigsSplitConfig

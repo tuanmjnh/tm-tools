@@ -2,6 +2,7 @@
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { DocumentArtifactView, DocumentOperationDefinition, DocumentRuntimeCapabilities } from '#shared/types/document'
 import type { DocumentErrorPayload } from '~/composables/useDocumentApi'
+import type { BatchViewModel } from '~/composables/useDocumentBatch'
 import { formatBytes } from '~/utils/formatBytes'
 import { createInlineZip } from '~/utils/zip'
 import {
@@ -27,6 +28,8 @@ const props = withDefaults(defineProps<{
   connectionCode?: string | null
   accept?: string
   multiple?: boolean
+  /** Present only for per-file batch operations; switches the action bar to pool controls. */
+  batch?: BatchViewModel | null
 }>(), {
   running: false,
   uploading: false,
@@ -35,7 +38,8 @@ const props = withDefaults(defineProps<{
   artifacts: () => [],
   connectionCode: null,
   accept: '',
-  multiple: false
+  multiple: false,
+  batch: null
 })
 
 const emit = defineEmits<{
@@ -47,6 +51,14 @@ const emit = defineEmits<{
   'reset': []
   'deleted': [artifactId: string]
   'update:outputPath': [path: string]
+  'batch-start': []
+  'batch-pause': []
+  'batch-resume': []
+  'batch-stop': []
+  'batch-retry': [id: string]
+  'update:concurrency': [value: number]
+  'update:pauseMs': [value: number]
+  'update:maxRetry': [value: number]
 }>()
 
 const { t } = useI18n()
@@ -290,18 +302,21 @@ const destinationText = computed(() => {
   return props.outputPath || t('document.output.defaultFolder')
 })
 
-const progress = computed(() => {
-  if (!props.running) return 0
-  return props.uploading ? 15 : 60
+const batchActive = computed(() => {
+  const status = props.batch?.status
+  return status === 'running' || status === 'paused' || status === 'stopping'
 })
+
+/** A per-job archive only covers one job, so batch results spanning jobs download individually. */
+const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact => artifact.jobId)).size > 1)
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-3">
     <DocumentStudioOperationStepHeader
       :operation="operation"
-      :step="running ? 'process' : artifacts.length ? 'save' : 'choose'"
-      :loading="running"
+      :step="(running || batchActive) ? 'process' : artifacts.length ? 'save' : 'choose'"
+      :loading="running || batchActive"
     />
 
     <DocumentStudioConnectionAlert v-if="connectionCode" :code="connectionCode" @retry="emit('reload')" />
@@ -444,7 +459,7 @@ const progress = computed(() => {
                 @click="saveInlineArchive"
               />
               <UButton
-                v-else-if="artifacts.length > 1 && artifacts[0]"
+                v-else-if="artifacts.length > 1 && artifacts[0] && !multiJobArtifacts"
                 color="neutral"
                 variant="ghost"
                 size="xs"
@@ -571,13 +586,33 @@ const progress = computed(() => {
           </UCard>
 
           <slot name="advanced" />
+
+          <DocumentStudioBatchPanel
+            v-if="batch"
+            :items="batch.items"
+            :concurrency="batch.concurrency"
+            :pause-ms="batch.pauseMs"
+            :max-retry="batch.maxRetry"
+            :status="batch.status"
+            :concurrency-cap="batch.concurrencyCap"
+            :disabled="batch.status === 'stopping'"
+            @update:concurrency="emit('update:concurrency', $event)"
+            @update:pause-ms="emit('update:pauseMs', $event)"
+            @update:max-retry="emit('update:maxRetry', $event)"
+            @retry="emit('batch-retry', $event)"
+          />
         </div>
 
         <div class="shrink-0 space-y-2 rounded-md border border-default/60 bg-elevated/40 p-3">
-          <div v-if="running" class="space-y-1">
-            <UProgress :model-value="progress" size="xs" />
+          <div v-if="batch ? (batchActive || batch.total > 0) : running" class="space-y-1">
+            <UProgress :model-value="batch ? batch.overallProgress : null" size="xs" />
             <p class="text-xs text-muted">
-              {{ uploading ? t('document.progress.uploading') : t('document.progress.processing') }}
+              <template v-if="batch">
+                {{ t('document.batch.overall', { done: batch.done, total: batch.total }) }}
+              </template>
+              <template v-else>
+                {{ uploading ? t('document.progress.uploading') : t('document.progress.processing') }}
+              </template>
             </p>
           </div>
 
@@ -589,7 +624,49 @@ const progress = computed(() => {
             :title="t(`document.errors.${error.code}`)"
           />
 
+          <div v-if="batch" class="flex items-center gap-2">
+            <UButton
+              v-if="batch.status === 'running'"
+              class="flex-1"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-pause"
+              :label="t('document.batch.pause')"
+              @click="emit('batch-pause')"
+            />
+            <UButton
+              v-else-if="batch.status === 'paused'"
+              class="flex-1"
+              color="primary"
+              variant="soft"
+              icon="i-lucide-play"
+              :label="t('document.batch.resume')"
+              @click="emit('batch-resume')"
+            />
+            <UButton
+              v-else
+              class="flex-1"
+              color="primary"
+              variant="soft"
+              icon="i-lucide-play"
+              :label="t('document.batch.start')"
+              :disabled="!canRun"
+              @click="emit('batch-start')"
+            />
+            <UButton
+              v-if="batchActive"
+              color="error"
+              variant="soft"
+              icon="i-lucide-square"
+              :label="t('document.batch.stop')"
+              :loading="batch.status === 'stopping'"
+              :disabled="batch.status === 'stopping'"
+              @click="emit('batch-stop')"
+            />
+          </div>
+
           <UButton
+            v-else
             block
             color="primary"
             variant="soft"

@@ -16,6 +16,19 @@ export interface BatchItem extends PoolItem {
   error?: DocumentErrorPayload
 }
 
+/** Plain, unwrapped snapshot the operation shell renders as its batch prop. */
+export interface BatchViewModel {
+  items: BatchItem[]
+  status: BatchStatus
+  concurrency: number
+  pauseMs: number
+  maxRetry: number
+  concurrencyCap: number
+  total: number
+  done: number
+  overallProgress: number
+}
+
 interface BatchRunOptions {
   directUpload?: boolean
   inline?: boolean
@@ -76,6 +89,18 @@ export function useDocumentBatch(
   const running = computed(() => s.status.value === 'running' || s.status.value === 'paused' || s.status.value === 'stopping')
   const overallProgress = computed(() => total.value ? Math.round((done.value / total.value) * 100) : 0)
   const artifacts = computed(() => s.items.value.flatMap(item => item.artifacts))
+
+  const viewModel = computed<BatchViewModel>(() => ({
+    items: s.items.value,
+    status: s.status.value,
+    concurrency: s.concurrency.value,
+    pauseMs: s.pauseMs.value,
+    maxRetry: s.maxRetry.value,
+    concurrencyCap: concurrencyCap.value,
+    total: total.value,
+    done: done.value,
+    overallProgress: overallProgress.value
+  }))
 
   function stopPoll() {
     if (s.poll) {
@@ -230,6 +255,12 @@ export function useDocumentBatch(
     s.status.value = 'idle'
   }
 
+  function removeArtifact(artifactId: string) {
+    for (const item of s.items.value) {
+      item.artifacts = item.artifacts.filter(artifact => artifact.id !== artifactId)
+    }
+  }
+
   function setConcurrency(value: number) {
     s.concurrency.value = Math.max(1, Math.min(Math.round(value) || 1, concurrencyCap.value))
   }
@@ -257,6 +288,7 @@ export function useDocumentBatch(
     running,
     overallProgress,
     artifacts,
+    viewModel,
     concurrencyCap,
     start,
     pause,
@@ -264,6 +296,7 @@ export function useDocumentBatch(
     stop,
     retryItem,
     clear,
+    removeArtifact,
     setConcurrency,
     setPauseMs,
     setMaxRetry
