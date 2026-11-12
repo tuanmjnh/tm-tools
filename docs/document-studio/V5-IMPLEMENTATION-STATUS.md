@@ -460,5 +460,82 @@ both the modal and the host.
 | Build | `pnpm build:electron` | exit 0; installer rebuilt 10:28 |
 | Packaged bundle | grep `.output/public/_nuxt` | 0 hits for `PdfWorkspaceShell` / `PdfFileBrowser` / `PdfOperationResult` — the deleted components are absent from the shipped client |
 
+---
+
+## 12. Batch processing — multi-file selection, concurrency and progress (2026-11-12)
+
+Every Document Studio tool can now take many files at once and run them as a
+managed batch: sequential or parallel (1–10 workers, default 1), a short rest
+between launch cycles, per-file progress, pause/resume/stop, retry, and a
+`partial` finish when any item fails. The server pipeline is unchanged — the
+batch is a **client-side async pool** over N independent single-input jobs
+(Approach A from the design spec), so local-web, Electron and cloud all share it.
+
+### Architecture
+
+| Layer | File | Responsibility |
+| :--- | :--- | :--- |
+| Pure scheduling core | `app/utils/batchPool.ts` | Framework-agnostic `runBatchPool(items, opts)`: cooperative launch up to `concurrency()`, retry-by-requeue under `maxRetry()`, `pauseMs()` rest between launch cycles, `isPaused()`/`isStopping()` gates, injectable `delay`/`tickMs` for tests. No Vue import. |
+| Shared single-job helper | `app/composables/useDocumentRun.ts` → `runSingleDocumentJob` | Ref-free create → stage → start lifecycle, reused verbatim by both the single-job wrapper and the batch pool. `AbortSignal` threaded through every API call; one idempotency key per attempt so a retried POST returns the same draft. |
+| Reactive batch state | `app/composables/useDocumentBatch.ts` | Module-global per-`operationId` state (survives navigation). Keeps `File` blobs in a plain `Map` outside reactivity, one `AbortController` per item, a 1 s job-progress poll cleared on finalize, and a `BatchViewModel` snapshot for the shell. |
+| Run funnel | `app/composables/useDocumentOperationPage.ts` | `isPerFileBatch = definition.batch?.mode === 'per-file'`; per-file runs route to `batch.start(...)`, combine ops keep the single `session.run(...)`. |
+| Panel UI | `app/components/document-studio/BatchPanel.vue` | Concurrency / pause / max-retry inputs, per-item status icon + `UBadge` + `UProgress`, capped `max-h-64` scroll, retry button. Token-only motion (`animate-pulse` on the running icon); concurrency locked to 1 with a hint when `concurrencyCap === 1`. |
+| Shell + page wiring | `OperationPageShell.vue`, `tools/[slug].vue` | Dual-mode action bar (batch start/pause/resume/stop vs single run); real `overallProgress` replaces the old fake `uploading ? 15 : 60`; batch artifacts surfaced as results with per-job archive guard and `removeArtifact` routing. |
+
+### Operation contract (`server/modules/document/operations.ts`)
+
+| Operation | Input | Batch | Concurrency cap |
+| :--- | :--- | :--- | :--- |
+| `pdf.split` | single-file | per-file, maxFiles 50 | 10 |
+| `pdf.rasterize` | single-file | per-file, maxFiles 50 | 10 |
+| `document.convert-to-pdf` | single-file | per-file, maxFiles 50 | 10 |
+| `pdf.export` | single-file | per-file, maxFiles 50 | 10 |
+| `document.ai-extract` | single-file | per-file, maxFiles 50 | **1 (locked)** |
+| `pdf.merge` | multi-file (2–50, ordered) | — combine N→1 | n/a |
+| `pdf.images-to-pdf` | multi-file (1–200, ordered) | — combine N→1 | n/a |
+
+Defaults: concurrency 1, pause 300 ms, maxRetry 0 (UI cap 5). `concurrencyCap =
+definition.batch?.maxConcurrency ?? 10`; AI-extract is forced sequential because
+the relay extractor is not safe to parallelize per device.
+
+### `useDocumentRun` optimization
+
+No new algorithm was added to `useDocumentRun`. The optimization was to **extract**
+its job lifecycle into the ref-free `runSingleDocumentJob` helper that the pool
+reuses, and add `AbortSignal` + per-attempt idempotency so parallel runs can be
+cancelled and retried safely. Concurrency/pause/retry scheduling lives in the pure
+pool; putting parallelism inside `useDocumentRun` would duplicate the pool and
+break the single-responsibility split. The single-job path keeps its inline
+fast-path (ephemeral cloud) and signed-plan direct upload (cloud storage).
+
+### Evidence
+
+| Gate | Command | Result |
+| :--- | :--- | :--- |
+| Typecheck | `npx nuxt typecheck` | exit 0, 0 `error TS`; `.nuxt/eslint.config.mjs` regenerated 2026-11-12 11:58:50 (27488 bytes) |
+| Lint | `npx eslint` on 16 touched files, **after** regeneration | exit 0; config mtime unchanged on re-lint (style-only fixes committed `9ec05e9`, assertions untouched) |
+| Unit suite | `pnpm test` | **65/65 specs passed**, exit 0 |
+| Batch core (real async) | `document_batch_pool.spec.ts` | 5/5 — concurrency cap never exceeded, failure→partial counts, retry-then-succeed, stop cancels waiting, paused launches nothing |
+| Batch composable / funnel | `document_batch_composable.spec.ts` | 8/8 — wraps `runBatchPool`, blobs outside reactivity, pause/resume/stop/retry, job poll + `clearInterval`, finalize→`partial`, per-file funnel |
+| Batch UI / i18n / shell | `document_batch_ui.spec.ts` | 12/12 — en+vi keys, concurrency cap + extract lock, per-item badge/progress, retry, capped scroll, token-only motion, shell mounts panel + real progress + start/pause/resume/stop |
+| Build | `pnpm build:electron` | exit 0; `release/tm-tools-1.0.1-setup.exe` (466,661,972 bytes, 12:20) + `win-unpacked`; code signing skipped (no cert configured) |
+| Dev runtime compile | `nuxt dev --port 4002`, `curl /_nuxt/@fs/…` | Ready 27.2 s; `[vue-tsc] Found 0 errors`; all 7 batch modules → HTTP 200 `text/javascript`, 0 transform errors; compiled markers present (`concurrencyCap`, `extractLocked`, `batchViewModel`, `resultArtifacts`, `runBatchPool`) |
+| Auth intact | navigate `/document-studio/tools/split` | redirects to `/login?redirect=…` (global middleware unchanged) |
+
+### Live signed-in golden path — BLOCKED (no legitimate session)
+
+The rendered batch run (3-PDF split at concurrency 2 observing per-file progress
+and `{done}/{total}`, an invalid file → `partial`, extract concurrency locked to 1)
+was **not** exercised. `auth.global.ts` protects every Document Studio route; the
+connected Chrome held no `:4002` session and native autofill did not populate the
+local login form. No credential was read or typed, auth was not disabled, and no
+signed-in pass is claimed. Probe fixtures (3 valid PDFs + 1 corrupt) were generated
+under `.probe-batch/` and removed; the dev server was stopped after verification.
+
+Functionality is covered by the real-async pool spec, the composable/funnel/UI
+contract specs, and clean dev-runtime compilation of all batch modules. To capture
+the live UI evidence, sign in to `:4002` in the browser and re-run the golden path;
+the tm-hub local stack on `:4000` is up.
+
 
 
