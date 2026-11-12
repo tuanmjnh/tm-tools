@@ -2,6 +2,71 @@ import type { DocumentArtifactView, DocumentJobView, DocumentRuntimeCapabilities
 import type { DocumentErrorPayload } from './useDocumentApi'
 import { isDocumentConnectionError } from '~/utils/documentStudio'
 
+export interface SingleDocumentJobOptions {
+  operationId: string
+  files: File[]
+  config: Record<string, unknown>
+  directUpload?: boolean
+  inline?: boolean
+  idempotencyKey?: string
+  signal?: AbortSignal
+  onJobId?: (id: string) => void
+  onUploading?: (uploading: boolean) => void
+}
+
+/**
+ * Ref-free single-job lifecycle: create draft → stage bytes → start → return
+ * the finished job and its artifacts. Throws the normalized `DOCUMENT_*`
+ * payload on failure so callers (the reactive wrapper and the batch pool) can
+ * decide how to surface it. Local posts multipart; cloud stages per signed plan.
+ */
+export async function runSingleDocumentJob(
+  api: ReturnType<typeof useDocumentApi>,
+  opts: SingleDocumentJobOptions
+): Promise<{ job: DocumentJobView, artifacts: DocumentArtifactView[] }> {
+  // One token per attempt: a retried POST returns this run's draft instead of
+  // creating a second job, and the next user-initiated run gets a fresh one.
+  const idempotencyKey = opts.idempotencyKey ?? crypto.randomUUID()
+
+  // Ephemeral cloud: no storage outlives the request, so the run and its
+  // result travel in a single call instead of create → upload → start.
+  if (opts.inline) {
+    opts.onUploading?.(true)
+    try {
+      const finished = await api.runInline(opts.operationId, opts.files, opts.config, opts.signal)
+      return { job: finished, artifacts: finished.artifacts }
+    } finally {
+      opts.onUploading?.(false)
+    }
+  }
+
+  const draft = await api.createJob(opts.operationId, opts.config, undefined, idempotencyKey, opts.signal)
+  opts.onJobId?.(draft.id)
+
+  opts.onUploading?.(true)
+  try {
+    if (!opts.directUpload) {
+      await api.uploadInputs(draft.id, opts.files, opts.signal)
+    } else {
+      for (const file of opts.files) {
+        const declared = await api.declareInput(draft.id, { name: file.name, size: file.size, type: file.type }, opts.signal)
+        if (declared.plan.mode === 'form-post') {
+          await api.uploadInputs(draft.id, [file], opts.signal)
+          await api.completeInput(draft.id, declared.input.id, {}, opts.signal)
+          continue
+        }
+        const completed = await api.uploadWithPlan(declared.plan, file)
+        await api.completeInput(draft.id, declared.input.id, completed, opts.signal)
+      }
+    }
+  } finally {
+    opts.onUploading?.(false)
+  }
+
+  const finished = await api.startJob(draft.id, opts.signal)
+  return { job: finished, artifacts: finished.artifacts }
+}
+
 /**
  * Runs one job: create draft → upload the picked bytes → start → keep the
  * returned artifacts. Local posts a multipart form; cloud asks for a signed
@@ -27,51 +92,14 @@ export function useDocumentRun() {
     error.value = null
     job.value = null
     artifacts.value = []
-    // One token per attempt: a retried POST returns this run's draft instead of
-    // creating a second job, and the next user-initiated run gets a fresh one.
-    const idempotencyKey = crypto.randomUUID()
 
     try {
-      // Ephemeral cloud: no storage outlives the request, so the run and its
-      // result travel in a single call instead of create → upload → start.
-      if (options.inline) {
-        uploading.value = true
-        try {
-          const finished = await api.runInline(options.operationId, options.files, options.config)
-          job.value = finished
-          artifacts.value = finished.artifacts
-          return true
-        } finally {
-          uploading.value = false
-        }
-      }
-
-      const draft = await api.createJob(options.operationId, options.config, undefined, idempotencyKey)
-      job.value = draft
-
-      uploading.value = true
-      try {
-        if (!options.directUpload) {
-          await api.uploadInputs(draft.id, options.files)
-        } else {
-          for (const file of options.files) {
-            const declared = await api.declareInput(draft.id, { name: file.name, size: file.size, type: file.type })
-            if (declared.plan.mode === 'form-post') {
-              await api.uploadInputs(draft.id, [file])
-              await api.completeInput(draft.id, declared.input.id)
-              continue
-            }
-            const completed = await api.uploadWithPlan(declared.plan, file)
-            await api.completeInput(draft.id, declared.input.id, completed)
-          }
-        }
-      } finally {
-        uploading.value = false
-      }
-
-      const finished = await api.startJob(draft.id)
-      job.value = finished
-      artifacts.value = finished.artifacts
+      const result = await runSingleDocumentJob(api, {
+        ...options,
+        onUploading: (value) => { uploading.value = value }
+      })
+      job.value = result.job
+      artifacts.value = result.artifacts
       return true
     } catch (caught) {
       uploading.value = false

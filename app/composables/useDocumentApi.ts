@@ -69,9 +69,9 @@ export function useDocumentApi() {
    * authenticated route wraps it in `DocumentEnvelope`. Reading `data` blindly
    * left the Settings page with an empty health object.
    */
-  async function get<T>(path: string, query?: Record<string, string>): Promise<T> {
+  async function get<T>(path: string, query?: Record<string, string>, signal?: AbortSignal): Promise<T> {
     try {
-      const res = await $fetch<DocumentEnvelope<T> | T>(apiUrl(path), { method: 'GET', query })
+      const res = await $fetch<DocumentEnvelope<T> | T>(apiUrl(path), { method: 'GET', query, signal })
       const envelope = res as DocumentEnvelope<T>
       return envelope?.data ?? (res as T)
     } catch (error) {
@@ -79,9 +79,9 @@ export function useDocumentApi() {
     }
   }
 
-  async function post<T>(path: string, body?: Record<string, unknown> | FormData): Promise<T> {
+  async function post<T>(path: string, body?: Record<string, unknown> | FormData, signal?: AbortSignal): Promise<T> {
     try {
-      const res = await $fetch<DocumentEnvelope<T>>(apiUrl(path), { method: 'POST', body })
+      const res = await $fetch<DocumentEnvelope<T>>(apiUrl(path), { method: 'POST', body, signal })
       return res.data
     } catch (error) {
       throw errorCodeOf(error)
@@ -142,12 +142,12 @@ export function useDocumentApi() {
      * finished artifacts come back with their bytes attached. There is no job
      * to poll or download afterwards.
      */
-    runInline: (operationId: string, files: File[], config: Record<string, unknown> = {}) => {
+    runInline: (operationId: string, files: File[], config: Record<string, unknown> = {}, signal?: AbortSignal) => {
       const body = new FormData()
       body.append('operationId', operationId)
       body.append('config', JSON.stringify(config))
       for (const file of files) body.append('files', file)
-      return post<DocumentJobView>('/run', body)
+      return post<DocumentJobView>('/run', body, signal)
     },
     operations: () => get<{
       runtime: string
@@ -156,21 +156,22 @@ export function useDocumentApi() {
       formats?: import('#shared/types/document/formats').DocumentFormatDefinition[]
       conversions?: import('#shared/types/document/formats').ConversionEdge[]
     }>('/operations'),
-    createJob: (operationId: string, config: Record<string, unknown>, retentionDays?: number, idempotencyKey?: string) =>
-      post<DocumentJobView>('/jobs', { operationId, config, retentionDays, idempotencyKey }),
-    uploadInputs: (jobId: string, files: File[]) => {
+    createJob: (operationId: string, config: Record<string, unknown>, retentionDays?: number, idempotencyKey?: string, signal?: AbortSignal) =>
+      post<DocumentJobView>('/jobs', { operationId, config, retentionDays, idempotencyKey }, signal),
+    uploadInputs: (jobId: string, files: File[], signal?: AbortSignal) => {
       const body = new FormData()
       for (const file of files) body.append('files', file)
-      return post<{ id: string, safeName: string, size: number }[]>(`/jobs/${encodeURIComponent(jobId)}/inputs`, body)
+      return post<{ id: string, safeName: string, size: number }[]>(`/jobs/${encodeURIComponent(jobId)}/inputs`, body, signal)
     },
-    declareInput: (jobId: string, file: { name: string, size: number, type: string }) =>
+    declareInput: (jobId: string, file: { name: string, size: number, type: string }, signal?: AbortSignal) =>
       post<{ input: PlannedInput, plan: UploadPlan }>(
         `/jobs/${encodeURIComponent(jobId)}/inputs/intent`,
-        { fileName: file.name, size: file.size, mimeType: file.type }
+        { fileName: file.name, size: file.size, mimeType: file.type },
+        signal
       ),
-    completeInput: (jobId: string, inputId: string, body: Record<string, unknown> = {}) =>
-      post<PlannedInput>(`/jobs/${encodeURIComponent(jobId)}/inputs/${encodeURIComponent(inputId)}/complete`, body),
-    startJob: (jobId: string) => post<DocumentJobView>(`/jobs/${encodeURIComponent(jobId)}/start`),
+    completeInput: (jobId: string, inputId: string, body: Record<string, unknown> = {}, signal?: AbortSignal) =>
+      post<PlannedInput>(`/jobs/${encodeURIComponent(jobId)}/inputs/${encodeURIComponent(inputId)}/complete`, body, signal),
+    startJob: (jobId: string, signal?: AbortSignal) => post<DocumentJobView>(`/jobs/${encodeURIComponent(jobId)}/start`, undefined, signal),
     cancelJob: (jobId: string) => post<{ cancelled: boolean }>(`/jobs/${encodeURIComponent(jobId)}/cancel`),
     deleteJob: (jobId: string) => del<{ deleted: boolean }>(`/jobs/${encodeURIComponent(jobId)}`),
     job: (jobId: string) => get<DocumentJobView>(`/jobs/${encodeURIComponent(jobId)}`),
