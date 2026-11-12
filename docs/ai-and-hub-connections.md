@@ -10,6 +10,7 @@ works with the hub's provider catalog, model list and relay.
 | Hub URL + app id | `.env` (`NUXT_PUBLIC_HUB_URL`, `NUXT_PUBLIC_HUB_APP_ID`) | public, safe to ship |
 | Shared JWT secret | `.env` (`AUTH_JWT_SECRET`) | never committed, must match tm-hub |
 | Non-secret app config | Electron `config.env` (`CHROME_PATH`, downloads dir, …) | plain text |
+| Device service credential | Electron `config.env` (`HUB_DEVICE_*`) | keychain-encrypted, Main only |
 | AI provider keys | **TM Hub only** | tm-tools never writes, caches or displays them |
 
 `electron/tools/secret-slots.cjs` still classifies a legacy `AI_API_KEY*` /
@@ -41,7 +42,9 @@ the same server-side filter in `server/utils/relayModels.ts`:
 
 The relay accepts a device credential (`X-Device-Id` / `X-Device-Secret`) before
 falling back to `X-App-Id` / `X-App-Secret`. An Electron build therefore needs no
-App Secret at all — it needs an enrolled device.
+App Secret at all: a normal sign-in registers the device and, when the app
+policy allows it, TM Hub issues the scoped credential that Main stores in the
+keychain (v2 — see `docs/TM-DEVICE-AUTH-UPGRADE-v2` in tm-hub).
 
 ## Failure copy in the packaged app
 
@@ -63,9 +66,13 @@ variable is a server-deployment mechanism, not something a packaged app holds.
   health, discovery, import/export. Editing a credential opens the hub
   connection wizard (`/resources/connections`) which posts to the hub.
 - `/resources/connections` — hub-backed credential wizard.
-- `/system/settings/hub` — device enrollment: issues this device an encrypted
-  credential and reports connection health. Linked from the chat and extraction
-  empty/error states.
+- `/system/settings/hub` — connection health and the current device credential's
+  metadata (id, scopes, expiry). Enrollment is automatic on sign-in; the page
+  keeps a root-gated "forget this device" action. Linked from the chat and
+  extraction empty/error states.
+- `/system/settings/devices` — the identity registry: every device signed in to
+  this account, with rename and revoke (`/api/v1/auth/user-devices`). Not the
+  service-credential list, and never a secret.
 
 ## Rules for contributors
 

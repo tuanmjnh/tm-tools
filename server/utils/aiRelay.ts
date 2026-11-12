@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { hubBaseUrl, resolveHubCaller } from './hubIdentity'
+import { hubBaseUrl, resolveHubCaller, resolveHubCallerDetailed } from './hubIdentity'
 
 export interface RelayAttachment {
   mimeType: string
@@ -108,6 +108,17 @@ function relayTargetOrThrow(event?: H3Event): { url: string, headers: Record<str
     return relayTarget(event)
   } catch (err: unknown) {
     if (err instanceof RelayNotConfiguredError) {
+      // A credential issued by another Hub is a different fix from "nothing is
+      // enrolled": the user has to re-enroll against this Hub, and clearing the
+      // old row by hand is never the answer.
+      const issue = resolveHubCallerDetailed(event).issue
+      if (issue) {
+        throw createError({
+          statusCode: 409,
+          statusMessage: 'error.deviceCredentialWrongHub',
+          message: issue
+        })
+      }
       throw createError({
         statusCode: 503,
         statusMessage: 'error.aiRelayNotConfigured',

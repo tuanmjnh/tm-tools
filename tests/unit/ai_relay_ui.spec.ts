@@ -96,3 +96,48 @@ describe('relay error copy', () => {
     assert.equal(/"cacheHint": "[^"]*does not clear the cache/.test(read('i18n/locales/en.json')), false)
   })
 })
+
+describe('model check quick action', () => {
+  const modelSelect = 'app/components/aiProviders/ModelSelect.vue'
+  const checkEndpoint = 'server/api/v1/ai/check.post.ts'
+
+  it('provides a check endpoint backed by the AI gateway', () => {
+    const source = read(checkEndpoint)
+    assert.match(source, /chatWithConnection/)
+    assert.match(source, /defineEventHandler/)
+    assert.match(source, /latencyMs/)
+  })
+
+  it('ModelSelect renders check button with tooltip and invokes check endpoint', () => {
+    const source = read(modelSelect)
+    assert.match(source, /showCheck/)
+    assert.match(source, /checkModel/)
+    assert.match(source, /\/api\/v1\/ai\/check/)
+    assert.match(source, /UTooltip/)
+    assert.match(source, /i-lucide-activity/)
+  })
+
+  it('parses raw 429 quota error into clean user-friendly text without JSON or URLs', async () => {
+    const { parseUpstreamAiError } = await import('../../shared/utils/aiError')
+    const raw = 'HTTP 429 — [{"error": {"code": 429, "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceed"}}]'
+    const result = parseUpstreamAiError(raw, 429)
+    assert.equal(result.reasonCode, 'quota_exceeded')
+    assert.equal(result.cleanMessage, 'You exceeded your current quota, please check your plan and billing details.')
+    assert.equal(/https?:\/\//.test(result.cleanMessage), false)
+  })
+
+  it('ModelSelect implements timeout and hover popover when in error state', () => {
+    const source = read(modelSelect)
+    assert.match(source, /CHECK_TIMEOUT_MS/)
+    assert.match(source, /UPopover/)
+    assert.match(source, /mode="hover"/)
+    assert.match(source, /lastRawError/)
+  })
+
+  it('parses timeout error into user-friendly text', async () => {
+    const { parseUpstreamAiError } = await import('../../shared/utils/aiError')
+    const result = parseUpstreamAiError('AI model check timed out after 10s', 408)
+    assert.equal(result.reasonCode, 'timeout')
+  })
+})
+

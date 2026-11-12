@@ -40,6 +40,7 @@
     "@pinia/nuxt": "^1.0.2",
     "@supabase/supabase-js": "^2.111.0",
     "@tanstack/table-core": "^8.21.3",
+    "@tuanmjnh/tm-ai-client": "file:../tm-platform/packages/ai-client",
     "@tinymce/tinymce-vue": "^6.3.0",
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-bubble-menu": "^3.32.0",

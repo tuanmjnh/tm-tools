@@ -43,6 +43,10 @@ export default defineNuxtConfig({
     // `NUXT_HUB_APP_SECRET` from the runtime environment instead (host env on
     // the web, userData/config.env in the desktop app).
     hubAppSecret: '',
+    // Server-only: explicit local AI connections (Hybrid AI mode `local`),
+    // a JSON array. Empty by default so a hosted build never calls a loopback
+    // endpoint; the desktop app can set AI_LOCAL_CONNECTIONS at runtime.
+    aiLocalConnections: '',
     public: {
       hubUrl: process.env.NUXT_PUBLIC_HUB_URL || 'http://localhost:4000',
       hubAppId: process.env.NUXT_PUBLIC_HUB_APP_ID || 'tm-tools'
