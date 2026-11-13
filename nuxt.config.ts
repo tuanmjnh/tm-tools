@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url'
+
 export default defineNuxtConfig({
 
   modules: [
@@ -96,6 +98,16 @@ export default defineNuxtConfig({
         '@unovis/ts'
       ]
     },
+    server: {
+      fs: {
+        // tm-ui and tm-core are linked from a sibling repo, so Vite dev must
+        // serve them from outside this project root.
+        allow: [
+          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url)),
+          fileURLToPath(new URL('../tm-platform/packages/tm-core', import.meta.url))
+        ]
+      }
+    },
     optimizeDeps: {
       include: [
         '@nuxt/ui > prosemirror-state',
@@ -189,5 +201,9 @@ export default defineNuxtConfig({
       stocksnap: 'https://cdn.stocksnap.io',
       envato: 'https://elements.envato.com'
     }
-  }
+  },
+  devServer: {
+    port: 4002,
+    host: '0.0.0.0' // Allow access from other devices on the same network
+  },
 })
