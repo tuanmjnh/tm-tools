@@ -290,8 +290,8 @@ importers:
         specifier: ^3.32.0
         version: 3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0)(vue@3.5.44(typescript@6.0.3))
       '@tuanmjnh/tm-ai-client':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
       '@unovis/ts':
         specifier: ^1.6.7
         version: 1.7.1(supports-color@10.2.2)
@@ -3830,8 +3830,8 @@ packages:
       y-protocols: ^1.0.1
       yjs: ^13.5.38
 
-  '@tuanmjnh/tm-ai-client@0.1.0':
-    resolution: {integrity: sha512-8buGAA9YX93YdFYTmQ8AOUah2MMGHJmxLAYDr2MO4fq6x3dIFEP3PLJv2r7Jof9U6eeRViMKr/y3OS82Vf8Vpw==}
+  '@tuanmjnh/tm-ai-client@0.2.0':
+    resolution: {integrity: sha512-bCAugP623Q1BqnyO1NngV3goe32G8pyO+xCrLEF1dajeBIhsc2l9JSNl28ChOP8uFznfqbagi+cDGgXb1AP4Yw==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -13552,7 +13552,7 @@ snapshots:
       y-protocols: 1.0.7(yjs@13.6.33)
       yjs: 13.6.33
 
-  '@tuanmjnh/tm-ai-client@0.1.0': {}
+  '@tuanmjnh/tm-ai-client@0.2.0': {}
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
