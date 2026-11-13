@@ -3,26 +3,28 @@
  * the local server still has to accept the HS256 tokens issued before the
  * rotation. A wrong key, an unknown `kid` and `alg: none` must all fail.
  */
-import { describe, it, beforeEach, afterEach } from 'node:test'
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { generateKeyPairSync } from 'node:crypto'
 import { SignJWT } from 'jose'
-import { hasAccessTokenVerificationMaterial, verifyAccessToken } from '../../server/utils/jwt'
+import { hasAccessTokenVerificationMaterial, inspectHubSigningKeys, verifyAccessToken } from '../../server/utils/jwt'
 
 const LEGACY_SECRET = 'legacy-shared-secret-for-tests-only'
 
-function keypair() {
+function keypair(kid = 'hub-1') {
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
   const jwk = publicKey.export({ format: 'jwk' }) as { n: string, e: string }
-  return { privateKey, publicKey: { kty: 'RSA', kid: 'hub-1', alg: 'RS256', use: 'sig', n: jwk.n, e: jwk.e } }
+  return { privateKey, publicKey: { kty: 'RSA', kid, alg: 'RS256', use: 'sig', n: jwk.n, e: jwk.e } }
 }
 
 const current = keypair()
-const other = keypair()
+const other = keypair('hub-2')
 
 const saved = new Map<string, string | undefined>()
 beforeEach(() => {
-  for (const key of ['AUTH_JWT_PUBLIC_KEYS', 'AUTH_JWT_SECRET']) {
+  for (const key of ['AUTH_JWT_PUBLIC_KEYS', 'AUTH_JWT_SECRET', 'AUTH_JWT_JWKS_URL', 'NUXT_PUBLIC_HUB_URL']) {
     saved.set(key, process.env[key])
     Reflect.deleteProperty(process.env, key)
   }
@@ -97,5 +99,107 @@ describe('P3 — RS256 by kid with an HS256 legacy fallback', () => {
   it('reports "not configured" when neither keys nor the legacy secret exist', () => {
     delete process.env.AUTH_JWT_PUBLIC_KEYS
     assert.equal(hasAccessTokenVerificationMaterial(), false)
+  })
+})
+
+/**
+ * Production shape: the packaged client holds NO key. It fetches the Hub's
+ * public JWKS and lets `kid` pick the key, which is what makes a Hub key
+ * rotation work without shipping a new installer.
+ */
+describe('P1 — verification through the Hub JWKS endpoint', () => {
+  const served: { keys: unknown[] } = { keys: [] }
+  let server: ReturnType<typeof createServer>
+  let url = ''
+
+  before(async () => {
+    server = createServer((req, res) => {
+      if ((req.url || '').split('?')[0] === '/api/v1/auth/jwks') {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ keys: served.keys }))
+        return
+      }
+      res.writeHead(404)
+      res.end()
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address() as AddressInfo
+    url = `http://127.0.0.1:${address.port}/api/v1/auth/jwks`
+  })
+
+  after(async () => {
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  })
+
+  beforeEach(() => {
+    served.keys = [current.publicKey]
+    // A packaged client has no pinned keys and no shared secret.
+    delete process.env.AUTH_JWT_PUBLIC_KEYS
+    delete process.env.AUTH_JWT_SECRET
+    process.env.AUTH_JWT_JWKS_URL = url
+  })
+
+  it('verifies a token by the kid the Hub published', async () => {
+    const payload = await verifyAccessToken(await rs256(current.privateKey))
+    assert.equal(payload?.userId, 'u1')
+  })
+
+  it('rejects a token signed by an unpublished key', async () => {
+    assert.equal(await verifyAccessToken(await rs256(other.privateKey, 'hub-2')), null)
+  })
+
+  it('rejects an expired token even when the signature is valid', async () => {
+    const expired = await new SignJWT(claims)
+      .setProtectedHeader({ alg: 'RS256', kid: 'hub-1' })
+      .setIssuedAt(Math.floor(Date.now() / 1000) - 3600)
+      .setExpirationTime(Math.floor(Date.now() / 1000) - 1800)
+      .sign(current.privateKey)
+    assert.equal(await verifyAccessToken(expired), null)
+  })
+
+  it('refuses alg:none with a JWKS configured', async () => {
+    const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
+    const body = Buffer.from(JSON.stringify(claims)).toString('base64url')
+    assert.equal(await verifyAccessToken(`${header}.${body}.`), null)
+  })
+
+  it('never treats an unreachable JWKS as a valid token', async () => {
+    process.env.AUTH_JWT_JWKS_URL = 'http://127.0.0.1:1/api/v1/auth/jwks'
+    assert.equal(await verifyAccessToken(await rs256(current.privateKey)), null)
+  })
+
+  it('counts the JWKS URL as verification material on its own', () => {
+    assert.equal(process.env.AUTH_JWT_PUBLIC_KEYS, undefined)
+    assert.equal(process.env.AUTH_JWT_SECRET, undefined)
+    assert.equal(hasAccessTokenVerificationMaterial(), true)
+  })
+
+  it('reports an empty key set on a cold cache instead of blaming the token', async () => {
+    // A fresh process (the real misconfiguration case): nothing cached yet.
+    served.keys = []
+    process.env.AUTH_JWT_JWKS_URL = `${url}?cold=1`
+    assert.equal(await inspectHubSigningKeys(), 'empty')
+  })
+
+  it('probes the endpoint rather than trusting the cached resolver', async () => {
+    // The resolver has already cached a key; the Hub now serves none. The
+    // diagnostic must describe the Hub as it is, not as it was.
+    served.keys = []
+    assert.equal(await inspectHubSigningKeys(), 'empty')
+  })
+
+  it('reports an unreachable key endpoint as such', async () => {
+    process.env.AUTH_JWT_JWKS_URL = 'http://127.0.0.1:1/api/v1/auth/jwks'
+    assert.equal(await inspectHubSigningKeys(), 'unreachable')
+  })
+
+  it('reports ok once the Hub publishes a key', async () => {
+    assert.equal(await inspectHubSigningKeys(), 'ok')
+  })
+
+  it('does not claim the Hub is broken when keys were pinned at build time', async () => {
+    delete process.env.AUTH_JWT_JWKS_URL
+    process.env.AUTH_JWT_PUBLIC_KEYS = JSON.stringify([current.publicKey])
+    assert.equal(await inspectHubSigningKeys(), 'ok')
   })
 })

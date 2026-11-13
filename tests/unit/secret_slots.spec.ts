@@ -42,6 +42,7 @@ describe('secret slots — credentials encrypted at rest', () => {
     'HUB_DEVICE_ID',
     'HUB_DEVICE_USER_ID',
     'HUB_DEVICE_APP_ID',
+    'HUB_DEVICE_HUB_ORIGIN',
     'HUB_DEVICE_EXPIRES_AT',
     'HUB_DEVICE_SCOPES',
     'AUTH_PROVIDER',

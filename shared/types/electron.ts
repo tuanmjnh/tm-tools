@@ -2,6 +2,7 @@ import type { ApiResponse } from '~~/shared/contracts/common'
 import type { SystemInfoResponse, OpenDirectoryInput, StorageUsage } from '~~/shared/contracts/system.ipc'
 import type { EventBusContracts } from '~~/shared/contracts/events'
 import type { BrowserItem, AddCustomBrowserInput, TestExecutableInput, TestExecutableResult } from '~~/shared/contracts/browser.ipc'
+import type { HubDeviceInfo } from '~~/shared/types/device'
 
 export interface TaskStatus {
   total: number
@@ -512,34 +513,81 @@ export interface AppUpdaterNamespace {
 }
 
 /**
- * P4 device enrollment. Every answer is identity metadata: the issued
- * credential stays in the main process and is never part of this surface.
+ * Device credential metadata. The issued credential stays in the main process
+ * vault and is never part of this surface.
  */
 export interface DeviceStatus {
   enrolled: boolean
   deviceId: string
   appId: string
   userId: string
+  /** Hub this build currently points at. */
+  hubUrl?: string
+  /** Hub that issued the stored credential (absent on pre-scoping rows). */
+  hubOrigin?: string
   expiresAt: string
   scopes: string[]
 }
 
-export interface DeviceEnrollProgress {
-  phase: 'authorizing' | 'pending' | 'issued' | 'denied' | 'expired'
-  userCode?: string
-  verificationUri?: string
-  expiresAt?: string
-}
-
-export type DeviceEnrollResult
-  = | { success: true, enrolled: true, deviceId: string, appId: string, expiresAt: string, scopes: string[] }
-    | { success: false, code: 'notRoot' | 'notConfigured' | 'unreachable' | 'rejected' | 'denied' | 'expired' | 'busy' | 'untrusted', hubCode?: string }
-
 export interface DeviceNamespace {
   status(): Promise<DeviceStatus>
-  enroll(accessToken?: string): Promise<DeviceEnrollResult>
-  forget(accessToken?: string): Promise<{ success: boolean, enrolled?: boolean, code?: 'notRoot' | 'untrusted' }>
-  onProgress(callback: (progress: DeviceEnrollProgress) => void): () => void
+  /** Local-only: removes the stored credential. Revoking the Hub record is a root action on the Hub. */
+  forget(): Promise<{ success: boolean, enrolled?: boolean, code?: 'untrusted' }>
+}
+
+/** Hub session payload as returned to the renderer (a device credential never appears here). */
+export interface DeviceAuthSession {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  user: {
+    id: string
+    email: string
+    name: string
+    username?: string | null
+    avatarUrl?: string | null
+    roles?: string[]
+    permissions?: string[]
+    prefix?: string
+    platform?: string
+    createdAt?: string
+    updatedAt?: string
+  }
+}
+
+/** TOTP challenge: authenticating with a password only, no session and no credential. */
+export interface DeviceAuthTotpChallenge {
+  totpRequired: true
+  pendingTotpToken: string
+  user: { id: string, email: string, name: string }
+}
+
+export type DeviceAuthResult
+  = | {
+    success: true
+    data: DeviceAuthSession | DeviceAuthTotpChallenge
+    /** True when Main stored a newly issued device credential in the vault. */
+    credentialPersisted?: boolean
+  }
+  | {
+    success: false
+    code: 'notConfigured' | 'unreachable' | 'rejected' | 'invalidRequest' | 'untrusted'
+    status?: number
+    statusMessage?: string
+    message?: string
+  }
+
+/**
+ * Main-process auth boundary for Electron. Every call carries the machine-derived
+ * device identity; only the session (or a TOTP challenge) comes back.
+ */
+export interface DeviceAuthNamespace {
+  info(): Promise<HubDeviceInfo | null>
+  login(credentials: { email: string, password: string }): Promise<DeviceAuthResult>
+  verifyTotp(input: { code: string, pendingTotpToken: string }): Promise<DeviceAuthResult>
+  passkeyStart(): Promise<{ success: true, data: unknown } | { success: false, code: string, statusMessage?: string, message?: string }>
+  passkeyFinish(credential: unknown): Promise<DeviceAuthResult>
+  register(input: { email: string, password: string, name: string }): Promise<DeviceAuthResult>
 }
 
 export interface ProfileGroup {
@@ -716,6 +764,7 @@ export interface ElectronAPI {
   fileManager: FileManagerNamespace
   appUpdater?: AppUpdaterNamespace
   device?: DeviceNamespace
+  deviceAuth?: DeviceAuthNamespace
   system: {
     getInfo(): Promise<ApiResponse<SystemInfoResponse>>
     openDirectory(input: OpenDirectoryInput): Promise<ApiResponse<void>>

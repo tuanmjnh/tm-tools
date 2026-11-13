@@ -1,5 +1,15 @@
 # P4 — Device enrollment and per-device credentials
 
+> **Superseded in the product by Device Registry v2 (2026-11-10).** The RFC 8628
+> enrollment flow described below is no longer reachable: `device:enroll`, the polling
+> loop and the approval UI were removed from tm-tools and tm-studio. A normal sign-in
+> now registers the device identity and Main receives the per-device credential through
+> the auth broker; `device_credentials` (the service-credential table this document
+> specifies) is kept as-is for AI Relay and Storage Gateway. Read this file as the
+> design record for the P4 mechanics that still exist on the Hub; read
+> `../ai-and-hub-connections.md` and the Hub's `docs/TM-DEVICE-AUTH-UPGRADE-v2/` for
+> current behavior.
+
 **Date**: 2026-11-09
 **Scope**: `tm-hub` (issuer + guard), `tm-tools` (Electron client), `tm-hub-client` (SDK)
 **Decision source**: architecture decision "Electron Build Security, Root-only & Avatar"
@@ -105,35 +115,42 @@ has no owner column yet, so a device must not inherit app-wide object access.
 
 ## 5. Electron surface (tm-tools Main)
 
-`electron/tools/device-enroll.cjs` is a pure module: `ipcMain`, `shell` and `fetch` are
-injected, which is why every branch is unit-testable.
+Historical note: this section used to describe `electron/tools/device-enroll.cjs`,
+which owned RFC 8628 enrollment, the polling loop and a root-gated `forget`. v2 retired
+all of it. The credential's entire local lifecycle now lives in
+`electron/tools/hub-login-broker.cjs` — the same module that receives it from a normal
+sign-in — and `device-enroll.cjs` is deleted.
 
 | IPC channel | Payload | Result |
 | :--- | :--- | :--- |
-| `device:status` | — | `{ enrolled, deviceId, appId, userId, expiresAt, scopes }` (metadata only) |
-| `device:enroll` | `{ accessToken? }` | `{ success: true, enrolled: true, deviceId, appId, expiresAt, scopes }` or `{ success: false, code }` |
-| `device:forget` | `{ accessToken? }` | `{ success, enrolled: false }` or `{ success: false, code: 'notRoot' \| 'untrusted' }` |
+| `device:status` | — | `{ enrolled, deviceId, appId, userId, hubUrl, hubOrigin, expiresAt, scopes }` (metadata only) |
+| `device:forget` | — | `{ success: true, enrolled: false }` or `{ success: false, code: 'untrusted' }` |
 
-Failure codes: `notRoot`, `notConfigured`, `unreachable`, `rejected` (+ `hubCode`),
-`denied`, `expired`, `busy`, `untrusted`.
+There is no `device:enroll`: a credential is issued only to an authenticated user, so
+enrollment *is* the normal sign-in (`auth:login`, `auth:verify-totp`,
+`auth:passkey-finish`, `auth:register`).
 
 Rules enforced in code:
 
 - Every handler passes `isTrustedSender(event)` first; untrusted senders get a
   `{ success: false, code: 'untrusted' }` / `{ enrolled: false }` answer.
-- The secret never crosses IPC. The renderer receives identity metadata only; the
-  `device:status` shape has no secret field, and the enroll result repeats that shape.
+- The secret never crosses IPC. The renderer receives identity metadata only, and the
+  broker strips `deviceCredential` before the IPC result is built.
 - The credential is written through the same `safeStorage` vault as other secret slots
-  (`tmcut:enc:v1:` magic, tolerant decrypt) into `config.env` under `userData`.
+  (`tmcut:enc:v1:` magic, tolerant decrypt) into `config.env` under `userData`. If the
+  keychain is unavailable the credential is dropped rather than written in plaintext.
 - `HUB_DEVICE_SECRET` is a secret slot; the other `HUB_DEVICE_*` keys are plain config.
   Both lists are pinned by `tests/unit/secret_slots.spec.ts`.
-- Re-enroll and forget require a root token **only when a credential is already stored**.
-  A fresh install can enroll without one (there is nothing to protect yet); the approval
-  step itself is root-only in the Hub.
-- `inFlight` guards concurrent enroll attempts (`code: 'busy'`).
-- `enroll` falls back to `http://localhost:4000` when `NUXT_PUBLIC_HUB_URL` is empty, so a
-  dev build still works; the packaged build always has the value baked in as public config.
-- `forget` deletes only `DEVICE_KEYS`; app id, Hub URL, model and other settings survive.
+- `HUB_DEVICE_HUB_ORIGIN` records the Hub that issued the credential. A credential is
+  only offered to that exact `(origin, appId)` pair — see
+  `shared/utils/deviceCredentialScope.ts` — so switching hubs produces a visible
+  re-enroll state instead of a 401 reported as an expired session.
+- `forget` is local-only and ungated: anyone signed in on this device may remove the
+  local copy. Revoking the Hub record stays a root-only Hub API action
+  (`DELETE /api/v1/auth/devices/:id`); this process never performs it on the caller's
+  behalf, so the local action needs no root token.
+- `forget` clears only `DEVICE_CREDENTIAL_KEYS`; app id, Hub URL, model and other
+  settings survive.
 
 **Dev-mode caveat**: under `pnpm dev` the Electron Main process and the Nuxt dev server
 are separate processes, so `process.env` writes from Main are not visible to the dev

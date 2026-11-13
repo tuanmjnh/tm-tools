@@ -14,7 +14,7 @@ const { t } = useI18n()
 
 const selected = computed({
   get: () => props.modelValue ?? ['png'],
-  set: (val) => emit('update:modelValue', val)
+  set: val => emit('update:modelValue', val)
 })
 
 const formatEntries = computed(() =>
@@ -92,4 +92,3 @@ function toggle(format: PdfSourceExportFormat) {
     </p>
   </div>
 </template>
-

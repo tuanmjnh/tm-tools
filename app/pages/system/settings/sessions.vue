@@ -109,8 +109,8 @@ useHead({ title: computed(() => t('profile.sessions')) })
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-end gap-2">
+  <BaseSettingsPage id="settings-sessions" :title="t('profile.sessions')" :description="t('profile.sessionsDesc')">
+    <template #right>
       <UButton
         color="error"
         variant="soft"
@@ -129,7 +129,7 @@ useHead({ title: computed(() => t('profile.sessions')) })
         :aria-label="t('common.refresh')"
         @click="sessionPager.refresh()"
       />
-    </div>
+    </template>
 
     <SharedListFooter :count="sessions.length" :has-more="sessionPager.hasMore.value" :loading="sessionsLoading">
       <template #right>
@@ -225,5 +225,5 @@ useHead({ title: computed(() => t('profile.sessions')) })
       :loading="revokeLoading"
       @confirm="confirmRevokeAll"
     />
-  </div>
+  </BaseSettingsPage>
 </template>

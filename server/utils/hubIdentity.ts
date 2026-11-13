@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { config } from '#server/config'
+import { credentialBelongsTo, normalizeOrigin } from '#shared/utils/deviceCredentialScope'
 
 /**
  * Which identity this server presents to TM Hub.
@@ -14,6 +15,25 @@ export interface HubCaller {
   appId: string
   userId: string | null
   headers: Record<string, string>
+}
+
+/**
+ * Why the stored credential is not being used. `null` when it is.
+ * A caller needs this to tell "re-enroll this device on this Hub" apart from
+ * "this Hub refused a credential it issued", which is a different fix.
+ */
+export type HubCredentialIssue
+  = | 'hub-mismatch'
+    | 'app-mismatch'
+    | 'legacy-no-origin'
+    | 'incomplete-pair'
+    | null
+
+export interface HubCallerResolution {
+  caller: HubCaller | null
+  issue: HubCredentialIssue
+  /** Origin the credential was issued by, for the re-enroll copy. */
+  storedOrigin: string
 }
 
 interface HubRuntimeConfig {
@@ -45,32 +65,71 @@ export function hubBaseUrl(event?: H3Event): string {
   return hubSettings(event).url
 }
 
-export function resolveHubCaller(event?: H3Event): HubCaller | null {
+/**
+ * The full resolution, including why a stored credential was refused. The
+ * credential is scoped to one Hub: sending a credential issued by another Hub
+ * (a local database, then Production) can only produce 401, and that answer
+ * would be misreported as an expired session.
+ */
+export function resolveHubCallerDetailed(event?: H3Event): HubCallerResolution {
   const settings = hubSettings(event)
-  if (!settings.url) return null
+  const empty: HubCallerResolution = { caller: null, issue: null, storedOrigin: '' }
+  if (!settings.url) return empty
 
   const deviceId = config.hub.deviceId.trim()
   const deviceSecret = config.hub.deviceSecret.trim()
+
+  // Half a credential is a broken state, not "no device": falling through to the
+  // App Secret would silently downgrade a desktop out of its device identity.
+  // Fail closed and say which half is missing.
+  if (Boolean(deviceId) !== Boolean(deviceSecret)) {
+    return { caller: null, issue: 'incomplete-pair', storedOrigin: '' }
+  }
+
   if (deviceId && deviceSecret) {
-    // The credential is bound to the app that was enrolled; a later App ID
-    // edit must not silently point it at a different satellite.
-    const appId = (config.hub.deviceAppId || settings.appId).trim()
-    if (!appId) return null
+    const storedOrigin = config.hub.deviceHubOrigin.trim()
+    const storedAppId = (config.hub.deviceAppId || '').trim()
+    const targetAppId = settings.appId || storedAppId
+
+    if (!credentialBelongsTo(
+      { deviceId, secret: deviceSecret, hubOrigin: storedOrigin, appId: storedAppId },
+      { hubUrl: settings.url, appId: targetAppId }
+    )) {
+      const issue: HubCredentialIssue = !storedOrigin
+        ? 'legacy-no-origin'
+        : normalizeOrigin(storedOrigin) !== normalizeOrigin(settings.url)
+          ? 'hub-mismatch'
+          : 'app-mismatch'
+      return { caller: null, issue, storedOrigin }
+    }
+
     return {
-      kind: 'device',
-      appId,
-      userId: config.hub.deviceUserId || null,
-      headers: { 'X-Device-Id': deviceId, 'X-Device-Secret': deviceSecret }
+      caller: {
+        kind: 'device',
+        appId: storedAppId,
+        userId: config.hub.deviceUserId || null,
+        headers: { 'X-Device-Id': deviceId, 'X-Device-Secret': deviceSecret }
+      },
+      issue: null,
+      storedOrigin
     }
   }
 
-  if (!settings.appId || !settings.appSecret) return null
+  if (!settings.appId || !settings.appSecret) return empty
   return {
-    kind: 'app',
-    appId: settings.appId,
-    userId: null,
-    headers: { 'X-App-Id': settings.appId, 'X-App-Secret': settings.appSecret }
+    caller: {
+      kind: 'app',
+      appId: settings.appId,
+      userId: null,
+      headers: { 'X-App-Id': settings.appId, 'X-App-Secret': settings.appSecret }
+    },
+    issue: null,
+    storedOrigin: ''
   }
+}
+
+export function resolveHubCaller(event?: H3Event): HubCaller | null {
+  return resolveHubCallerDetailed(event).caller
 }
 
 /**

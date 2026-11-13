@@ -31,7 +31,6 @@ const TASK_EVENT_NAMES = [
 const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
-  'device:enroll-progress',
   'tools:profiles:statusChanged',
   ...TASK_EVENT_NAMES.map(n => `tools:youtube:${n}`),
   ...TASK_EVENT_NAMES.map(n => `tools:ffmpeg:${n}`)

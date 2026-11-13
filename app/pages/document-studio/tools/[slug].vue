@@ -42,6 +42,22 @@ function handleRun() {
     void page.run()
   }
 }
+
+watch(exportFormats, (formats) => {
+  if (operationId.value === 'pdf.export') page.batch.updateConfig({ formats })
+}, { deep: true })
+
+watch(extractConfig, (config) => {
+  if (operationId.value === 'document.ai-extract') page.batch.updateConfig(config)
+}, { deep: true })
+
+watch(splitConfig, (config) => {
+  if (operationId.value === 'pdf.split') page.batch.updateConfig(config)
+}, { deep: true })
+
+watch(rasterConfig, (config) => {
+  if (operationId.value === 'pdf.rasterize') page.batch.updateConfig(config)
+}, { deep: true })
 </script>
 
 <template>
@@ -79,6 +95,8 @@ function handleRun() {
         @batch-resume="page.batch.resume"
         @batch-stop="page.batch.stop"
         @batch-retry="page.batch.retryItem"
+        @batch-retry-all="page.batch.retryAllFailed"
+        @batch-clear="page.batch.clear"
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"

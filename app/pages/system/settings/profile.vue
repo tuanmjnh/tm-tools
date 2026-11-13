@@ -72,8 +72,8 @@ useHead({ title: computed(() => t('profile.title')) })
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex justify-end">
+  <BaseSettingsPage id="settings-profile" :title="t('profile.info')" :description="t('profile.description')">
+    <template #right>
       <UButton
         icon="i-lucide-save"
         :label="t('settings.saveChanges')"
@@ -82,7 +82,7 @@ useHead({ title: computed(() => t('profile.title')) })
         variant="soft"
         @click="saveProfile"
       />
-    </div>
+    </template>
 
     <UCard>
       <template #header>
@@ -150,32 +150,32 @@ useHead({ title: computed(() => t('profile.title')) })
         </UFormField>
       </UForm>
     </UCard>
+  </BaseSettingsPage>
 
-    <LazyBaseResponsiveModal
-      v-model:open="isAvatarPickerOpen"
-      :title="t('settings.avatar')"
-      :description="t('settings.avatarDesc')"
-      :ui="{ body: 'min-h-[300px]', footer: 'justify-end' }"
-    >
-      <template #body>
-        <LazyMediaGallery
-          :model-value="tempAvatarUrl || null"
-          :multiple="false"
-          size="200px"
-          accept="image/*"
-          folder="avatars"
-          @update:model-value="onAvatarPicked"
-        />
-      </template>
-      <template #footer>
-        <UButton
-          color="neutral"
-          variant="ghost"
-          :label="t('common.cancel')"
-          @click="isAvatarPickerOpen = false"
-        />
-        <UButton color="primary" :label="t('common.update')" @click="applyAvatar" />
-      </template>
-    </LazyBaseResponsiveModal>
-  </div>
+  <LazyBaseResponsiveModal
+    v-model:open="isAvatarPickerOpen"
+    :title="t('settings.avatar')"
+    :description="t('settings.avatarDesc')"
+    :ui="{ body: 'min-h-[300px]', footer: 'justify-end' }"
+  >
+    <template #body>
+      <LazyMediaGallery
+        :model-value="tempAvatarUrl || null"
+        :multiple="false"
+        size="200px"
+        accept="image/*"
+        folder="avatars"
+        @update:model-value="onAvatarPicked"
+      />
+    </template>
+    <template #footer>
+      <UButton
+        color="neutral"
+        variant="ghost"
+        :label="t('common.cancel')"
+        @click="isAvatarPickerOpen = false"
+      />
+      <UButton color="primary" :label="t('common.update')" @click="applyAvatar" />
+    </template>
+  </LazyBaseResponsiveModal>
 </template>

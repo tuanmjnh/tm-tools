@@ -864,7 +864,7 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
                       <template #hint>
                         <div class="flex items-center gap-2 text-xs text-muted">
                           <span v-if="isPlaylist" class="text-primary font-medium">{{ t('tools.playlistDetected')
-                            }}</span>
+                          }}</span>
                           <UButton v-if="isPlaylist && !loadingPlaylist" size="xs" variant="soft"
                             :loading="loadingPlaylist" :disabled="controlsDisabled" @click="crawlPlaylist">
                             {{ t('tools.getPlaylistInfo') }}

@@ -5,6 +5,10 @@ const splitConfig = ref({ createSubfolder: true })
 function runSplit() {
   void page.run(splitConfig.value)
 }
+
+watch(splitConfig, (opts) => {
+  page.batch.updateConfig(opts)
+}, { deep: true })
 </script>
 
 <template>
@@ -34,6 +38,7 @@ function runSplit() {
         @remove="page.selection.remove"
         @move="page.selection.move"
         @reset="page.selection.clear"
+        @reload="page.reload"
         @run="runSplit"
         @deleted="page.removeArtifact"
         @batch-start="runSplit"
@@ -41,6 +46,8 @@ function runSplit() {
         @batch-resume="page.batch.resume"
         @batch-stop="page.batch.stop"
         @batch-retry="page.batch.retryItem"
+        @batch-retry-all="page.batch.retryAllFailed"
+        @batch-clear="page.batch.clear"
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"

@@ -1,5 +1,5 @@
 import { config } from '../config/index'
-import { hasAccessTokenVerificationMaterial, verifyAccessToken } from '../utils/jwt'
+import { hasAccessTokenVerificationMaterial, inspectHubSigningKeys, verifyAccessToken } from '../utils/jwt'
 import { isRootClaims } from '../utils/authz'
 
 const publicRoutes = [
@@ -56,6 +56,19 @@ export default defineEventHandler(async (event) => {
   const payload = await verifyAccessToken(token)
 
   if (!payload) {
+    // A deployment that cannot verify anything reports every valid token as
+    // expired. Ask the Hub what it actually publishes before blaming the
+    // session, so the fix ("the Hub has no signing key") is visible.
+    const keyState = await inspectHubSigningKeys()
+    if (keyState === 'empty' || keyState === 'unreachable') {
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'error.hubSigningKeyUnavailable',
+        message: keyState === 'empty'
+          ? 'TM Hub publishes no signing key (GET /api/v1/auth/jwks is empty); set AUTH_JWT_PRIVATE_KEY on the Hub'
+          : 'TM Hub key endpoint is unreachable'
+      })
+    }
     throw createError({ statusCode: 401, statusMessage: 'error.invalidToken', message: 'Invalid or expired token' })
   }
 

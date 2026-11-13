@@ -9,7 +9,8 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const { bakePublicConfig, applyPublicConfig, PUBLIC_CONFIG_KEYS, FILE_NAME } = require('../../electron/tools/public-config.cjs')
@@ -40,6 +41,7 @@ describe('bake-public-config — allow-list only', () => {
       NUXT_PUBLIC_HUB_URL: 'https://hub.example.test',
       NUXT_PUBLIC_HUB_APP_ID: 'tm-tools_test',
       AUTH_JWT_PUBLIC_KEYS: JSON.stringify([PUBLIC_JWK]),
+      AUTH_JWT_JWKS_URL: 'https://hub.example.test/api/v1/auth/jwks',
       AUTH_JWT_SECRET: JWT_SECRET,
       NUXT_HUB_APP_SECRET: APP_SECRET
     })
@@ -53,6 +55,21 @@ describe('bake-public-config — allow-list only', () => {
     assert.equal(text.includes(APP_SECRET), false)
     assert.equal(JSON.parse(text).AUTH_JWT_SECRET, undefined)
     assert.equal(JSON.parse(text).NUXT_HUB_APP_SECRET, undefined)
+  })
+
+  it('bakes the JWKS endpoint so keys rotate without a new installer', () => {
+    writeEnv({
+      NUXT_PUBLIC_HUB_URL: 'https://hub.example.test',
+      NUXT_PUBLIC_HUB_APP_ID: 'tm-tools_test',
+      AUTH_JWT_PUBLIC_KEYS: JSON.stringify([PUBLIC_JWK]),
+      AUTH_JWT_JWKS_URL: 'https://hub.example.test/api/v1/auth/jwks'
+    })
+
+    bakePublicConfig({ projectRoot: root, env: {} })
+    const written = JSON.parse(readFileSync(join(root, 'resources', FILE_NAME), 'utf8'))
+    assert.equal(written.AUTH_JWT_JWKS_URL, 'https://hub.example.test/api/v1/auth/jwks')
+    // A symmetric secret must never reach the desktop, whatever .env holds.
+    assert.equal(written.AUTH_JWT_SECRET, undefined)
   })
 
   it('refuses a key set that carries a private exponent', () => {
@@ -97,5 +114,36 @@ describe('apply-public-config — defaults only', () => {
     const env: Record<string, string> = {}
     assert.deepEqual(applyPublicConfig(join(root, 'missing.json'), env), [])
     assert.deepEqual(env, {})
+  })
+})
+
+/**
+ * The reported bug: `pnpm dev:electron` login answered "Hub URL and App ID are
+ * not configured". Dev loads the renderer from the Nuxt dev server and never
+ * calls `startServer()`, so applying the baked file inside that function left
+ * the auth broker with an empty app id. The call must sit on the startup path
+ * both modes take, after config.env has had its chance to win.
+ */
+describe('main.cjs applies the baked config in dev too', () => {
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
+  const main = readFileSync(join(repoRoot, 'electron', 'main.cjs'), 'utf8')
+
+  it('applies it from app.whenReady, not from startServer', () => {
+    const ready = main.slice(main.indexOf('app.whenReady()'))
+    assert.ok(
+      /loadUserConfig\(\)\s*\n\s*applyBakedPublicConfig\(\)/.test(ready),
+      'whenReady must load config.env then apply the baked public config'
+    )
+    const startServer = main.slice(main.indexOf('async function startServer()'))
+    const body = startServer.slice(0, startServer.indexOf('\n}'))
+    assert.ok(
+      !/applyPublicConfig\(/.test(body),
+      'startServer is packaged-only; the call belongs on the shared startup path'
+    )
+  })
+
+  it('resolves the packaged and dev locations separately', () => {
+    assert.ok(/process\.resourcesPath.*resources.*public-config\.json/s.test(main))
+    assert.ok(/__dirname,\s*'\.\.',\s*'resources',\s*'public-config\.json'/.test(main))
   })
 })

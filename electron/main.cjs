@@ -12,7 +12,7 @@ const { registerProfilesController } = require('./tools/profiles.controller.cjs'
 // API-key slots are encrypted AT REST with the OS keychain (safeStorage:
 // DPAPI/Keychain/libsecret). decrypt() passes plaintext through, so files
 // written before encryption existed keep working.
-const { decrypt } = require('./tools/ai-secure.cjs')
+const { decrypt, isEncryptionAvailable } = require('./tools/ai-secure.cjs')
 // One config.env parser for startup, get-config and set-config: "file
 // missing" can never be read differently by two handlers.
 const { readConfigFile, writeConfigValues } = require('./tools/config-file.cjs')
@@ -24,9 +24,9 @@ const { mediaSchemePrivileges, createMediaHandler } = require('./media-protocol.
 // Secret config slots: ONE definition shared by the masking and encryption
 // paths below, so no arbitrary key name qualifies for at-rest encryption.
 const { SECRET_SLOT_RE } = require('./tools/secret-slots.cjs')
-// P4: per-device Hub enrollment (RFC 8628). The issued credential is stored in
-// the same keychain vault and never returned to the renderer.
-const { registerDeviceController } = require('./tools/device-enroll.cjs')
+// v2: the auth broker is the only writer of a device credential. It is stored in
+// the keychain vault and never returned to the renderer.
+const { createHubLoginBroker } = require('./tools/hub-login-broker.cjs')
 // window.open policy: same-origin API links download, `?inline=1` previews.
 const { decideWindowOpen } = require('./tools/window-open.cjs')
 // P1: the device-config admin gate verifies the caller's Hub token locally.
@@ -81,14 +81,23 @@ function loadUserConfig() {
   }
 }
 
-async function startServer() {
-  loadUserConfig()
+/**
+ * Hub URL / app id / public JWKs baked at build time. Applied on the shared
+ * startup path, not inside `startServer()`: dev loads the renderer from the
+ * Nuxt dev server and never starts Nitro, so a packaged-only call left the
+ * auth broker with an empty app id and every login failed `notConfigured`.
+ * `applyPublicConfig` only fills keys the environment does not already have,
+ * so `config.env` still wins.
+ */
+function applyBakedPublicConfig() {
   applyPublicConfig(
     app.isPackaged
       ? path.join(process.resourcesPath, 'resources', 'public-config.json')
       : path.join(__dirname, '..', 'resources', 'public-config.json')
   )
+}
 
+async function startServer() {
   process.env.NITRO_PORT = String(PORT)
   process.env.NITRO_HOST = '127.0.0.1'
   // Nitro runs in-process here, so cwd-relative data (.data/) would land
@@ -331,19 +340,66 @@ ipcMain.handle('set-config', async (event, values, accessToken) => {
   return { success: true, path: configFile }
 })
 
-// P4: device enrollment writes the per-device credential itself (never handed
-// to the renderer), so a public build needs no App Secret on first run.
-registerDeviceController({
-  ipcMain,
-  isTrustedSender,
+// v2: the renderer never talks to Hub for a full-session auth call. Main derives
+// the device identity, receives the optional device service credential, writes
+// it into the vault and returns only sanitized session data over IPC.
+const hubAuth = createHubLoginBroker({
   configFile: userConfigPath,
   readConfigFile,
   writeConfigValues,
-  isRootAccessToken,
-  openExternal: url => require('electron').shell.openExternal(url).catch(() => false),
-  onProgress: (payload) => {
-    if (win && !win.isDestroyed()) win.webContents.send('device:enroll-progress', payload)
-  }
+  // No keychain, no credential on disk. The session still completes; the user
+  // sees a "sign in again to enrol" hint instead of a silent plaintext secret.
+  canPersistSecret: isEncryptionAvailable
+})
+
+ipcMain.handle('auth:device-info', (event) => {
+  if (!isTrustedSender(event)) return null
+  return hubAuth.deviceInfo()
+})
+
+ipcMain.handle('auth:login', async (event, credentials) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  const email = String(credentials?.email || '').trim()
+  const password = String(credentials?.password || '')
+  if (!email || !password) return { success: false, code: 'invalidRequest' }
+  return await hubAuth.login({ email, password })
+})
+
+ipcMain.handle('auth:verify-totp', async (event, input) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.verifyTotp(input)
+})
+
+ipcMain.handle('auth:passkey-start', async (event) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.passkeyStart()
+})
+
+ipcMain.handle('auth:passkey-finish', async (event, credential) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return await hubAuth.passkeyFinish(credential)
+})
+
+ipcMain.handle('auth:register', async (event, input) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  const email = String(input?.email || '').trim()
+  const password = String(input?.password || '')
+  const name = String(input?.name || '').trim()
+  if (!email || !password || !name) return { success: false, code: 'invalidRequest' }
+  return await hubAuth.register({ email, password, name })
+})
+
+// Credential metadata + local forget. Nothing here reaches the Hub: "Forget
+// this device" removes the local copy only, while revoking the Hub record stays
+// a root-only Hub API action (its own route enforces that server-side).
+ipcMain.handle('device:status', (event) => {
+  if (!isTrustedSender(event)) return { enrolled: false, deviceId: '', appId: '', userId: '', expiresAt: '', scopes: [] }
+  return hubAuth.credentialStatus()
+})
+
+ipcMain.handle('device:forget', (event) => {
+  if (!isTrustedSender(event)) return { success: false, code: 'untrusted' }
+  return hubAuth.forgetCredential()
 })
 
 ipcMain.handle('open-path', async (event, fullPath) => {
@@ -403,8 +459,10 @@ app.whenReady().then(() => {
   // User config is read for every session so dev and prod see the same env
   // (set-if-unset semantics): the profile controller resolves its browser
   // executables from CHROME_PATH / CAMOUFOX_PATH / ... written by the
-  // settings pages.
+  // settings pages. The baked public config is applied right after it because
+  // the Hub URL and app id gate every authenticated call in both modes.
   loadUserConfig()
+  applyBakedPublicConfig()
   protocol.handle('media', createMediaHandler(appOrigins))
 
   registerYoutubeController()

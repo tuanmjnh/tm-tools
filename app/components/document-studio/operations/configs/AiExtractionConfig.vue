@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
 import { getErrorMessage, getPresetErrorMessage } from '~/shared/utils/errors'
+import type { AvailableModel } from '~/types/chat'
 import type { PdfExtractPreset, PdfOfficeFormat } from '#shared/types/pdf'
 import {
   PRESET_MAX_COUNT,
@@ -45,10 +46,35 @@ const selectedPresetId = ref(props.modelValue?.presetId || '__none__')
 const selectedFormats = ref<PdfOfficeFormat[]>(props.modelValue?.formats || ['csv']) // , 'xlsx', 'json', 'docx', 'xml'
 const force = ref(Boolean(props.modelValue?.force))
 
-const modelList = ref<ExtractModel[]>([])
+const modelList = ref<AvailableModel[]>([])
 const modelsLoading = ref(true)
 const modelsError = ref('')
 const presets = ref<PdfExtractPreset[]>([])
+
+const selectedModelKey = computed({
+  get: () => {
+    if (!selectedModel.value) return ''
+    return selectedConnectionId.value ? `${selectedConnectionId.value}:${selectedModel.value}` : selectedModel.value
+  },
+  set: (val: string) => {
+    if (!val) {
+      selectedModel.value = ''
+      selectedConnectionId.value = ''
+      return
+    }
+    const [connId, ...rest] = val.split(':')
+    selectedConnectionId.value = connId || ''
+    selectedModel.value = rest.join(':') || ''
+  }
+})
+
+const selectedModelInfo = computed(() => {
+  if (!selectedModel.value) return null
+  return modelList.value.find(m =>
+    m.modelId === selectedModel.value
+    && (!selectedConnectionId.value || m.connectionId === selectedConnectionId.value)
+  ) || null
+})
 
 const presetEditorOpen = ref(false)
 const editingPreset = ref<PdfExtractPreset | null>(null)
@@ -117,7 +143,7 @@ function emitUpdate() {
 watch([selectedModel, selectedConnectionId, selectedPresetId, selectedFormats, force], emitUpdate, { deep: true })
 
 function selectDefaultModel() {
-  const fallback = modelList.value.find(model => model.isDefault) ?? modelList.value[0]
+  const fallback = modelList.value.find(model => (model as any).isDefault || model.isPrimary) ?? modelList.value[0]
   if (!fallback) return
   selectedModel.value = fallback.modelId
   selectedConnectionId.value = fallback.connectionId
@@ -127,12 +153,12 @@ async function fetchModels(reload = false) {
   modelsLoading.value = true
   modelsError.value = ''
   try {
-    const res = await $fetch<{ data: ExtractModel[] }>(
+    const res = await $fetch<{ data: (AvailableModel & { isDefault?: boolean })[] }>(
       reload ? '/api/v1/pdf/extract/models?refresh=1' : '/api/v1/pdf/extract/models'
     )
     modelList.value = res.data || []
     const stillListed = modelList.value.some(model =>
-      model.modelId === selectedModel.value && model.connectionId === selectedConnectionId.value)
+      model.modelId === selectedModel.value && (!selectedConnectionId.value || model.connectionId === selectedConnectionId.value))
     if (!stillListed) selectDefaultModel()
   } catch (err: unknown) {
     modelList.value = []
@@ -343,13 +369,18 @@ onMounted(async () => {
           />
         </template>
       </UAlert>
-      <USelect
-        v-else-if="modelList.length"
-        :model-value="selectedModel"
-        :items="modelList.map(model => ({ label: `${model.displayName} (${model.connectionName})`, value: model.modelId }))"
-        class="w-full"
-        @update:model-value="onModelSelected"
-      />
+      <div v-else-if="modelList.length" class="space-y-1.5">
+        <AiProvidersModelSelect
+          v-model="selectedModelKey"
+          :models="modelList"
+          :loading="modelsLoading"
+          width-class="w-full"
+        />
+        <div v-if="selectedModelInfo" class="flex items-center justify-between text-[11px] text-muted px-0.5">
+          <span class="truncate max-w-[200px]">{{ selectedModelInfo.connectionName }}</span>
+          <span class="capitalize shrink-0">{{ selectedModelInfo.provider }}</span>
+        </div>
+      </div>
       <div v-else class="space-y-2">
         <p class="text-xs text-muted">
           {{ t('pdf.extract.noModelSelected') }}
@@ -406,9 +437,9 @@ onMounted(async () => {
           @change="onPresetFileChosen"
         >
       </div>
-      <p v-if="selectedPreset?.description" class="mt-1 text-[11px] leading-relaxed text-muted">
+      <!-- <p v-if="selectedPreset?.description" class="mt-1 text-[11px] leading-relaxed text-muted">
         {{ selectedPreset.description }}
-      </p>
+      </p> -->
     </UFormField>
 
     <!-- Export formats -->
@@ -421,22 +452,23 @@ onMounted(async () => {
           {{ selectedFormats.length }} / {{ formatOptions.length }}
         </span>
       </div>
-      <div class="flex flex-col gap-2">
+      <div class="grid grid-cols-2 gap-2">
         <button
           v-for="item in formatOptions"
           :key="item.format"
           type="button"
-          class="panel-flat flex items-start gap-3 rounded-lg p-3 text-start transition-all cursor-pointer"
+          class="panel-flat flex items-center gap-2.5 rounded-lg p-2.5 text-start transition-all cursor-pointer"
           :class="[
             selectedFormats.includes(item.format)
               ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
               : 'hover:border-primary/50 hover:bg-muted/10'
           ]"
           :aria-pressed="selectedFormats.includes(item.format)"
+          :title="t(item.hintKey)"
           @click="toggleFormat(item.format)"
         >
           <div
-            class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors"
+            class="flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors"
             :class="[
               selectedFormats.includes(item.format)
                 ? 'border-primary/40 bg-primary/10 text-primary'
@@ -445,27 +477,19 @@ onMounted(async () => {
           >
             <UIcon
               :name="selectedFormats.includes(item.format) ? 'i-lucide-check-circle-2' : item.icon"
-              class="size-4"
+              class="size-3.5"
             />
           </div>
-          <div class="min-w-0 flex-1 space-y-0.5">
-            <div class="flex items-center justify-between gap-2">
-              <span
-                class="text-xs font-semibold text-highlighted"
-                :class="{ 'text-primary': selectedFormats.includes(item.format) }"
-              >
-                {{ item.label }}
-              </span>
-              <span
-                v-if="selectedFormats.includes(item.format)"
-                class="text-[10px] font-medium uppercase tracking-wider text-primary"
-              >
-                {{ t('pdf.browser.selected') }}
-              </span>
-            </div>
-            <p class="text-[11px] leading-relaxed text-muted">
+          <div class="min-w-0 flex-1">
+            <span
+              class="block truncate text-xs font-semibold"
+              :class="selectedFormats.includes(item.format) ? 'text-primary' : 'text-foreground'"
+            >
+              {{ item.label }}
+            </span>
+            <span class="block truncate text-[10px] text-muted">
               {{ t(item.hintKey) }}
-            </p>
+            </span>
           </div>
         </button>
       </div>

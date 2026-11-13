@@ -45,7 +45,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // Device configuration is administrative: root only. Non-root users see the
   // connection banner instead of the page, and the server refuses the API even
   // if the route is typed by hand.
-  if (to.path === '/system/settings/hub') return navigateTo('/')
+  if (to.path === '/system/settings/hub' || to.path === '/system/settings/ai-local') return navigateTo('/')
 
   const nav = useNavMenu()
   const routes = await nav.fetchRoutes()

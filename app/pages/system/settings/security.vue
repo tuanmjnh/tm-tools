@@ -213,8 +213,8 @@ useHead({ title: computed(() => t('profile.security')) })
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-end gap-2">
+  <BaseSettingsPage id="settings-security" :title="t('profile.security')" :description="t('profile.securityDesc')">
+    <template #right>
       <UButton
         type="submit"
         form="security-form"
@@ -224,7 +224,7 @@ useHead({ title: computed(() => t('profile.security')) })
         variant="soft"
         :loading="passwordLoading"
       />
-    </div>
+    </template>
 
     <UCard>
       <template #header>
@@ -484,5 +484,5 @@ useHead({ title: computed(() => t('profile.security')) })
         </div>
       </template>
     </UModal>
-  </div>
+  </BaseSettingsPage>
 </template>

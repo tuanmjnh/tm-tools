@@ -145,3 +145,25 @@ the flows above remain open.
 - Electron resolves `appData` through the Windows known-folder API, so an `APPDATA`
   environment redirect does not isolate a launch. Verification ran against the real
   `%APPDATA%\tm-tools` profile; nothing was deleted.
+
+## 8. Update 2026-11-10 — Device Registry v2
+
+The two rows above that were blocked by the RFC 8628 approval flow describe a flow that
+no longer exists. Approval-in-browser is retired: a normal login registers the device
+identity and Main receives the credential through `electron/tools/hub-login-broker.cjs`,
+writing `HUB_DEVICE_*` into the keychain vault and stripping `deviceCredential` before
+the IPC result.
+
+What changed in the artifact:
+
+| Item | Before | Now |
+| :--- | :--- | :--- |
+| Enrollment entry point | `device:enroll` + polling + approval UI | removed; `device-enroll.cjs` keeps `status()` and `forget()` only |
+| Auth IPC | password login posted from the renderer | `auth:login` / `auth:verify-totp` / `auth:passkey-start` / `auth:passkey-finish` / `auth:register` / `auth:device-info` in Main |
+| Credential source | `X-App-Secret` from env | `X-Device-Id` / `X-Device-Secret`; App Secret only for a host deployment |
+| Device UI | `/system/settings/hub` (enrollment) | `/system/settings/devices` (list, rename, revoke); hub page is health + metadata |
+
+Re-verified for this update: `vue-tsc` 0 errors, 58/58 unit specs, `pnpm build` green,
+`electron-builder --dir` exit 0. The G5 rows about a live signed-in packaged app
+(password/TOTP, revoke → restart, two Windows users) are **still open** — the code path
+changed, but the packaged smoke test was not run in this pass.

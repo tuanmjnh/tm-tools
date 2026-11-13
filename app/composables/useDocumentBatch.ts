@@ -27,6 +27,9 @@ export interface BatchViewModel {
   total: number
   done: number
   overallProgress: number
+  failed: number
+  waiting: number
+  runningCount: number
 }
 
 interface BatchRunOptions {
@@ -99,7 +102,10 @@ export function useDocumentBatch(
     concurrencyCap: concurrencyCap.value,
     total: total.value,
     done: done.value,
-    overallProgress: overallProgress.value
+    overallProgress: overallProgress.value,
+    failed: failed.value,
+    waiting: waiting.value,
+    runningCount: runningCount.value
   }))
 
   function stopPoll() {
@@ -135,6 +141,9 @@ export function useDocumentBatch(
     s.controllers.set(item.id, controller)
     item.error = undefined
     item.progress = 0
+    // Always assign a fresh idempotency token per attempt to avoid 409 DOCUMENT_JOB_STATE_INVALID
+    const key = crypto.randomUUID()
+    s.keys.set(item.id, key)
     try {
       const result = await runSingleDocumentJob(api, {
         operationId,
@@ -142,7 +151,7 @@ export function useDocumentBatch(
         config: s.config,
         directUpload: s.options.directUpload,
         inline: s.options.inline,
-        idempotencyKey: s.keys.get(item.id),
+        idempotencyKey: key,
         signal: controller.signal,
         onJobId: (id) => { item.jobId = id }
       })
@@ -158,6 +167,10 @@ export function useDocumentBatch(
 
   function finalize() {
     stopPoll()
+    if (s.items.value.length === 0) {
+      s.status.value = 'idle'
+      return
+    }
     for (const item of s.items.value) {
       if (s.cancelledIds.has(item.id) && item.status !== 'done') item.status = 'cancelled'
     }
@@ -234,6 +247,7 @@ export function useDocumentBatch(
     item.progress = 0
     item.error = undefined
     s.cancelledIds.delete(id)
+    s.keys.set(id, crypto.randomUUID())
     if (!running.value) {
       s.status.value = 'running'
       startPoll()
@@ -241,12 +255,37 @@ export function useDocumentBatch(
     }
   }
 
-  function clear() {
-    if (running.value) {
-      void stop()
-      return
+  function retryAllFailed() {
+    const failedItems = s.items.value.filter(item => item.status === 'failed' || item.status === 'cancelled')
+    if (!failedItems.length) return
+    for (const item of failedItems) {
+      item.status = 'waiting'
+      item.progress = 0
+      item.error = undefined
+      s.cancelledIds.delete(item.id)
+      s.keys.set(item.id, crypto.randomUUID())
     }
+    if (!running.value) {
+      s.status.value = 'running'
+      startPoll()
+      runPool()
+    }
+  }
+
+  function updateConfig(config: Record<string, unknown>) {
+    s.config = { ...s.config, ...config }
+  }
+
+  function clear() {
     stopPoll()
+    for (const [id, controller] of s.controllers) {
+      s.cancelledIds.add(id)
+      controller.abort()
+      const item = s.items.value.find(entry => entry.id === id)
+      if (item?.jobId) {
+        void api.cancelJob(item.jobId).catch(() => {})
+      }
+    }
     s.blobs.clear()
     s.keys.clear()
     s.controllers.clear()
@@ -295,6 +334,8 @@ export function useDocumentBatch(
     resume,
     stop,
     retryItem,
+    retryAllFailed,
+    updateConfig,
     clear,
     removeArtifact,
     setConcurrency,

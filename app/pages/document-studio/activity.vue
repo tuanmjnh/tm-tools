@@ -189,6 +189,23 @@ function openOutputFolder() {
   openLocalPath(outputPath.value)
 }
 
+const activityActions = computed<DropdownMenuItem[][]>(() => {
+  const items: DropdownMenuItem[] = []
+  if (desktop && outputPath.value) {
+    items.push({
+      label: t('document.activity.openOutputFolder'),
+      icon: 'i-lucide-folder-open',
+      onSelect: () => openOutputFolder()
+    })
+  }
+  items.push({
+    label: t('document.activity.refresh'),
+    icon: 'i-lucide-refresh-cw',
+    onSelect: () => void load()
+  })
+  return [items]
+})
+
 function retryJob(job: DocumentJobView) {
   const route = DOCUMENT_STUDIO_OPERATIONS.find(entry => entry.id === job.operationId)?.route ?? '/document-studio'
   void navigateTo(route)
@@ -398,25 +415,17 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
           </div>
 
           <div class="flex items-center gap-1.5 shrink-0">
+            <UDropdownMenu :items="activityActions" :content="{ align: 'end' }">
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :label="t('common.actions')"
+                :loading="loading"
+              />
+            </UDropdownMenu>
             <AdminViewModeToggle v-model="viewMode" />
-            <UButton
-              v-if="desktop && outputPath"
-              icon="i-lucide-folder-open"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :label="t('document.activity.openOutputFolder')"
-              @click="openOutputFolder"
-            />
-            <UButton
-              icon="i-lucide-refresh-cw"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :loading="loading"
-              :label="t('document.activity.refresh')"
-              @click="load"
-            />
           </div>
         </div>
       </div>

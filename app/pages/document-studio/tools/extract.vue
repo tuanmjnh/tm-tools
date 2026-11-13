@@ -5,6 +5,10 @@ const extractOptions = ref<Record<string, unknown>>({})
 function runExtract() {
   void page.run(extractOptions.value)
 }
+
+watch(extractOptions, (opts) => {
+  page.batch.updateConfig(opts)
+}, { deep: true })
 </script>
 
 <template>
@@ -42,6 +46,8 @@ function runExtract() {
         @batch-resume="page.batch.resume"
         @batch-stop="page.batch.stop"
         @batch-retry="page.batch.retryItem"
+        @batch-retry-all="page.batch.retryAllFailed"
+        @batch-clear="page.batch.clear"
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"

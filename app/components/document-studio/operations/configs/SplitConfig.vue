@@ -24,14 +24,20 @@ function toggleSubfolder() {
 <template>
   <div class="space-y-3">
     <div class="flex flex-col w-full">
-      <button type="button"
-        class="panel-flat flex w-full items-start gap-3 rounded-md p-3 text-start transition-all cursor-pointer" :class="[
+      <button
+        type="button"
+        class="panel-flat flex w-full items-start gap-3 rounded-md p-3 text-start transition-all cursor-pointer"
+        :class="[
           createSubfolder
             ? 'border-primary ring-1 ring-primary/30 bg-primary/5'
             : 'border-default hover:border-default/80 hover:bg-muted/10'
-        ]" @click="toggleSubfolder">
-        <div class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors text-white"
-          :class="createSubfolder ? 'border-primary bg-primary text-primary-foreground' : 'border-gray-500 bg-transparent'">
+        ]"
+        @click="toggleSubfolder"
+      >
+        <div
+          class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors text-white"
+          :class="createSubfolder ? 'border-primary bg-primary text-primary-foreground' : 'border-gray-500 bg-transparent'"
+        >
           <UIcon v-if="createSubfolder" name="i-lucide-check" class="size-3" />
         </div>
         <div class="flex-1 min-w-0">

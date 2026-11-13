@@ -25,8 +25,10 @@ const activeIndex = computed(() => steps.value.findIndex(entry => entry.key === 
   <div class="flex flex-col gap-1 border-b border-default/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex items-center gap-2 text-xs">
       <template v-for="(entry, index) in steps" :key="entry.key">
-        <div class="flex items-center gap-1.5"
-          :class="index <= activeIndex ? 'text-primary-600 dark:text-primary-400' : 'text-muted'">
+        <div
+          class="flex items-center gap-1.5"
+          :class="index <= activeIndex ? 'text-primary-600 dark:text-primary-400' : 'text-muted'"
+        >
           <UIcon :name="entry.icon" class="size-4" />
           <span class="font-medium">{{ entry.label }}</span>
         </div>

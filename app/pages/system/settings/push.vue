@@ -48,34 +48,40 @@ useHead({ title: computed(() => t('notifications.pushTitle')) })
 </script>
 
 <template>
-  <UCard>
-    <div class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated/50 p-4">
-      <div class="flex items-center gap-3 min-w-0">
-        <span
-          class="inline-flex shrink-0 items-center justify-center rounded-lg p-2.5"
-          :class="pushSubscribed ? 'bg-success/10 text-success' : 'bg-muted text-muted'"
-        >
-          <UIcon :name="pushSubscribed ? 'i-lucide-bell-ring' : 'i-lucide-bell-off'" class="size-5" />
-        </span>
-        <div class="min-w-0">
-          <p class="text-sm font-medium text-highlighted">
-            {{ pushSubscribed ? t('common.subscribed') : t('common.unsubscribed') }}
-          </p>
-          <p v-if="!pushSupported" class="text-xs text-warning mt-0.5">
-            {{ t('notifications.pushUnsupported') }}
-          </p>
+  <BaseSettingsPage
+    id="settings-push"
+    :title="t('notifications.pushTitle')"
+    :description="t('notifications.pushDesc')"
+  >
+    <UCard>
+      <div class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated/50 p-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <span
+            class="inline-flex shrink-0 items-center justify-center rounded-lg p-2.5"
+            :class="pushSubscribed ? 'bg-success/10 text-success' : 'bg-muted text-muted'"
+          >
+            <UIcon :name="pushSubscribed ? 'i-lucide-bell-ring' : 'i-lucide-bell-off'" class="size-5" />
+          </span>
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-highlighted">
+              {{ pushSubscribed ? t('common.subscribed') : t('common.unsubscribed') }}
+            </p>
+            <p v-if="!pushSupported" class="text-xs text-warning mt-0.5">
+              {{ t('notifications.pushUnsupported') }}
+            </p>
+          </div>
         </div>
+        <USwitch
+          :model-value="pushSubscribed"
+          :loading="pushLoading"
+          :disabled="!pushSupported"
+          size="lg"
+          :aria-label="t('notifications.pushTitle')"
+          @update:model-value="onPushSwitch"
+        />
       </div>
-      <USwitch
-        :model-value="pushSubscribed"
-        :loading="pushLoading"
-        :disabled="!pushSupported"
-        size="lg"
-        :aria-label="t('notifications.pushTitle')"
-        @update:model-value="onPushSwitch"
-      />
-    </div>
-  </UCard>
+    </UCard>
+  </BaseSettingsPage>
 
   <BaseConfirmModal
     v-model:open="isPushConfirmOpen"

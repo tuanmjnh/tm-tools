@@ -58,37 +58,21 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
   <UDashboardGroup unit="rem">
     <BaseAppBackdrop />
 
-    <UDashboardSidebar
-      id="default"
-      v-model:open="open"
-      collapsible
-      resizable
-      class="border-e border-default/70 tm-chrome"
-      :ui="{ footer: 'lg:border-t lg:border-default/70' }"
-    >
+    <UDashboardSidebar id="default" v-model:open="open" collapsible resizable
+      class="border-e border-default/70 tm-chrome" :ui="{ footer: 'lg:border-t lg:border-default/70 py-1' }">
       <template #header="{ collapsed }">
         <LazyDashboardTeamsMenu :collapsed="collapsed" />
       </template>
 
       <template #default="{ collapsed }">
-        <UDashboardSearchButton
-          :collapsed="collapsed"
-          :label="$t('global.search')"
-          class="bg-transparent ring-default"
-        />
+        <UDashboardSearchButton :collapsed="collapsed" :label="$t('global.search')"
+          class="bg-transparent ring-default" />
 
-        <UNavigationMenu
-          v-if="links[0]?.length"
-          :collapsed="collapsed"
-          :items="links[0]"
-          orientation="vertical"
-          tooltip
-          popover
-          :ui="{
+        <UNavigationMenu v-if="links[0]?.length" :collapsed="collapsed" :items="links[0]" orientation="vertical" tooltip
+          popover :ui="{
             link: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25 data-[state=open]:text-highlighted! data-[state=open]:before:bg-primary/10 data-[state=open]:before:ring-1 data-[state=open]:before:ring-inset data-[state=open]:before:ring-primary/25',
             childLink: 'data-[active]:text-highlighted! data-[active]:before:bg-primary/10 data-[active]:before:ring-1 data-[active]:before:ring-inset data-[active]:before:ring-primary/25'
-          }"
-        />
+          }" />
       </template>
 
       <template #footer="{ collapsed }">

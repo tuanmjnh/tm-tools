@@ -56,6 +56,8 @@ const emit = defineEmits<{
   'batch-resume': []
   'batch-stop': []
   'batch-retry': [id: string]
+  'batch-retry-all': []
+  'batch-clear': []
   'update:concurrency': [value: number]
   'update:pauseMs': [value: number]
   'update:maxRetry': [value: number]
@@ -103,6 +105,12 @@ const fileIcon = (name: string): string => {
 }
 
 const canRun = computed(() => props.ready && !props.running)
+
+const summaryInputCount = computed(() => {
+  if (props.batch && props.batch.total > 0) return props.batch.total
+  return props.files.filter(file => file.status === 'selected').length
+})
+
 const archivePath = (jobId: string): string =>
   `/api/v1/documents/jobs/${encodeURIComponent(jobId)}/artifacts/archive`
 
@@ -188,6 +196,21 @@ function downloadArtifact(artifact: DocumentArtifactView) {
     return
   }
   triggerDownload(artifact.downloadPath)
+}
+
+async function downloadAllArtifacts() {
+  if (hasInlineResults.value) {
+    saveInlineArchive()
+    return
+  }
+  if (!multiJobArtifacts.value && props.artifacts[0]) {
+    triggerDownload(archivePath(props.artifacts[0].jobId))
+    return
+  }
+  for (const artifact of props.artifacts) {
+    downloadArtifact(artifact)
+    await new Promise(resolve => setTimeout(resolve, 300))
+  }
 }
 
 async function copyValue(value: string) {
@@ -323,7 +346,9 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
 
     <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <div class="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
+        <!-- Contextual Dropzone: full when empty, compact when files/batch exist -->
         <div
+          v-if="!files.length && (!batch || batch.total === 0)"
           class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
           :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
           @dragover.prevent="dragging = true"
@@ -374,7 +399,59 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
           </div>
         </div>
 
-        <div v-if="files.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
+        <div
+          v-else
+          class="panel-flat flex items-center justify-between rounded-md border border-dashed border-default/70 px-4 py-2.5 text-xs transition-colors shrink-0"
+          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
+          @dragover.prevent="dragging = true"
+          @dragleave.prevent="dragging = false"
+          @drop.prevent="onDrop"
+        >
+          <input
+            ref="inputRef"
+            type="file"
+            class="hidden"
+            :accept="accept || undefined"
+            :multiple="multiple"
+            @change="onPick"
+          >
+          <input
+            ref="folderInputRef"
+            type="file"
+            class="hidden"
+            webkitdirectory
+            directory
+            @change="onPick"
+          >
+          <div class="flex items-center gap-2 min-w-0">
+            <UIcon name="i-lucide-cloud-upload" class="size-4 shrink-0 text-primary" />
+            <span class="truncate text-muted">
+              {{ t(operation?.input.mode === 'single-file' ? 'document.input.dropSingle' : 'document.input.dropMany') }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-file-plus"
+              :label="t('document.input.browse')"
+              @click="browse"
+            />
+            <UButton
+              v-if="multiple"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-folder-open"
+              :label="t('document.input.browseFolder')"
+              @click="browseFolder"
+            />
+          </div>
+        </div>
+
+        <!-- Selected files (before batch start or in non-batch mode) -->
+        <div v-if="files.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
           <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.input.selected', { count: files.length }) }}
@@ -443,7 +520,31 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
           </ul>
         </div>
 
-        <div v-if="artifacts.length" class="panel-flat rounded-md shrink-0 overflow-hidden">
+        <!-- Unified Batch Work Area (Left Column) when batch has items -->
+        <DocumentStudioBatchPanel
+          v-if="batch && batch.total > 0"
+          :items="batch.items"
+          :concurrency="batch.concurrency"
+          :pause-ms="batch.pauseMs"
+          :max-retry="batch.maxRetry"
+          :status="batch.status"
+          :concurrency-cap="batch.concurrencyCap"
+          :disabled="batch.status === 'stopping'"
+          :output-path="outputPath"
+          :artifacts="artifacts"
+          @update:concurrency="emit('update:concurrency', $event)"
+          @update:pause-ms="emit('update:pauseMs', $event)"
+          @update:max-retry="emit('update:maxRetry', $event)"
+          @retry="emit('batch-retry', $event)"
+          @retry-all="emit('batch-retry-all')"
+          @clear="emit('batch-clear')"
+          @preview-artifact="previewArtifact"
+          @download-artifact="downloadArtifact"
+          @download-all="downloadAllArtifacts"
+          @open-output-folder="openOutputFolder"
+        />
+
+        <div v-if="artifacts.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
           <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
             <p class="text-xs font-semibold uppercase tracking-wide text-muted">
               {{ t('document.result.title', { count: artifacts.length }) }}
@@ -466,6 +567,15 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
                 icon="i-lucide-folder-down"
                 :label="t('document.result.downloadAll')"
                 @click="triggerDownload(archivePath(artifacts[0].jobId))"
+              />
+              <UButton
+                v-else-if="artifacts.length > 1"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                icon="i-lucide-folder-down"
+                :label="t('document.result.downloadAll')"
+                @click="downloadAllArtifacts"
               />
               <UButton
                 v-if="outputPath"
@@ -560,7 +670,7 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
                   {{ t('document.summary.input') }}
                 </dt>
                 <dd class="text-end font-medium">
-                  {{ t('document.summary.files', { count: files.filter(file => file.status === 'selected').length }) }}
+                  {{ t('document.summary.files', { count: summaryInputCount }) }}
                 </dd>
               </div>
               <div class="flex items-start justify-between gap-3">
@@ -568,7 +678,17 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
                   {{ t('document.summary.output') }}
                 </dt>
                 <dd class="flex flex-col items-end gap-1">
-                  <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                  <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                    <UBadge
+                      v-if="artifacts.length > 0"
+                      color="primary"
+                      variant="subtle"
+                      size="xs"
+                    >
+                      {{ artifacts.length }} {{ t('document.result.title', { count: artifacts.length }) }}
+                    </UBadge>
+                    <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                  </div>
                   <UButton
                     v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
                     color="neutral"
@@ -588,7 +708,7 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
           <slot name="advanced" />
 
           <DocumentStudioBatchPanel
-            v-if="batch"
+            v-if="batch && batch.total === 0"
             :items="batch.items"
             :concurrency="batch.concurrency"
             :pause-ms="batch.pauseMs"
@@ -596,10 +716,18 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
             :status="batch.status"
             :concurrency-cap="batch.concurrencyCap"
             :disabled="batch.status === 'stopping'"
+            :output-path="outputPath"
+            :artifacts="artifacts"
             @update:concurrency="emit('update:concurrency', $event)"
             @update:pause-ms="emit('update:pauseMs', $event)"
             @update:max-retry="emit('update:maxRetry', $event)"
             @retry="emit('batch-retry', $event)"
+            @retry-all="emit('batch-retry-all')"
+            @clear="emit('batch-clear')"
+            @preview-artifact="previewArtifact"
+            @download-artifact="downloadArtifact"
+            @download-all="downloadAllArtifacts"
+            @open-output-folder="openOutputFolder"
           />
         </div>
 
@@ -662,6 +790,14 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
               :loading="batch.status === 'stopping'"
               :disabled="batch.status === 'stopping'"
               @click="emit('batch-stop')"
+            />
+            <UButton
+              v-if="!batchActive && batch.total > 0"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-trash-2"
+              :label="t('document.batch.clearList')"
+              @click="emit('batch-clear')"
             />
           </div>
 

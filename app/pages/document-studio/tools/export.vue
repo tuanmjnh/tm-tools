@@ -8,6 +8,10 @@ const formats = ref<PdfSourceExportFormat[]>(['png'])
 function runExport() {
   void page.run({ formats: formats.value })
 }
+
+watch(formats, (f) => {
+  page.batch.updateConfig({ formats: f })
+}, { deep: true })
 </script>
 
 <template>
@@ -37,6 +41,7 @@ function runExport() {
         @remove="page.selection.remove"
         @move="page.selection.move"
         @reset="page.selection.clear"
+        @reload="page.reload"
         @run="runExport"
         @deleted="page.removeArtifact"
         @batch-start="runExport"
@@ -44,6 +49,8 @@ function runExport() {
         @batch-resume="page.batch.resume"
         @batch-stop="page.batch.stop"
         @batch-retry="page.batch.retryItem"
+        @batch-retry-all="page.batch.retryAllFailed"
+        @batch-clear="page.batch.clear"
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"

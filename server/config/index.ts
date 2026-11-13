@@ -16,6 +16,8 @@ export interface AppConfig {
     deviceSecret: string
     deviceUserId: string
     deviceAppId: string
+    /** Hub base URL the credential was issued by; a credential never crosses Hubs. */
+    deviceHubOrigin: string
     deviceExpiresAt: string
     deviceScopes: string[]
   }
@@ -185,6 +187,15 @@ export function loadConfig(): AppConfig {
       get accessTokenPublicKeys() {
         return readEnv('AUTH_JWT_PUBLIC_KEYS')
       },
+      get accessTokenJwksUrl() {
+        // Explicit override wins; otherwise derive the hub's own route from the
+        // hub URL this build points at. Deriving keeps a switch between a local
+        // and a hosted hub working without also editing the JWKS URL.
+        const explicit = readEnv('AUTH_JWT_JWKS_URL').trim()
+        if (explicit) return explicit
+        const hubUrl = readEnv('NUXT_PUBLIC_HUB_URL').trim().replace(/\/+$/, '')
+        return hubUrl ? `${hubUrl}/api/v1/auth/jwks` : ''
+      },
       get refreshTokenSecret() {
         return readEnv('AUTH_REFRESH_TOKEN_SECRET')
       },
@@ -210,6 +221,9 @@ export function loadConfig(): AppConfig {
       },
       get deviceAppId() {
         return readEnv('HUB_DEVICE_APP_ID')
+      },
+      get deviceHubOrigin() {
+        return readEnv('HUB_DEVICE_HUB_ORIGIN')
       },
       get deviceExpiresAt() {
         return readEnv('HUB_DEVICE_EXPIRES_AT')

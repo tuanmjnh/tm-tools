@@ -42,6 +42,8 @@
     "noAppAccess": "You do not have access to this application",
     "invalidCredentials": "Incorrect email/username or password",
     "invalidToken": "Invalid or expired session",
+    "hubSigningKeyUnavailable": "TM Hub is not publishing a token signing key, so no session can be verified. Set AUTH_JWT_PRIVATE_KEY on the Hub production deployment, redeploy, then sign in again.",
+    "authNotConfigured": "TM Hub connection is not configured on this device. Set the Hub URL, then sign in.",
     "tokenMissing": "You are not signed in",
     "emailExists": "Email is already registered",
     "usernameExists": "Username is already taken",
@@ -99,6 +101,7 @@
     "aiFailed": "AI request failed",
     "aiRelayNotConfigured": "AI relay is not configured. Enroll this device under Settings > Hub connection, or set the app secret on a server deployment.",
     "aiRelayUnauthorized": "TM Hub rejected this device's credential. Re-enroll the device under Settings > Hub connection, then retry.",
+    "deviceCredentialWrongHub": "This device's credential was issued by a different Hub, so it is not sent here. Sign in against the Hub URL this build points at to enroll it again; the old credential stays stored and is never sent to the new Hub.",
     "chatNoPermission": "You do not have permission to use the chat",
     "notRoot": "Only root can perform this action",
     "required": "This field cannot be left blank",
@@ -123,7 +126,8 @@
     "userNotInApp": "User does not belong to this application",
     "alreadyExists": "Resource already exists",
     "cannotDeleteSystem": "Cannot delete system resources",
-    "inUse": "Resource is currently in use"
+    "inUse": "Resource is currently in use",
+    "cannotRevokeCurrentDevice": "You cannot revoke the device you are signed in on. Sign it out instead."
   },
   "chat": {
     "title": "AI Chat",
@@ -1086,28 +1090,18 @@
       "appSecret": "App Secret",
       "appSecretDesc": "Server-only secret for the Hub AI relay and Hub Storage grants. Not needed once this device is enrolled; leave empty to keep those features off.",
       "deviceTitle": "Device enrollment",
-      "deviceDesc": "Register this installation with TM Hub. A root administrator approves the short code in the browser, then Hub issues a credential only this device can use.",
+      "deviceDesc": "Signing in on this device registers it with TM Hub automatically. When the app policy allows it, Hub issues a credential that only this device can use for AI Relay and Hub Storage.",
+      "deviceAutoHint": "The credential is renewed by your next full sign-in. Revoking the device in Hub removes it immediately.",
       "deviceId": "Device ID",
       "deviceScopes": "Scopes",
       "deviceExpires": "Expires",
-      "deviceRootHint": "Changing the credential requires a root session.",
-      "deviceReenroll": "Re-enroll",
       "deviceForget": "Forget device",
-      "deviceNotEnrolled": "Not enrolled. Hub features need either a device credential or an App Secret.",
-      "deviceEnroll": "Enroll this device",
-      "deviceUserCode": "Approval code",
-      "deviceWaiting": "Waiting for approval in the browser…",
-      "deviceOpenApproval": "Open approval page",
-      "deviceAuthorizing": "Requesting an approval code…",
-      "deviceEnrolled": "Device enrolled",
-      "deviceEnrollFailed": "Could not enroll this device",
-      "deviceNotRoot": "Only a root administrator can change this device's credential.",
-      "deviceNotConfigured": "Set the Hub URL and App ID first.",
-      "deviceUnreachable": "TM Hub did not answer. Check the Hub URL and try again.",
-      "deviceRejected": "TM Hub rejected the enrollment request.",
-      "deviceDenied": "The approval was denied in TM Hub.",
-      "deviceExpired": "The approval code expired. Try again.",
-      "deviceBusy": "An enrollment is already in progress.",
+      "deviceNotEnrolled": "Not enrolled yet. Sign in normally to register this device; server deployments can still use an App Secret.",
+      "credentialWrongHub": "Enrolled on a different Hub",
+      "credentialWrongHubDesc": "This credential was issued by another Hub, so it is never sent here. The original is kept; sign in against this Hub to enroll this device.",
+      "reEnroll": "Sign in to enroll",
+      "credentialUnbound": "Credential from an older build",
+      "credentialUnboundDesc": "This credential predates Hub scoping, so it cannot be proven to belong to the current Hub and is not sent. Signing in again binds it to this Hub; nothing is deleted.",
       "deviceForgotten": "Device credential removed from this device",
       "deviceForgetFailed": "Could not remove the device credential",
       "deviceForgetTitle": "Forget this device?",
@@ -1346,7 +1340,8 @@
     "colorSuccess": "Success",
     "colorWarning": "Warning",
     "colorError": "Error",
-    "colorNeutral": "Neutral"
+    "colorNeutral": "Neutral",
+    "appearanceDesc": "Theme, language and accent colours for this app."
   },
   "aiProviders": {
     "title": "AI Providers & Models",
@@ -1665,7 +1660,11 @@
     "more": "More",
     "deleted": "Deleted",
     "showing": "Showing",
-    "open": "Open"
+    "open": "Open",
+    "list": "List",
+    "grid": "Grid",
+    "selectAll": "Select all",
+    "selectRow": "Select row"
   },
   "media": {
     "title": "Media Management",
@@ -2582,6 +2581,28 @@
       "description": "Rich text editor with Tiptap & TinyMCE"
     }
   },
+  "devices": {
+    "myTitle": "My devices",
+    "myDescription": "Every device signed in to this account on this app. Rename or revoke one here; revoking signs it out immediately.",
+    "myEmpty": "No devices registered yet",
+    "current": "This device",
+    "name": "Device name",
+    "rename": "Rename",
+    "renameTitle": "Rename device",
+    "renamedToast": "Device renamed",
+    "revokeTitle": "Revoke this device?",
+    "revokeDesc": "The device loses its sessions and any stored service credential. If it is this device, you will be signed out.",
+    "revokedToast": "Device revoked",
+    "lastSeen": "Last seen",
+    "status": {
+      "active": "Active",
+      "pending": "Pending approval",
+      "blocked": "Blocked",
+      "revoked": "Revoked"
+    },
+    "revoke": "Revoke device",
+    "currentCannotRevoke": "This is the device you are using. Sign out instead of revoking it."
+  },
   "profile": {
     "title": "My Profile",
     "description": "View and update your personal account information.",
@@ -2629,7 +2650,8 @@
     "recoveryDesc": "Save these recovery codes somewhere safe — each code can be used once if you lose access to your authenticator app.",
     "recoveryCopy": "Copy codes",
     "recoveryCopied": "Recovery codes copied",
-    "recoveryWarning": "These codes will not be shown again."
+    "recoveryWarning": "These codes will not be shown again.",
+    "securityDesc": "Password, passkeys, two-factor authentication and account recovery."
   },
   "logs": {
     "title": "Audit Logs",
@@ -3260,6 +3282,14 @@
       "resume": "Resume",
       "stop": "Stop",
       "retry": "Retry",
+      "retryAll": "Retry all failed",
+      "clearList": "Clear list",
+      "filterAll": "All",
+      "filterRunning": "Running",
+      "filterDone": "Done",
+      "filterFailed": "Failed",
+      "search": "Search files...",
+      "settings": "Batch settings",
       "overall": "{done}/{total} files",
       "empty": "No files in the batch yet.",
       "extractLocked": "AI extraction runs one file at a time.",

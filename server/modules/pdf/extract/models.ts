@@ -1,5 +1,5 @@
 import { config } from '#server/config'
-import { fetchRelayCatalog } from '../../../utils/aiRelay'
+import { fetchAICatalog } from '../../../utils/aiGateway'
 import { bareModelId, isTextModel } from '../../../utils/relayModels'
 
 export interface PdfExtractModel {
@@ -31,7 +31,7 @@ let cache: { at: number, models: PdfExtractModel[] } | null = null
 export async function listExtractModels(force = false): Promise<PdfExtractModel[]> {
   if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.models
 
-  const connections = await fetchRelayCatalog()
+  const connections = await fetchAICatalog()
   const preferred = config.pdf.extract.model
 
   const models: PdfExtractModel[] = connections

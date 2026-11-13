@@ -41,14 +41,14 @@ function runConvert() {
         @batch-resume="page.batch.resume"
         @batch-stop="page.batch.stop"
         @batch-retry="page.batch.retryItem"
+        @batch-retry-all="page.batch.retryAllFailed"
+        @batch-clear="page.batch.clear"
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"
       >
         <template #config>
-          <p class="rounded-md bg-muted/20 p-2 text-xs text-muted">
-            {{ $t('document.convert.configHint') }}
-          </p>
+          <DocumentStudioOperationsConfigsConvertConfig />
         </template>
       </DocumentStudioOperationPageShell>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
 import { formatTimeAgo } from '@vueuse/core'
 import { getErrorMessage } from '~/shared/utils/errors'
 import type { GridColumn } from '~/components/gridList/Index.vue'

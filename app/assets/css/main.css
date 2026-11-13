@@ -1,5 +1,13 @@
 @import "tailwindcss" theme(static);
 @import "@nuxt/ui";
+/* tm-ui ships precompiled components, so its class strings live only in the
+   package's JS. Tailwind v4 does not scan node_modules, so name the package
+   root. It must be the package root, not `dist/`: the published tarball is the
+   contents of dist, so `@source ".../tm-ui/dist"` matches nothing and silently
+   drops every package-only utility. */
+@source "../../../node_modules/@tuanmjnh/tm-ui";
+/* Scoped component styles and @he-tree/vue layout rules ship as one file. */
+@import "@tuanmjnh/tm-ui/style.css";
 @import "./glass.css";
 @import "./decor.css";
 @import "./self.css";

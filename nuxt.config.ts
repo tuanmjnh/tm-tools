@@ -142,7 +142,19 @@ export default defineNuxtConfig({
       include: [
         '../types/**/*.ts',
         '../types/**/*.d.ts'
-      ]
+      ],
+      // tm-ui is linked from a sibling repo and brings its own `vue` install.
+      // Its published types re-import `vue`, and TypeScript then loads the
+      // package's copy next to this app's — two module identities, so Nuxt's
+      // own augmentations ($t, useI18n, and every auto-import global) stop
+      // applying and every component reports "Property '$t' does not exist".
+      // Pinning the specifier to this app's install keeps one identity.
+      compilerOptions: {
+        paths: {
+          vue: ['../node_modules/vue'],
+          'vue/*': ['../node_modules/vue/*']
+        }
+      }
     }
   },
 

@@ -5,7 +5,7 @@ import type {
   PdfExtractVariant
 } from '#shared/types/pdf'
 import { config } from '#server/config'
-import { relayChat } from '../../../utils/aiRelay'
+import { chatWithConnection } from '../../../utils/aiGateway'
 import { buildPagePrompt, buildSystemPrompt, buildTextChunkPrompt } from './prompt'
 import type { PdfExtractTarget } from './models'
 import type { PdfExtractInstructions } from './presets'
@@ -145,7 +145,7 @@ async function callPage(
 
   const image = await renderPage(buffer)
 
-  const result = await relayChat({
+  const result = await chatWithConnection({
     connectionId: target.connectionId,
     model: target.model,
     // The relay is text-only, so the schema and the operator's guidance all
@@ -176,7 +176,7 @@ async function callTextChunk(
 ): Promise<PdfExtractPage> {
   const { temperature } = config.pdf.extract
 
-  const result = await relayChat({
+  const result = await chatWithConnection({
     connectionId: target.connectionId,
     model: target.model,
     systemPrompt: buildSystemPrompt(instructions),

@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { config } from '#server/config'
-import { hubBaseUrl, resolveHubCaller } from './hubIdentity'
+import { hubBaseUrl, resolveHubCaller, resolveHubCallerDetailed } from './hubIdentity'
 
 /**
  * Server-only client for the TM Hub Storage Gateway (`/api/v1/apps/:id/storage`).
@@ -22,6 +22,7 @@ import { hubBaseUrl, resolveHubCaller } from './hubIdentity'
 
 export type HubStorageErrorCode
   = | 'integrations.hubStorageNotConfigured'
+    | 'integrations.hubStorageWrongHub'
     | 'integrations.hubStorageUnauthorized'
     | 'integrations.hubStorageNotFound'
     | 'integrations.hubStorageRejected'
@@ -188,7 +189,14 @@ export function hubTarget(event: H3Event): HubTarget {
   const requestId = randomUUID()
 
   if (!caller) {
-    throw new HubStorageError('integrations.hubStorageNotConfigured', 503, { requestId })
+    // A credential from another Hub would otherwise be reported as "nothing
+    // configured" and send the user looking for a setting that already exists.
+    const { issue } = resolveHubCallerDetailed(event)
+    throw new HubStorageError(
+      issue ? 'integrations.hubStorageWrongHub' : 'integrations.hubStorageNotConfigured',
+      issue ? 409 : 503,
+      { requestId }
+    )
   }
 
   const headers: Record<string, string> = {

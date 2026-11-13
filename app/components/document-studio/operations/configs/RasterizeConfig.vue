@@ -58,4 +58,3 @@ function toggleSubfolder() {
     </p>
   </div>
 </template>
-

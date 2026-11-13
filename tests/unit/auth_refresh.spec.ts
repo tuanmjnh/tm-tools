@@ -96,6 +96,13 @@ function harness(initialCookies: Record<string, string> = {}) {
     computed,
     readonly,
     Headers,
+    // The transpiled composable requires its value imports. The browser device
+    // identity is a pure helper with its own spec, so a stub keeps this harness
+    // focused on refresh behavior.
+    require: (id: string) => {
+      assert.match(id, /deviceIdentity$/, `unexpected runtime require ${id}`)
+      return { browserDeviceInfo: () => ({ deviceId: 'test-device', identityKind: 'browser-profile', deviceType: 'web', platform: 'web' }) }
+    },
     getCurrentInstance: () => null,
     useState: (name: string, init: () => unknown) => {
       if (!states.has(name)) states.set(name, ref(init()))

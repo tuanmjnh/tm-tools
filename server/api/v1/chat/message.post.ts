@@ -1,6 +1,7 @@
 import type { ChatAttachment } from '#shared/types/chat'
 import { CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TEXT_LIMIT } from '#shared/utils/chat'
-import { relayChat, type RelayMessage } from '../../../utils/aiRelay'
+import { chatWithConnection, type GatewayChatBody } from '../../../utils/aiGateway'
+import type { RelayMessage } from '../../../utils/aiRelay'
 import { requireChatUser, requireChatWrite } from '../../../utils/chatAuth'
 import { deriveTitle, getChatStore, CHAT_HISTORY_WINDOW } from '../../../modules/chat/store'
 
@@ -120,14 +121,14 @@ export default defineEventHandler(async (event) => {
       }))
     relayMessages.push({ role: 'user', content: buildRelayContent(message, attachments) })
 
-    const result = await relayChat({
+    const result = await chatWithConnection({
       connectionId,
       model,
       messages: relayMessages,
       systemPrompt,
       temperature: 0.7,
       maxTokens: 2048
-    })
+    } satisfies GatewayChatBody)
 
     const userMessage = store.appendMessage({
       conversationId: conversation.id,

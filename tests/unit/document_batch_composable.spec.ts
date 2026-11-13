@@ -25,6 +25,9 @@ describe('batch composable', () => {
   it('finalizes to partial when any item failed', () => {
     assert.match(src, /'partial'/)
   })
+  it('exposes clear to reset batch queue and state', () => {
+    assert.match(src, /function clear/)
+  })
 })
 
 describe('funnel branch', () => {

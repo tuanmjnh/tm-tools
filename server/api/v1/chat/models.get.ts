@@ -1,4 +1,4 @@
-import { fetchRelayCatalog } from '../../../utils/aiRelay'
+import { fetchAICatalog } from '../../../utils/aiGateway'
 import { requireChatUser } from '../../../utils/chatAuth'
 import { chatModelsFromCatalog } from '../../../utils/relayModels'
 
@@ -12,6 +12,6 @@ import { chatModelsFromCatalog } from '../../../utils/relayModels'
 export default defineEventHandler(async (event) => {
   requireChatUser(event)
 
-  const connections = await fetchRelayCatalog(event)
+  const connections = await fetchAICatalog(event)
   return { success: true, data: chatModelsFromCatalog(connections) }
 })

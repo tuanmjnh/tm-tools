@@ -8,7 +8,6 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron')
 const PUSH_CHANNELS = [
   'eventbus:event',
   'app-updater:status-changed',
-  'device:enroll-progress',
   'tools:profiles:statusChanged',
   'tools:youtube:managerInitialized', 'tools:youtube:beforeRunTask', 'tools:youtube:progressTask', 'tools:youtube:allTasksDone',
   'tools:youtube:stoppedTask', 'tools:youtube:stoppedTasks', 'tools:youtube:errorTask', 'tools:youtube:taskRetry', 'tools:youtube:taskTimeout', 'tools:youtube:updateProgress',
@@ -103,17 +102,23 @@ const fileManager = exposeNamespace('tools:file-manager', {
   on: []
 })
 
-// P4 device enrollment. The issued credential stays in Main: `enroll` answers
-// identity metadata only, and nothing here can read HUB_DEVICE_SECRET.
+// Device credential metadata + local forget. The credential stays in Main:
+// nothing here can read HUB_DEVICE_SECRET, enrollment happens through the
+// normal sign-in broker below, and forgetting only removes the local copy.
 const device = {
   status: () => ipcRenderer.invoke('device:status'),
-  enroll: accessToken => ipcRenderer.invoke('device:enroll', { accessToken }),
-  forget: accessToken => ipcRenderer.invoke('device:forget', { accessToken }),
-  onProgress: (callback) => {
-    const listener = (_event, payload) => callback(payload)
-    ipcRenderer.on('device:enroll-progress', listener)
-    return () => ipcRenderer.removeListener('device:enroll-progress', listener)
-  }
+  forget: () => ipcRenderer.invoke('device:forget')
+}
+
+// v2 device-auth boundary. Main owns the machine id and the device credential;
+// these calls return a session or a TOTP challenge, never a secret.
+const deviceAuth = {
+  info: () => ipcRenderer.invoke('auth:device-info'),
+  login: credentials => ipcRenderer.invoke('auth:login', credentials),
+  verifyTotp: input => ipcRenderer.invoke('auth:verify-totp', input),
+  passkeyStart: () => ipcRenderer.invoke('auth:passkey-start'),
+  passkeyFinish: credential => ipcRenderer.invoke('auth:passkey-finish', credential),
+  register: input => ipcRenderer.invoke('auth:register', input)
 }
 
 const appUpdater = {
@@ -169,6 +174,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fileManager,
   appUpdater,
   device,
+  deviceAuth,
   system: {
     getInfo: () => ipcRenderer.invoke('system:getInfo'),
     openDirectory: input => ipcRenderer.invoke('system:openDirectory', input),

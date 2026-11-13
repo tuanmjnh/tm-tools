@@ -119,6 +119,12 @@ export interface AuthConfig {
   accessTokenSecret: string
   /** JSON array of Hub public JWKs for RS256 verification. Public, never secret. */
   accessTokenPublicKeys: string
+  /**
+   * Hub JWKS endpoint. Public by definition and the only material a packaged
+   * client needs: keys rotate on the Hub without shipping a new installer, and
+   * no symmetric secret ever travels to the desktop.
+   */
+  accessTokenJwksUrl: string
   refreshTokenSecret: string
   accessTokenExpiry: number
   refreshTokenExpiry: number

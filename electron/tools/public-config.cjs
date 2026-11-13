@@ -15,7 +15,10 @@ const { readConfigFile } = require('./config-file.cjs')
 const PUBLIC_CONFIG_KEYS = [
   'NUXT_PUBLIC_HUB_URL',
   'NUXT_PUBLIC_HUB_APP_ID',
-  'AUTH_JWT_PUBLIC_KEYS'
+  'AUTH_JWT_PUBLIC_KEYS',
+  // The Hub's public key endpoint. Not a secret, and the only verification
+  // material a packaged client needs: keys rotate on the Hub without a rebuild.
+  'AUTH_JWT_JWKS_URL'
 ]
 const FILE_NAME = 'public-config.json'
 

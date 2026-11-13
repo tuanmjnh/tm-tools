@@ -42,6 +42,8 @@
     "noAppAccess": "Tài khoản không có quyền truy cập ứng dụng này",
     "invalidCredentials": "Email/username hoặc mật khẩu không đúng",
     "invalidToken": "Phiên đăng nhập không hợp lệ hoặc đã hết hạn",
+    "hubSigningKeyUnavailable": "TM Hub chưa công bố khoá ký token nên không thể xác minh phiên nào. Hãy đặt AUTH_JWT_PRIVATE_KEY trên bản Production của Hub, deploy lại rồi đăng nhập.",
+    "authNotConfigured": "Thiết bị này chưa cấu hình kết nối TM Hub. Hãy đặt Hub URL rồi đăng nhập.",
     "tokenMissing": "Bạn chưa đăng nhập",
     "emailExists": "Email đã được đăng ký",
     "usernameExists": "Username đã được sử dụng",
@@ -99,6 +101,7 @@
     "aiFailed": "Yêu cầu AI thất bại",
     "aiRelayNotConfigured": "AI relay chưa được cấu hình. Hãy đăng ký thiết bị này trong Cài đặt > Kết nối Hub, hoặc đặt app secret trên bản triển khai máy chủ.",
     "aiRelayUnauthorized": "TM Hub từ chối thông tin xác thực của thiết bị này. Hãy đăng ký lại thiết bị trong Cài đặt > Kết nối Hub rồi thử lại.",
+    "deviceCredentialWrongHub": "Thông tin xác thực của thiết bị này do một Hub khác cấp nên không được gửi tới Hub hiện tại. Hãy đăng nhập vào Hub URL mà bản build đang trỏ tới để đăng ký lại; thông tin cũ vẫn được giữ và không bao giờ gửi sang Hub mới.",
     "chatNoPermission": "Bạn không có quyền sử dụng chat",
     "notRoot": "Chỉ root mới được thực hiện thao tác này",
     "required": "Không được để trống trường này",
@@ -123,7 +126,8 @@
     "userNotInApp": "Người dùng không thuộc ứng dụng này",
     "alreadyExists": "Tài nguyên đã tồn tại",
     "cannotDeleteSystem": "Không thể xóa tài nguyên hệ thống",
-    "inUse": "Tài nguyên đang được sử dụng"
+    "inUse": "Tài nguyên đang được sử dụng",
+    "cannotRevokeCurrentDevice": "Không thể thu hồi thiết bị bạn đang đăng nhập. Hãy đăng xuất thiết bị này thay vì thu hồi."
   },
   "chat": {
     "title": "Chat AI",
@@ -1086,28 +1090,18 @@
       "appSecret": "App Secret",
       "appSecretDesc": "Secret chỉ dùng ở máy chủ cho Hub AI relay và Hub Storage. Không cần khi thiết bị đã đăng ký; để trống nếu không dùng các tính năng đó.",
       "deviceTitle": "Đăng ký thiết bị",
-      "deviceDesc": "Đăng ký bản cài này với TM Hub. Quản trị root duyệt mã ngắn trên trình duyệt, sau đó Hub cấp thông tin xác thực chỉ thiết bị này dùng được.",
+      "deviceDesc": "Đăng nhập trên thiết bị này sẽ tự động đăng ký với TM Hub. Khi chính sách ứng dụng cho phép, Hub cấp một thông tin xác thực chỉ thiết bị này dùng được cho AI Relay và Hub Storage.",
+      "deviceAutoHint": "Thông tin xác thực được cấp mới ở lần đăng nhập đầy đủ tiếp theo. Thu hồi thiết bị trên Hub sẽ vô hiệu hoá ngay.",
       "deviceId": "Device ID",
       "deviceScopes": "Phạm vi",
       "deviceExpires": "Hết hạn",
-      "deviceRootHint": "Đổi thông tin xác thực cần phiên root.",
-      "deviceReenroll": "Đăng ký lại",
       "deviceForget": "Quên thiết bị",
-      "deviceNotEnrolled": "Chưa đăng ký. Tính năng Hub cần thông tin xác thực thiết bị hoặc App Secret.",
-      "deviceEnroll": "Đăng ký thiết bị này",
-      "deviceUserCode": "Mã duyệt",
-      "deviceWaiting": "Đang chờ duyệt trên trình duyệt…",
-      "deviceOpenApproval": "Mở trang duyệt",
-      "deviceAuthorizing": "Đang xin mã duyệt…",
-      "deviceEnrolled": "Đã đăng ký thiết bị",
-      "deviceEnrollFailed": "Không đăng ký được thiết bị này",
-      "deviceNotRoot": "Chỉ quản trị root mới được đổi thông tin xác thực của thiết bị này.",
-      "deviceNotConfigured": "Hãy đặt Hub URL và App ID trước.",
-      "deviceUnreachable": "TM Hub không trả lời. Kiểm tra Hub URL rồi thử lại.",
-      "deviceRejected": "TM Hub từ chối yêu cầu đăng ký.",
-      "deviceDenied": "Yêu cầu đã bị từ chối trên TM Hub.",
-      "deviceExpired": "Mã duyệt đã hết hạn. Hãy thử lại.",
-      "deviceBusy": "Đang có một lần đăng ký khác chạy.",
+      "deviceNotEnrolled": "Chưa được đăng ký. Hãy đăng nhập bình thường để đăng ký thiết bị; máy chủ triển khai vẫn có thể dùng App Secret.",
+      "credentialWrongHub": "Đã đăng ký ở một Hub khác",
+      "credentialWrongHubDesc": "Thông tin xác thực này do Hub khác cấp nên không bao giờ được gửi tới đây. Bản gốc vẫn được giữ; hãy đăng nhập vào Hub này để đăng ký thiết bị.",
+      "reEnroll": "Đăng nhập để đăng ký",
+      "credentialUnbound": "Thông tin xác thực từ bản cũ",
+      "credentialUnboundDesc": "Thông tin xác thực này có từ trước khi Hub được phân phạm vi, nên không thể chứng minh thuộc Hub hiện tại và sẽ không được gửi. Đăng nhập lại để gắn nó với Hub này; không có gì bị xoá.",
       "deviceForgotten": "Đã xoá thông tin xác thực thiết bị khỏi máy này",
       "deviceForgetFailed": "Không xoá được thông tin xác thực thiết bị",
       "deviceForgetTitle": "Quên thiết bị này?",
@@ -1346,7 +1340,8 @@
     "colorSuccess": "Thành công",
     "colorWarning": "Cảnh báo",
     "colorError": "Lỗi",
-    "colorNeutral": "Trung tính"
+    "colorNeutral": "Trung tính",
+    "appearanceDesc": "Giao diện, ngôn ngữ và màu nhấn cho ứng dụng này."
   },
   "aiProviders": {
     "title": "Nhà cung cấp & Mô hình AI",
@@ -1665,7 +1660,11 @@
     "more": "Thêm",
     "deleted": "Đã xóa",
     "showing": "Hiển thị",
-    "open": "Mở"
+    "open": "Mở",
+    "list": "Danh sách",
+    "grid": "Lưới",
+    "selectAll": "Chọn tất cả",
+    "selectRow": "Chọn dòng"
   },
   "media": {
     "title": "Quản lý media",
@@ -2582,6 +2581,28 @@
       "description": "Trình soạn thảo văn bản phong phú với Tiptap & TinyMCE"
     }
   },
+  "devices": {
+    "myTitle": "Thiết bị của tôi",
+    "myDescription": "Mọi thiết bị đã đăng nhập vào tài khoản này trên ứng dụng. Đổi tên hoặc thu hồi tại đây; thu hồi sẽ đăng xuất thiết bị ngay lập tức.",
+    "myEmpty": "Chưa có thiết bị nào được đăng ký",
+    "current": "Thiết bị này",
+    "name": "Tên thiết bị",
+    "rename": "Đổi tên",
+    "renameTitle": "Đổi tên thiết bị",
+    "renamedToast": "Đã đổi tên thiết bị",
+    "revokeTitle": "Thu hồi thiết bị này?",
+    "revokeDesc": "Thiết bị mất phiên đăng nhập và mọi thông tin xác thực dịch vụ đã lưu. Nếu đây là thiết bị hiện tại, bạn sẽ bị đăng xuất.",
+    "revokedToast": "Đã thu hồi thiết bị",
+    "lastSeen": "Lần cuối",
+    "status": {
+      "active": "Hoạt động",
+      "pending": "Chờ duyệt",
+      "blocked": "Đã chặn",
+      "revoked": "Đã thu hồi"
+    },
+    "revoke": "Thu hồi thiết bị",
+    "currentCannotRevoke": "Đây là thiết bị bạn đang dùng. Hãy đăng xuất thay vì thu hồi."
+  },
   "profile": {
     "title": "Hồ sơ của tôi",
     "description": "Xem và cập nhật thông tin tài khoản cá nhân của bạn.",
@@ -2629,7 +2650,8 @@
     "recoveryDesc": "Lưu các mã khôi phục này ở nơi an toàn — mỗi mã chỉ dùng được một lần nếu bạn mất quyền truy cập ứng dụng xác thực.",
     "recoveryCopy": "Sao chép mã",
     "recoveryCopied": "Đã sao chép mã khôi phục",
-    "recoveryWarning": "Các mã này sẽ không hiển thị lại."
+    "recoveryWarning": "Các mã này sẽ không hiển thị lại.",
+    "securityDesc": "Mật khẩu, passkey, xác thực hai lớp và khôi phục tài khoản."
   },
   "logs": {
     "title": "Nhật ký kiểm toán",
@@ -3260,6 +3282,14 @@
       "resume": "Tiếp tục",
       "stop": "Dừng",
       "retry": "Thử lại",
+      "retryAll": "Thử lại tất cả lỗi",
+      "clearList": "Xóa danh sách",
+      "filterAll": "Tất cả",
+      "filterRunning": "Đang chạy",
+      "filterDone": "Xong",
+      "filterFailed": "Lỗi",
+      "search": "Tìm theo tên file...",
+      "settings": "Cài đặt hàng loạt",
       "overall": "{done}/{total} file",
       "empty": "Chưa có file trong batch.",
       "extractLocked": "AI extraction chạy từng file một.",
