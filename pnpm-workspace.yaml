@@ -15,7 +15,7 @@ minimumReleaseAgeExclude:
   - tm-hub-client@1.0.1 || 1.0.2 || 1.0.3 || 1.0.4 || 1.0.6 || 1.0.7 || 1.0.9 || 1.1.0 || 1.2.0
   - electron@44.9.0 || 44.9.1
   - '@nuxt/image@2.2.0'
-  - '@tuanmjnh/tm-ai-client@0.1.0 || 0.2.0'
+  - '@tuanmjnh/tm-ai-client@0.1.0 || 0.2.0 || 0.2.1'
 
 overrides:
   source-map: 0.6.1
