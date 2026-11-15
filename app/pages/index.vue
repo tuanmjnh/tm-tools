@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BentoCard, BentoGrid } from '@tuanmjnh/tm-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useHubAi } from '~/composables/useHubAi'
 import type { HubAiProviderItem } from '~/composables/useHubAi'
@@ -102,9 +103,9 @@ const moreActions = computed(() => [
         <div class="tm-iso-grid" />
       </div>
 
-      <BaseBentoGrid>
+      <BentoGrid>
         <!-- KPI tiles -->
-        <BaseBentoCard :span="3" :span-sm="3">
+        <BentoCard :span="3" :span-sm="3">
           <div class="flex h-full items-start justify-between gap-3 p-3.5">
             <div class="flex min-w-0 flex-col">
               <p class="stat-label">{{ t('dashboard.stats.profiles') }}</p>
@@ -117,9 +118,9 @@ const moreActions = computed(() => [
               <UIcon name="i-lucide-id-card" class="size-4" />
             </span>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
-        <BaseBentoCard :span="3" :span-sm="3">
+        <BentoCard :span="3" :span-sm="3">
           <div class="flex h-full items-start justify-between gap-3 p-3.5">
             <div class="flex min-w-0 flex-col">
               <p class="stat-label">{{ t('dashboard.stats.proxies') }}</p>
@@ -132,9 +133,9 @@ const moreActions = computed(() => [
               <UIcon name="i-lucide-globe" class="size-4" />
             </span>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
-        <BaseBentoCard :span="3" :span-sm="3">
+        <BentoCard :span="3" :span-sm="3">
           <div class="flex h-full items-start justify-between gap-3 p-3.5">
             <div class="flex min-w-0 flex-col">
               <p class="stat-label">{{ t('dashboard.stats.aiConnections') }}</p>
@@ -147,9 +148,9 @@ const moreActions = computed(() => [
               <UIcon name="i-lucide-brain" class="size-4" />
             </span>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
-        <BaseBentoCard :span="3" :span-sm="3">
+        <BentoCard :span="3" :span-sm="3">
           <div class="flex h-full items-start justify-between gap-3 p-3.5">
             <div class="flex min-w-0 flex-col">
               <p class="stat-label">{{ t('dashboard.stats.media') }}</p>
@@ -162,10 +163,10 @@ const moreActions = computed(() => [
               <UIcon name="i-lucide-images" class="size-4" />
             </span>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
         <!-- Quick actions -->
-        <BaseBentoCard :span="12" :span-sm="6" :title="t('dashboard.quickActions')" icon="i-lucide-sparkles">
+        <BentoCard :span="12" :span-sm="6" :title="t('dashboard.quickActions')" icon="i-lucide-sparkles">
           <div class="flex flex-wrap items-center gap-2 pb-0.5">
             <UButton icon="i-lucide-arrow-down-to-line" size="xs" color="primary" variant="soft" to="/media/download">
               {{ t('dashboard.actions.openDownloader') }}
@@ -186,10 +187,10 @@ const moreActions = computed(() => [
               {{ t('nav.utilities') }}
             </UButton>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
         <!-- Core modules -->
-        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.toolsTitle')" icon="i-lucide-film">
+        <BentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.toolsTitle')" icon="i-lucide-film">
           <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.toolsDesc') }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" class="tm-tile text-start" @click="router.push('/media/download')">
@@ -215,9 +216,9 @@ const moreActions = computed(() => [
               {{ t('dashboard.actions.videoTools') }}
             </UButton>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
-        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.profilesTitle')" icon="i-lucide-fingerprint">
+        <BentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.profilesTitle')" icon="i-lucide-fingerprint">
           <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.profilesDesc') }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" class="tm-tile text-start" @click="router.push('/browser-hub')">
@@ -243,9 +244,9 @@ const moreActions = computed(() => [
               {{ t('dashboard.actions.manageProxies') }}
             </UButton>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
-        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.utilitiesTitle')" icon="i-lucide-sparkles">
+        <BentoCard :span="4" :span-sm="6" :title="t('dashboard.modules.utilitiesTitle')" icon="i-lucide-sparkles">
           <p class="mb-3 text-[11px] leading-relaxed text-muted">{{ t('dashboard.modules.utilitiesDesc') }}</p>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" class="tm-tile text-start" @click="router.push('/system/ai-keys')">
@@ -288,10 +289,10 @@ const moreActions = computed(() => [
               {{ t('nav.utilities') }}
             </UButton>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
         <!-- Document Studio -->
-        <BaseBentoCard :span="8" :span-sm="6" :title="t('document.home.title')" icon="i-lucide-file-text">
+        <BentoCard :span="8" :span-sm="6" :title="t('document.home.title')" icon="i-lucide-file-text">
           <template #action>
             <UButton to="/document-studio" size="xs" color="neutral" variant="ghost" trailing-icon="i-lucide-arrow-right">
               {{ t('common.open') }}
@@ -359,10 +360,10 @@ const moreActions = computed(() => [
               {{ t('nav.document_activity') }}
             </UButton>
           </div>
-        </BaseBentoCard>
+        </BentoCard>
 
         <!-- System status -->
-        <BaseBentoCard :span="4" :span-sm="6" :title="t('dashboard.systemStatus')" icon="i-lucide-activity">
+        <BentoCard :span="4" :span-sm="6" :title="t('dashboard.systemStatus')" icon="i-lucide-activity">
           <ul class="divide-y divide-default/60">
             <li class="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
               <UIcon name="i-lucide-cpu" class="mt-0.5 size-4 shrink-0 text-emerald-500" />
@@ -393,8 +394,8 @@ const moreActions = computed(() => [
               </div>
             </li>
           </ul>
-        </BaseBentoCard>
-      </BaseBentoGrid>
+        </BentoCard>
+      </BentoGrid>
     </div>
   </BasePage>
 </template>

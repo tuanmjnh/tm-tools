@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppBackdrop } from '@tuanmjnh/tm-ui'
 import { z } from 'zod'
 import type { LoginRequest, TotpChallenge } from '#shared/types/auth'
 import { getErrorMessage } from '~/shared/utils/errors'
@@ -118,7 +119,7 @@ useHead({ title: computed(() => t('auth.signIn')) })
 <template>
   <div class="relative flex min-h-screen flex-col overflow-hidden px-4 py-8">
     <!-- Aurora mesh + glowing orbs + isometric grid showcase -->
-    <BaseAppBackdrop grid />
+    <AppBackdrop grid />
 
     <div class="absolute top-4 right-4 z-10 flex items-center gap-2">
       <UTooltip :text="t('settings.title')">

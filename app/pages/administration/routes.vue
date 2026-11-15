@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
+import { StatusBadge as AdminStatusBadge, HeTreeMenu, EmptyState } from '@tuanmjnh/tm-ui'
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
 import type { Role, SystemRoute, RouteTreeNode } from '#shared/types/rbac'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
@@ -282,11 +282,11 @@ useHead({ title })
         </div>
 
         <div v-if="flat.length === 0" class="py-8">
-          <AdminEmptyState :title="t('routes.empty')" icon="i-lucide-menu" />
+          <EmptyState :title="t('routes.empty')" icon="i-lucide-menu" />
         </div>
 
         <div v-else class="flex-1 min-h-0 overflow-auto pe-1">
-          <SharedHeTreeMenu
+          <HeTreeMenu
             ref="treeRef"
             :model-value="searchQuery ? filteredTree : tree"
             class="w-full"
@@ -335,7 +335,7 @@ useHead({ title })
             <template #actions="{ node }">
               <AdminRowActions :items="rowActions(node)" />
             </template>
-          </SharedHeTreeMenu>
+          </HeTreeMenu>
         </div>
       </template>
     </div>

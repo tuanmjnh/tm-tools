@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
+import { StatusBadge as AdminStatusBadge, EmptyState } from '@tuanmjnh/tm-ui'
 import { useModuleExport, buildExportChildren } from '~/composables/useModuleExport'
 import type { GridColumn } from '~/components/gridList/Index.vue'
 import type { Role } from '#shared/types/rbac'
@@ -317,7 +317,7 @@ useHead({ title })
         </template>
 
         <template #empty>
-          <AdminEmptyState :title="t('common.no_results')" />
+          <EmptyState :title="t('common.no_results')" />
         </template>
       </LazyGridList>
     </div>

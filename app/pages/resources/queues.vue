@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
+import { StatusBadge as AdminStatusBadge, EmptyState } from '@tuanmjnh/tm-ui'
 import { formatTimeAgo } from '@vueuse/core'
 import { getErrorMessage } from '~/shared/utils/errors'
 import type { GridColumn } from '~/components/gridList/Index.vue'
@@ -365,7 +365,7 @@ useHead({ title })
           </template>
 
           <template #empty>
-            <AdminEmptyState :title="t('queues.noJobs')" icon="i-lucide-list-x" />
+            <EmptyState :title="t('queues.noJobs')" icon="i-lucide-list-x" />
           </template>
         </LazyGridList>
       </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { EmptyState } from '@tuanmjnh/tm-ui'
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'
 import { MODULE_DEFINITIONS } from '#shared/rbac'
@@ -174,7 +175,7 @@ useHead({ title })
         <p>{{ t('admin.permissionsReadOnly') }}</p>
       </div>
 
-      <AdminEmptyState v-if="!loading && !grouped.length" :title="t('common.no_results')" />
+      <EmptyState v-if="!loading && !grouped.length" :title="t('common.no_results')" />
 
       <div v-for="[mod, rows] in grouped" :key="mod" class="space-y-3">
         <div class="flex items-center gap-2">

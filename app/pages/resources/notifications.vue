@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StatusBadge as AdminStatusBadge } from '@tuanmjnh/tm-ui'
+import { StatusBadge as AdminStatusBadge, EmptyState } from '@tuanmjnh/tm-ui'
 import { useModuleExport, buildExportChildren } from '~/composables/admin/useModuleExport'
 import { formatTimeAgo } from '@vueuse/core'
 import type { GridColumn } from '~/components/gridList/Index.vue'
@@ -220,7 +220,7 @@ useHead({ title })
         </template>
 
         <template #empty>
-          <AdminEmptyState :title="t('common.no_notifications')" icon="i-lucide-bell-off" />
+          <EmptyState :title="t('common.no_notifications')" icon="i-lucide-bell-off" />
         </template>
       </LazyGridList>
     </div>

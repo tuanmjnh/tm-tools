@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { AppBackdrop } from '@tuanmjnh/tm-ui'
 import type { CommandPaletteGroup, NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
@@ -56,7 +57,7 @@ const groups = computed<CommandPaletteGroup[]>(() => [{
 
 <template>
   <UDashboardGroup unit="rem">
-    <BaseAppBackdrop />
+    <AppBackdrop />
 
     <UDashboardSidebar id="default" v-model:open="open" collapsible resizable
       class="border-e border-default/70 tm-chrome" :ui="{ footer: 'lg:border-t lg:border-default/70 py-1' }">
