@@ -151,7 +151,7 @@ export default defineNuxtConfig({
       // Pinning the specifier to this app's install keeps one identity.
       compilerOptions: {
         paths: {
-          vue: ['../node_modules/vue'],
+          'vue': ['../node_modules/vue'],
           'vue/*': ['../node_modules/vue/*']
         }
       }

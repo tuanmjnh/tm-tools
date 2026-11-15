@@ -1,6 +1,4 @@
 <script lang="ts">
-// Call sites import these types from this component path; the wrapper re-exports
-// them so the move into the package did not change any import statement.
 export type { HeaderAction, HeaderActionChild } from '@tuanmjnh/tm-ui'
 </script>
 
@@ -21,5 +19,10 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <TmHeaderActions :actions="actions" :max-inline="maxInline" :more-label="t('common.more')" v-bind="$attrs" />
+  <TmHeaderActions
+    :actions="actions"
+    :max-inline="maxInline"
+    :more-label="t('common.more')"
+    v-bind="$attrs"
+  />
 </template>

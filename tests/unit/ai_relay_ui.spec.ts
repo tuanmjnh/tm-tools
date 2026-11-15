@@ -101,7 +101,7 @@ describe('model check quick action', () => {
   const modelSelect = 'app/components/aiProviders/ModelSelect.vue'
   // The picker, its check button and the error popover now live in the shared
   // package; the app file is a wrapper that supplies labels and the transport.
-  const sharedModelSelect = '../tm-platform/packages/tm-ui/src/ModelSelect.vue'
+  const sharedModelSelect = '../tm-platform/packages/tm-ui/src/ai/ModelSelect.vue'
   const checkEndpoint = 'server/api/v1/ai/check.post.ts'
 
   it('provides a check endpoint backed by the AI gateway', () => {

@@ -33,10 +33,20 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <TmHeTreeMenu v-bind="$attrs" :model-value="modelValue" :field-names="fieldNames" :selected-keys="selectedKeys"
-    :class-node="classNode" :default-icon="defaultIcon" :hide-icon="hideIcon"
-    :default-expand-all="defaultExpandAll" :expanded-ids="expandedIds" :draggable="draggable"
-    :card-clickable="cardClickable" :hide-checkbox="hideCheckbox" :action-options="actionOptions"
+  <TmHeTreeMenu
+    v-bind="$attrs"
+    :model-value="modelValue"
+    :field-names="fieldNames"
+    :selected-keys="selectedKeys"
+    :class-node="classNode"
+    :default-icon="defaultIcon"
+    :hide-icon="hideIcon"
+    :default-expand-all="defaultExpandAll"
+    :expanded-ids="expandedIds"
+    :draggable="draggable"
+    :card-clickable="cardClickable"
+    :hide-checkbox="hideCheckbox"
+    :action-options="actionOptions"
     @update:model-value="emit('update:modelValue', $event)"
     @node:click="emit('node:click', $event)"
     @node:toggle="emit('node:toggle', $event)"

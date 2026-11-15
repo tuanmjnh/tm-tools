@@ -17,7 +17,13 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <TmEmptyState :title="title" :description="description" :icon="icon" :actions="actions" v-bind="$attrs">
+  <TmEmptyState
+    :title="title"
+    :description="description"
+    :icon="icon"
+    :actions="actions"
+    v-bind="$attrs"
+  >
     <template v-for="(_, name) in $slots" #[name]="data">
       <slot :name="name" v-bind="data ?? {}" />
     </template>
