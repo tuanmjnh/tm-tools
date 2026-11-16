@@ -1,5 +1,3 @@
-import { fileURLToPath } from 'node:url'
-
 export default defineNuxtConfig({
 
   modules: [
@@ -97,16 +95,6 @@ export default defineNuxtConfig({
         '@unovis/vue',
         '@unovis/ts'
       ]
-    },
-    server: {
-      fs: {
-        // tm-ui and tm-core are linked from a sibling repo, so Vite dev must
-        // serve them from outside this project root.
-        allow: [
-          fileURLToPath(new URL('../tm-platform/packages/tm-ui', import.meta.url)),
-          fileURLToPath(new URL('../tm-platform/packages/tm-core', import.meta.url))
-        ]
-      }
     },
     optimizeDeps: {
       include: [
