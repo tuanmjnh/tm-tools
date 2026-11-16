@@ -30,6 +30,8 @@ export interface BatchViewModel {
   failed: number
   waiting: number
   runningCount: number
+  /** Percent of the file currently being processed, or null when nothing runs. */
+  activePercent: number | null
 }
 
 interface BatchRunOptions {
@@ -47,7 +49,6 @@ interface BatchState {
   keys: Map<string, string>
   controllers: Map<string, AbortController>
   cancelledIds: Set<string>
-  poll: ReturnType<typeof setInterval> | null
   config: Record<string, unknown>
   options: BatchRunOptions
 }
@@ -73,7 +74,6 @@ export function useDocumentBatch(
       keys: new Map<string, string>(),
       controllers: new Map<string, AbortController>(),
       cancelledIds: new Set<string>(),
-      poll: null,
       config: {},
       options: {}
     }
@@ -90,8 +90,26 @@ export function useDocumentBatch(
   const waiting = computed(() => s.items.value.filter(item => item.status === 'waiting').length)
   const runningCount = computed(() => s.items.value.filter(item => item.status === 'running').length)
   const running = computed(() => s.status.value === 'running' || s.status.value === 'paused' || s.status.value === 'stopping')
-  const overallProgress = computed(() => total.value ? Math.round((done.value / total.value) * 100) : 0)
+  /**
+   * Fractional on purpose: with `maxConcurrency: 1` (ai-extract) a whole-file
+   * counter would sit at 0% for the entire job, which reads as "stuck".
+   */
+  const overallProgress = computed(() => {
+    if (!total.value) return 0
+    const units = s.items.value.reduce((sum, item) => {
+      if (item.status === 'done') return sum + 1
+      if (item.status === 'running' || item.status === 'waiting') return sum + Math.min(1, item.progress / 100)
+      return sum
+    }, 0)
+    return Math.min(100, Math.round((units / total.value) * 100))
+  })
   const artifacts = computed(() => s.items.value.flatMap(item => item.artifacts))
+
+  const activePercent = computed(() => {
+    const active = s.items.value.filter(item => item.status === 'running')
+    if (!active.length) return null
+    return Math.max(...active.map(item => item.progress))
+  })
 
   const viewModel = computed<BatchViewModel>(() => ({
     items: s.items.value,
@@ -105,34 +123,9 @@ export function useDocumentBatch(
     overallProgress: overallProgress.value,
     failed: failed.value,
     waiting: waiting.value,
-    runningCount: runningCount.value
+    runningCount: runningCount.value,
+    activePercent: activePercent.value
   }))
-
-  function stopPoll() {
-    if (s.poll) {
-      clearInterval(s.poll)
-      s.poll = null
-    }
-  }
-
-  function startPoll() {
-    stopPoll()
-    s.poll = setInterval(() => {
-      const active = s.items.value.filter(item => item.status === 'running' && item.jobId)
-      if (!active.length) return
-      void Promise.allSettled(active.map(async (item) => {
-        try {
-          const view = await api.job(item.jobId!)
-          const progress = view.progress
-          if (progress.totalUnits > 0) {
-            item.progress = Math.round((progress.completedUnits / progress.totalUnits) * 100)
-          }
-        } catch {
-          // Keep the last known progress; a transient poll failure is not a job failure.
-        }
-      }))
-    }, 1000)
-  }
 
   async function runItem(item: BatchItem) {
     const file = s.blobs.get(item.id)
@@ -153,7 +146,12 @@ export function useDocumentBatch(
         inline: s.options.inline,
         idempotencyKey: key,
         signal: controller.signal,
-        onJobId: (id) => { item.jobId = id }
+        onJobId: (id) => { item.jobId = id },
+        onProgress: (progress) => {
+          if (progress.totalUnits > 0) {
+            item.progress = Math.round((progress.completedUnits / progress.totalUnits) * 100)
+          }
+        }
       })
       item.artifacts = result.artifacts
       item.progress = 100
@@ -166,7 +164,6 @@ export function useDocumentBatch(
   }
 
   function finalize() {
-    stopPoll()
     if (s.items.value.length === 0) {
       s.status.value = 'idle'
       return
@@ -211,7 +208,6 @@ export function useDocumentBatch(
       s.keys.set(item.id, crypto.randomUUID())
     })
     s.status.value = 'running'
-    startPoll()
     runPool()
   }
 
@@ -250,7 +246,6 @@ export function useDocumentBatch(
     s.keys.set(id, crypto.randomUUID())
     if (!running.value) {
       s.status.value = 'running'
-      startPoll()
       runPool()
     }
   }
@@ -267,7 +262,6 @@ export function useDocumentBatch(
     }
     if (!running.value) {
       s.status.value = 'running'
-      startPoll()
       runPool()
     }
   }
@@ -277,7 +271,6 @@ export function useDocumentBatch(
   }
 
   function clear() {
-    stopPoll()
     for (const [id, controller] of s.controllers) {
       s.cancelledIds.add(id)
       controller.abort()
@@ -326,6 +319,7 @@ export function useDocumentBatch(
     runningCount,
     running,
     overallProgress,
+    activePercent,
     artifacts,
     viewModel,
     concurrencyCap,

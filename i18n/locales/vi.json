@@ -3266,7 +3266,9 @@
     },
     "progress": {
       "uploading": "Đang tải lên…",
-      "processing": "Đang xử lý…"
+      "processing": "Đang xử lý…",
+      "processingPages": "Đang xử lý trang {done}/{total}",
+      "preparing": "Đang chuẩn bị…"
     },
     "actions": {
       "run": "Chạy"

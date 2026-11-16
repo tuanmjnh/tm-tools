@@ -21,6 +21,12 @@ const props = withDefaults(defineProps<{
   ready: boolean
   running?: boolean
   uploading?: boolean
+  /** True until the operation definition resolves, so the shell can render a skeleton. */
+  loadingDefinition?: boolean
+  /** Percent of the single running job; null renders the indeterminate bar. */
+  progress?: number | null
+  /** `completedUnits/totalUnits` of the single running job, for the page counter. */
+  progressUnits?: { done: number, total: number } | null
   error?: DocumentErrorPayload | null
   outputPath?: string
   artifacts?: DocumentArtifactView[]
@@ -33,6 +39,9 @@ const props = withDefaults(defineProps<{
 }>(), {
   running: false,
   uploading: false,
+  loadingDefinition: false,
+  progress: null,
+  progressUnits: null,
   error: null,
   outputPath: '',
   artifacts: () => [],
@@ -330,8 +339,34 @@ const batchActive = computed(() => {
   return status === 'running' || status === 'paused' || status === 'stopping'
 })
 
-/** A per-job archive only covers one job, so batch results spanning jobs download individually. */
+/**
+ * A per-job archive only covers one job, so batch results spanning jobs download individually.
+ */
 const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact => artifact.jobId)).size > 1)
+
+/** Batch progress is per pool; a single run only knows the page counts the job reported. */
+const progressValue = computed<number | null>(() => {
+  if (props.batch) return props.batch.overallProgress
+  return props.progress ?? null
+})
+
+const progressText = computed(() => {
+  if (props.batch) {
+    const { done, total, activePercent } = props.batch
+    // One file at a time gives a whole-file counter the same value for minutes,
+    // so show the page progress of the file that is actually running.
+    if (activePercent !== null && activePercent > 0 && activePercent < 100) {
+      return t('document.progress.processingPages', { done, total })
+    }
+    return t('document.batch.overall', { done, total })
+  }
+  if (props.uploading) return t('document.progress.uploading')
+  if (props.progressUnits) {
+    const { done, total } = props.progressUnits
+    if (total > 0) return t('document.progress.processingPages', { done, total })
+  }
+  return t('document.progress.processing')
+})
 </script>
 
 <template>
@@ -344,7 +379,25 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
 
     <DocumentStudioConnectionAlert v-if="connectionCode" :code="connectionCode" @retry="emit('reload')" />
 
-    <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+    <div v-if="loadingDefinition" class="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[minmax(0,1fr)_380px]" aria-busy="true">
+      <div class="panel-flat flex min-h-36 flex-col items-center justify-center gap-3 rounded-md border border-dashed border-default/70 p-6">
+        <USkeleton class="size-7 rounded-full" />
+        <USkeleton class="h-3 w-40" />
+        <USkeleton class="h-3 w-28" />
+        <div class="mt-2 flex gap-2">
+          <USkeleton class="h-7 w-24 rounded-md" />
+          <USkeleton class="h-7 w-28 rounded-md" />
+        </div>
+      </div>
+      <div class="panel-flat space-y-3 rounded-md p-4">
+        <USkeleton class="h-3 w-24" />
+        <USkeleton class="h-3 w-full" />
+        <USkeleton class="h-3 w-3/4" />
+        <USkeleton class="h-16 w-full rounded-md" />
+      </div>
+    </div>
+
+    <div v-else class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <div class="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
         <!-- Contextual Dropzone: full when empty, compact when files/batch exist -->
         <div
@@ -465,7 +518,11 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
               @click="emit('reset')"
             />
           </div>
-          <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
+          <TransitionGroup
+            tag="ul"
+            name="doc-row"
+            class="relative max-h-64 divide-y divide-default/50 overflow-auto"
+          >
             <li
               v-for="(file, index) in files"
               :key="file.id"
@@ -517,7 +574,7 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
                 @click="emit('remove', file.id)"
               />
             </li>
-          </ul>
+          </TransitionGroup>
         </div>
 
         <!-- Unified Batch Work Area (Left Column) when batch has items -->
@@ -589,7 +646,11 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
               <span class="text-xs text-muted">{{ destinationText }}</span>
             </div>
           </div>
-          <ul class="max-h-64 divide-y divide-default/50 overflow-auto">
+          <TransitionGroup
+            tag="ul"
+            name="doc-row"
+            class="relative max-h-64 divide-y divide-default/50 overflow-auto"
+          >
             <li v-for="artifact in artifacts" :key="artifact.id">
               <AppContextMenu :items="artifactMenu(artifact)">
                 <div class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
@@ -640,7 +701,7 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
                 </div>
               </AppContextMenu>
             </li>
-          </ul>
+          </TransitionGroup>
         </div>
       </div>
 
@@ -732,16 +793,18 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
         </div>
 
         <div class="shrink-0 space-y-2 rounded-md border border-default/60 bg-elevated/40 p-3">
-          <div v-if="batch ? (batchActive || batch.total > 0) : running" class="space-y-1">
-            <UProgress :model-value="batch ? batch.overallProgress : null" size="xs" />
-            <p class="text-xs text-muted">
-              <template v-if="batch">
-                {{ t('document.batch.overall', { done: batch.done, total: batch.total }) }}
-              </template>
-              <template v-else>
-                {{ uploading ? t('document.progress.uploading') : t('document.progress.processing') }}
-              </template>
-            </p>
+          <div v-if="batch ? (batchActive || batch.total > 0) : running" class="space-y-1.5">
+            <UProgress
+              :model-value="progressValue"
+              :animation="progressValue === null ? 'carousel' : undefined"
+              size="xs"
+            />
+            <div class="flex items-center justify-between gap-2 text-xs text-muted">
+              <span class="truncate">{{ progressText }}</span>
+              <span v-if="progressValue !== null" class="shrink-0 font-medium tabular-nums text-toned">
+                {{ progressValue }}%
+              </span>
+            </div>
           </div>
 
           <UAlert
@@ -854,3 +917,37 @@ const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact =>
     </LazyBaseResponsiveModal>
   </div>
 </template>
+
+<style scoped>
+/* Rows entering, leaving or reordering in the file and artifact lists. */
+.doc-row-enter-active,
+.doc-row-leave-active,
+.doc-row-move {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.doc-row-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.doc-row-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.doc-row-leave-active {
+  position: absolute;
+  inset-inline: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-row-enter-active,
+  .doc-row-leave-active,
+  .doc-row-move {
+    transition: none;
+  }
+}
+</style>

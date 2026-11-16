@@ -26,10 +26,17 @@ export function useDocumentOperationPage(operationId: string) {
   async function loadDefinition() {
     loadingDefinition.value = true
     try {
+      // One `/operations` call feeds both the definition and the runtime
+      // capabilities; fetching them separately doubled the request per mount.
       const catalog = await api.operations()
       definition.value = catalog.operations.find(operation => operation.id === operationId) ?? null
-    } catch {
+      await runtime.load(catalog)
+    } catch (caught) {
       definition.value = null
+      // Retrying `/operations` here would repeat the request that just failed,
+      // so surface its code directly and only fetch the output folder.
+      runtime.connectionError.value = (caught as { code?: string })?.code || 'DOCUMENT_STORAGE_UNAVAILABLE'
+      await runtime.loadSettings()
     } finally {
       loadingDefinition.value = false
     }
@@ -45,6 +52,13 @@ export function useDocumentOperationPage(operationId: string) {
   // view model and results; combine ops keep the single-session job.
   const batchViewModel = computed(() => isPerFileBatch.value ? batch.viewModel.value : null)
   const resultArtifacts = computed(() => isPerFileBatch.value ? batch.artifacts.value : session.artifacts.value)
+
+  /** Page counts of the single running job; the shell prints them next to the bar. */
+  const progressUnits = computed(() => {
+    const current = session.progress.value
+    if (!current || current.totalUnits <= 0) return null
+    return { done: current.completedUnits, total: current.totalUnits }
+  })
 
   function removeArtifact(artifactId: string) {
     if (isPerFileBatch.value) batch.removeArtifact(artifactId)
@@ -91,12 +105,10 @@ export function useDocumentOperationPage(operationId: string) {
     return ok
   }
 
-  onMounted(async () => {
-    await Promise.all([loadDefinition(), runtime.load()])
-  })
+  onMounted(loadDefinition)
 
   async function reload() {
-    await Promise.all([loadDefinition(), runtime.load()])
+    await loadDefinition()
   }
 
   return {
@@ -109,6 +121,10 @@ export function useDocumentOperationPage(operationId: string) {
     batchViewModel,
     resultArtifacts,
     loading: computed(() => loadingDefinition.value),
+    /** Percent of the single running job, or null while it has not reported yet. */
+    progressPercent: session.progressPercent,
+    progress: session.progress,
+    progressUnits,
     selection,
     session,
     batch,

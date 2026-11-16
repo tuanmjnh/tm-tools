@@ -1,4 +1,9 @@
-import type { DocumentArtifactView, DocumentJobView, DocumentRuntimeCapabilities } from '#shared/types/document'
+import type {
+  DocumentArtifactView,
+  DocumentJobProgress,
+  DocumentJobView,
+  DocumentRuntimeCapabilities
+} from '#shared/types/document'
 import type { DocumentErrorPayload } from './useDocumentApi'
 import { isDocumentConnectionError } from '~/utils/documentStudio'
 
@@ -12,7 +17,11 @@ export interface SingleDocumentJobOptions {
   signal?: AbortSignal
   onJobId?: (id: string) => void
   onUploading?: (uploading: boolean) => void
+  onProgress?: (progress: DocumentJobProgress) => void
 }
+
+/** The job record only advances while `start` is open, so read it on a timer. */
+const PROGRESS_POLL_MS = 900
 
 /**
  * Ref-free single-job lifecycle: create draft → stage bytes → start → return
@@ -44,6 +53,27 @@ export async function runSingleDocumentJob(
   opts.onJobId?.(draft.id)
 
   opts.onUploading?.(true)
+
+  let poll: ReturnType<typeof setInterval> | null = null
+
+  /** `start` resolves only when the job is finished, so progress arrives out of band. */
+  const pollProgress = () => {
+    if (!opts.onProgress || poll) return
+    poll = setInterval(() => {
+      void api.job(draft.id)
+        .then((view) => {
+          const progress = view.progress
+          if (progress.totalUnits > 0) opts.onProgress?.(progress)
+        })
+        .catch(() => {})
+    }, PROGRESS_POLL_MS)
+  }
+  const stopPolling = () => {
+    if (poll) {
+      clearInterval(poll)
+      poll = null
+    }
+  }
   try {
     if (!opts.directUpload) {
       await api.uploadInputs(draft.id, opts.files, opts.signal)
@@ -63,8 +93,14 @@ export async function runSingleDocumentJob(
     opts.onUploading?.(false)
   }
 
-  const finished = await api.startJob(draft.id, opts.signal)
-  return { job: finished, artifacts: finished.artifacts }
+  pollProgress()
+  try {
+    const finished = await api.startJob(draft.id, opts.signal)
+    opts.onProgress?.(finished.progress)
+    return { job: finished, artifacts: finished.artifacts }
+  } finally {
+    stopPolling()
+  }
 }
 
 /**
@@ -80,6 +116,14 @@ export function useDocumentRun() {
   const job = ref<DocumentJobView | null>(null)
   const artifacts = ref<DocumentArtifactView[]>([])
   const error = ref<DocumentErrorPayload | null>(null)
+  /** Latest `completedUnits / totalUnits` of the running job, or null before one starts. */
+  const progress = ref<DocumentJobProgress | null>(null)
+
+  const progressPercent = computed(() => {
+    const current = progress.value
+    if (!current || current.totalUnits <= 0) return null
+    return Math.min(100, Math.round((current.completedUnits / current.totalUnits) * 100))
+  })
 
   async function run(options: {
     operationId: string
@@ -92,11 +136,13 @@ export function useDocumentRun() {
     error.value = null
     job.value = null
     artifacts.value = []
+    progress.value = null
 
     try {
       const result = await runSingleDocumentJob(api, {
         ...options,
-        onUploading: (value) => { uploading.value = value }
+        onUploading: (value) => { uploading.value = value },
+        onProgress: (value) => { progress.value = value }
       })
       job.value = result.job
       artifacts.value = result.artifacts
@@ -124,13 +170,14 @@ export function useDocumentRun() {
     job.value = null
     artifacts.value = []
     error.value = null
+    progress.value = null
   }
 
   function removeArtifact(artifactId: string) {
     artifacts.value = artifacts.value.filter(artifact => artifact.id !== artifactId)
   }
 
-  return { running, uploading, job, artifacts, error, run, cancel, reset, removeArtifact }
+  return { running, uploading, progress, progressPercent, job, artifacts, error, run, cancel, reset, removeArtifact }
 }
 
 /**
@@ -145,18 +192,8 @@ export function useDocumentRuntime() {
   const outputPath = ref('')
   const connectionError = ref<string | null>(null)
 
-  async function load() {
-    try {
-      const catalog = await api.operations()
-      capabilities.value = catalog.capabilities
-      connectionError.value = null
-    } catch (caught) {
-      capabilities.value = null
-      // A missing or mismatched shared secret is a device setup problem, not
-      // a broken page: keep the code so the UI can point at the Hub settings
-      // instead of showing an empty catalogue with no explanation.
-      connectionError.value = (caught as DocumentErrorPayload)?.code || 'DOCUMENT_STORAGE_UNAVAILABLE'
-    }
+  /** Output folder only: Activity and Settings need no catalogue probe. */
+  async function loadSettings() {
     try {
       const settings = await api.settings()
       const saved = typeof window !== 'undefined' ? localStorage.getItem(OUTPUT_PATH_STORAGE_KEY) : null
@@ -164,6 +201,30 @@ export function useDocumentRuntime() {
     } catch {
       outputPath.value = ''
     }
+  }
+
+  /**
+   * `catalog` is passed by a page that already called `/operations`; without
+   * it the same request would be issued twice per page mount.
+   */
+  async function load(catalog?: { capabilities: DocumentRuntimeCapabilities }) {
+    if (catalog) {
+      capabilities.value = catalog.capabilities
+      connectionError.value = null
+    } else {
+      try {
+        const fetched = await api.operations()
+        capabilities.value = fetched.capabilities
+        connectionError.value = null
+      } catch (caught) {
+        capabilities.value = null
+        // A missing or mismatched shared secret is a device setup problem, not
+        // a broken page: keep the code so the UI can point at the Hub settings
+        // instead of showing an empty catalogue with no explanation.
+        connectionError.value = (caught as DocumentErrorPayload)?.code || 'DOCUMENT_STORAGE_UNAVAILABLE'
+      }
+    }
+    await loadSettings()
   }
 
   function setOutputPath(path: string) {
@@ -190,5 +251,5 @@ export function useDocumentRuntime() {
 
   const needsSetup = computed(() => isDocumentConnectionError(connectionError.value))
 
-  return { capabilities, outputPath, isLocal, destinationLabel, connectionError, needsSetup, load, setOutputPath }
+  return { capabilities, outputPath, isLocal, destinationLabel, connectionError, needsSetup, load, loadSettings, setOutputPath }
 }

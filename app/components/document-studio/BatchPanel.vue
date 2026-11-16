@@ -400,9 +400,11 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
       </div>
 
       <!-- Queue and Results Items List -->
-      <ul
+      <TransitionGroup
         v-if="filteredItems.length"
-        class="max-h-64 sm:max-h-80 md:max-h-[32rem] divide-y divide-default/50 overflow-auto scroll-thin"
+        tag="ul"
+        name="doc-row"
+        class="relative max-h-64 divide-y divide-default/50 overflow-auto scroll-thin sm:max-h-80 md:max-h-[32rem]"
       >
         <li
           v-for="item in filteredItems"
@@ -423,12 +425,15 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
                 </p>
                 <span class="shrink-0 text-xs text-muted">{{ formatBytes(item.size) }}</span>
               </div>
-              <div v-if="item.status === 'running' || item.progress > 0" class="mt-1">
+              <div v-if="item.status === 'running' || item.progress > 0" class="mt-1 flex items-center gap-2">
                 <UProgress
                   :model-value="item.progress"
                   size="xs"
-                  class="w-full"
+                  class="w-full flex-1"
                 />
+                <span class="shrink-0 text-[11px] font-medium tabular-nums text-muted">
+                  {{ item.progress }}%
+                </span>
               </div>
               <p
                 v-if="item.error"
@@ -537,7 +542,7 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
             </div>
           </div>
         </li>
-      </ul>
+      </TransitionGroup>
 
       <div v-else class="px-3 py-6 text-center text-sm text-muted">
         {{ t('document.batch.empty') }}
@@ -545,3 +550,37 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Queue rows enter, leave and reorder as the pool advances. */
+.doc-row-enter-active,
+.doc-row-leave-active,
+.doc-row-move {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.doc-row-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.doc-row-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.doc-row-leave-active {
+  position: absolute;
+  inset-inline: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-row-enter-active,
+  .doc-row-leave-active,
+  .doc-row-move {
+    transition: none;
+  }
+}
+</style>

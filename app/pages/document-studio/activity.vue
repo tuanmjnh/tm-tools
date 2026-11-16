@@ -17,7 +17,8 @@ type Filter = 'all' | 'running' | 'completed' | 'problem' | 'expired'
 const { t, locale } = useI18n()
 const api = useDocumentApi()
 const notify = useNotify()
-const { outputPath, load: loadRuntime } = useDocumentRuntime()
+// Only the output folder is needed here, so skip the catalogue probe.
+const { outputPath, loadSettings: loadRuntime } = useDocumentRuntime()
 const { viewMode } = useAdminGridView('document-activity-view-mode')
 
 const jobs = ref<DocumentJobView[]>([])
@@ -101,6 +102,19 @@ function formatWhen(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString(locale.value, { dateStyle: 'short', timeStyle: 'short' })
+}
+
+/** `null` keeps the bar indeterminate while the executor has not reported a page count. */
+function jobProgressPercent(job: DocumentJobView): number | null {
+  const { totalUnits, completedUnits } = job.progress
+  if (totalUnits <= 0) return null
+  return Math.min(100, Math.round((completedUnits / totalUnits) * 100))
+}
+
+function jobProgressText(job: DocumentJobView): string {
+  const { totalUnits, completedUnits } = job.progress
+  if (totalUnits <= 0) return t('document.progress.preparing')
+  return t('document.progress.processingPages', { done: completedUnits, total: totalUnits })
 }
 
 /** Hours left before the artifacts stop being downloadable, or 0 once past. */
@@ -490,14 +504,12 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                 class="flex items-center gap-2"
               >
                 <UProgress
-                  :model-value="job.progress.totalUnits
-                    ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
-                    : 0"
+                  :model-value="jobProgressPercent(job)"
                   size="xs"
                   class="flex-1"
                 />
                 <span class="text-xs text-muted">
-                  {{ job.progress.completedUnits }}/{{ job.progress.totalUnits }}
+                  {{ jobProgressText(job) }}
                 </span>
               </div>
 
@@ -594,14 +606,12 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
                 class="flex items-center gap-2"
               >
                 <UProgress
-                  :model-value="job.progress.totalUnits
-                    ? Math.round((job.progress.completedUnits / job.progress.totalUnits) * 100)
-                    : 0"
+                  :model-value="jobProgressPercent(job)"
                   size="xs"
                   class="flex-1"
                 />
                 <span class="text-xs text-muted">
-                  {{ job.progress.completedUnits }}/{{ job.progress.totalUnits }}
+                  {{ jobProgressText(job) }}
                 </span>
               </div>
 

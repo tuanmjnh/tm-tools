@@ -3266,7 +3266,9 @@
     },
     "progress": {
       "uploading": "Uploading…",
-      "processing": "Processing…"
+      "processing": "Processing…",
+      "processingPages": "Processing page {done}/{total}",
+      "preparing": "Preparing…"
     },
     "actions": {
       "run": "Run"
