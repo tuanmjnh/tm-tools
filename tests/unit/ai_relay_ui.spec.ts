@@ -99,9 +99,11 @@ describe('relay error copy', () => {
 
 describe('model check quick action', () => {
   const modelSelect = 'app/components/aiProviders/ModelSelect.vue'
-  // The picker, its check button and the error popover now live in the shared
+  // The picker, its check button and the error popover live in the shared
   // package; the app file is a wrapper that supplies labels and the transport.
-  const sharedModelSelect = '../tm-platform/packages/tm-ui/src/ai/ModelSelect.vue'
+  // The package is consumed from the registry, so this reads the compiled module
+  // it actually ships rather than a source file that is not installed.
+  const sharedModelSelect = 'node_modules/@tuanmjnh/tm-ui/ModelSelect.js'
   const checkEndpoint = 'server/api/v1/ai/check.post.ts'
 
   it('provides a check endpoint backed by the AI gateway', () => {
@@ -135,7 +137,7 @@ describe('model check quick action', () => {
     const shared = read(sharedModelSelect)
     assert.match(shared, /checkTimeoutMs/)
     assert.match(shared, /UPopover/)
-    assert.match(shared, /mode="hover"/)
+    assert.match(shared, /mode: "hover"/)
     assert.match(shared, /lastRawError/)
   })
 
