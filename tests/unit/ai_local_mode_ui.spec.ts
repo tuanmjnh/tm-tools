@@ -7,35 +7,46 @@ const root = join(import.meta.dirname, '..', '..')
 const read = (path: string) => readFileSync(join(root, path), 'utf8')
 
 const page = 'app/pages/system/settings/ai-local.vue'
-const card = 'app/components/aiProviders/LocalConnectionCard.vue'
 const nav = 'app/composables/useSettingsNav.ts'
 const guard = 'app/middleware/auth.global.ts'
 const endpoint = 'server/api/v1/ai/local-connections.get.ts'
-const gateway = 'server/utils/aiGateway.ts'
 
 describe('local AI settings surface', () => {
-  it('edits local connections through the desktop vault, not the Hub', () => {
+  it('edits per-account connections through the app API, not the desktop vault', () => {
     const source = read(page)
-    assert.match(source, /AI_LOCAL_CONNECTIONS/)
-    assert.match(source, /electronAPI!\.setConfig/)
-    assert.match(source, /parseAILocalConnections/)
-    assert.match(read(card), /BasePasswordInput/)
-    // The key is written to a slot, never into the JSON array.
-    assert.equal(/apiKey: row\.apiKey/.test(source), false)
-    assert.match(source, /values\[slot\] = key/)
+    assert.match(source, /'\/api\/v1\/ai\/connections'/)
+    assert.match(source, /method: 'PUT'/)
+    assert.equal(/electronAPI/.test(source), false)
+    assert.equal(/parseAppConnections/.test(source), false)
+    assert.match(source, /AIConnectionsEditor/)
+    // The key goes to the server once and is cleared from the form.
+    assert.match(source, /apiKey: row\.apiKey\.trim\(\) \|\| undefined/)
+    assert.match(source, /row\.apiKey = ''/)
   })
 
-  it('offers a per-row test against the AI check endpoint', () => {
+  it('sends stored model objects so enabled and primary survive a save', () => {
     const source = read(page)
-    assert.match(source, /\/api\/v1\/ai\/check/)
+    assert.match(source, /function modelsForSave/)
+    assert.match(source, /previous\.get\(id\)/)
+    assert.match(source, /isPrimary: true/)
+  })
+
+  it('offers per-row test, save and remove, plus a models refresh', () => {
+    const source = read(page)
+    assert.match(source, /\/test`/)
+    assert.match(source, /\/models\/refresh`/)
     assert.match(source, /testRow/)
-    assert.match(read(card), /@click="emit\('test'\)"/)
+    assert.match(source, /@test="testRow"/)
+    assert.match(source, /@save="saveAll"/)
+    assert.match(source, /@remove="requestRemove"/)
   })
 
-  it('shows the server-side env names on a web build', () => {
+  it('is not desktop-gated and drops the env-only card', () => {
     const source = read(page)
-    assert.match(source, /settings\.aiLocal\.webTitle/)
-    assert.match(source, /settings\.aiLocal\.envHint/)
+    assert.equal(/disabled="!desktop"/.test(source), false)
+    assert.equal(/settings\.aiLocal\.webTitle/.test(source), false)
+    assert.match(source, /method: 'DELETE'/)
+    assert.match(source, /encodeURIComponent/)
   })
 
   it('is root-only in the settings nav and the route guard', () => {
@@ -43,9 +54,10 @@ describe('local AI settings surface', () => {
     assert.match(read(guard), /'\/system\/settings\/ai-local'/)
   })
 
-  it('exposes the server view without keys', () => {
+  it('exposes the account rows and the env view without keys', () => {
     const source = read(endpoint)
     assert.match(source, /describeLocalConnections/)
+    assert.match(source, /safeConnection/)
     assert.equal(/apiKey:/.test(source), false)
   })
 })
@@ -100,8 +112,8 @@ describe('gateway key slots', () => {
   })
 
   it('rejects a slot name that is not a secret slot', async () => {
-    const { parseAILocalConnections } = await import('../../shared/utils/aiLocalConnections')
-    const result = parseAILocalConnections([
+    const { parseAppConnections } = await import('@tuanmjnh/tm-ai-client')
+    const result = parseAppConnections([
       { connectionId: 'x', baseUrl: 'http://localhost:11434/v1', apiKeyEnv: 'RANDOM_VAR' }
     ])
     assert.equal(result.connections.length, 0)

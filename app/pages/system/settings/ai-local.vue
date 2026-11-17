@@ -1,42 +1,94 @@
 <script setup lang="ts">
-import type { AILocalConnectionRow, AILocalConnectionTest } from '~/shared/types/aiLocal'
+import {
+  AIConnectionsEditor,
+  type AIConnectionRow,
+  type AIConnectionsEditorLabels,
+  type AIProviderOption
+} from '@tuanmjnh/tm-ui'
+import { AI_PROVIDERS } from '@tuanmjnh/tm-ai-client'
+import { getErrorMessage } from '~/shared/utils/errors'
 
 /**
- * Local AI connections (Hybrid AI, mode = `local`).
+ * Per-account AI connections (Hybrid AI).
  *
- * A connection listed here is called by this machine, not by the Hub relay.
- * The key never lives in the JSON: the row stores a config slot name
- * (`AI_API_KEY_<SUFFIX>`), which the desktop shell encrypts with the OS
- * keychain. The server only ever sees `hasKey`.
+ * Rows live in this app's own database, one document per account. The key is
+ * sealed server-side (AES-256-GCM) and the server only reports `hasKey`, so the
+ * field below starts empty on every load and an empty value keeps the stored key.
  */
-interface LocalConnectionStatus {
-  connectionId: string
-  provider: string
-  baseUrl: string
-  hasKey: boolean
-  apiKeyEnv: string | null
-  models: string[]
+interface SafeAIModel {
+  modelId: string
+  displayName?: string
+  enabled: boolean
+  isPrimary?: boolean
 }
 
-const MASK = '********'
+interface SafeAIConnection {
+  connectionId: string
+  providerKey: string
+  baseUrl: string
+  apiKeyEnv: string | null
+  hasKey: boolean
+  models: SafeAIModel[]
+}
+
+interface TestResult {
+  ok: boolean
+  message: string
+}
 
 const { t } = useI18n()
 const notify = useNotify()
-const auth = useAuth()
 
-const desktop = computed(() => Boolean(window.electronAPI?.isElectron))
-const rows = ref<AILocalConnectionRow[]>([])
+const rows = ref<AIConnectionRow[]>([])
+const models = ref<Record<string, SafeAIModel[]>>({})
 const loading = ref(true)
 const saving = ref(false)
+const refreshing = ref(false)
 const loadFailed = ref(false)
-const errors = ref<string[]>([])
 const testingId = ref('')
-const tests = ref<Record<string, AILocalConnectionTest>>({})
+const tests = ref<Record<string, TestResult>>({})
+const removeOpen = ref(false)
+const removing = ref(false)
+const removingRow = ref<AIConnectionRow | null>(null)
 
-function emptyRow(): AILocalConnectionRow {
+const providers: AIProviderOption[] = AI_PROVIDERS.map(provider => ({
+  key: provider.key,
+  name: provider.name,
+  keyless: provider.keyless,
+  defaultBaseUrl: provider.defaultBaseUrl
+}))
+
+const labels = computed<AIConnectionsEditorLabels>(() => ({
+  connectionId: t('settings.aiLocal.connectionId'),
+  connectionIdDesc: t('settings.aiLocal.connectionIdDesc'),
+  provider: t('settings.aiLocal.provider'),
+  providerDesc: t('settings.aiLocal.providerDesc'),
+  keyless: t('settings.aiLocal.providerKeyless'),
+  baseUrl: t('settings.aiLocal.baseUrl'),
+  baseUrlDesc: t('settings.aiLocal.baseUrlDesc'),
+  models: t('settings.aiLocal.models'),
+  modelsDesc: t('settings.aiLocal.modelsDesc'),
+  keySlot: t('settings.aiLocal.keySlot'),
+  keySlotDesc: t('settings.aiLocal.keySlotDesc'),
+  keyValue: t('settings.aiLocal.keyValue'),
+  keyValueSaved: t('settings.aiLocal.keyValueSaved'),
+  keyValueHint: t('settings.aiLocal.keyValueHint'),
+  test: t('settings.aiLocal.test'),
+  remove: t('settings.aiLocal.remove'),
+  add: t('settings.aiLocal.add'),
+  save: t('settings.aiLocal.save'),
+  unsavedHint: t('settings.aiLocal.unsavedHint'),
+  empty: t('settings.aiLocal.empty')
+}))
+
+const persistedCount = computed(() =>
+  rows.value.filter(row => models.value[row.connectionId.trim()] !== undefined).length
+)
+
+function emptyRow(): AIConnectionRow {
   return {
     connectionId: '',
-    provider: 'openai-compatible',
+    providerKey: 'custom',
     baseUrl: '',
     models: '',
     apiKeyEnv: '',
@@ -45,161 +97,192 @@ function emptyRow(): AILocalConnectionRow {
   }
 }
 
-function toRow(entry: LocalConnectionStatus): AILocalConnectionRow {
+function toRow(entry: SafeAIConnection): AIConnectionRow {
   return {
     connectionId: entry.connectionId,
-    provider: entry.provider || 'openai-compatible',
+    providerKey: entry.providerKey,
     baseUrl: entry.baseUrl,
-    models: (entry.models || []).join(', '),
+    models: entry.models.map(model => model.modelId).join(', '),
     apiKeyEnv: entry.apiKeyEnv || '',
     apiKey: '',
     hasKey: entry.hasKey
   }
 }
 
-async function loadStatus() {
+function splitModels(value: string): string[] {
+  return value.split(',').map(model => model.trim()).filter(Boolean)
+}
+
+function joinModels(entries: SafeAIModel[]): string {
+  return entries.map(model => model.modelId).join(', ')
+}
+
+async function loadConnections() {
   try {
-    const res = await $fetch<{ success: boolean, data: { connections: LocalConnectionStatus[], errors: string[] } }>(
-      '/api/v1/ai/local-connections'
+    const res = await $fetch<{ success: boolean, data: { connections: SafeAIConnection[] } }>(
+      '/api/v1/ai/connections'
     )
-    const data = res?.data
-    errors.value = data?.errors || []
-    rows.value = (data?.connections || []).map(toRow)
+    const connections = res?.data?.connections || []
+    rows.value = connections.map(toRow)
+    models.value = Object.fromEntries(connections.map(entry => [entry.connectionId, entry.models]))
     loadFailed.value = false
   } catch {
     loadFailed.value = true
-    errors.value = []
   } finally {
     loading.value = false
   }
 }
 
-/**
- * The vault is the source of truth for editing: it keeps the slot names of
- * connections whose key is already stored. The server view only reports
- * `hasKey`, which is not enough to round-trip a row.
- */
-async function loadVault() {
-  if (!desktop.value) return
-  try {
-    const conf = await window.electronAPI!.getConfig()
-    const parsed = parseAILocalConnections(conf?.AI_LOCAL_CONNECTIONS || '')
-    rows.value = parsed.connections.map((entry) => {
-      const slot = entry.apiKeyEnv || ''
-      const stored = slot ? String(conf?.[slot] || '') : ''
-      return {
-        connectionId: entry.connectionId,
-        provider: entry.provider,
-        baseUrl: entry.baseUrl,
-        models: (entry.models || []).map(model => model.modelId).join(', '),
-        apiKeyEnv: slot,
-        apiKey: '',
-        hasKey: Boolean(entry.apiKey) || stored === MASK || stored !== ''
-      }
-    })
-    if (parsed.errors.length) errors.value = parsed.errors
-    loadFailed.value = false
-  } catch {
-    notify.error(t('settings.aiLocal.loadFailed'), '')
-  }
-}
-
-onMounted(async () => {
-  await loadStatus()
-  await loadVault()
-  loading.value = false
-})
+onMounted(loadConnections)
 
 function addRow() {
   rows.value.push(emptyRow())
 }
 
-function removeRow(row: AILocalConnectionRow) {
-  const index = rows.value.indexOf(row)
-  if (index !== -1) rows.value.splice(index, 1)
+/**
+ * The editor only knows a comma list, so the stored model objects are kept
+ * aside and re-attached by id: `enabled`, `displayName` and `isPrimary`
+ * survive a save, and a deleted primary promotes the new first model.
+ */
+function modelsForSave(row: AIConnectionRow): SafeAIModel[] {
+  const previous = new Map((models.value[row.connectionId.trim()] || []).map(model => [model.modelId, model]))
+  const payload = splitModels(row.models).map(id => previous.get(id) ?? { modelId: id, enabled: true })
+  if (payload.length && !payload.some(model => model.isPrimary)) payload[0] = { ...payload[0]!, isPrimary: true }
+  return payload
 }
 
-function buildConfig() {
-  const entries = rows.value
-    .filter(row => row.connectionId.trim() || row.baseUrl.trim())
-    .map((row) => {
-      const apiKeyEnv = row.apiKeyEnv.trim()
-      return {
-        connectionId: row.connectionId.trim(),
-        provider: row.provider.trim() || 'openai-compatible',
-        baseUrl: row.baseUrl.trim(),
-        ...(apiKeyEnv ? { apiKeyEnv } : {}),
-        models: row.models
-          .split(',')
-          .map(model => model.trim())
-          .filter(Boolean)
-      }
-    })
-  const json = JSON.stringify(entries)
-  const parsed = parseAILocalConnections(json)
-  return { entries, json, errors: parsed.errors }
-}
-
-async function save() {
-  if (!desktop.value) return
-  const built = buildConfig()
-  if (built.errors.length) {
-    notify.error(t('settings.aiLocal.invalid'), built.errors[0] || '')
+async function saveAll() {
+  const incomplete = rows.value.find(row =>
+    !row.connectionId.trim() && (row.baseUrl.trim() || row.models.trim() || row.apiKey.trim())
+  )
+  if (incomplete) {
+    notify.error(t('settings.aiLocal.invalid'), t('settings.aiLocal.connectionIdRequired'))
     return
   }
 
-  const values: Record<string, string> = { AI_LOCAL_CONNECTIONS: built.json }
-  for (const row of rows.value) {
-    const slot = row.apiKeyEnv.trim()
-    const key = row.apiKey.trim()
-    if (slot && key && key !== MASK) values[slot] = key
-  }
-
+  const target = rows.value.filter(row => row.connectionId.trim())
   saving.value = true
   try {
-    const token = auth.accessToken.value || String(useCookie('accessToken').value || '')
-    const result = await window.electronAPI!.setConfig(values, token)
-    if (!result?.success) {
-      if (result?.code === 'notRoot') {
-        notify.error(t('settings.hub.notRoot'), '')
-        return
-      }
-      throw new Error('set-config failed')
+    for (const row of target) {
+      const res = await $fetch<{ success: boolean, data: SafeAIConnection }>('/api/v1/ai/connections', {
+        method: 'PUT',
+        body: {
+          connectionId: row.connectionId.trim(),
+          providerKey: row.providerKey,
+          baseUrl: row.baseUrl.trim(),
+          apiKey: row.apiKey.trim() || undefined,
+          apiKeyEnv: row.apiKeyEnv.trim(),
+          models: modelsForSave(row)
+        }
+      })
+      const saved = res.data
+      models.value[saved.connectionId] = saved.models
+      row.connectionId = saved.connectionId
+      row.baseUrl = saved.baseUrl
+      row.apiKeyEnv = saved.apiKeyEnv || ''
+      row.models = joinModels(saved.models)
+      row.apiKey = ''
+      tests.value = Object.fromEntries(
+        Object.entries(tests.value).filter(([id]) => id !== saved.connectionId)
+      )
     }
-    for (const row of rows.value) row.apiKey = ''
-    await loadStatus()
-    await loadVault()
-    notify.success(t('settings.aiLocal.saved'), result.path || '')
-  } catch (error) {
-    notify.error(t('settings.aiLocal.saveFailed'), error instanceof Error ? error.message : '')
+    notify.success(t('settings.aiLocal.saved'), '')
+  } catch (err) {
+    notify.error(t('settings.aiLocal.saveFailed'), getErrorMessage(err, key => t(key)))
   } finally {
     saving.value = false
   }
 }
 
-async function testRow(row: AILocalConnectionRow) {
+function requestRemove(row: AIConnectionRow) {
   const connectionId = row.connectionId.trim()
-  const model = row.models.split(',').map(value => value.trim()).filter(Boolean)[0]
-  if (!connectionId || !model) return
+  if (!connectionId || models.value[connectionId] === undefined) {
+    rows.value = rows.value.filter(entry => entry !== row)
+    return
+  }
+  removingRow.value = row
+  removeOpen.value = true
+}
 
+async function confirmRemove() {
+  const row = removingRow.value
+  if (!row) return
+  const connectionId = row.connectionId.trim()
+  removing.value = true
+  try {
+    await $fetch(`/api/v1/ai/connections/${encodeURIComponent(connectionId)}`, { method: 'DELETE' })
+    rows.value = rows.value.filter(entry => entry !== row)
+    models.value = Object.fromEntries(
+      Object.entries(models.value).filter(([id]) => id !== connectionId)
+    )
+    tests.value = Object.fromEntries(
+      Object.entries(tests.value).filter(([id]) => id !== connectionId)
+    )
+    removeOpen.value = false
+    removingRow.value = null
+  } catch (err) {
+    notify.error(t('settings.aiLocal.removeFailed'), getErrorMessage(err, key => t(key)))
+  } finally {
+    removing.value = false
+  }
+}
+
+async function reloadModels(ids: string[]) {
+  const res = await $fetch<{ success: boolean, data: { connections: SafeAIConnection[] } }>(
+    '/api/v1/ai/connections'
+  )
+  for (const entry of res?.data?.connections || []) {
+    if (!ids.includes(entry.connectionId)) continue
+    models.value[entry.connectionId] = entry.models
+    const row = rows.value.find(item => item.connectionId.trim() === entry.connectionId)
+    if (row) row.models = joinModels(entry.models)
+  }
+}
+
+async function refreshModels() {
+  const ids = rows.value
+    .map(row => row.connectionId.trim())
+    .filter(id => id && models.value[id] !== undefined)
+  if (!ids.length) return
+
+  refreshing.value = true
+  const failed: string[] = []
+  let total = 0
+  try {
+    for (const id of ids) {
+      try {
+        const res = await $fetch<{ success: boolean, data: { total: number } }>(
+          `/api/v1/ai/connections/${encodeURIComponent(id)}/models/refresh`,
+          { method: 'POST' }
+        )
+        total += res.data.total
+      } catch {
+        failed.push(id)
+      }
+    }
+    const refreshed = ids.filter(id => !failed.includes(id))
+    if (refreshed.length) await reloadModels(refreshed)
+    if (failed.length) notify.error(t('settings.aiLocal.refreshFailed'), failed.join(', '))
+    else notify.success(t('settings.aiLocal.modelsRefreshed', { count: total }), '')
+  } catch (err) {
+    notify.error(t('settings.aiLocal.refreshFailed'), getErrorMessage(err, key => t(key)))
+  } finally {
+    refreshing.value = false
+  }
+}
+
+async function testRow(row: AIConnectionRow) {
+  const connectionId = row.connectionId.trim()
+  if (!connectionId) return
   testingId.value = connectionId
   try {
-    const res = await $fetch<{
-      success: boolean
-      data: { ok: boolean, latencyMs: number, error?: string }
-    }>('/api/v1/ai/check', {
-      method: 'POST',
-      body: { connectionId, model }
-    })
-    const data = res?.data
-    tests.value[connectionId] = data?.ok
-      ? { ok: true, message: t('settings.aiLocal.testOk', { ms: data.latencyMs }) }
-      : { ok: false, message: data?.error || t('settings.aiLocal.testFailed') }
-  } catch (error) {
-    tests.value[connectionId] = {
-      ok: false,
-      message: error instanceof Error ? error.message : t('settings.aiLocal.testFailed')
-    }
+    const res = await $fetch<{ success: boolean, data: TestResult }>(
+      `/api/v1/ai/connections/${encodeURIComponent(connectionId)}/test`,
+      { method: 'POST' }
+    )
+    tests.value[connectionId] = { ok: res.data.ok, message: res.data.message }
+  } catch (err) {
+    tests.value[connectionId] = { ok: false, message: getErrorMessage(err, key => t(key)) }
   } finally {
     testingId.value = ''
   }
@@ -221,15 +304,6 @@ useHead({ title: computed(() => t('settings.aiLocal.title')) })
         variant="subtle"
         icon="i-lucide-circle-x"
         :title="t('settings.aiLocal.loadFailed')"
-      />
-
-      <UAlert
-        v-if="errors.length"
-        color="warning"
-        variant="subtle"
-        icon="i-lucide-triangle-alert"
-        :title="t('settings.aiLocal.errorsTitle')"
-        :description="errors.join(' · ')"
       />
 
       <UCard>
@@ -255,77 +329,54 @@ useHead({ title: computed(() => t('settings.aiLocal.title')) })
               color="neutral"
               variant="ghost"
               size="sm"
+              icon="i-lucide-rotate-cw"
+              :label="t('settings.aiLocal.refreshModels')"
+              :loading="refreshing"
+              :disabled="!persistedCount"
+              @click="refreshModels"
+            />
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="sm"
               icon="i-lucide-refresh-cw"
               square
               :loading="loading"
               :aria-label="t('common.refresh')"
-              @click="async () => { await loadStatus(); await loadVault() }"
+              @click="loadConnections"
             />
           </div>
         </div>
 
         <USkeleton v-if="loading && !rows.length" class="mt-4 h-24 w-full" />
 
-        <p v-if="!loading && !rows.length" class="mt-4 text-sm text-muted">
-          {{ t('settings.aiLocal.empty') }}
-        </p>
-
-        <div v-if="rows.length" class="mt-4 space-y-3">
-          <AiProvidersLocalConnectionCard
-            v-for="row in rows"
-            :key="row.connectionId + '-' + row.baseUrl"
-            :row="row"
-            :desktop="desktop"
-            :testing="testingId === row.connectionId.trim()"
-            :test-result="tests[row.connectionId.trim()]"
-            @test="testRow(row)"
-            @remove="removeRow(row)"
+        <div v-else class="mt-4">
+          <AIConnectionsEditor
+            :rows="rows"
+            :providers="providers"
+            :labels="labels"
+            :saving="saving"
+            :testing-id="testingId"
+            :tests="tests"
+            @add="addRow"
+            @remove="requestRemove"
+            @test="testRow"
+            @save="saveAll"
           />
         </div>
-
-
-        <template v-if="desktop" #footer>
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <UButton
-                color="neutral"
-                variant="soft"
-                size="sm"
-                icon="i-lucide-plus"
-                :label="t('settings.aiLocal.add')"
-                @click="addRow"
-              />
-              <span class="text-xs text-muted">{{ t('settings.aiLocal.unsavedHint') }}</span>
-            </div>
-            <UButton
-              color="primary"
-              variant="soft"
-              icon="i-lucide-save"
-              :label="t('settings.aiLocal.save')"
-              :loading="saving"
-              @click="save"
-            />
-          </div>
-        </template>
       </UCard>
 
-      <UCard v-if="!desktop">
-        <div class="flex items-start gap-3">
-          <UIcon name="i-lucide-server" class="mt-0.5 size-5 shrink-0 text-primary" />
-          <div class="space-y-1">
-            <h3 class="text-sm font-semibold text-highlighted">
-              {{ t('settings.aiLocal.webTitle') }}
-            </h3>
-            <p class="text-xs text-muted">
-              {{ t('settings.aiLocal.webDesc') }}
-            </p>
-            <p class="text-xs text-muted">
-              {{ t('settings.aiLocal.envHint') }}
-            </p>
-            <pre class="overflow-x-auto rounded-md bg-elevated/60 p-2 font-mono text-xs text-muted">AI_LOCAL_CONNECTIONS=[{"connectionId":"...","baseUrl":"http://127.0.0.1:11434/v1"}]</pre>
-          </div>
-        </div>
-      </UCard>
+      <BaseConfirmModal
+        v-model:open="removeOpen"
+        :title="t('settings.aiLocal.removeTitle')"
+        :description="t('settings.aiLocal.removeDesc', { name: removingRow?.connectionId || '' })"
+        :confirm-label="t('common.delete')"
+        :cancel-label="t('common.cancel')"
+        color="error"
+        icon="i-lucide-alert-triangle"
+        :loading="removing"
+        @confirm="confirmRemove"
+      />
     </div>
   </BaseSettingsPage>
 </template>
