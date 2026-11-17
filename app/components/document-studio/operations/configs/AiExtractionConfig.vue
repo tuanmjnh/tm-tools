@@ -62,9 +62,9 @@ const selectedModelKey = computed({
       selectedConnectionId.value = ''
       return
     }
-    const [connId, ...rest] = val.split(':')
-    selectedConnectionId.value = connId || ''
-    selectedModel.value = rest.join(':') || ''
+    const match = modelList.value.find(model => `${model.connectionId}:${model.modelId}` === val)
+    selectedConnectionId.value = match?.connectionId ?? ''
+    selectedModel.value = match?.modelId ?? val
   }
 })
 

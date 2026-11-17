@@ -36,6 +36,12 @@ describe('AI relay failure surfaces', () => {
     assert.doesNotMatch(source, /selectedModelKey\.value\.split\(/)
     assert.match(source, /`\$\{m\.connectionId\}:\$\{m\.modelId\}` === selectedModelKey\.value/)
   })
+
+  it('resolves the extraction model key without splitting the connection id', () => {
+    const source = read(extractConfig)
+    assert.doesNotMatch(source, /\.split\(':'\)/)
+    assert.match(source, /`\$\{model\.connectionId\}:\$\{model\.modelId\}` === val/)
+  })
 })
 
 describe('extraction preset editor', () => {
