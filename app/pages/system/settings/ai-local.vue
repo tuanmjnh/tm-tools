@@ -153,7 +153,8 @@ function modelsForSave(row: AIConnectionRow): SafeAIModel[] {
 
 async function saveAll() {
   const incomplete = rows.value.find(row =>
-    !row.connectionId.trim() && (row.baseUrl.trim() || row.models.trim() || row.apiKey.trim())
+    !row.connectionId.trim()
+    && (row.baseUrl.trim() || row.models.trim() || row.apiKey.trim() || row.apiKeyEnv.trim())
   )
   if (incomplete) {
     notify.error(t('settings.aiLocal.invalid'), t('settings.aiLocal.connectionIdRequired'))
@@ -180,6 +181,7 @@ async function saveAll() {
       row.connectionId = saved.connectionId
       row.baseUrl = saved.baseUrl
       row.apiKeyEnv = saved.apiKeyEnv || ''
+      row.hasKey = saved.hasKey
       row.models = joinModels(saved.models)
       row.apiKey = ''
       tests.value = Object.fromEntries(

@@ -101,7 +101,7 @@
     "aiFailed": "Yêu cầu AI thất bại",
     "aiRelayNotConfigured": "AI relay chưa được cấu hình. Hãy đăng ký thiết bị này trong Cài đặt > Kết nối Hub, hoặc đặt app secret trên bản triển khai máy chủ.",
     "aiRelayUnauthorized": "TM Hub từ chối thông tin xác thực của thiết bị này. Hãy đăng ký lại thiết bị trong Cài đặt > Kết nối Hub rồi thử lại.",
-    "badRequest": "Yêu cầu còn thiếu trường bắt buộc",
+    "badRequest": "Kiểm tra connection id và các trường bắt buộc",
     "aiNoModel": "Kết nối này không có model nào đang bật để kiểm tra",
     "aiLocalUpstreamFailed": "Nhà cung cấp không phản hồi",
     "aiLocalKeyMissing": "Kết nối này cần API key",
