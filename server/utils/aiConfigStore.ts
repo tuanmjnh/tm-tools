@@ -147,11 +147,11 @@ async function decryptKey(record: StoredAIConnection): Promise<string | undefine
   return undefined
 }
 
-export async function importEnvConnections(ownerId: string): Promise<number> {
+export async function importEnvConnections(ownerId: string, rawLocal?: string): Promise<number> {
   const store = aiConfigStore(ownerId)
   const existing = await store.listConnections()
   if (existing.length) return 0
-  const parsed = parseAppConnections(envValue('AI_LOCAL_CONNECTIONS') || '')
+  const parsed = parseAppConnections(rawLocal ?? envValue('AI_LOCAL_CONNECTIONS') ?? '')
   const secret = resolveAIConfigSecret()
   let imported = 0
   for (const entry of parsed.connections) {
@@ -173,12 +173,12 @@ export async function importEnvConnections(ownerId: string): Promise<number> {
 }
 
 /** Server-only: results carry decrypted keys — never serialise them to the renderer; map through `safeConnection` first. */
-export async function configuredConnections(event?: H3Event): Promise<AppAIConnection[]> {
+export async function configuredConnections(event?: H3Event, rawLocal?: string): Promise<AppAIConnection[]> {
   const ownerId = event?.context?.auth ? storeOwnerId(event) : null
   if (!ownerId) {
-    return parseAppConnections(envValue('AI_LOCAL_CONNECTIONS') || '').connections
+    return parseAppConnections(rawLocal ?? envValue('AI_LOCAL_CONNECTIONS') ?? '').connections
   }
-  await importEnvConnections(ownerId)
+  await importEnvConnections(ownerId, rawLocal)
   const records = await aiConfigStore(ownerId).listConnections()
   const out: AppAIConnection[] = []
   for (const record of records) {
@@ -189,7 +189,7 @@ export async function configuredConnections(event?: H3Event): Promise<AppAIConne
   return out
 }
 
-export async function findConfiguredConnection(connectionId: string, event?: H3Event): Promise<AppAIConnection | undefined> {
-  const entries = await configuredConnections(event)
+export async function findConfiguredConnection(connectionId: string, event?: H3Event, rawLocal?: string): Promise<AppAIConnection | undefined> {
+  const entries = await configuredConnections(event, rawLocal)
   return entries.find(entry => entry.connectionId === connectionId.replace(/^app:/, ''))
 }

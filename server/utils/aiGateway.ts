@@ -1,17 +1,22 @@
 import type { H3Event } from 'h3'
-import { AIClientError, createAIClient } from '@tuanmjnh/tm-ai-client'
+import {
+  AIClientError,
+  createAIClient,
+  findAppConnection,
+  mergeCatalog,
+  parseAppConnections,
+  providerDisplayName,
+  toAppCatalogConnection,
+  type AppAIConnection,
+  type CatalogConnection
+} from '@tuanmjnh/tm-ai-client'
+import { configuredConnections, findConfiguredConnection } from './aiConfigStore'
 import {
   fetchRelayCatalog,
   relayChat,
-  type RelayCatalogConnection,
   type RelayChatResult,
   type RelayMessage
 } from './aiRelay'
-import {
-  findAILocalConnection,
-  parseAILocalConnections,
-  type AILocalConnectionConfig
-} from '#shared/utils/aiLocalConnections'
 
 /**
  * AI gateway: one call site for chat + catalogue, two execution modes.
@@ -34,12 +39,15 @@ export interface GatewayChatBody {
   temperature?: number
 }
 
-function readLocalConfig(event?: H3Event) {
+function readLocalRaw(event?: H3Event): string {
   // Nitro maps `NUXT_AI_LOCAL_CONNECTIONS`, while the desktop shell writes
   // `AI_LOCAL_CONNECTIONS` into the process env (same file as the hub secret).
   const runtime = useRuntimeConfig(event).aiLocalConnections
-  const raw = runtime || process.env.AI_LOCAL_CONNECTIONS || ''
-  const parsed = parseAILocalConnections(raw)
+  return runtime || process.env.AI_LOCAL_CONNECTIONS || ''
+}
+
+function readLocalConfig(event?: H3Event) {
+  const parsed = parseAppConnections(readLocalRaw(event))
   // Configuration errors are surfaced once per call, not silently dropped, so
   // an operator sees why a local connection is missing from the picker.
   if (parsed.errors.length) {
@@ -48,7 +56,7 @@ function readLocalConfig(event?: H3Event) {
   return parsed
 }
 
-export function localConnections(event?: H3Event): AILocalConnectionConfig[] {
+export function localConnections(event?: H3Event): AppAIConnection[] {
   return readLocalConfig(event).connections
 }
 
@@ -57,7 +65,7 @@ export function localConnections(event?: H3Event): AILocalConnectionConfig[] {
  * file) or names a config slot (`AI_API_KEY_<SUFFIX>`), which the desktop shell
  * keeps encrypted in the OS keychain and exposes through `process.env`.
  */
-function resolveApiKey(entry: AILocalConnectionConfig): string | undefined {
+function resolveApiKey(entry: AppAIConnection): string | undefined {
   if (entry.apiKey) return entry.apiKey
   if (entry.apiKeyEnv) return String(process.env[entry.apiKeyEnv] || '').trim() || undefined
   return undefined
@@ -69,53 +77,50 @@ export function describeLocalConnections(event?: H3Event) {
   return {
     connections: connections.map(entry => ({
       connectionId: entry.connectionId,
-      provider: entry.provider,
+      providerKey: entry.providerKey,
+      providerName: providerDisplayName(entry.providerKey),
       baseUrl: entry.baseUrl,
       hasKey: Boolean(resolveApiKey(entry)),
       apiKeyEnv: entry.apiKeyEnv ?? null,
-      models: (entry.models || []).map(model => model.modelId)
+      models: entry.models.map(model => model.modelId)
     })),
     errors
   }
 }
 
-export function findLocalConnection(connectionId: string, event?: H3Event): AILocalConnectionConfig | undefined {
-  return findAILocalConnection(localConnections(event), connectionId)
+export function findLocalConnection(connectionId: string, event?: H3Event): AppAIConnection | undefined {
+  return findAppConnection(localConnections(event), connectionId)
 }
 
 /** Resolves the key for a local connection; used by the gateway and by tests. */
-export function resolveLocalApiKey(entry: AILocalConnectionConfig): string | undefined {
+export function resolveLocalApiKey(entry: AppAIConnection): string | undefined {
   return resolveApiKey(entry)
 }
 
-function localConnectionAsCatalog(entry: AILocalConnectionConfig): RelayCatalogConnection {
-  const models = (entry.models || []).map(model => ({
-    modelId: model.modelId,
-    displayName: model.displayName || model.modelId
-  }))
-  return {
-    connectionId: entry.connectionId,
-    provider: entry.provider,
-    name: `${entry.provider} (local)`,
-    adapterType: entry.provider,
+function localConnectionAsCatalog(entry: AppAIConnection): CatalogConnection {
+  return toAppCatalogConnection(entry, {
     // Explicitly configured means usable. Local providers (Ollama, LM Studio)
     // are often keyless, and the pickers hide connections without a key.
-    hasKey: Boolean(resolveApiKey(entry)) || !entry.apiKeyEnv,
-    model: models[0]?.modelId ?? null,
-    models
-  }
+    hasKey: Boolean(resolveApiKey(entry)) || !entry.apiKeyEnv
+  })
 }
 
 /**
- * Catalogue = hub connections + explicitly configured local connections.
+ * Catalogue = local connections + hub connections, de-duplicated at the model
+ * level. App rows come first and keep their `app:` id namespace, so a local
+ * connection never hides a hub row that happens to share an id.
  *
  * Local-only installations (no hub enrollment) still get a working picker, so
  * a hub failure is only rethrown when there is nothing local to fall back on.
+ *
+ * Database first: a signed-in user's per-account rows are the source of truth and env is the
+ * bootstrap import; with no signed-in user (background work such as PDF extraction) the same env
+ * fallback the gateway always used is returned.
  */
-export async function fetchAICatalog(event?: H3Event): Promise<RelayCatalogConnection[]> {
-  const local = localConnections(event).map(localConnectionAsCatalog)
+export async function fetchAICatalog(event?: H3Event): Promise<CatalogConnection[]> {
+  const local = (await configuredConnections(event, readLocalRaw(event))).map(localConnectionAsCatalog)
 
-  let hub: RelayCatalogConnection[] = []
+  let hub: CatalogConnection[] = []
   try {
     hub = await fetchRelayCatalog(event)
   } catch (err) {
@@ -123,11 +128,10 @@ export async function fetchAICatalog(event?: H3Event): Promise<RelayCatalogConne
     console.warn('[ai-gateway] hub catalogue unavailable; using local connections only')
   }
 
-  const localIds = new Set(local.map(entry => entry.connectionId))
-  return [...local, ...hub.filter(entry => !localIds.has(entry.connectionId))]
+  return mergeCatalog(hub, local)
 }
 
-function localError(err: unknown, entry: AILocalConnectionConfig) {
+function localError(err: unknown, entry: AppAIConnection) {
   if (err instanceof AIClientError) {
     const detail = err.message || err.code
     switch (err.code) {
@@ -162,10 +166,11 @@ function localError(err: unknown, entry: AILocalConnectionConfig) {
 
 /**
  * Chat through the mode that owns the connection. Signature is the relay's, so
- * existing callers only change their import.
+ * existing callers only change their import. A catalogue id may carry the
+ * `app:` namespace; the configured connection id never does.
  */
 export async function chatWithConnection(body: GatewayChatBody, event?: H3Event): Promise<RelayChatResult> {
-  const entry = findLocalConnection(body.connectionId, event)
+  const entry = await findConfiguredConnection(body.connectionId, event, readLocalRaw(event))
   if (!entry) return relayChat(body, event)
 
   const messages = body.systemPrompt?.trim()
@@ -174,7 +179,7 @@ export async function chatWithConnection(body: GatewayChatBody, event?: H3Event)
 
   const client = createAIClient({
     endpoint: {
-      provider: entry.provider,
+      provider: entry.providerKey,
       baseUrl: entry.baseUrl,
       apiKey: resolveApiKey(entry),
       mode: 'local'
@@ -193,10 +198,10 @@ export async function chatWithConnection(body: GatewayChatBody, event?: H3Event)
         // A local provider call receives the same text the relay would build.
         content: message.attachments?.length
           ? `${message.content}\n\n${message.attachments
-              .map(attachment => attachment.mimeType.startsWith('image/')
-                ? `--- Attached image (${attachment.mimeType}) ---`
-                : `--- Attached file (${attachment.mimeType}) ---\n${attachment.data}`)
-              .join('\n\n')}`
+            .map(attachment => attachment.mimeType.startsWith('image/')
+              ? `--- Attached image (${attachment.mimeType}) ---`
+              : `--- Attached file (${attachment.mimeType}) ---\n${attachment.data}`)
+            .join('\n\n')}`
           : message.content
       })),
       maxTokens: body.maxTokens,
