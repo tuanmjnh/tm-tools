@@ -12,15 +12,6 @@ import {
   type PresetTransferEntry
 } from '#shared/utils/presetTransfer'
 
-interface ExtractModel {
-  connectionId: string
-  connectionName: string
-  provider: string
-  modelId: string
-  displayName: string
-  isDefault: boolean
-}
-
 interface ExtractModelValue {
   model?: string
   connectionId?: string
@@ -46,7 +37,7 @@ const selectedPresetId = ref(props.modelValue?.presetId || '__none__')
 const selectedFormats = ref<PdfOfficeFormat[]>(props.modelValue?.formats || ['csv']) // , 'xlsx', 'json', 'docx', 'xml'
 const force = ref(Boolean(props.modelValue?.force))
 
-const modelList = ref<AvailableModel[]>([])
+const modelList = ref<(AvailableModel & { isDefault?: boolean })[]>([])
 const modelsLoading = ref(true)
 const modelsError = ref('')
 const presets = ref<PdfExtractPreset[]>([])
@@ -143,7 +134,7 @@ function emitUpdate() {
 watch([selectedModel, selectedConnectionId, selectedPresetId, selectedFormats, force], emitUpdate, { deep: true })
 
 function selectDefaultModel() {
-  const fallback = modelList.value.find(model => (model as any).isDefault || model.isPrimary) ?? modelList.value[0]
+  const fallback = modelList.value.find(model => model.isDefault || model.isPrimary) ?? modelList.value[0]
   if (!fallback) return
   selectedModel.value = fallback.modelId
   selectedConnectionId.value = fallback.connectionId
@@ -178,12 +169,6 @@ async function fetchPresets() {
   if (selectedPresetId.value !== '__none__' && !presets.value.some(preset => preset.id === selectedPresetId.value)) {
     selectedPresetId.value = '__none__'
   }
-}
-
-function onModelSelected(modelId: string) {
-  selectedModel.value = modelId
-  const match = modelList.value.find(model => model.modelId === modelId)
-  if (match) selectedConnectionId.value = match.connectionId
 }
 
 function toggleFormat(fmt: PdfOfficeFormat) {
