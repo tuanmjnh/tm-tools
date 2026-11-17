@@ -21,9 +21,15 @@ extraResources:
   - from: resources
     to: resources
     filter:
-      - "**/*.exe"
+      # Only the config JSON ships. The tool binaries (ffmpeg / ffplay / ffprobe /
+      # yt-dlp) and the ISNet model (resources/models/isnet-general-use.onnx) are
+      # NOT bundled: they are installed on demand from their official sources
+      # into this same folder at runtime (see electron/tools/updater.cjs). The
+      # .onnx was never matched by this filter, so it stays out by omission.
       - "**/*.json"
       - "**/*.node"
+      - "!**/*.exe"
+      - "!**/*.onnx"
 afterPack: electron/tools/brand-exe.cjs
 win:
   icon: public/icon.ico
