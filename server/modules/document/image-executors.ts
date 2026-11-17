@@ -5,7 +5,8 @@ import type { ImageRegion, RasterImage } from '../image/types'
 import { DocumentError } from './operations'
 import { decodeImage } from '../image/decode'
 import { encodePng } from '../image/encode'
-import { chromaKey, type Rgb } from '../image/background'
+import { chromaKey, applyMatte, type Rgb } from '../image/background'
+import { maskFromImage } from '../image/matte'
 import { fillRegion } from '../image/watermark'
 import { proposeCornerRegion, resolveRegion, type RegionInput } from '../image/regions'
 import { writeFileAtomic } from '../pdf/paths'
@@ -61,16 +62,30 @@ export class BackgroundExecutor implements DocumentOperationExecutor<BackgroundC
   }
 
   async execute(context: OperationExecutionContext, config: BackgroundConfig = {}) {
-    if (config.mode === 'ai') throw new DocumentError('DOCUMENT_AI_MODEL_UNAVAILABLE')
-
     const input = single(context.inputs)
     await context.onProgress({ totalUnits: 3, completedUnits: 0 })
 
     const image = await decodeImage(new Uint8Array(readFileSync(input.stagedPath)), input.extension)
     await context.onProgress({ totalUnits: 3, completedUnits: 1 })
 
-    const tolerance = Math.max(0, Math.min(255, Math.round(config.tolerance ?? 30)))
-    const cleaned = chromaKey(image, checkedBackdrop(config.backdrop), tolerance)
+    let cleaned: RasterImage
+    if (config.mode === 'ai') {
+      let mask: Uint8Array
+      try {
+        mask = await maskFromImage(image)
+      } catch (error) {
+        // A missing or hash-mismatched model is an install problem, not a job
+        // failure; say so instead of reporting a generic processing error.
+        if (error instanceof Error && error.message === 'IMAGE_MODEL_MISSING') {
+          throw new DocumentError('DOCUMENT_AI_MODEL_UNAVAILABLE')
+        }
+        throw error
+      }
+      cleaned = applyMatte(image, mask)
+    } else {
+      const tolerance = Math.max(0, Math.min(255, Math.round(config.tolerance ?? 30)))
+      cleaned = chromaKey(image, checkedBackdrop(config.backdrop), tolerance)
+    }
     await context.onProgress({ totalUnits: 3, completedUnits: 2 })
 
     const fileName = `${outputStem(input.safeName)}_nobg.png`

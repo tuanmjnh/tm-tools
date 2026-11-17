@@ -88,6 +88,8 @@ export interface AppConfig {
       maxRetries: number
       retryDelayMs: number
       pageDelayMs: number
+      /** Output budget per page or chunk; a dense table needs headroom. */
+      maxOutputTokens: number
     }
   }
   // Document Studio v4 cloud runtime. Everything here is server-only: the
@@ -134,6 +136,8 @@ export interface AppConfig {
     inputRetentionHours: number
     outputRetentionHours: number
     jobHistoryDays: number
+    /** SHA-256 of the segmentation model; empty disables the AI mode. */
+    imageModelSha256: string
   }
   modules: ModuleDefinition[]
 }
@@ -303,7 +307,10 @@ export function loadConfig(): AppConfig {
         temperature: parseFloat(readEnv('PDF_EXTRACT_TEMPERATURE', '0.1')),
         maxRetries: parseInt(readEnv('PDF_EXTRACT_MAX_RETRIES', '3')),
         retryDelayMs: parseInt(readEnv('PDF_EXTRACT_RETRY_DELAY_MS', '3000')),
-        pageDelayMs: parseInt(readEnv('PDF_EXTRACT_PAGE_DELAY_MS', '1500'))
+        pageDelayMs: parseInt(readEnv('PDF_EXTRACT_PAGE_DELAY_MS', '1500')),
+        // Gemini counts its reasoning tokens against this budget, so a dense
+        // page that fits 4k of JSON could still be cut off at 8192.
+        maxOutputTokens: parseInt(readEnv('PDF_EXTRACT_MAX_OUTPUT_TOKENS', '16384'))
       }
     },
     document: {
@@ -336,7 +343,8 @@ export function loadConfig(): AppConfig {
       maxScratchBytes: parseInt(readEnv('DOCUMENT_MAX_SCRATCH_BYTES', String(350 * 1024 * 1024))),
       inputRetentionHours: parseInt(readEnv('DOCUMENT_INPUT_RETENTION_HOURS', '24')),
       outputRetentionHours: parseInt(readEnv('DOCUMENT_OUTPUT_RETENTION_HOURS', '24')),
-      jobHistoryDays: parseInt(readEnv('DOCUMENT_JOB_HISTORY_DAYS', '7'))
+      jobHistoryDays: parseInt(readEnv('DOCUMENT_JOB_HISTORY_DAYS', '7')),
+      imageModelSha256: readEnv('IMAGE_MODEL_SHA256', '')
     },
     modules: [
       { key: 'dashboard', label: 'Dashboard', description: 'Dashboard module', icon: 'i-lucide-layout-dashboard' },

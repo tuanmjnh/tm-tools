@@ -94,6 +94,7 @@
     "mongodb": "^7.5.0",
     "node-machine-id": "^1.1.12",
     "nuxt": "^4.6.2",
+    "onnxruntime-web": "^1.31.1",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^7.0.1",
     "pdfjs-dist": "^6.5.438",
