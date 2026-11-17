@@ -23,8 +23,13 @@ media/utility workspace, and a read-only view of the AI providers that live in
 
 ## Architecture & contracts
 
-- 🔐 **[AI & Hub Connections](./ai-and-hub-connections.md)** — tm-tools holds no
-  AI keys; the hub owns credentials, catalog and relay.
+- 🔐 **[AI & Hub Connections](./ai-and-hub-connections.md)** — three homes for AI
+  keys: hub connections (hub-owned), app-managed rows in `ai_connections` sealed
+  by `AI_CONFIG_SECRET`, and the legacy `AI_LOCAL_CONNECTIONS` import source. Also
+  covers the env contract and Vercel/Atlas notes. The pre-2026-11-18 versions of
+  this page and of
+  [AI connection modes](./ai-local-mode.md) are kept in
+  [`docs/archive/2026-11-18-app-local-ai-config/`](./archive/2026-11-18-app-local-ai-config/).
 - 🔗 **[Hub Storage integration brief](./TM-TOOLS-HUB-STORAGE-INTEGRATION.md)** —
   how Document Studio uses a Hub storage connection, why `/tmp` is only a
   one-request fallback on Vercel, and what must never reach the browser.
@@ -79,7 +84,7 @@ media/utility workspace, and a read-only view of the AI providers that live in
 | --- | --- |
 | TMCut editor / templates / autocut / HTML studio | moved to `tm-studio` |
 | Playlist MCP server & AI gateway | removed from tm-tools |
-| AI keys vault | hub-only (`/system/ai-keys` is read-only) |
+| AI keys | hub catalogue only at `/system/ai-keys`; app-managed rows live in `ai_connections` under Settings → AI connections |
 | Browser Hub, downloader, FFmpeg, utilities, media | alive in this repo |
 | PDF workspace (`/pdf/*`, `server/modules/pdf`) | new in this repo |
 | Document Studio storage | Hub storage connection → self-owned R2 → ephemeral `/tmp` (one request, inline bytes) |

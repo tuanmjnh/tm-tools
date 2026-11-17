@@ -6,22 +6,32 @@ gateway: `server/utils/aiGateway.ts`.
 | Mode | Who holds the key | Who calls the provider |
 |---|---|---|
 | `hub` (default) | TM Hub (encrypted connection) | TM Hub relay |
-| `local` | This machine (`AI_LOCAL_CONNECTIONS`) | tm-tools, via `@tuanmjnh/tm-ai-client` |
+| `local` | This app, per account (`ai_connections`) | tm-tools, via `@tuanmjnh/tm-ai-client` |
 
 There is no implicit detection. A connection is `local` only when it is listed
 explicitly, so a hosted deployment can never be tricked into calling a loopback
 or private-network address. Everything else stays on the hub relay, unchanged.
 
-## Configuring a local connection
+## Where local connections live now
 
-`AI_LOCAL_CONNECTIONS` is a JSON array. Nitro also reads its runtime variant
-`NUXT_AI_LOCAL_CONNECTIONS`; the desktop shell writes the plain name into
-`userData/config.env`.
+Rows live per account in this app's own MongoDB, collection `ai_connections`
+(`MONGODB_URI`, `MONGODB_DB_NAME` — see
+[AI & Hub Connections](./ai-and-hub-connections.md)). **Settings → AI connections**
+(`/system/settings/ai-local`, root only) edits those rows; it does not touch any
+file. The UI sends the key once, the server seals it with `AI_CONFIG_SECRET` into
+`apiKeyCipher`, and the page only ever shows whether a key exists (`hasKey`).
+`AI_CONFIG_SECRET` is 32 random bytes, base64, never committed; losing it makes
+the stored keys unreadable, so they have to be re-entered.
 
-On desktop, open **Settings → Local AI connections** (`/system/settings/ai-local`,
-root only) instead of editing the file by hand. The page writes the JSON and puts
-the key into a named secret slot, so the key is encrypted by the OS keychain and
-never sits inside the JSON.
+## `AI_LOCAL_CONNECTIONS` is an import source
+
+`AI_LOCAL_CONNECTIONS` (Nitro runtime variant: `NUXT_AI_LOCAL_CONNECTIONS`) is a
+JSON array, read **once** for a user: the first signed-in read imports its entries
+into that user's rows while the user has zero rows, and the database wins from
+then on. The env variable or file is never rewritten, and the settings page no
+longer writes it either.
+
+The JSON shape is still the import format:
 
 ```json
 [
@@ -39,23 +49,30 @@ never sits inside the JSON.
   connection that is its hub id, so the existing picker entry keeps working and
   simply changes execution mode.
 - `baseUrl` must be `http(s)`. Trailing slashes are stripped.
-- `apiKeyEnv` names a config slot (`AI_API_KEY` or `AI_API_KEY_<SUFFIX>`). That slot
-  is encrypted at rest by the OS keychain and masked to the renderer; the gateway
-  reads it from `process.env` on every call. Prefer it over `apiKey`.
-- `apiKey` is an inline fallback for env-file-only setups (Ollama and LM Studio need none).
+- `apiKeyEnv` names a server config slot (`AI_API_KEY` or `AI_API_KEY_<SUFFIX>`),
+  read from `process.env` on every call. On desktop a slot in `config.env` is
+  encrypted at rest by the OS keychain and masked to the renderer. Prefer it over
+  `apiKey`.
+- `apiKey` is an inline fallback for env-file-only setups (Ollama and LM Studio
+  need none). It is sealed with `AI_CONFIG_SECRET` on import; with no secret the
+  entry is skipped rather than stored.
 - `models` feeds the picker when the hub catalogue is unavailable. A running hub
   still contributes its own models for the same connection.
 
 Bad entries are rejected individually and logged once per call; a malformed
 entry never half-registers.
 
-Examples:
+Examples.
+
+Ollama (no key needed):
 
 ```bash
-# Ollama
 AI_LOCAL_CONNECTIONS='[{"connectionId":"ollama","provider":"openai-compatible","baseUrl":"http://127.0.0.1:11434/v1","models":["llama3.2"]}]'
+```
 
-# FreeLLMAPI
+FreeLLMAPI (key stays in a server config slot):
+
+```bash
 AI_LOCAL_CONNECTIONS='[{"connectionId":"774c79e3-9293-4bbe-9d6c-fe9d84991315","provider":"openai-compatible","baseUrl":"http://127.0.0.1:31415/v1","apiKeyEnv":"AI_API_KEY_FREELLM","models":["auto"]}]'
 AI_API_KEY_FREELLM='sk-...'
 ```
@@ -76,5 +93,6 @@ AI_API_KEY_FREELLM='sk-...'
 
 - Keep `AI_LOCAL_CONNECTIONS` empty in the public web build. A loopback base URL
   there would just fail, but it also must never be shipped with a real key.
-- The local key lives in the same server-side config file as
-  `NUXT_HUB_APP_SECRET`, never in the renderer and never in the hub.
+- The live local key sits in `ai_connections` as `apiKeyCipher`, sealed with
+  `AI_CONFIG_SECRET`; it is read only on the server for the duration of a call and
+  never reaches the renderer or the hub.
