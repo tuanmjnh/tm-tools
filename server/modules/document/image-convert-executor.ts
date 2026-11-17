@@ -6,6 +6,7 @@ import type { RasterImage } from '../image/types'
 import { DocumentError } from './operations'
 import { decodeImage } from '../image/decode'
 import { buildIco, normalizeIcoSizes, PNG_ICON_SIZES } from '../image/ico'
+import { buildIcns, ICNS_ALLOWED_SIZES } from '../image/icns'
 import { writeFileAtomic } from '../pdf/paths'
 import { safeFileName } from '../pdf/security'
 
@@ -19,11 +20,11 @@ import { safeFileName } from '../pdf/security'
  * only useful inverse for an icon.
  */
 
-export const IMAGE_CONVERT_TARGETS = ['png', 'jpg', 'webp', 'ico'] as const
+export const IMAGE_CONVERT_TARGETS = ['png', 'jpg', 'webp', 'ico', 'icns'] as const
 export type ImageConvertTarget = typeof IMAGE_CONVERT_TARGETS[number]
 
 const SVG_SOURCE = 'svg'
-const ACCEPTED_SOURCE = new Set(['png', 'jpg', 'jpeg', 'webp', SVG_SOURCE, 'ico'])
+const ACCEPTED_SOURCE = new Set(['png', 'jpg', 'jpeg', 'webp', SVG_SOURCE, 'ico', 'icns'])
 
 export interface ImageConvertConfig {
   target?: string
@@ -91,6 +92,19 @@ async function icoToPng(input: VerifiedInput): Promise<{ png: Uint8Array, width:
   return { png, width: image.width, height: image.height }
 }
 
+/** Largest PNG payload inside an ICNS becomes the inverse PNG. */
+async function icnsToPng(input: VerifiedInput): Promise<{ png: Uint8Array, width: number, height: number }> {
+  const buffer = readFileSync(input.stagedPath)
+  const { parseIcnsDirectory } = await import('../image/icns')
+  const entries = parseIcnsDirectory(buffer).filter(entry => entry.png && entry.size > 0)
+  if (!entries.length) throw new Error('ICNS_NO_PNG_PAYLOAD')
+  const largest = entries.reduce((a, b) => (b.size > a.size ? b : a))
+  const payloadLength = largest.length - 8
+  const png = new Uint8Array(buffer.subarray(largest.dataOffset, largest.dataOffset + payloadLength))
+  const image = await loadImage(Buffer.from(png))
+  return { png, width: image.width, height: image.height }
+}
+
 function rasterTo(image: RasterImage, target: 'png' | 'jpg' | 'webp', quality: number): Uint8Array {
   const canvas = createCanvas(image.width, image.height)
   const ctx = canvas.getContext('2d')
@@ -151,17 +165,17 @@ export class ImageConvertExecutor implements DocumentOperationExecutor<ImageConv
     const stem = stemOf(input.safeName)
     const sourceExt = sourceExtension(input)
 
-    // ICO → PNG is its own small path: the payload is already a PNG.
-    if (sourceExt === 'ico' && target === 'png') {
+    // An icon source reads back to PNG: the payload inside is already a PNG.
+    if ((sourceExt === 'ico' || sourceExt === 'icns') && target === 'png') {
       await context.onProgress({ totalUnits: 1, completedUnits: 0 })
-      const { png } = await icoToPng(input)
+      const { png } = sourceExt === 'icns' ? await icnsToPng(input) : await icoToPng(input)
       const fileName = `${stem}.png`
       const outPath = join(context.workspace.outputDir, fileName)
       writeFileAtomic(outPath, png)
       await context.onProgress({ totalUnits: 1, completedUnits: 1 })
       return { files: [{ fileName, mimeType: 'image/png', path: outPath, size: statSync(outPath).size }] }
     }
-    if (sourceExt === 'ico') throw new DocumentError('DOCUMENT_OPERATION_CONFIG_INVALID', { field: 'target' })
+    if (sourceExt === 'ico' || sourceExt === 'icns') throw new DocumentError('DOCUMENT_OPERATION_CONFIG_INVALID', { field: 'target' })
 
     const image = await decodeSource(input)
     await context.onProgress({ totalUnits: 1, completedUnits: 0 })
@@ -187,6 +201,22 @@ export class ImageConvertExecutor implements DocumentOperationExecutor<ImageConv
 
       await context.onProgress({ totalUnits: 1, completedUnits: 1 })
       return { files }
+    }
+
+    if (target === 'icns') {
+      // ICNS stores 512 natively, so the picked ladder maps onto its own allowed
+      // sizes (16/32/64/128/256/512) — anything off that ladder is dropped.
+      const allowed = new Set<number>(ICNS_ALLOWED_SIZES)
+      const requested = (Array.isArray(config.sizes) ? config.sizes.map(Number) : ICNS_ALLOWED_SIZES)
+        .filter(size => allowed.has(size))
+      const sizes = requested.length ? [...new Set(requested)].sort((a, b) => a - b) : ICNS_ALLOWED_SIZES
+      const payloads = sizes.map(size => ({ size, png: scaledPng(image, size) }))
+      const icns = buildIcns(payloads)
+      const fileName = `${stem}.icns`
+      const outPath = join(context.workspace.outputDir, fileName)
+      writeFileAtomic(outPath, new Uint8Array(icns))
+      await context.onProgress({ totalUnits: 1, completedUnits: 1 })
+      return { files: [{ fileName, mimeType: 'image/icns', path: outPath, size: statSync(outPath).size }] }
     }
 
     const quality = clampQuality(config.quality)

@@ -12,6 +12,7 @@ export const DOCUMENT_FORMAT_IDS = [
   'webp',
   'svg',
   'ico',
+  'icns',
   'txt',
   'zip'
 ] as const
@@ -119,6 +120,13 @@ export const DOCUMENT_FORMATS: readonly DocumentFormatDefinition[] = [
     previewKind: 'image'
   },
   {
+    id: 'icns',
+    extensions: ['icns'],
+    mimeTypes: ['image/icns', 'image/x-icns'],
+    category: 'image',
+    previewKind: 'image'
+  },
+  {
     id: 'txt',
     extensions: ['txt'],
     mimeTypes: ['text/plain'],
@@ -176,12 +184,21 @@ export const CONVERSION_MATRIX: readonly ConversionEdge[] = [
   { source: 'webp', target: 'ico', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
   { source: 'svg', target: 'ico', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
   { source: 'ico', target: 'png', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  // ICNS (macOS) stores up to 512 in one container.
+  { source: 'png', target: 'icns', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'jpg', target: 'icns', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'webp', target: 'icns', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'svg', target: 'icns', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'icns', target: 'png', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  // Structured data: csv ↔ xlsx and xml ↔ json (was declared-but-disabled).
+  { source: 'csv', target: 'xlsx', operationId: 'structured.convert', strategy: 'structured-data', available: true },
+  { source: 'xlsx', target: 'csv', operationId: 'structured.convert', strategy: 'structured-data', available: true },
+  { source: 'xml', target: 'json', operationId: 'structured.convert', strategy: 'structured-data', available: true },
+  { source: 'json', target: 'xml', operationId: 'structured.convert', strategy: 'structured-data', available: true },
   // webp → PDF now runs: pdf-lib embeds it after the canvas re-encodes to PNG.
   { source: 'webp', target: 'pdf', operationId: 'pdf.images-to-pdf', strategy: 'layout', available: true },
   { source: 'xlsx', target: 'docx', operationId: 'spreadsheet.xlsx-to-docx', strategy: 'layout', available: false, reasonDisabled: 'Not implemented' },
-  { source: 'docx', target: 'xlsx', operationId: 'document.docx-table-extract', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' },
-  { source: 'xml', target: 'json', operationId: 'structured.xml-to-json', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' },
-  { source: 'json', target: 'xml', operationId: 'structured.json-to-xml', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' }
+  { source: 'docx', target: 'xlsx', operationId: 'document.docx-table-extract', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' }
 ]
 
 export function formatById(id: string): DocumentFormatDefinition | null {

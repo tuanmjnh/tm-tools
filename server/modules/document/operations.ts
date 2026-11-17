@@ -170,9 +170,23 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     enabled: true,
     // SVG is accepted as a source (rasterised by the bundled canvas); `.ico`
     // is accepted so an icon can be read back to PNG.
-    input: { mode: 'single-file', acceptedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'svg', 'ico'], minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    input: { mode: 'single-file', acceptedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'svg', 'ico', 'icns'], minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
     configuration: { componentKey: 'image-convert', hasAdvancedOptions: false },
-    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/x-icon'] },
+    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/x-icon', 'image/icns'] },
+    execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
+    batch: { mode: 'per-file', maxFiles: 50 }
+  },
+  {
+    id: 'structured.convert',
+    version: '1.0.0',
+    category: 'convert',
+    titleKey: 'document.operations.structuredConvert.title',
+    descriptionKey: 'document.operations.structuredConvert.description',
+    icon: 'i-lucide-table-2',
+    enabled: true,
+    input: { mode: 'single-file', acceptedExtensions: ['csv', 'xlsx', 'xml', 'json'], minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    configuration: { componentKey: 'structured-convert', hasAdvancedOptions: false },
+    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/xml', 'application/json'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
     batch: { mode: 'per-file', maxFiles: 50 }
   }

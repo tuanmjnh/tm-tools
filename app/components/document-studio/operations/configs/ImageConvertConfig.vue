@@ -17,16 +17,17 @@ const targets = computed(() => [
   { value: 'png' as const, label: 'PNG', hint: t('document.imageConvert.targetPngHint') },
   { value: 'jpg' as const, label: 'JPG', hint: t('document.imageConvert.targetJpgHint') },
   { value: 'webp' as const, label: 'WEBP', hint: t('document.imageConvert.targetWebpHint') },
-  { value: 'ico' as const, label: '.ICO', hint: t('document.imageConvert.targetIcoHint') }
+  { value: 'ico' as const, label: '.ICO', hint: t('document.imageConvert.targetIcoHint') },
+  { value: 'icns' as const, label: '.ICNS', hint: t('document.imageConvert.targetIcnsHint') }
 ])
 
-/** The ICO size ladder. 512 is a PNG export that rides alongside the .ico. */
+/** The icon size ladder. 512 is a PNG export that rides alongside the .ico. */
 const sizes = [16, 32, 48, 64, 128, 256, 512] as const
 
 const target = computed(() => props.modelValue?.target ?? 'png')
 const selectedSizes = computed(() => new Set(props.modelValue?.sizes ?? []))
 
-function selectTarget(value: 'png' | 'jpg' | 'webp' | 'ico') {
+function selectTarget(value: 'png' | 'jpg' | 'webp' | 'ico' | 'icns') {
   emit('update:modelValue', { ...props.modelValue, target: value })
 }
 
@@ -67,9 +68,9 @@ const showQuality = computed(() => target.value === 'jpg' || target.value === 'w
     </UFormField>
 
     <UFormField
-      v-if="target === 'ico'"
+      v-if="target === 'ico' || target === 'icns'"
       :label="t('document.imageConvert.sizes')"
-      :description="t('document.imageConvert.sizesHint')"
+      :description="target === 'icns' ? t('document.imageConvert.sizesIcnsHint') : t('document.imageConvert.sizesHint')"
     >
       <div class="flex flex-wrap gap-2">
         <button

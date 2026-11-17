@@ -3384,6 +3384,10 @@
       "imageConvert": {
         "title": "Chuyển ảnh / icon",
         "description": "Chuyển đổi giữa PNG, JPG, WEBP và .ICO — từ ảnh hoặc SVG."
+      },
+      "structuredConvert": {
+        "title": "Chuyển dữ liệu bảng",
+        "description": "Chuyển CSV ↔ XLSX và XML ↔ JSON theo quy tắc rõ ràng."
       }
     },
     "split": {
@@ -3526,7 +3530,19 @@
       "targetIcoHint": "Icon Windows với các kích thước bạn chọn.",
       "sizes": "Kích thước icon",
       "sizesHint": "Chọn kích thước nhúng. 512 sẽ xuất thành PNG kèm file .ico.",
-      "quality": "Chất lượng"
+      "quality": "Chất lượng",
+      "targetIcnsHint": "Icon macOS tới 512px trong một file.",
+      "sizesIcnsHint": "Chọn kích thước nhúng. ICNS lưu 512 trực tiếp."
+    },
+    "structuredConvert": {
+      "familyTabular": "Bảng",
+      "familyTabularHint": "Dữ liệu hàng/cột — CSV và Excel.",
+      "familyMarkup": "Markup có cấu trúc",
+      "familyMarkupHint": "Dữ liệu dạng cây — XML và JSON.",
+      "targetCsvHint": "Văn bản phân tách bằng dấu phẩy.",
+      "targetXlsxHint": "Bảng tính Excel một sheet.",
+      "targetXmlHint": "Cây phần tử; thuộc tính là @name.",
+      "targetJsonHint": "JavaScript Object Notation."
     }
   }
 }

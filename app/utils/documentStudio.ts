@@ -94,6 +94,14 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     icon: 'i-lucide-repeat-2',
     route: '/document-studio/tools/image-convert',
     category: 'image'
+  },
+  {
+    id: 'structured.convert',
+    titleKey: 'document.operations.structuredConvert.title',
+    descriptionKey: 'document.operations.structuredConvert.description',
+    icon: 'i-lucide-table-2',
+    route: '/document-studio/tools/structured-convert',
+    category: 'convert'
   }
 ]
 
@@ -113,7 +121,8 @@ const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
   'extract': 'document.ai-extract',
   'watermark': 'image.watermark-remove',
   'remove-bg': 'image.background-remove',
-  'image-convert': 'image.convert'
+  'image-convert': 'image.convert',
+  'structured-convert': 'structured.convert'
 }
 
 export function operationIdFromSlug(slug: string): DocumentOperationId {
@@ -138,9 +147,15 @@ export interface BackgroundConfigModel {
 
 /** Shape the image-convert panel emits and the server executor reads. */
 export interface ImageConvertConfigModel {
-  target?: 'png' | 'jpg' | 'webp' | 'ico'
+  target?: 'png' | 'jpg' | 'webp' | 'ico' | 'icns'
   sizes?: number[]
   quality?: number
+  [key: string]: unknown
+}
+
+/** Shape the structured-convert panel emits and the server executor reads. */
+export interface StructuredConvertConfigModel {
+  target?: 'csv' | 'xlsx' | 'xml' | 'json'
   [key: string]: unknown
 }
 

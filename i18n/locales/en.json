@@ -3384,6 +3384,10 @@
       "imageConvert": {
         "title": "Convert image / icon",
         "description": "Convert between PNG, JPG, WEBP, and .ICO — from an image or SVG."
+      },
+      "structuredConvert": {
+        "title": "Convert structured data",
+        "description": "Convert CSV ↔ XLSX and XML ↔ JSON with predictable rules."
       }
     },
     "split": {
@@ -3526,7 +3530,19 @@
       "targetIcoHint": "Windows icon with the sizes you pick.",
       "sizes": "Icon sizes",
       "sizesHint": "Pick the sizes to embed. 512 is exported as a PNG beside the .ico.",
-      "quality": "Quality"
+      "quality": "Quality",
+      "targetIcnsHint": "macOS icon up to 512px in one file.",
+      "sizesIcnsHint": "Pick the sizes to embed. ICNS stores 512 natively."
+    },
+    "structuredConvert": {
+      "familyTabular": "Table",
+      "familyTabularHint": "Row/column data — CSV and Excel.",
+      "familyMarkup": "Structured markup",
+      "familyMarkupHint": "Tree data — XML and JSON.",
+      "targetCsvHint": "Plain comma-separated text.",
+      "targetXlsxHint": "Excel workbook with one sheet.",
+      "targetXmlHint": "Element tree; attributes as @name.",
+      "targetJsonHint": "JavaScript Object Notation."
     }
   }
 }
