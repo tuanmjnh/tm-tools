@@ -86,6 +86,14 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     icon: 'i-lucide-scissors-line-dashed',
     route: '/document-studio/tools/remove-bg',
     category: 'image'
+  },
+  {
+    id: 'image.convert',
+    titleKey: 'document.operations.imageConvert.title',
+    descriptionKey: 'document.operations.imageConvert.description',
+    icon: 'i-lucide-repeat-2',
+    route: '/document-studio/tools/image-convert',
+    category: 'image'
   }
 ]
 
@@ -104,7 +112,8 @@ const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
   'export': 'pdf.export',
   'extract': 'document.ai-extract',
   'watermark': 'image.watermark-remove',
-  'remove-bg': 'image.background-remove'
+  'remove-bg': 'image.background-remove',
+  'image-convert': 'image.convert'
 }
 
 export function operationIdFromSlug(slug: string): DocumentOperationId {
@@ -124,6 +133,14 @@ export interface BackgroundConfigModel {
   mode?: 'chroma' | 'ai'
   backdrop?: [number, number, number]
   tolerance?: number
+  [key: string]: unknown
+}
+
+/** Shape the image-convert panel emits and the server executor reads. */
+export interface ImageConvertConfigModel {
+  target?: 'png' | 'jpg' | 'webp' | 'ico'
+  sizes?: number[]
+  quality?: number
   [key: string]: unknown
 }
 

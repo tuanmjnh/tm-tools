@@ -10,6 +10,8 @@ export const DOCUMENT_FORMAT_IDS = [
   'png',
   'jpg',
   'webp',
+  'svg',
+  'ico',
   'txt',
   'zip'
 ] as const
@@ -103,6 +105,20 @@ export const DOCUMENT_FORMATS: readonly DocumentFormatDefinition[] = [
     previewKind: 'image'
   },
   {
+    id: 'svg',
+    extensions: ['svg'],
+    mimeTypes: ['image/svg+xml'],
+    category: 'image',
+    previewKind: 'image'
+  },
+  {
+    id: 'ico',
+    extensions: ['ico'],
+    mimeTypes: ['image/x-icon', 'image/vnd.microsoft.icon'],
+    category: 'image',
+    previewKind: 'image'
+  },
+  {
     id: 'txt',
     extensions: ['txt'],
     mimeTypes: ['text/plain'],
@@ -144,6 +160,24 @@ export const CONVERSION_MATRIX: readonly ConversionEdge[] = [
   { source: 'pdf', target: 'csv', operationId: 'pdf.export', strategy: 'structured-data', available: true },
   { source: 'pdf', target: 'json', operationId: 'pdf.export', strategy: 'structured-data', available: true },
   { source: 'pdf', target: 'xml', operationId: 'pdf.export', strategy: 'structured-data', available: true },
+  // Image ↔ image and icon conversions run on the bundled canvas, so they are
+  // local/electron only, exactly like pdf.rasterize.
+  { source: 'png', target: 'jpg', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'png', target: 'webp', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'jpg', target: 'png', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'jpg', target: 'webp', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'webp', target: 'png', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'webp', target: 'jpg', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'svg', target: 'png', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'svg', target: 'jpg', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'svg', target: 'webp', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'png', target: 'ico', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'jpg', target: 'ico', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'webp', target: 'ico', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'svg', target: 'ico', operationId: 'image.convert', strategy: 'layout', available: true, runtimeRestrictions: ['local', 'electron'] },
+  { source: 'ico', target: 'png', operationId: 'image.convert', strategy: 'binary', available: true, runtimeRestrictions: ['local', 'electron'] },
+  // webp → PDF now runs: pdf-lib embeds it after the canvas re-encodes to PNG.
+  { source: 'webp', target: 'pdf', operationId: 'pdf.images-to-pdf', strategy: 'layout', available: true },
   { source: 'xlsx', target: 'docx', operationId: 'spreadsheet.xlsx-to-docx', strategy: 'layout', available: false, reasonDisabled: 'Not implemented' },
   { source: 'docx', target: 'xlsx', operationId: 'document.docx-table-extract', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' },
   { source: 'xml', target: 'json', operationId: 'structured.xml-to-json', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' },
@@ -162,4 +196,3 @@ export function formatByExtension(ext: string): DocumentFormatDefinition | null 
 export function allowedTargetsFor(source: DocumentFormatId): ConversionEdge[] {
   return CONVERSION_MATRIX.filter(edge => edge.source === source)
 }
-

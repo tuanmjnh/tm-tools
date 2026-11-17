@@ -55,11 +55,13 @@ describe('name guards', () => {
     assert.equal(isPdfName('a.png'), false)
   })
 
-  it('recognises png/jpg/jpeg images only', () => {
+  it('recognises png/jpg/jpeg/webp images and rejects other files', () => {
     assert.equal(isImageName('a.png'), true)
     assert.equal(isImageName('a.JPG'), true)
     assert.equal(isImageName('a.jpeg'), true)
-    assert.equal(isImageName('a.webp'), false)
+    assert.equal(isImageName('a.webp'), true)
+    assert.equal(isImageName('a.pdf'), false)
+    assert.equal(isImageName('a.docx'), false)
   })
 })
 

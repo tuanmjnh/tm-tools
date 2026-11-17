@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 const { DOCUMENT_OPERATIONS, documentOperation } = await import('../../server/modules/document/operations')
 
-const PER_FILE = ['pdf.split', 'pdf.rasterize', 'document.convert-to-pdf', 'pdf.export', 'document.ai-extract']
+const PER_FILE = ['pdf.split', 'pdf.rasterize', 'document.convert-to-pdf', 'pdf.export', 'document.ai-extract', 'image.convert']
 const COMBINE = ['pdf.merge', 'pdf.images-to-pdf']
 
 describe('batch contract', () => {
@@ -34,6 +34,6 @@ describe('batch contract', () => {
   })
 
   it('does not change the operation count', () => {
-    assert.equal(DOCUMENT_OPERATIONS.length, 9)
+    assert.equal(DOCUMENT_OPERATIONS.length, 10)
   })
 })

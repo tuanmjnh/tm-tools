@@ -147,6 +147,8 @@
     "conversations": "Conversations",
     "noConversations": "No conversations yet",
     "selectModel": "Select model",
+    "sourceHub": "HUB",
+    "sourceApp": "APP",
     "checkModel": "Check model",
     "checkModelTooltip": "Check connection and quota for this model",
     "checkingModel": "Checking connection...",
@@ -1048,7 +1050,8 @@
       "connectionId": "Connection ID",
       "connectionIdDesc": "Must match the id the app sends: a hub connection id, or a name you choose.",
       "provider": "Provider",
-      "providerDesc": "Adapter family used for the call.",
+      "providerDesc": "Which provider this endpoint serves. The model picker uses it for the icon and name.",
+      "providerKeyless": "Keyless",
       "baseUrl": "Base URL",
       "baseUrlDesc": "Must be reachable from this machine, e.g. http://127.0.0.1:11434/v1",
       "models": "Models",
@@ -1057,7 +1060,7 @@
       "keySlotDesc": "Config slot encrypted by the OS keychain, e.g. AI_API_KEY or AI_API_KEY_OLLAMA.",
       "keyValue": "API key",
       "keyValueSaved": "Stored in the OS keychain. Leave empty to keep it.",
-      "keylessHint": "Leave the key slot and key empty for a keyless provider (Ollama, LM Studio).",
+      "keyValueHint": "Not stored. Leave empty when the provider is keyless (Ollama, LM Studio).",
       "test": "Test",
       "testing": "Testing...",
       "testOk": "Answered in {ms} ms",
@@ -3377,6 +3380,10 @@
       "removeBackground": {
         "title": "Remove background",
         "description": "Cut the backdrop out and keep a transparent PNG."
+      },
+      "imageConvert": {
+        "title": "Convert image / icon",
+        "description": "Convert between PNG, JPG, WEBP, and .ICO — from an image or SVG."
       }
     },
     "split": {
@@ -3510,6 +3517,16 @@
         "deleteNow": "Delete a result now",
         "deleteHint": "Any result can be deleted from Activity; the stored file is removed immediately."
       }
+    },
+    "imageConvert": {
+      "target": "Convert to",
+      "targetPngHint": "Lossless, keeps transparency.",
+      "targetJpgHint": "Smaller, no transparency (flattened to white).",
+      "targetWebpHint": "Small with transparency.",
+      "targetIcoHint": "Windows icon with the sizes you pick.",
+      "sizes": "Icon sizes",
+      "sizesHint": "Pick the sizes to embed. 512 is exported as a PNG beside the .ico.",
+      "quality": "Quality"
     }
   }
 }

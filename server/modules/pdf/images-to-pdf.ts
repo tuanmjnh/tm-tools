@@ -1,9 +1,18 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, extname, join } from 'node:path'
+import { createCanvas, loadImage } from '@napi-rs/canvas'
 import { PDFDocument } from 'pdf-lib'
 import { recordAudit } from './audit'
 import { ensureDir, writeFileAtomic } from './paths'
 import { isImageName, naturalCompare, safeFileName } from './security'
+
+/** pdf-lib embeds PNG/JPEG only; webp is decoded and re-encoded to PNG first. */
+async function webpToPng(bytes: Buffer): Promise<Uint8Array> {
+  const image = await loadImage(bytes)
+  const canvas = createCanvas(image.width, image.height)
+  canvas.getContext('2d').drawImage(image, 0, 0)
+  return new Uint8Array(canvas.toBuffer('image/png'))
+}
 
 export async function imagesToPdf(
   folderPath: string,
@@ -25,10 +34,16 @@ export async function imagesToPdf(
   const doc = await PDFDocument.create()
 
   for (const file of files) {
+    const ext = extname(file).toLowerCase()
     const bytes = readFileSync(join(folderPath, file))
-    const image = extname(file).toLowerCase() === '.png'
-      ? await doc.embedPng(bytes)
-      : await doc.embedJpg(bytes)
+    let image
+    if (ext === '.png') {
+      image = await doc.embedPng(bytes)
+    } else if (ext === '.webp') {
+      image = await doc.embedPng(await webpToPng(bytes))
+    } else {
+      image = await doc.embedJpg(bytes)
+    }
 
     const page = doc.addPage([image.width, image.height])
     page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })

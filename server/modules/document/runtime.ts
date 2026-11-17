@@ -200,6 +200,7 @@ const OVERRIDES: Record<DocumentRuntimeKind, Partial<Record<DocumentOperationId,
     'pdf.rasterize': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
     'image.watermark-remove': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
     'image.background-remove': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
+    'image.convert': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
     'document.ai-extract': { enabled: false, executionMode: 'worker', reasonDisabled: 'external-worker-required' },
     'pdf.export': { maxPages: 50 },
     'pdf.split': { maxPages: 100 },
@@ -221,7 +222,8 @@ const SCRATCH_MULTIPLIER: Record<DocumentOperationId, number> = {
   'document.ai-extract': 3,
   // Decoded RGBA at 4 bytes per pixel plus the encoded copy.
   'image.watermark-remove': 4,
-  'image.background-remove': 4
+  'image.background-remove': 4,
+  'image.convert': 4
 }
 
 export function policyFor(runtime: DocumentRuntimeKind = detectRuntime()): RuntimePolicy {

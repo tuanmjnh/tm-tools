@@ -147,6 +147,8 @@
     "conversations": "Lịch sử trò chuyện",
     "noConversations": "Chưa có cuộc hội thoại nào",
     "selectModel": "Chọn model",
+    "sourceHub": "HUB",
+    "sourceApp": "APP",
     "checkModel": "Kiểm tra model",
     "checkModelTooltip": "Kiểm tra kết nối và hạn mức của model này",
     "checkingModel": "Đang kiểm tra kết nối...",
@@ -1048,7 +1050,8 @@
       "connectionId": "ID kết nối",
       "connectionIdDesc": "Phải trùng id app gửi lên: id kết nối trên Hub, hoặc tên bạn tự đặt.",
       "provider": "Nhà cung cấp",
-      "providerDesc": "Kiểu adapter dùng cho lời gọi.",
+      "providerDesc": "Nhà cung cấp mà endpoint này phục vụ. Danh sách model dùng nó cho icon và tên.",
+      "providerKeyless": "Không cần key",
       "baseUrl": "Base URL",
       "baseUrlDesc": "Phải truy cập được từ máy này, ví dụ http://127.0.0.1:11434/v1",
       "models": "Model",
@@ -1057,7 +1060,7 @@
       "keySlotDesc": "Ô cấu hình được OS keychain mã hoá, ví dụ AI_API_KEY hoặc AI_API_KEY_OLLAMA.",
       "keyValue": "API key",
       "keyValueSaved": "Đã lưu trong OS keychain. Để trống nếu muốn giữ nguyên.",
-      "keylessHint": "Để trống ô lưu key và API key nếu nhà cung cấp không cần key (Ollama, LM Studio).",
+      "keyValueHint": "Chưa lưu. Để trống nếu nhà cung cấp không cần key (Ollama, LM Studio).",
       "test": "Kiểm tra",
       "testing": "Đang kiểm tra...",
       "testOk": "Phản hồi sau {ms} ms",
@@ -3377,6 +3380,10 @@
       "removeBackground": {
         "title": "Xoá phông nền",
         "description": "Tách nền và giữ lại ảnh PNG trong suốt."
+      },
+      "imageConvert": {
+        "title": "Chuyển ảnh / icon",
+        "description": "Chuyển đổi giữa PNG, JPG, WEBP và .ICO — từ ảnh hoặc SVG."
       }
     },
     "split": {
@@ -3510,6 +3517,16 @@
         "deleteNow": "Xoá kết quả ngay",
         "deleteHint": "Có thể xoá bất kỳ kết quả nào trong Hoạt động; tệp lưu trữ bị xoá ngay."
       }
+    },
+    "imageConvert": {
+      "target": "Chuyển sang",
+      "targetPngHint": "Không mất dữ liệu, giữ nền trong suốt.",
+      "targetJpgHint": "Nhỏ hơn, không có nền trong suốt (nền trắng).",
+      "targetWebpHint": "Nhỏ gọn, giữ nền trong suốt.",
+      "targetIcoHint": "Icon Windows với các kích thước bạn chọn.",
+      "sizes": "Kích thước icon",
+      "sizesHint": "Chọn kích thước nhúng. 512 sẽ xuất thành PNG kèm file .ico.",
+      "quality": "Chất lượng"
     }
   }
 }

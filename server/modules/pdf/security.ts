@@ -72,7 +72,7 @@ export function isPdfName(name: string): boolean {
 }
 
 export function isImageName(name: string): boolean {
-  return /\.(png|jpe?g)$/i.test(name)
+  return /\.(png|jpe?g|webp)$/i.test(name)
 }
 
 /**

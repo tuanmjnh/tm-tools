@@ -5,7 +5,7 @@ import type {
 } from '#shared/types/document'
 
 const PDF = ['pdf']
-const IMAGES = ['png', 'jpg', 'jpeg']
+const IMAGES = ['png', 'jpg', 'jpeg', 'webp']
 /**
  * The cleanup engine decodes with the native canvas, which handles webp; the
  * PNG/JPEG-only list above stays untouched because images→PDF embeds bytes
@@ -157,6 +157,22 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     input: { mode: 'single-file', acceptedExtensions: IMAGE_CLEANUP, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
     configuration: { componentKey: 'background', hasAdvancedOptions: false },
     output: { artifactMode: 'single', defaultFileNamePattern: '{stem}_nobg.png', mimeTypes: ['image/png'] },
+    execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
+    batch: { mode: 'per-file', maxFiles: 50 }
+  },
+  {
+    id: 'image.convert',
+    version: '1.0.0',
+    category: 'image',
+    titleKey: 'document.operations.imageConvert.title',
+    descriptionKey: 'document.operations.imageConvert.description',
+    icon: 'i-lucide-repeat-2',
+    enabled: true,
+    // SVG is accepted as a source (rasterised by the bundled canvas); `.ico`
+    // is accepted so an icon can be read back to PNG.
+    input: { mode: 'single-file', acceptedExtensions: ['png', 'jpg', 'jpeg', 'webp', 'svg', 'ico'], minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    configuration: { componentKey: 'image-convert', hasAdvancedOptions: false },
+    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/x-icon'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
     batch: { mode: 'per-file', maxFiles: 50 }
   }

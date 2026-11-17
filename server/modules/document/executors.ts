@@ -21,6 +21,7 @@ import { inputBufferToPdf } from '../pdf/convert'
 import { pdfToDocx } from '../pdf/office/pdfToDocx'
 import { writeProducts } from '../pdf/extract/export'
 import { BackgroundExecutor, WatermarkExecutor } from './image-executors'
+import { ImageConvertExecutor } from './image-convert-executor'
 import { ensureDir, writeFileAtomic } from '../pdf/paths'
 import { documentStem, naturalCompare, safeFileName, safeStem } from '../pdf/security'
 import { config } from '#server/config'
@@ -378,7 +379,8 @@ const EXECUTORS: Record<string, DocumentOperationExecutor<never>> = {
   'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>,
   'document.ai-extract': new AiExtractExecutor() as unknown as DocumentOperationExecutor<never>,
   'image.watermark-remove': new WatermarkExecutor() as unknown as DocumentOperationExecutor<never>,
-  'image.background-remove': new BackgroundExecutor() as unknown as DocumentOperationExecutor<never>
+  'image.background-remove': new BackgroundExecutor() as unknown as DocumentOperationExecutor<never>,
+  'image.convert': new ImageConvertExecutor() as unknown as DocumentOperationExecutor<never>
 }
 
 export function executorFor(operationId: DocumentOperationId): DocumentOperationExecutor<never> {
