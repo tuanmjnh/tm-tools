@@ -115,10 +115,18 @@ function localConnectionAsCatalog(entry: AppAIConnection): CatalogConnection {
  *
  * Database first: a signed-in user's per-account rows are the source of truth and env is the
  * bootstrap import; with no signed-in user (background work such as PDF extraction) the same env
- * fallback the gateway always used is returned.
+ * fallback the gateway always used is returned. An unavailable account store degrades to that env
+ * reader instead of failing the catalogue.
  */
 export async function fetchAICatalog(event?: H3Event): Promise<CatalogConnection[]> {
-  const local = (await configuredConnections(event, readLocalRaw(event))).map(localConnectionAsCatalog)
+  let entries: AppAIConnection[]
+  try {
+    entries = await configuredConnections(event, readLocalRaw(event))
+  } catch (err) {
+    console.warn('[ai-gateway] account AI config unavailable; using env:', (err as Error).message)
+    entries = readLocalConfig(event).connections
+  }
+  const local = entries.map(localConnectionAsCatalog)
 
   let hub: CatalogConnection[] = []
   try {
@@ -167,10 +175,17 @@ function localError(err: unknown, entry: AppAIConnection) {
 /**
  * Chat through the mode that owns the connection. Signature is the relay's, so
  * existing callers only change their import. A catalogue id may carry the
- * `app:` namespace; the configured connection id never does.
+ * `app:` namespace; the configured connection id never does. An unavailable
+ * account store degrades to the env reader, so the relay stays reachable.
  */
 export async function chatWithConnection(body: GatewayChatBody, event?: H3Event): Promise<RelayChatResult> {
-  const entry = await findConfiguredConnection(body.connectionId, event, readLocalRaw(event))
+  let entry: AppAIConnection | undefined
+  try {
+    entry = await findConfiguredConnection(body.connectionId, event, readLocalRaw(event))
+  } catch (err) {
+    console.warn('[ai-gateway] account AI config unavailable; using env:', (err as Error).message)
+    entry = findLocalConnection(body.connectionId, event)
+  }
   if (!entry) return relayChat(body, event)
 
   const messages = body.systemPrompt?.trim()

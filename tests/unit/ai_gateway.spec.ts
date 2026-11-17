@@ -174,30 +174,68 @@ describe('AI gateway local mode', () => {
 
   it('catalogue includes a DB row even when both env sources are empty', async () => {
     const storeMod = await import('../../server/utils/aiConfigStore')
-    storeMod.__setTestHooks({ db: freshFakeDb() })
-    await storeMod.aiConfigStore('u1').upsertConnection({
-      connectionId: 'db-lab',
-      providerKey: 'openai-compatible',
-      baseUrl: 'http://127.0.0.1:9/v1',
-      apiKeyCipher: '',
-      enabled: true,
-      models: [{ modelId: 'auto', enabled: true }]
-    })
-
     const globals = globalThis as unknown as Record<string, unknown>
     const runtime = globals.useRuntimeConfig
     const previousEnv = process.env.AI_LOCAL_CONNECTIONS
     globals.useRuntimeConfig = () => ({ aiLocalConnections: '' })
     delete process.env.AI_LOCAL_CONNECTIONS
     try {
+      storeMod.__setTestHooks({ db: freshFakeDb() })
+      await storeMod.aiConfigStore('u1').upsertConnection({
+        connectionId: 'db-lab',
+        providerKey: 'openai-compatible',
+        baseUrl: 'http://127.0.0.1:9/v1',
+        apiKeyCipher: '',
+        enabled: true,
+        models: [{ modelId: 'auto', enabled: true }]
+      })
       const { fetchAICatalog } = await import('../../server/utils/aiGateway')
       const catalog = await fetchAICatalog({ context: { auth: { userId: 'u1' } } } as never)
       const app = catalog.find(connection => connection.connectionId === 'app:db-lab')
       assert.ok(app, 'expected the app-local catalogue row')
       assert.equal(app.source, 'app')
       assert.deepEqual(app.models.map(model => model.modelId), ['auto'])
+      assert.equal(app.hasKey, true)
     } finally {
       globals.useRuntimeConfig = runtime
+      if (previousEnv === undefined) delete process.env.AI_LOCAL_CONNECTIONS
+      else process.env.AI_LOCAL_CONNECTIONS = previousEnv
+      storeMod.__setTestHooks({})
+    }
+  })
+
+  it('degrades to the env reader when the account store throws', async () => {
+    const storeMod = await import('../../server/utils/aiConfigStore')
+    storeMod.__setTestHooks({
+      db: {
+        collection() {
+          throw new Error('mongo unreachable')
+        }
+      }
+    })
+    const globals = globalThis as unknown as Record<string, unknown>
+    const runtime = globals.useRuntimeConfig
+    const hubFetch = globals.$fetch
+    const previousEnv = process.env.AI_LOCAL_CONNECTIONS
+    globals.useRuntimeConfig = () => ({
+      aiLocalConnections: '',
+      hubAppSecret: 'test-secret',
+      public: { hubUrl: 'http://hub.test', hubAppId: 'tm-tools_test' }
+    })
+    globals.$fetch = async () => {
+      throw Object.assign(new Error('hub unavailable'), { statusCode: 503, data: { message: 'hub unavailable' } })
+    }
+    delete process.env.AI_LOCAL_CONNECTIONS
+    try {
+      const { fetchAICatalog } = await import('../../server/utils/aiGateway')
+      await assert.rejects(
+        () => fetchAICatalog({ context: { auth: { userId: 'u1' } } } as never),
+        (err: { statusCode?: number, message?: string }) =>
+          err.statusCode === 503 && String(err.message).includes('hub unavailable')
+      )
+    } finally {
+      globals.useRuntimeConfig = runtime
+      globals.$fetch = hubFetch
       if (previousEnv === undefined) delete process.env.AI_LOCAL_CONNECTIONS
       else process.env.AI_LOCAL_CONNECTIONS = previousEnv
       storeMod.__setTestHooks({})
