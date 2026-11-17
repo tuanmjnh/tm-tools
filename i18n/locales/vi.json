@@ -3427,7 +3427,8 @@
       "DOCUMENT_AI_INVALID_RESPONSE": "Model trả về văn bản không phải JSON như yêu cầu. Hãy thử lại, hoặc đổi sang model tuân thủ schema tốt hơn.",
       "DOCUMENT_AI_EMPTY_RESPONSE": "Model trả về rỗng hoặc trang không tạo được ảnh. Hãy thử lại trang đó.",
       "DOCUMENT_AI_RELAY_FAILED": "Relay TM Hub không kết nối được tới nhà cung cấp model. Kiểm tra kết nối rồi thử lại.",
-      "DOCUMENT_AI_EXTRACT_FAILED": "Trích xuất thất bại. Xem nhật ký công việc để biết mã lỗi của engine."
+      "DOCUMENT_AI_EXTRACT_FAILED": "Trích xuất thất bại. Xem nhật ký công việc để biết mã lỗi của engine.",
+      "DOCUMENT_IMAGE_MODEL_UNAVAILABLE": "Máy này chưa cài model AI tách nền. Hãy cài model để dùng chế độ này, hoặc chuyển sang khoá màu."
     },
     "convert": {
       "configHint": "Word, Excel và file dữ liệu được dựng lại thành bố cục PDF, không phải bản sao từng điểm ảnh."

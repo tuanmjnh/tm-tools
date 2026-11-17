@@ -3427,7 +3427,8 @@
       "DOCUMENT_AI_INVALID_RESPONSE": "The model returned text that was not the expected JSON. Retry, or switch to a model that follows the schema more reliably.",
       "DOCUMENT_AI_EMPTY_RESPONSE": "The model returned an empty answer or the page produced no image. Retry the page.",
       "DOCUMENT_AI_RELAY_FAILED": "The TM Hub relay could not reach the model provider. Check the connection and try again.",
-      "DOCUMENT_AI_EXTRACT_FAILED": "Extraction failed. Open the job journal for the engine code."
+      "DOCUMENT_AI_EXTRACT_FAILED": "Extraction failed. Open the job journal for the engine code.",
+      "DOCUMENT_IMAGE_MODEL_UNAVAILABLE": "The AI background model is not installed on this machine. Install the model to use this mode, or switch to the colour key."
     },
     "convert": {
       "configHint": "Word, Excel and data files are rebuilt as a PDF layout, not converted pixel-for-pixel."

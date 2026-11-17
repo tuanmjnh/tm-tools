@@ -77,7 +77,7 @@ export class BackgroundExecutor implements DocumentOperationExecutor<BackgroundC
         // A missing or hash-mismatched model is an install problem, not a job
         // failure; say so instead of reporting a generic processing error.
         if (error instanceof Error && error.message === 'IMAGE_MODEL_MISSING') {
-          throw new DocumentError('DOCUMENT_AI_MODEL_UNAVAILABLE')
+          throw new DocumentError('DOCUMENT_IMAGE_MODEL_UNAVAILABLE')
         }
         throw error
       }
