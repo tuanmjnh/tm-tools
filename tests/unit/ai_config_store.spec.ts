@@ -94,6 +94,14 @@ await check('decryption resolves the inline key for server calls', async () => {
   assert.deepEqual(entries[0].models.map(m => m.modelId), ['llama3.2'])
 })
 
+await check('GET payload contract carries no ciphertext', async () => {
+  const rows = (await mod.aiConfigStore('u1').listConnections()).map(mod.safeConnection)
+  const json = JSON.stringify(rows)
+  assert.equal(json.includes('apiKeyCipher'), false)
+  assert.equal(json.includes('v1.'), false)
+  assert.equal(json.includes('legacy-key'), false)
+})
+
 if (failures) {
   console.log(`${failures} FAILED`)
   process.exit(1)
