@@ -5,6 +5,7 @@ import type { ImageRegion, RasterImage } from '../image/types'
 import { DocumentError } from './operations'
 import { decodeImage } from '../image/decode'
 import { encodePng } from '../image/encode'
+import { chromaKey, type Rgb } from '../image/background'
 import { fillRegion } from '../image/watermark'
 import { proposeCornerRegion, resolveRegion, type RegionInput } from '../image/regions'
 import { writeFileAtomic } from '../pdf/paths'
@@ -35,6 +36,52 @@ function checkedRegion(region: ImageRegion): ImageRegion {
 
 function outputStem(name: string): string {
   return safeFileName(name).replace(/\.[^.]+$/, '') || 'image'
+}
+
+export interface BackgroundConfig {
+  mode?: 'chroma' | 'ai'
+  backdrop?: Rgb
+  tolerance?: number
+}
+
+function checkedBackdrop(backdrop: Rgb | undefined): Rgb {
+  if (!backdrop) return [255, 255, 255]
+  const valid = backdrop.length === 3 && backdrop.every(channel => Number.isInteger(channel) && channel >= 0 && channel <= 255)
+  if (!valid) throw new DocumentError('DOCUMENT_OPERATION_CONFIG_INVALID', { field: 'backdrop' })
+  return backdrop
+}
+
+export class BackgroundExecutor implements DocumentOperationExecutor<BackgroundConfig> {
+  readonly operationId = 'image.background-remove' as const
+
+  async validateInputs(inputs: VerifiedInput[]): Promise<ValidationResult> {
+    return inputs.length === 1
+      ? { ok: true, issues: [] }
+      : { ok: false, issues: [{ code: 'DOCUMENT_INPUT_COUNT_INVALID' }] }
+  }
+
+  async execute(context: OperationExecutionContext, config: BackgroundConfig = {}) {
+    if (config.mode === 'ai') throw new DocumentError('DOCUMENT_AI_MODEL_UNAVAILABLE')
+
+    const input = single(context.inputs)
+    await context.onProgress({ totalUnits: 3, completedUnits: 0 })
+
+    const image = await decodeImage(new Uint8Array(readFileSync(input.stagedPath)), input.extension)
+    await context.onProgress({ totalUnits: 3, completedUnits: 1 })
+
+    const tolerance = Math.max(0, Math.min(255, Math.round(config.tolerance ?? 30)))
+    const cleaned = chromaKey(image, checkedBackdrop(config.backdrop), tolerance)
+    await context.onProgress({ totalUnits: 3, completedUnits: 2 })
+
+    const fileName = `${outputStem(input.safeName)}_nobg.png`
+    const target = join(context.workspace.outputDir, fileName)
+    writeFileAtomic(target, encodePng(cleaned))
+    await context.onProgress({ totalUnits: 3, completedUnits: 3 })
+
+    return {
+      files: [{ fileName, mimeType: 'image/png', path: target, size: statSync(target).size }]
+    }
+  }
 }
 
 export class WatermarkExecutor implements DocumentOperationExecutor<WatermarkConfig> {

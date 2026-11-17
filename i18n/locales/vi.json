@@ -3185,6 +3185,16 @@
       "manualFallback": "Chưa chọn vùng — hệ thống dùng góc dưới bên phải.",
       "limitNote": "Phần lấp sao chép các pixel xung quanh. Trên nền nhiều chi tiết vẫn sẽ thấy một mảng."
     },
+    "removeBackground": {
+      "mode": "Cách xoá",
+      "modeChroma": "Theo màu nền",
+      "modeChromaHint": "Chính xác, dùng cho phông phẳng.",
+      "modeAi": "Mô hình AI",
+      "modeAiHint": "Dùng được với mọi phông nền. Cần tải mô hình.",
+      "backdrop": "Màu phông nền",
+      "tolerance": "Độ dung sai",
+      "aiPending": "Mô hình AI chưa được cài. Hiện có thể tách theo màu nền."
+    },
     "connection": {
       "title": "Thiết bị này chưa kết nối với Hub",
       "notConfigured": "Máy chủ cục bộ chưa có secret JWT chia sẻ nên không xác minh được phiên đăng nhập, danh sách công cụ vì thế trống. Hãy mở cài đặt kết nối Hub và dán đúng giá trị AUTH_JWT_SECRET mà TM Hub đang dùng.",
@@ -3363,6 +3373,10 @@
       "watermark": {
         "title": "Xoá vùng đánh dấu",
         "description": "Xoá một vùng được chọn và lấp lại bằng các pixel xung quanh."
+      },
+      "removeBackground": {
+        "title": "Xoá phông nền",
+        "description": "Tách nền và giữ lại ảnh PNG trong suốt."
       }
     },
     "split": {

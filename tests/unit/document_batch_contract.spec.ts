@@ -34,6 +34,6 @@ describe('batch contract', () => {
   })
 
   it('does not change the operation count', () => {
-    assert.equal(DOCUMENT_OPERATIONS.length, 8)
+    assert.equal(DOCUMENT_OPERATIONS.length, 9)
   })
 })

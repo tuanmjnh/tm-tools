@@ -78,6 +78,14 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     icon: 'i-lucide-eraser',
     route: '/document-studio/tools/watermark',
     category: 'image'
+  },
+  {
+    id: 'image.background-remove',
+    titleKey: 'document.operations.removeBackground.title',
+    descriptionKey: 'document.operations.removeBackground.description',
+    icon: 'i-lucide-scissors-line-dashed',
+    route: '/document-studio/tools/remove-bg',
+    category: 'image'
   }
 ]
 
@@ -95,7 +103,8 @@ const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
   'convert': 'document.convert-to-pdf',
   'export': 'pdf.export',
   'extract': 'document.ai-extract',
-  'watermark': 'image.watermark-remove'
+  'watermark': 'image.watermark-remove',
+  'remove-bg': 'image.background-remove'
 }
 
 export function operationIdFromSlug(slug: string): DocumentOperationId {
@@ -107,6 +116,14 @@ export interface WatermarkConfigModel {
   mode?: 'manual' | 'batch' | 'auto'
   region?: { x: number, y: number, width: number, height: number }
   regionRatio?: { xRatio: number, yRatio: number, widthRatio: number, heightRatio: number }
+  [key: string]: unknown
+}
+
+/** Shape the background panel emits and the server executor reads. */
+export interface BackgroundConfigModel {
+  mode?: 'chroma' | 'ai'
+  backdrop?: [number, number, number]
+  tolerance?: number
   [key: string]: unknown
 }
 

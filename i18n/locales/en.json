@@ -3185,6 +3185,16 @@
       "manualFallback": "No area selected yet — the bottom-right corner is used.",
       "limitNote": "The fill copies the surrounding pixels. Over detailed content you will still see a patch."
     },
+    "removeBackground": {
+      "mode": "Method",
+      "modeChroma": "Colour key",
+      "modeChromaHint": "Exact, for a flat backdrop.",
+      "modeAi": "AI model",
+      "modeAiHint": "Works on any backdrop. Needs a download.",
+      "backdrop": "Backdrop colour",
+      "tolerance": "Tolerance",
+      "aiPending": "The AI model is not installed yet. Colour key is available now."
+    },
     "connection": {
       "title": "This device is not connected to Hub",
       "notConfigured": "The local server has no shared JWT secret, so it cannot verify your session and every tool list stays empty. Open the Hub connection settings and paste the same AUTH_JWT_SECRET value TM Hub uses.",
@@ -3363,6 +3373,10 @@
       "watermark": {
         "title": "Remove watermark",
         "description": "Erase a marked area and fill it from the surrounding pixels."
+      },
+      "removeBackground": {
+        "title": "Remove background",
+        "description": "Cut the backdrop out and keep a transparent PNG."
       }
     },
     "split": {

@@ -145,6 +145,20 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     output: { artifactMode: 'single', defaultFileNamePattern: '{stem}_clean.png', mimeTypes: ['image/png'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
     batch: { mode: 'per-file', maxFiles: 50 }
+  },
+  {
+    id: 'image.background-remove',
+    version: '1.0.0',
+    category: 'image',
+    titleKey: 'document.operations.removeBackground.title',
+    descriptionKey: 'document.operations.removeBackground.description',
+    icon: 'i-lucide-scissors-line-dashed',
+    enabled: true,
+    input: { mode: 'single-file', acceptedExtensions: IMAGE_CLEANUP, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    configuration: { componentKey: 'background', hasAdvancedOptions: false },
+    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}_nobg.png', mimeTypes: ['image/png'] },
+    execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
+    batch: { mode: 'per-file', maxFiles: 50 }
   }
 ]
 
