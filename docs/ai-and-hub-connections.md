@@ -131,7 +131,9 @@ variable is a server-deployment mechanism, not something a packaged app holds.
   requires a **redeploy** before the new value is used.
 - MongoDB Atlas must accept Vercel's egress addresses (Atlas **Network Access**;
   `0.0.0.0/0` is the usual choice for serverless). While Atlas refuses the
-  connection, every AI call that needs a stored connection answers 503.
+  connection, every AI call that needs a stored connection fails with a server
+  error: `getSharedConnection()` throws a plain `MongoDB is not reachable`, and
+  tm-tools has no dedicated `error.mongo*` code to translate it.
 
 ## Rules for contributors
 
