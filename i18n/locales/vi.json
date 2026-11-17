@@ -3196,7 +3196,14 @@
       "modeAiHint": "Dùng được với mọi phông nền. Cần tải mô hình.",
       "backdrop": "Màu phông nền",
       "tolerance": "Độ dung sai",
-      "aiPending": "Mô hình AI chưa được cài. Hiện có thể tách theo màu nền."
+      "aiPending": "Mô hình AI chưa được cài. Hiện có thể tách theo màu nền.",
+      "modelReady": "Đã cài và xác minh model AI.",
+      "modelMissing": "Chưa cài model AI",
+      "modelMissingHint": "Tải model phân vùng từ nguồn chính thức ({size}). Sẽ được xác minh sau khi tải.",
+      "installing": "Đang cài model AI… {percent}%",
+      "install": "Tải model AI ({size})",
+      "retryInstall": "Tải lại",
+      "installFailed": "Tải model thất bại. Kiểm tra kết nối và thử lại."
     },
     "connection": {
       "title": "Thiết bị này chưa kết nối với Hub",

@@ -1,35 +1,33 @@
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-import { config } from '#server/config'
+import {
+  MODEL_FILE,
+  expectedModelSha256 as installerExpectedSha256,
+  modelStatus as installerStatus,
+  resolveModelPath,
+  verifyModel as installerVerifyModel
+} from './model-installer'
 
-export const MODEL_FILE = 'isnet-general-use.onnx'
+export { MODEL_FILE }
 
 /**
- * Same resolution as `resolveBundledTool`: an explicit env override first, then
- * the resources folder the desktop installer ships. An empty status means "not
- * installed"; callers report that instead of throwing a random fs error.
+ * Same resolution as `resolveBundledTool`: an explicit `IMAGE_MODEL_PATH`
+ * override first, then the writable data directory the model installer writes
+ * into. A packaged Electron app cannot write next to its binary, so the path
+ * must never be cwd-relative — `model-installer` owns that rule.
  */
 export function modelPath(): string {
-  const override = process.env.IMAGE_MODEL_PATH?.trim()
-  if (override) return override
-  return join(process.cwd(), 'resources', 'models', MODEL_FILE)
+  return resolveModelPath()
 }
 
-export function modelStatus(): { installed: boolean, path: string, bytes: number } {
-  const path = modelPath()
-  if (!existsSync(path)) return { installed: false, path, bytes: 0 }
-  return { installed: true, path, bytes: statSync(path).size }
+export function modelStatus(): { installed: boolean, path: string, bytes: number, verified: boolean } {
+  const status = installerStatus()
+  return { installed: status.installed, path: status.path, bytes: status.bytes, verified: status.verified }
 }
 
 /** A truncated or substituted download must never reach the session. */
 export function verifyModel(path: string, expectedSha256: string): boolean {
-  if (!expectedSha256) return false
-  if (!existsSync(path)) return false
-  const actual = createHash('sha256').update(readFileSync(path)).digest('hex')
-  return actual === expectedSha256.toLowerCase()
+  return installerVerifyModel(path, expectedSha256)
 }
 
 export function expectedModelSha256(): string {
-  return config.document.imageModelSha256
+  return installerExpectedSha256()
 }

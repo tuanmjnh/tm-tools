@@ -212,6 +212,20 @@ export function useDocumentApi() {
         maxTempBytes: number
         maxInlineDurationMs: number
       }
-    }>('/health')
+    }>('/health'),
+    imageModelStatus: () => get<{
+      installed: boolean
+      verified: boolean
+      bytes: number
+      expectedBytes: number
+      version: string
+      sha256: string
+      url: string
+      installing: boolean
+      progress: { percent: number, receivedBytes: number, totalBytes: number } | null
+    }>('/image-model/status'),
+    installImageModel: () => post<{ started: boolean, installed?: boolean, installing?: boolean, bytes?: number }>(
+      '/image-model/install'
+    )
   }
 }

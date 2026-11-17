@@ -12,8 +12,72 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const api = useDocumentApi()
 
 const mode = computed(() => props.modelValue?.mode ?? 'chroma')
+
+// ── AI model install state ────────────────────────────────────────────────
+const modelInstalled = ref(false)
+const modelVerified = ref(false)
+const modelBytes = ref(0)
+const modelExpectedBytes = ref(0)
+const installing = ref(false)
+const installPercent = ref(0)
+const installError = ref('')
+let poll: ReturnType<typeof setInterval> | null = null
+
+function stopPoll() {
+  if (poll) {
+    clearInterval(poll)
+    poll = null
+  }
+}
+
+async function refreshModel() {
+  try {
+    const status = await api.imageModelStatus()
+    modelInstalled.value = status.installed
+    modelVerified.value = status.verified
+    modelBytes.value = status.bytes
+    modelExpectedBytes.value = status.expectedBytes
+    installing.value = status.installing
+    if (status.installing && status.progress) installPercent.value = status.progress.percent
+    if (status.verified) stopPoll()
+  } catch {
+    // A missing route or unconfigured runtime just means "not installed".
+  }
+}
+
+async function installModel() {
+  if (installing.value) return
+  installing.value = true
+  installError.value = ''
+  installPercent.value = 0
+  stopPoll()
+  poll = setInterval(() => {
+    void refreshModel()
+  }, 1000)
+  try {
+    await api.installImageModel()
+    await refreshModel()
+  } catch {
+    installError.value = t('document.removeBackground.installFailed')
+  } finally {
+    installing.value = false
+    stopPoll()
+    await refreshModel()
+  }
+}
+
+const sizeLabel = computed(() => {
+  const bytes = modelExpectedBytes.value || modelBytes.value
+  return bytes ? `${(bytes / (1024 * 1024)).toFixed(0)} MB` : ''
+})
+
+onMounted(() => {
+  void refreshModel()
+})
+onBeforeUnmount(stopPoll)
 
 const modes = computed(() => [
   { value: 'chroma' as const, label: t('document.removeBackground.modeChroma'), hint: t('document.removeBackground.modeChromaHint') },
@@ -98,8 +162,56 @@ const backdropHex = computed({
       </UFormField>
     </template>
 
-    <p v-else class="rounded-md bg-warning/10 p-2 text-xs text-warning">
-      {{ t('document.removeBackground.aiPending') }}
-    </p>
+    <div v-if="mode === 'ai'" class="space-y-2">
+      <div
+        v-if="modelVerified"
+        class="flex items-center gap-2 rounded-md bg-success/10 p-2 text-xs text-success"
+      >
+        <UIcon name="i-lucide-circle-check" class="size-4 shrink-0" />
+        <span>{{ t('document.removeBackground.modelReady') }}</span>
+      </div>
+
+      <UAlert
+        v-else-if="installError"
+        color="error"
+        variant="subtle"
+        icon="i-lucide-circle-alert"
+        :title="t('document.removeBackground.modelMissing')"
+        :description="installError"
+      >
+        <template #actions>
+          <UButton
+            size="sm"
+            color="primary"
+            variant="soft"
+            icon="i-lucide-refresh-cw"
+            :label="t('document.removeBackground.retryInstall')"
+            @click="installModel"
+          />
+        </template>
+      </UAlert>
+
+      <div v-else class="space-y-2 rounded-md border border-default/60 p-3">
+        <p class="text-xs text-muted">
+          {{ t('document.removeBackground.modelMissingHint', { size: sizeLabel }) }}
+        </p>
+        <div v-if="installing" class="space-y-1">
+          <UProgress :model-value="installPercent" size="xs" />
+          <p class="text-[11px] text-muted">
+            {{ t('document.removeBackground.installing', { percent: installPercent }) }}
+          </p>
+        </div>
+        <UButton
+          v-else
+          size="sm"
+          color="primary"
+          variant="soft"
+          icon="i-lucide-download"
+          block
+          :label="t('document.removeBackground.install', { size: sizeLabel })"
+          @click="installModel"
+        />
+      </div>
+    </div>
   </div>
 </template>

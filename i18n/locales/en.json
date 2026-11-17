@@ -3196,7 +3196,14 @@
       "modeAiHint": "Works on any backdrop. Needs a download.",
       "backdrop": "Backdrop colour",
       "tolerance": "Tolerance",
-      "aiPending": "The AI model is not installed yet. Colour key is available now."
+      "aiPending": "The AI model is not installed yet. Colour key is available now.",
+      "modelReady": "AI model installed and verified.",
+      "modelMissing": "AI model not installed",
+      "modelMissingHint": "Download the segmentation model from its official source ({size}). It is verified after download.",
+      "installing": "Installing AI model… {percent}%",
+      "install": "Download AI model ({size})",
+      "retryInstall": "Retry download",
+      "installFailed": "The model download failed. Check your connection and try again."
     },
     "connection": {
       "title": "This device is not connected to Hub",
