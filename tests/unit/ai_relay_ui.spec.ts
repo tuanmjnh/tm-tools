@@ -159,3 +159,11 @@ describe('model check quick action', () => {
     assert.equal(result.reasonCode, 'timeout')
   })
 })
+
+describe('AI config endpoint boundaries', () => {
+  it('the connection PUT rejects apiKeyEnv outside the AI_API_KEY namespace', () => {
+    const source = read('server/api/v1/ai/connections/index.put.ts')
+    assert.match(source, /AI_API_KEY\(_\[A-Z0-9_\]\+\)\?/)
+    assert.match(source, /apiKeyEnv must be/)
+  })
+})
