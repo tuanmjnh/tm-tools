@@ -1,11 +1,16 @@
-import type { RelayCatalogConnection } from './aiRelay'
+import type { CatalogConnection } from '@tuanmjnh/tm-ai-client'
 
 export interface ChatModelOption {
   connectionId: string
   connectionName: string
   provider: string
+  providerName?: string
   modelId: string
   displayName: string
+  /** Which source owns the row; the picker badges an overlapping provider. */
+  source?: 'hub' | 'app'
+  /** An identical provider+model exists on the other source; never offered. */
+  shadowed?: boolean
   isPrimary?: boolean
 }
 
@@ -28,24 +33,31 @@ export function isTextModel(modelId: string): boolean {
 }
 
 /**
- * Flattens the relay catalogue into the chat picker shape. A connection only
- * appears when it holds a key, and a model only when it can actually answer.
+ * Flattens the merged catalogue into the chat picker shape. A connection only
+ * appears when it holds a key, a model only when it can answer, and a shadowed
+ * model never: the app-local twin already represents it.
  */
-export function chatModelsFromCatalog(connections: RelayCatalogConnection[]): ChatModelOption[] {
+export function chatModelsFromCatalog(connections: CatalogConnection[]): ChatModelOption[] {
   const data: ChatModelOption[] = []
   for (const connection of connections) {
     if (!connection.hasKey) continue
     for (const model of connection.models ?? []) {
-      if (!model.modelId || !isTextModel(model.modelId)) continue
+      if (!model.modelId || model.shadowed || !isTextModel(model.modelId)) continue
+      const displayName = model.displayName || bareModelId(model.modelId)
       data.push({
         connectionId: connection.connectionId,
         connectionName: connection.name,
         provider: connection.provider,
+        providerName: connection.providerName,
         modelId: model.modelId,
-        displayName: model.displayName || bareModelId(model.modelId),
+        displayName: connection.source === 'app' && connection.name
+          ? `${displayName} · ${connection.name}`
+          : displayName,
+        source: connection.source,
+        shadowed: model.shadowed,
         isPrimary: connection.model === model.modelId
       })
     }
   }
-  return data
+  return data.sort((a, b) => Number(b.source === 'app') - Number(a.source === 'app'))
 }

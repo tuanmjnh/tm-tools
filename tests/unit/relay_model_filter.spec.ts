@@ -103,4 +103,72 @@ describe('chat model catalogue', () => {
     assert.equal(data[0]!.displayName, 'gpt-4o')
     assert.equal(data[0]!.isPrimary, true)
   })
+
+  it('never offers a hub twin that an app-local connection already provides', () => {
+    const data = chatModelsFromCatalog([
+      {
+        connectionId: 'app:local',
+        provider: 'nvidia',
+        providerName: 'NVIDIA NIM',
+        name: '127.0.0.1:11434',
+        adapterType: 'openai-compatible',
+        hasKey: true,
+        model: 'nemotron',
+        models: [{ modelId: 'nemotron' }],
+        source: 'app'
+      },
+      {
+        connectionId: 'hub-nvidia',
+        provider: 'nvidia',
+        providerName: 'NVIDIA NIM',
+        name: 'NVIDIA cloud',
+        adapterType: 'openai-compatible',
+        hasKey: true,
+        model: null,
+        models: [
+          { modelId: 'nemotron', displayName: 'Nemotron', shadowed: true },
+          { modelId: 'llama-3.1', displayName: 'Llama 3.1' }
+        ],
+        source: 'hub'
+      }
+    ])
+
+    assert.deepEqual(data.map(model => `${model.connectionId}:${model.modelId}`), [
+      'app:local:nemotron',
+      'hub-nvidia:llama-3.1'
+    ])
+    assert.equal(data[0]!.source, 'app')
+    assert.equal(data[0]!.providerName, 'NVIDIA NIM')
+  })
+
+  it('offers app-local rows first and marks them with their connection', () => {
+    const data = chatModelsFromCatalog([
+      {
+        connectionId: 'hub-openai',
+        provider: 'openai',
+        providerName: 'OpenAI',
+        name: 'OpenAI cloud',
+        adapterType: 'openai-compatible',
+        hasKey: true,
+        model: null,
+        models: [{ modelId: 'gpt-4o', displayName: 'GPT-4o' }],
+        source: 'hub'
+      },
+      {
+        connectionId: 'app:local',
+        provider: 'custom',
+        providerName: 'Custom endpoint',
+        name: '127.0.0.1:31415',
+        adapterType: 'openai-compatible',
+        hasKey: true,
+        model: 'agents-a1',
+        models: [{ modelId: 'agents-a1', displayName: 'agents-a1' }],
+        source: 'app'
+      }
+    ])
+
+    assert.deepEqual(data.map(model => model.connectionId), ['app:local', 'hub-openai'])
+    assert.equal(data[0]!.displayName, 'agents-a1 · 127.0.0.1:31415')
+    assert.equal(data[1]!.displayName, 'GPT-4o')
+  })
 })
