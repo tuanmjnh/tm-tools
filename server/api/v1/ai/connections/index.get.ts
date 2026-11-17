@@ -1,4 +1,4 @@
-import { aiConfigStore, importEnvConnections, safeConnection, storeOwnerId } from '../../../../utils/aiConfigStore'
+import { aiConfigStore, importEnvConnections, safeConnection, storeOwnerId } from '#server/utils/aiConfigStore'
 
 export default defineEventHandler(async (event) => {
   const ownerId = storeOwnerId(event)
