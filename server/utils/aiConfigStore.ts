@@ -1,7 +1,6 @@
 import type { H3Event } from 'h3'
 import {
   createMongoAIConfigStore,
-  generateMasterKey,
   openSecret,
   parseAppConnections,
   providerDisplayName,
@@ -48,8 +47,7 @@ export function __setTestHooks(next: TestHooks): void {
 }
 
 function envValue(key: string): string | undefined {
-  const fakeEnv = (globalThis as Record<string, unknown>).__env as Record<string, string | undefined> | undefined
-  return (hooks.env ?? fakeEnv ?? process.env)[key]
+  return (hooks.env ?? process.env)[key]
 }
 
 export function resolveAIConfigSecret(): string | null {
@@ -70,42 +68,37 @@ export function requireAIConfigSecret(): string {
   return secret
 }
 
-/** Generated lazily so a read-only deployment can still list env connections. */
-let ephemeralSecret: string | null = null
-function secretForWrite(): string {
-  const configured = resolveAIConfigSecret()
-  if (configured) return configured
-  if (!ephemeralSecret) {
-    console.warn('[ai-config] AI_CONFIG_SECRET is unset; using an ephemeral master key (keys will not survive a restart)')
-    ephemeralSecret = generateMasterKey()
-  }
-  return ephemeralSecret
-}
-
 export function storeOwnerId(event: H3Event): string {
   return requireChatUser(event).userId
 }
 
-export function aiConfigStore(ownerId: string): AIConfigStore {
-  const fakeMongo = (globalThis as Record<string, unknown>).__fakeMongo
-  const db = (hooks.db ?? fakeMongo ?? null) as MongoDatabaseLike | null
-  if (db) return createMongoAIConfigStore(db, ownerId)
-  // getSharedConnection is async; Mongo driver construction is synchronous, so
-  // the first operation awaits the connection through this proxy. `find` hands
-  // back a cursor synchronously in the driver contract, so it wraps toArray.
-  const proxy: MongoDatabaseLike = {
-    collection(name: string): MongoCollectionLike {
-      const live = async () => (await getSharedConnection()).db.collection(name) as unknown as MongoCollectionLike
-      return {
-        find: filter => ({ toArray: async () => (await live()).find(filter).toArray() }),
-        findOne: filter => live().then(collection => collection.findOne(filter)),
-        updateOne: (filter, update, options) => live().then(collection => collection.updateOne(filter, update, options)),
-        deleteOne: filter => live().then(collection => collection.deleteOne(filter)),
-        createIndex: (spec, options) => live().then(collection => collection.createIndex(spec, options))
-      }
+// getSharedConnection is async; Mongo driver construction is synchronous, so
+// every operation awaits the connection through this proxy. `find` hands back a
+// cursor synchronously in the driver contract, so it wraps toArray.
+const sharedDbProxy: MongoDatabaseLike = {
+  collection(name: string): MongoCollectionLike {
+    const live = async () => (await getSharedConnection()).db.collection(name) as unknown as MongoCollectionLike
+    return {
+      find: filter => ({ toArray: async () => (await live()).find(filter).toArray() }),
+      findOne: filter => live().then(collection => collection.findOne(filter)),
+      updateOne: (filter, update, options) => live().then(collection => collection.updateOne(filter, update, options)),
+      deleteOne: filter => live().then(collection => collection.deleteOne(filter)),
+      createIndex: (spec, options) => live().then(collection => collection.createIndex(spec, options))
     }
   }
-  return createMongoAIConfigStore(proxy, ownerId)
+}
+
+// One store per owner so `createIndex` runs once instead of on every call. Only
+// the real connection is cached: a test-hook db can be swapped between runs.
+const storesByOwner = new Map<string, AIConfigStore>()
+
+export function aiConfigStore(ownerId: string): AIConfigStore {
+  if (hooks.db) return createMongoAIConfigStore(hooks.db as MongoDatabaseLike, ownerId)
+  const cached = storesByOwner.get(ownerId)
+  if (cached) return cached
+  const store = createMongoAIConfigStore(sharedDbProxy, ownerId)
+  storesByOwner.set(ownerId, store)
+  return store
 }
 
 export function safeConnection(record: StoredAIConnection): SafeAIConnection {
@@ -128,14 +121,19 @@ export function safeConnection(record: StoredAIConnection): SafeAIConnection {
 }
 
 export async function sealForKey(plain: string): Promise<string> {
-  return sealSecret(secretForWrite(), plain)
+  return sealSecret(requireAIConfigSecret(), plain)
 }
+
+let warnedMissingSecret = false
 
 async function decryptKey(record: StoredAIConnection): Promise<string | undefined> {
   if (record.apiKeyCipher) {
-    const secret = resolveAIConfigSecret() ?? ephemeralSecret
+    const secret = resolveAIConfigSecret()
     if (!secret) {
-      console.warn(`[ai-config] cannot decrypt connection "${record.connectionId}": no master key configured`)
+      if (!warnedMissingSecret) {
+        warnedMissingSecret = true
+        console.warn('[ai-config] AI_CONFIG_SECRET is unset; stored AI connection keys cannot be decrypted')
+      }
       return undefined
     }
     try {
@@ -154,13 +152,17 @@ export async function importEnvConnections(ownerId: string): Promise<number> {
   const existing = await store.listConnections()
   if (existing.length) return 0
   const parsed = parseAppConnections(envValue('AI_LOCAL_CONNECTIONS') || '')
+  const secret = resolveAIConfigSecret()
   let imported = 0
   for (const entry of parsed.connections) {
+    // Without a master key an inline key cannot be sealed into anything a later
+    // process could decrypt, so the row is never written.
+    if (entry.apiKey && !secret) continue
     await store.upsertConnection({
       connectionId: entry.connectionId,
       providerKey: entry.providerKey,
       baseUrl: entry.baseUrl,
-      apiKeyCipher: entry.apiKey ? await sealForKey(entry.apiKey) : '',
+      apiKeyCipher: entry.apiKey && secret ? await sealSecret(secret, entry.apiKey) : '',
       ...(entry.apiKeyEnv ? { apiKeyEnv: entry.apiKeyEnv } : {}),
       enabled: true,
       models: entry.models.map(model => ({ modelId: model.modelId, displayName: model.displayName, enabled: true }))
@@ -170,6 +172,7 @@ export async function importEnvConnections(ownerId: string): Promise<number> {
   return imported
 }
 
+/** Server-only: results carry decrypted keys — never serialise them to the renderer; map through `safeConnection` first. */
 export async function configuredConnections(event?: H3Event): Promise<AppAIConnection[]> {
   const ownerId = event?.context?.auth ? storeOwnerId(event) : null
   if (!ownerId) {

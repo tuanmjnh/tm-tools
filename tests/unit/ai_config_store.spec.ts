@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+process.env.NODE_ENV = 'test'
+
 let failures = 0
 function check(name: string, fn: () => Promise<void> | void) {
   return Promise.resolve().then(fn).then(
@@ -58,6 +60,12 @@ const collections = new Map<string, MemoryCollection>()
 
 await import('../../server/utils/aiConfigStore') // imported after the fakes so the module-level client factory sees them
 const mod = await import('../../server/utils/aiConfigStore')
+
+mod.__setTestHooks({
+  db: (globalThis as Record<string, unknown>).__fakeMongo as { collection(name: string): unknown },
+  secret: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
+  env: (globalThis as Record<string, unknown>).__env as Record<string, string | undefined>
+})
 
 await check('safeConnection never leaks the cipher', () => {
   const safe = mod.safeConnection({
