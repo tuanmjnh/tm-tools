@@ -3558,7 +3558,7 @@
       "familyMarkupHint": "Dữ liệu dạng cây — XML và JSON.",
       "targetCsvHint": "Văn bản phân tách bằng dấu phẩy.",
       "targetXlsxHint": "Bảng tính Excel một sheet.",
-      "targetXmlHint": "Cây phần tử; thuộc tính là @name.",
+      "targetXmlHint": "Cây phần tử; thuộc tính mang tiền tố dấu a còng.",
       "targetJsonHint": "JavaScript Object Notation."
     }
   }

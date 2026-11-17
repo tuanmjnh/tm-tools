@@ -3558,7 +3558,7 @@
       "familyMarkupHint": "Tree data — XML and JSON.",
       "targetCsvHint": "Plain comma-separated text.",
       "targetXlsxHint": "Excel workbook with one sheet.",
-      "targetXmlHint": "Element tree; attributes as @name.",
+      "targetXmlHint": "Element tree; attributes prefixed with an at sign.",
       "targetJsonHint": "JavaScript Object Notation."
     }
   }
