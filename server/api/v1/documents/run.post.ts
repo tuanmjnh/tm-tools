@@ -91,7 +91,7 @@ export default defineEventHandler(async (event) => {
         await runtime.jobs.addInput(staged.record)
       }
 
-      const finished = await startDocumentJob(deps, job.id, caller.ownerId)
+      const finished = await startDocumentJob(deps, job.id, caller.ownerId, event)
       const bodies = new Map<string, string>()
       for (const artifact of finished.artifacts) {
         // The published copy is the only readable one: staging is released by

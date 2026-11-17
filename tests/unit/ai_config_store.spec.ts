@@ -56,7 +56,10 @@ const collections = new Map<string, MemoryCollection>()
     return collections.get(name)
   }
 }
-;(globalThis as Record<string, unknown>).__env = { AI_LOCAL_CONNECTIONS: JSON.stringify([{ connectionId: 'legacy', providerKey: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', models: ['llama3.2'], apiKey: 'legacy-key' }]) }
+;(globalThis as Record<string, unknown>).__env = {
+  AI_LOCAL_CONNECTIONS: JSON.stringify([{ connectionId: 'legacy', providerKey: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', models: ['llama3.2'], apiKey: 'legacy-key' }]),
+  AI_API_KEY_SLOT_FILLED: 'sk-from-slot'
+}
 
 await import('../../server/utils/aiConfigStore') // imported after the fakes so the module-level client factory sees them
 const mod = await import('../../server/utils/aiConfigStore')
@@ -75,6 +78,25 @@ await check('safeConnection never leaks the cipher', () => {
   assert.equal(JSON.stringify(safe).includes('v1.a.b'), false)
   assert.equal(safe.hasKey, true)
   assert.equal(safe.models[0].modelId, 'llama3.2')
+})
+
+await check('hasKey matches the gateway for sealed, keyless and env-backed rows', () => {
+  const base = {
+    ownerId: 'u1',
+    connectionId: 'slot',
+    providerKey: 'openai-compatible',
+    baseUrl: 'http://x',
+    apiKeyCipher: '',
+    enabled: true,
+    models: []
+  }
+  // A sealed key is a key.
+  assert.equal(mod.safeConnection({ ...base, apiKeyEnv: null, apiKeyCipher: 'v1.a.b' }).hasKey, true)
+  // Keyless local providers (Ollama) are usable without a key or a slot.
+  assert.equal(mod.safeConnection({ ...base }).hasKey, true)
+  // A named slot counts only while it holds a value.
+  assert.equal(mod.safeConnection({ ...base, apiKeyEnv: 'AI_API_KEY_SLOT_FILLED' }).hasKey, true)
+  assert.equal(mod.safeConnection({ ...base, apiKeyEnv: 'AI_API_KEY_SLOT_EMPTY' }).hasKey, false)
 })
 
 await check('env import seals the inline key once per account', async () => {
@@ -100,6 +122,29 @@ await check('GET payload contract carries no ciphertext', async () => {
   assert.equal(json.includes('apiKeyCipher'), false)
   assert.equal(json.includes('v1.'), false)
   assert.equal(json.includes('legacy-key'), false)
+})
+
+await check('a second owner can neither list nor delete another owner\'s rows', async () => {
+  const other = mod.aiConfigStore('u2')
+  await other.upsertConnection({
+    connectionId: 'u2-lab',
+    providerKey: 'openai-compatible',
+    baseUrl: 'http://127.0.0.1:9/v1',
+    apiKeyCipher: '',
+    enabled: true,
+    models: [{ modelId: 'price-text-b', enabled: true }]
+  })
+
+  const own = await other.listConnections()
+  assert.deepEqual(own.map(row => row.connectionId), ['u2-lab'])
+
+  const firstOwner = mod.aiConfigStore('u1')
+  const leaked = (await firstOwner.listConnections()).filter(row => row.connectionId === 'u2-lab')
+  assert.deepEqual(leaked, [])
+
+  // A delete scoped to the wrong owner must not remove the other owner's row.
+  await firstOwner.removeConnection('u2-lab')
+  assert.deepEqual((await other.listConnections()).map(row => row.connectionId), ['u2-lab'])
 })
 
 if (failures) {

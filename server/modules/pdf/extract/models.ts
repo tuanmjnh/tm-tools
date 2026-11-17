@@ -1,3 +1,4 @@
+import type { H3Event } from 'h3'
 import { config } from '#server/config'
 import { fetchAICatalog } from '../../../utils/aiGateway'
 import { bareModelId, isTextModel } from '../../../utils/relayModels'
@@ -27,17 +28,22 @@ let cache: { at: number, models: PdfExtractModel[] } | null = null
  * Every model of every AI connection this app may use, straight from the hub
  * catalogue. Nothing is hard-coded here, so connecting another provider (or a
  * newer model at the same provider) shows up in the picker without a deploy.
+ *
+ * `event` decides whose account rows are read; a list resolved for one account
+ * is never cached, because the next caller would then be served that account's
+ * connections. Only the env-only list (no event) keeps the short TTL.
  */
-export async function listExtractModels(force = false): Promise<PdfExtractModel[]> {
-  if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.models
+export async function listExtractModels(event?: H3Event, force = false): Promise<PdfExtractModel[]> {
+  const cacheable = !event
+  if (cacheable && !force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.models
 
-  const connections = await fetchAICatalog()
+  const connections = await fetchAICatalog(event)
   const preferred = config.pdf.extract.model
 
   const models: PdfExtractModel[] = connections
     .filter(connection => connection.hasKey && connection.models?.length)
     .flatMap(connection => connection.models
-      .filter(entry => entry.modelId && isTextModel(entry.modelId))
+      .filter(entry => entry.modelId && !entry.shadowed && isTextModel(entry.modelId))
       .map(entry => ({
         connectionId: connection.connectionId,
         connectionName: connection.name,
@@ -58,12 +64,17 @@ export async function listExtractModels(force = false): Promise<PdfExtractModel[
     || a.connectionName.localeCompare(b.connectionName)
     || a.displayName.localeCompare(b.displayName))
 
-  cache = { at: Date.now(), models }
+  if (cacheable) cache = { at: Date.now(), models }
   return models
 }
 
+/**
+ * Catalogue ids, not paths: an app-local id keeps its `app:` namespace and a
+ * local model id may carry a tag (`llama3.2:latest`). The value still has to
+ * match a live catalogue entry before it is used.
+ */
 function isSafeId(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
+  return /^(?:app:)?[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value)
 }
 
 /**
@@ -72,9 +83,10 @@ function isSafeId(value: string): boolean {
  * available one, so a stale browser tab still starts a job.
  */
 export async function resolveExtractTarget(
-  requested?: Partial<PdfExtractTarget> | null
+  requested?: Partial<PdfExtractTarget> | null,
+  event?: H3Event
 ): Promise<PdfExtractTarget> {
-  const models = await listExtractModels()
+  const models = await listExtractModels(event)
   const connectionId = (requested?.connectionId || '').trim()
   const model = bareModelId(String(requested?.model || ''))
 

@@ -311,7 +311,7 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
   async execute(context: OperationExecutionContext, options: Record<string, unknown>): Promise<OperationExecutionResult> {
     const input = single(context.inputs)
     const force = Boolean(options.force)
-    const target = await resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null)
+    const target = await resolveExtractTarget(options.model ? { model: String(options.model), connectionId: options.connectionId ? String(options.connectionId) : undefined } : null, context.event)
     const preset = options.presetId ? getPreset(String(options.presetId)) : null
     const requestedFormats = Array.isArray(options.formats) ? options.formats.map(String) : null
 
@@ -322,7 +322,8 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
       preset ? { sample: preset.sample, description: preset.description, preset: preset.name } : null,
       true,
       requestedFormats,
-      { path: input.stagedPath, kind: input.extension === 'pdf' ? 'pdf' : 'word' }
+      { path: input.stagedPath, kind: input.extension === 'pdf' ? 'pdf' : 'word' },
+      context.event
     )
 
     // Poll until completion or failure

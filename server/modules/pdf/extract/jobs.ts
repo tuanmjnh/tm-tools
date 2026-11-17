@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import type { H3Event } from 'h3'
 import type {
   PdfExportRow,
   PdfExtractJobState,
@@ -34,6 +35,12 @@ interface JobEntry {
   formats?: string[] | null
   /** Bytes staged for one document job instead of the persistent input library. */
   stagedSource: PdfExtractStagedSource | null
+  /**
+   * The request that started the job. It is what makes the job read the same
+   * account's `ai_connections` rows (and the same relay credentials) when the
+   * model is resolved and each page is sent; the job itself outlives the response.
+   */
+  event: H3Event | null
 }
 
 /** A source file that already lives in a job workspace, not in `pdfDirs.input`. */
@@ -176,7 +183,8 @@ export async function startExtraction(
   instructions?: PdfExtractInstructions | null,
   overwrite = true,
   formats?: string[] | null,
-  stagedSource?: PdfExtractStagedSource | null
+  stagedSource?: PdfExtractStagedSource | null,
+  event?: H3Event
 ): Promise<PdfExtractJobState> {
   const source = safeRelativePath(rawSource)
   resolveExtractSource(source, stagedSource)
@@ -187,7 +195,7 @@ export async function startExtraction(
 
   // The picker sends a live catalogue entry; anything else falls back to the
   // suggested model, so there is no model allowlist to keep in sync here.
-  const target = await resolveExtractTarget(requested)
+  const target = await resolveExtractTarget(requested, event)
 
   const running = [...jobs.values()].find(entry => entry.state.status === 'running')
   if (running) {
@@ -221,7 +229,8 @@ export async function startExtraction(
     instructions: instructions ?? null,
     fingerprint: null,
     formats,
-    stagedSource: stagedSource ?? null
+    stagedSource: stagedSource ?? null,
+    event: event ?? null
   }
   jobs.set(state.id, entry)
   pruneJobs()
@@ -284,7 +293,14 @@ async function buildUnits(
       const chunkId = `text_${String(index + 1).padStart(config.pdf.padLength, '0')}`
       return {
         id: chunkId,
-        extract: () => extractTextWithRetry(entry.state.source, chunkId, chunk, target, entry.instructions)
+        extract: () => extractTextWithRetry(
+          entry.state.source,
+          chunkId,
+          chunk,
+          target,
+          entry.instructions,
+          entry.event ?? undefined
+        )
       }
     })
   }
@@ -300,7 +316,8 @@ async function buildUnits(
         readFileSync(join(splitDir, `${pageId}.pdf`)),
         pageId,
         target,
-        entry.instructions
+        entry.instructions,
+        entry.event ?? undefined
       )
     }
   })
@@ -357,6 +374,10 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
         const code = (error as Error)?.message || 'PDF_AI_REQUEST_FAILED'
         entry.state.failedPages.push(unit.id)
         entry.state.error = code
+        // The code alone does not say whether the budget ran out or the model
+        // answered badly; keep the message and page so a failure is diagnosable
+        // from the journal without re-running the job.
+        entry.state.errorDetail = `${unit.id}: ${(error as Error)?.stack?.split('\n')[0] || code}`
         // No usable model/connection: every remaining unit would fail the same way.
         if (code === 'PDF_AI_NO_MODEL') break
       }
@@ -385,6 +406,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
   } catch (error) {
     entry.state.status = 'failed'
     entry.state.error = (error as Error)?.message || 'PDF_EXTRACT_FAILED'
+    entry.state.errorDetail = (error as Error)?.stack?.split('\n').slice(0, 3).join(' | ') || null
   } finally {
     entry.state.currentPage = null
     entry.state.finishedAt = new Date().toISOString()

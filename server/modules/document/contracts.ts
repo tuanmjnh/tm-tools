@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import type { H3Event } from 'h3'
 import type {
   DocumentArtifactRecord,
   DocumentJobInputRecord,
@@ -222,6 +223,12 @@ export interface OperationExecutionContext {
   inputs: VerifiedInput[]
   signal: AbortSignal
   onProgress: (progress: Partial<DocumentJobProgress>) => Promise<void> | void
+  /**
+   * The request that started the run, when there is one: engines that read
+   * per-account configuration (the AI extraction executor) need it to resolve
+   * the same account's rows instead of the machine-level env fallback.
+   */
+  event?: H3Event
 }
 
 export interface OperationExecutionResult {

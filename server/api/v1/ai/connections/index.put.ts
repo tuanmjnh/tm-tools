@@ -1,5 +1,6 @@
 import { AIClientError, resolveProviderKey, type StoredAIConnection, type StoredAIModel } from '@tuanmjnh/tm-ai-client'
 import { aiConfigStore, requireAIConfigSecret, safeConnection, sealForKey, storeOwnerId } from '#server/utils/aiConfigStore'
+import { requireRootAuth } from '#server/utils/authz'
 
 interface Body {
   connectionId?: unknown
@@ -19,6 +20,7 @@ interface RawModel {
 }
 
 export default defineEventHandler(async (event) => {
+  requireRootAuth(event)
   const ownerId = storeOwnerId(event)
   const body = (await readBody<Body>(event)) ?? {}
   const connectionId = String(body.connectionId ?? '').trim()

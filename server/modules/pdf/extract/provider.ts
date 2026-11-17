@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import type { H3Event } from 'h3'
 import { pdf } from 'pdf-to-img'
 import type {
   PdfExtractPage,
@@ -9,6 +12,27 @@ import { chatWithConnection } from '../../../utils/aiGateway'
 import { buildPagePrompt, buildSystemPrompt, buildTextChunkPrompt } from './prompt'
 import type { PdfExtractTarget } from './models'
 import type { PdfExtractInstructions } from './presets'
+
+/**
+ * Absolute URL of pdf.js's bundled standard fonts. Resolved once: the package
+ * layout does not change while the process runs.
+ */
+let standardFontsPath: string | null = null
+function standardFontsUrl(): string | undefined {
+  if (standardFontsPath !== null) return standardFontsPath || undefined
+  try {
+    const require = createRequire(import.meta.url)
+    const pdfjsDir = dirname(require.resolve('pdfjs-dist/package.json'))
+    // pdf.js validates a trailing forward slash, not the OS separator, so a
+    // Windows `\` is rejected outright ("must include trailing slash").
+    standardFontsPath = `${join(pdfjsDir, 'standard_fonts').replace(/\\/g, '/')}/`
+  } catch {
+    // A layout without pdfjs-dist beside this module still renders; it only
+    // falls back to substitute fonts, which is what we had before the fix.
+    standardFontsPath = ''
+  }
+  return standardFontsPath || undefined
+}
 
 class PdfProviderError extends Error {
   status: number
@@ -79,6 +103,10 @@ function parsePage(payload: unknown, pageId: string): PdfExtractPage {
 
 function isRetryable(error: unknown): boolean {
   if (!(error instanceof PdfProviderError)) return true
+  // A truncated answer is a budget problem, not a transient one: the same
+  // request against the same budget produces the same cut, so retrying only
+  // costs time and tokens.
+  if (error instanceof PdfProviderError && error.message === 'PDF_AI_OUTPUT_TRUNCATED') return false
   return error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500
 }
 
@@ -86,12 +114,25 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/** Output budget for one page; a full price table does not fit in 8192. */
+function maxOutputTokens(): number {
+  return config.pdf.extract.maxOutputTokens
+}
+
 /**
  * Renders the single-page PDF to PNG so the page can be sent to any vision
  * model: every provider accepts an image part, while only some accept a PDF.
+ *
+ * `pdf-to-img` builds `standardFontDataUrl` with `path.posix`, so on Windows the
+ * value is a relative `standard_fonts/` that never resolves and every embedded
+ * PDF font falls back to the built-in one. Passing an absolute URL restores the
+ * glyphs; without it a page's own typography is lost in the image we send.
  */
 async function renderPage(buffer: Buffer): Promise<Buffer> {
-  const document = await pdf(buffer, { scale: config.pdf.imageScale })
+  const document = await pdf(buffer, {
+    scale: config.pdf.imageScale,
+    docInitParams: { standardFontDataUrl: standardFontsUrl() }
+  })
   try {
     if (document.length < 1) throw new PdfProviderError('PDF_AI_EMPTY_PAGE')
     return await document.getPage(1)
@@ -100,8 +141,13 @@ async function renderPage(buffer: Buffer): Promise<Buffer> {
   }
 }
 
-/** Models often wrap JSON in a fenced block or add prose around it. */
-function extractJson(text: string): unknown {
+/**
+ * Models often wrap JSON in a fenced block or add prose around it. When the
+ * output budget ran out the JSON is also cut mid-token, and no repair helps —
+ * that case is reported separately so the caller can raise the budget instead
+ * of retrying the same request forever.
+ */
+function extractJson(text: string, usage?: { outputTokens?: number } | null): unknown {
   const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim()
   const candidates = [cleaned]
 
@@ -116,6 +162,10 @@ function extractJson(text: string): unknown {
       // try the next shape
     }
   }
+
+  const budget = maxOutputTokens()
+  const spent = usage?.outputTokens ?? 0
+  if (spent > 0 && spent >= budget * 0.95) throw new PdfProviderError('PDF_AI_OUTPUT_TRUNCATED')
   throw new PdfProviderError('PDF_AI_INVALID_JSON')
 }
 
@@ -139,7 +189,8 @@ async function callPage(
   buffer: Buffer,
   pageId: string,
   target: PdfExtractTarget,
-  instructions?: PdfExtractInstructions | null
+  instructions?: PdfExtractInstructions | null,
+  event?: H3Event
 ): Promise<PdfExtractPage> {
   const { temperature } = config.pdf.extract
 
@@ -158,13 +209,13 @@ async function callPage(
     }],
     // A dense price page easily needs a few thousand tokens; too small a budget
     // truncates the JSON and loses the tail of the page.
-    maxTokens: 8192,
+    maxTokens: maxOutputTokens(),
     temperature
-  })
+  }, event)
 
   if (!result.content.trim()) throw new PdfProviderError('PDF_AI_EMPTY_RESPONSE')
 
-  return parsePage(extractJson(result.content), pageId)
+  return parsePage(extractJson(result.content, result.usage), pageId)
 }
 
 async function callTextChunk(
@@ -172,7 +223,8 @@ async function callTextChunk(
   chunkId: string,
   text: string,
   target: PdfExtractTarget,
-  instructions?: PdfExtractInstructions | null
+  instructions?: PdfExtractInstructions | null,
+  event?: H3Event
 ): Promise<PdfExtractPage> {
   const { temperature } = config.pdf.extract
 
@@ -184,20 +236,21 @@ async function callTextChunk(
       role: 'user',
       content: `${buildTextChunkPrompt(fileName, chunkId, text)}\n\nChỉ trả về JSON hợp lệ, không thêm giải thích hay khối markdown.`
     }],
-    maxTokens: 8192,
+    maxTokens: maxOutputTokens(),
     temperature
-  })
+  }, event)
 
   if (!result.content.trim()) throw new PdfProviderError('PDF_AI_EMPTY_RESPONSE')
 
-  return parsePage(extractJson(result.content), chunkId)
+  return parsePage(extractJson(result.content, result.usage), chunkId)
 }
 
 export async function extractPageWithRetry(
   buffer: Buffer,
   pageId: string,
   target: PdfExtractTarget,
-  instructions?: PdfExtractInstructions | null
+  instructions?: PdfExtractInstructions | null,
+  event?: H3Event
 ): Promise<PdfExtractPage> {
   const { maxRetries, retryDelayMs } = config.pdf.extract
 
@@ -209,7 +262,7 @@ export async function extractPageWithRetry(
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt++) {
     try {
-      return await callPage(buffer, pageId, target, instructions)
+      return await callPage(buffer, pageId, target, instructions, event)
     } catch (error) {
       lastError = toProviderError(error)
       if (!isRetryable(lastError) || attempt >= maxRetries) break
@@ -229,7 +282,8 @@ export async function extractTextWithRetry(
   chunkId: string,
   text: string,
   target: PdfExtractTarget,
-  instructions?: PdfExtractInstructions | null
+  instructions?: PdfExtractInstructions | null,
+  event?: H3Event
 ): Promise<PdfExtractPage> {
   const { maxRetries, retryDelayMs } = config.pdf.extract
 
@@ -241,7 +295,7 @@ export async function extractTextWithRetry(
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt++) {
     try {
-      return await callTextChunk(fileName, chunkId, text, target, instructions)
+      return await callTextChunk(fileName, chunkId, text, target, instructions, event)
     } catch (error) {
       lastError = toProviderError(error)
       if (!isRetryable(lastError) || attempt >= maxRetries) break

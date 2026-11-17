@@ -109,7 +109,10 @@ export function safeConnection(record: StoredAIConnection): SafeAIConnection {
     providerName: providerDisplayName(record.providerKey),
     baseUrl: record.baseUrl,
     apiKeyEnv,
-    hasKey: Boolean(record.apiKeyCipher) || !apiKeyEnv,
+    // Same answer the gateway gives: a sealed key, no slot at all, or a slot
+    // that currently holds a value. An env-backed row with an empty slot has no
+    // usable key even though its name is configured.
+    hasKey: Boolean(record.apiKeyCipher) || !apiKeyEnv || Boolean(String(envValue(apiKeyEnv) || '').trim()),
     enabled: record.enabled,
     models: record.models.map(model => ({
       modelId: model.modelId,

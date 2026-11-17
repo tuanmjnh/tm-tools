@@ -32,7 +32,9 @@ export default defineEventHandler(async (event) => {
       },
       sanitizeInstructions(body.preset),
       overwriteFlag(body.overwrite),
-      formats
+      formats,
+      null,
+      event
     )
     return { success: true, data: job }
   })

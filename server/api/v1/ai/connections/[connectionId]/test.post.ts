@@ -1,8 +1,9 @@
-import { getRouterParam } from 'h3'
 import { createAIClient } from '@tuanmjnh/tm-ai-client'
 import { aiConfigStore, openConnectionKey, storeOwnerId } from '#server/utils/aiConfigStore'
+import { requireRootAuth } from '#server/utils/authz'
 
 export default defineEventHandler(async (event) => {
+  requireRootAuth(event)
   const connectionId = getRouterParam(event, 'connectionId')
   if (!connectionId) throw createError({ statusCode: 400, statusMessage: 'error.badRequest', message: 'connectionId is required' })
 

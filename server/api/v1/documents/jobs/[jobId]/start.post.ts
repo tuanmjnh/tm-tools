@@ -29,7 +29,8 @@ export default defineEventHandler(async (event) => {
     return startDocumentJob(
       { jobs: runtime.jobs, temp: runtime.temp, storage: runtime.storage, delivery: runtime.delivery },
       jobId,
-      caller.ownerId
+      caller.ownerId,
+      event
     )
   })
 })

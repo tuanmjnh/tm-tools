@@ -2,6 +2,7 @@ import { createWriteStream, mkdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { randomUUID } from 'node:crypto'
+import type { H3Event } from 'h3'
 import type {
   DocumentArtifactRecord,
   DocumentArtifactView,
@@ -135,7 +136,8 @@ async function materializeInput(
 export async function startDocumentJob(
   deps: DocumentRunDeps,
   jobId: string,
-  ownerId: string
+  ownerId: string,
+  event?: H3Event
 ): Promise<DocumentJobView> {
   const job = await deps.jobs.getJob(jobId, ownerId)
   if (!job) throw new DocumentError('DOCUMENT_JOB_NOT_FOUND')
@@ -185,6 +187,7 @@ export async function startDocumentJob(
       workspace,
       inputs: verified,
       signal: new AbortController().signal,
+      ...(event ? { event } : {}),
       onProgress: progress => deps.jobs.updateProgress(jobId, {
         totalUnits: 0,
         completedUnits: 0,

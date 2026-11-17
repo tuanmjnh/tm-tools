@@ -44,7 +44,7 @@ const models = ref<Record<string, SafeAIModel[]>>({})
 const loading = ref(true)
 const saving = ref(false)
 const refreshing = ref(false)
-const loadFailed = ref(false)
+const loadError = ref('')
 const testingId = ref('')
 const tests = ref<Record<string, TestResult>>({})
 const removeOpen = ref(false)
@@ -125,9 +125,9 @@ async function loadConnections() {
     const connections = res?.data?.connections || []
     rows.value = connections.map(toRow)
     models.value = Object.fromEntries(connections.map(entry => [entry.connectionId, entry.models]))
-    loadFailed.value = false
-  } catch {
-    loadFailed.value = true
+    loadError.value = ''
+  } catch (err) {
+    loadError.value = getErrorMessage(err, key => t(key)) || t('settings.aiLocal.loadFailed')
   } finally {
     loading.value = false
   }
@@ -301,11 +301,12 @@ useHead({ title: computed(() => t('settings.aiLocal.title')) })
   >
     <div class="space-y-4">
       <UAlert
-        v-if="loadFailed"
+        v-if="loadError"
         color="error"
         variant="subtle"
         icon="i-lucide-circle-x"
         :title="t('settings.aiLocal.loadFailed')"
+        :description="loadError"
       />
 
       <UCard>
