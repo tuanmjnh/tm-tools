@@ -30,6 +30,12 @@ describe('AI relay failure surfaces', () => {
   it('both surfaces point at the Hub connection page', () => {
     assert.match(read(chatPage), /\/system\/settings\/hub/)
   })
+
+  it('resolves the selected model by its full key, not by splitting it', () => {
+    const source = read(chatPage)
+    assert.doesNotMatch(source, /selectedModelKey\.value\.split\(/)
+    assert.match(source, /`\$\{m\.connectionId\}:\$\{m\.modelId\}` === selectedModelKey\.value/)
+  })
 })
 
 describe('extraction preset editor', () => {

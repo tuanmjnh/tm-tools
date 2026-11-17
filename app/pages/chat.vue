@@ -81,9 +81,7 @@ function scrollToBottom(smooth = true) {
 
 const selectedModel = computed<AvailableModel | null>(() => {
   if (!selectedModelKey.value) return null
-  const [connId, ...rest] = selectedModelKey.value.split(':')
-  const modelId = rest.join(':')
-  return availableModels.value.find(m => m.connectionId === connId && m.modelId === modelId) || null
+  return availableModels.value.find(m => `${m.connectionId}:${m.modelId}` === selectedModelKey.value) || null
 })
 
 const canSend = computed(() =>
