@@ -19,7 +19,9 @@ export const DOCUMENT_OPERATION_IDS = [
   'pdf.images-to-pdf',
   'document.convert-to-pdf',
   'pdf.export',
-  'document.ai-extract'
+  'document.ai-extract',
+  'image.watermark-remove',
+  'image.background-remove'
 ] as const
 
 export type DocumentOperationId = typeof DOCUMENT_OPERATION_IDS[number]
@@ -33,7 +35,7 @@ export const DOCUMENT_INPUT_MODES = ['single-file', 'multi-file', 'folder-batch'
 export type DocumentInputMode = typeof DOCUMENT_INPUT_MODES[number]
 
 /** Configuration forms the client is allowed to mount for an operation. */
-export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'rasterize', 'export-formats', 'ai-extraction'] as const
+export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'rasterize', 'export-formats', 'ai-extraction', 'watermark', 'background'] as const
 
 export type DocumentConfigComponent = typeof DOCUMENT_CONFIG_COMPONENTS[number]
 
@@ -319,6 +321,12 @@ export const DOCUMENT_ERROR_CODES = [
   'DOCUMENT_WORKER_REQUIRED',
   'DOCUMENT_OPERATION_NOT_SUPPORTED',
   'DOCUMENT_OPERATION_CONFIG_INVALID',
+  'DOCUMENT_AI_MODEL_UNAVAILABLE',
+  'DOCUMENT_AI_OUTPUT_TRUNCATED',
+  'DOCUMENT_AI_INVALID_RESPONSE',
+  'DOCUMENT_AI_EMPTY_RESPONSE',
+  'DOCUMENT_AI_RELAY_FAILED',
+  'DOCUMENT_AI_EXTRACT_FAILED',
   'DOCUMENT_PROCESSING_TIMEOUT',
   'DOCUMENT_CLEANUP_FAILED'
 ] as const

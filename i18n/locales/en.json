@@ -3036,7 +3036,7 @@
     },
     "sdk": {
       "title": "Client SDK",
-      "description": "Use the tm-hub-client SDK from {app} — it attaches your app identity and tokens automatically."
+      "description": "Use the tm-hub-client SDK (scoped package) from {app} — it attaches your app identity and tokens automatically."
     },
     "api": {
       "title": "REST API",
@@ -3302,7 +3302,8 @@
         "failed": "Failed",
         "cancelled": "Cancelled",
         "retrying": "Retrying"
-      }
+      },
+      "working": "Working…"
     },
     "status": {
       "created": "Draft",
@@ -3345,6 +3346,10 @@
       "extract": {
         "title": "AI extraction",
         "description": "Extract product rows from a price-list PDF with the AI relay."
+      },
+      "watermark": {
+        "title": "Remove watermark",
+        "description": "Erase a marked area and fill it from the surrounding pixels."
       }
     },
     "split": {
@@ -3389,7 +3394,13 @@
       "DOCUMENT_OPERATION_CONFIG_INVALID": "Those options are not valid for this tool.",
       "DOCUMENT_PROCESSING_TIMEOUT": "Processing took too long and was stopped.",
       "DOCUMENT_CLEANUP_FAILED": "Cleanup did not finish. Try again.",
-      "generic": "Something went wrong. Try again."
+      "generic": "Something went wrong. Try again.",
+      "DOCUMENT_AI_MODEL_UNAVAILABLE": "No AI model is configured for extraction. Pick a model in the config panel, or connect one in Hub settings.",
+      "DOCUMENT_AI_OUTPUT_TRUNCATED": "The model ran out of output tokens mid-answer, so the JSON was cut off. Raise PDF_EXTRACT_MAX_OUTPUT_TOKENS or pick a model with a larger budget.",
+      "DOCUMENT_AI_INVALID_RESPONSE": "The model returned text that was not the expected JSON. Retry, or switch to a model that follows the schema more reliably.",
+      "DOCUMENT_AI_EMPTY_RESPONSE": "The model returned an empty answer or the page produced no image. Retry the page.",
+      "DOCUMENT_AI_RELAY_FAILED": "The TM Hub relay could not reach the model provider. Check the connection and try again.",
+      "DOCUMENT_AI_EXTRACT_FAILED": "Extraction failed. Open the job journal for the engine code."
     },
     "convert": {
       "configHint": "Word, Excel and data files are rebuilt as a PDF layout, not converted pixel-for-pixel."

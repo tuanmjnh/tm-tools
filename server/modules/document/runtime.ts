@@ -198,6 +198,8 @@ const OVERRIDES: Record<DocumentRuntimeKind, Partial<Record<DocumentOperationId,
     // Rasterization pulls a native canvas build and AI extraction runs long
     // behind the hub relay; neither is proven inside a Function.
     'pdf.rasterize': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
+    'image.watermark-remove': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
+    'image.background-remove': { enabled: false, reasonDisabled: 'native-canvas-unavailable' },
     'document.ai-extract': { enabled: false, executionMode: 'worker', reasonDisabled: 'external-worker-required' },
     'pdf.export': { maxPages: 50 },
     'pdf.split': { maxPages: 100 },
@@ -216,7 +218,10 @@ const SCRATCH_MULTIPLIER: Record<DocumentOperationId, number> = {
   'pdf.images-to-pdf': 2.5,
   'document.convert-to-pdf': 3,
   'pdf.export': 6,
-  'document.ai-extract': 3
+  'document.ai-extract': 3,
+  // Decoded RGBA at 4 bytes per pixel plus the encoded copy.
+  'image.watermark-remove': 4,
+  'image.background-remove': 4
 }
 
 export function policyFor(runtime: DocumentRuntimeKind = detectRuntime()): RuntimePolicy {

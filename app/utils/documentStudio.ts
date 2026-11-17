@@ -70,6 +70,14 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     icon: 'i-lucide-scan-text',
     route: '/document-studio/tools/extract',
     category: 'extract'
+  },
+  {
+    id: 'image.watermark-remove',
+    titleKey: 'document.operations.watermark.title',
+    descriptionKey: 'document.operations.watermark.description',
+    icon: 'i-lucide-eraser',
+    route: '/document-studio/tools/watermark',
+    category: 'image'
   }
 ]
 
@@ -86,7 +94,8 @@ const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
   'images-to-pdf': 'pdf.images-to-pdf',
   'convert': 'document.convert-to-pdf',
   'export': 'pdf.export',
-  'extract': 'document.ai-extract'
+  'extract': 'document.ai-extract',
+  'watermark': 'image.watermark-remove'
 }
 
 export function operationIdFromSlug(slug: string): DocumentOperationId {

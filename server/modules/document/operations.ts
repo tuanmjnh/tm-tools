@@ -6,6 +6,12 @@ import type {
 
 const PDF = ['pdf']
 const IMAGES = ['png', 'jpg', 'jpeg']
+/**
+ * The cleanup engine decodes with the native canvas, which handles webp; the
+ * PNG/JPEG-only list above stays untouched because images→PDF embeds bytes
+ * straight into pdf-lib and would drop a webp file without saying so.
+ */
+const IMAGE_CLEANUP = ['png', 'jpg', 'jpeg', 'webp']
 const OFFICE_INPUT = ['png', 'jpg', 'jpeg', 'docx', 'xlsx', 'csv', 'json', 'xml']
 const EXPORT_OUTPUT_MIME = [
   'image/png',
@@ -125,6 +131,20 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     execution: { mode: 'async-function', supportsProgress: true, supportsCancel: true, supportsPartial: true, resourceProfile: 'ai-extract' },
     batch: { mode: 'per-file', maxFiles: 50, maxConcurrency: 1 },
     legacyTool: 'extract'
+  },
+  {
+    id: 'image.watermark-remove',
+    version: '1.0.0',
+    category: 'image',
+    titleKey: 'document.operations.watermark.title',
+    descriptionKey: 'document.operations.watermark.description',
+    icon: 'i-lucide-eraser',
+    enabled: true,
+    input: { mode: 'single-file', acceptedExtensions: IMAGE_CLEANUP, minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    configuration: { componentKey: 'watermark', hasAdvancedOptions: false },
+    output: { artifactMode: 'single', defaultFileNamePattern: '{stem}_clean.png', mimeTypes: ['image/png'] },
+    execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
+    batch: { mode: 'per-file', maxFiles: 50 }
   }
 ]
 
@@ -167,6 +187,12 @@ const ERROR_STATUS: Record<DocumentErrorCode, number> = {
   DOCUMENT_WORKER_REQUIRED: 422,
   DOCUMENT_OPERATION_NOT_SUPPORTED: 404,
   DOCUMENT_OPERATION_CONFIG_INVALID: 422,
+  DOCUMENT_AI_MODEL_UNAVAILABLE: 503,
+  DOCUMENT_AI_OUTPUT_TRUNCATED: 422,
+  DOCUMENT_AI_INVALID_RESPONSE: 502,
+  DOCUMENT_AI_EMPTY_RESPONSE: 502,
+  DOCUMENT_AI_RELAY_FAILED: 502,
+  DOCUMENT_AI_EXTRACT_FAILED: 502,
   DOCUMENT_PROCESSING_TIMEOUT: 504,
   DOCUMENT_CLEANUP_FAILED: 500
 }

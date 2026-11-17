@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { DocumentOperationId } from '#shared/types/document'
+import type { DocumentErrorCode, DocumentOperationId } from '#shared/types/document'
 import type {
   DocumentOperationExecutor,
   OperationExecutionContext,
@@ -20,6 +20,7 @@ import { rasterizePdf } from '../pdf/raster'
 import { inputBufferToPdf } from '../pdf/convert'
 import { pdfToDocx } from '../pdf/office/pdfToDocx'
 import { writeProducts } from '../pdf/extract/export'
+import { WatermarkExecutor } from './image-executors'
 import { ensureDir, writeFileAtomic } from '../pdf/paths'
 import { documentStem, naturalCompare, safeFileName, safeStem } from '../pdf/security'
 import { config } from '#server/config'
@@ -272,6 +273,31 @@ function toProduced(path: string): ProducedFile {
   return { fileName, path, size: statSync(path).size, mimeType: mimeOf(fileName) }
 }
 
+/**
+ * Maps the extraction engine's code onto the transport code the page localizes.
+ * Unmapped codes fall back to a generic processing failure, never to a timeout.
+ */
+export function extractFailureCode(code: string | null | undefined): DocumentErrorCode {
+  switch (code) {
+    case 'PDF_AI_NO_MODEL':
+    case 'PDF_AI_KEY_MISSING':
+      return 'DOCUMENT_AI_MODEL_UNAVAILABLE'
+    case 'PDF_AI_OUTPUT_TRUNCATED':
+      return 'DOCUMENT_AI_OUTPUT_TRUNCATED'
+    case 'PDF_AI_INVALID_JSON':
+    case 'PDF_AI_INVALID_RESPONSE':
+      return 'DOCUMENT_AI_INVALID_RESPONSE'
+    case 'PDF_AI_EMPTY_RESPONSE':
+    case 'PDF_AI_EMPTY_PAGE':
+      return 'DOCUMENT_AI_EMPTY_RESPONSE'
+    case 'PDF_AI_TIMEOUT':
+      return 'DOCUMENT_PROCESSING_TIMEOUT'
+    default:
+      if (code?.startsWith('ERROR_AI_RELAY')) return 'DOCUMENT_AI_RELAY_FAILED'
+      return 'DOCUMENT_AI_EXTRACT_FAILED'
+  }
+}
+
 class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unknown>> {
   readonly operationId: DocumentOperationId = 'document.ai-extract'
 
@@ -306,13 +332,21 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
       if (current) {
         await context.onProgress({
           totalUnits: current.totalPages || 1,
-          completedUnits: current.processedPages + current.cachedPages
+          completedUnits: current.processedPages + current.cachedPages,
+          // With one page there is no percentage to watch, so the label is what
+          // proves the job is alive. The UI prints it beside the bar.
+          currentLabel: current.currentPage ?? undefined
         })
       }
     }
 
     if (current?.status === 'failed') {
-      throw new DocumentError('DOCUMENT_PROCESSING_TIMEOUT', { cause: current.error })
+      // The engine's own code is the diagnosis: a truncated answer needs a
+      // bigger budget, a missing model needs a different pick, and a relay
+      // failure needs the connection fixed. Reporting every one of them as a
+      // timeout sent the operator looking at the wrong thing.
+      console.warn(`[document] extract failed: ${current.error} (${current.errorDetail ?? 'no detail'})`)
+      throw new DocumentError(extractFailureCode(current.error), { cause: current.error })
     }
 
     // Copy generated products into job workspace outputDir
@@ -342,7 +376,8 @@ const EXECUTORS: Record<string, DocumentOperationExecutor<never>> = {
   'pdf.images-to-pdf': new ImagesToPdfExecutor() as unknown as DocumentOperationExecutor<never>,
   'document.convert-to-pdf': new ConvertExecutor() as unknown as DocumentOperationExecutor<never>,
   'pdf.export': new ExportExecutor() as unknown as DocumentOperationExecutor<never>,
-  'document.ai-extract': new AiExtractExecutor() as unknown as DocumentOperationExecutor<never>
+  'document.ai-extract': new AiExtractExecutor() as unknown as DocumentOperationExecutor<never>,
+  'image.watermark-remove': new WatermarkExecutor() as unknown as DocumentOperationExecutor<never>
 }
 
 export function executorFor(operationId: DocumentOperationId): DocumentOperationExecutor<never> {

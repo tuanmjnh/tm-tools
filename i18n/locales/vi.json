@@ -3036,7 +3036,7 @@
     },
     "sdk": {
       "title": "SDK client",
-      "description": "Dùng SDK tm-hub-client trong {app} — nó tự gắn định danh app và token."
+      "description": "Dùng SDK tm-hub-client (gói scoped) trong {app} — nó tự gắn định danh app và token."
     },
     "api": {
       "title": "REST API",
@@ -3302,7 +3302,8 @@
         "failed": "Lỗi",
         "cancelled": "Đã hủy",
         "retrying": "Thử lại"
-      }
+      },
+      "working": "Đang xử lý…"
     },
     "status": {
       "created": "Bản nháp",
@@ -3345,6 +3346,10 @@
       "extract": {
         "title": "Trích xuất bằng AI",
         "description": "Trích xuất dòng sản phẩm từ PDF bảng giá qua AI relay."
+      },
+      "watermark": {
+        "title": "Xoá vùng đánh dấu",
+        "description": "Xoá một vùng được chọn và lấp lại bằng các pixel xung quanh."
       }
     },
     "split": {
@@ -3389,7 +3394,13 @@
       "DOCUMENT_OPERATION_CONFIG_INVALID": "Tùy chọn này không hợp lệ cho công cụ.",
       "DOCUMENT_PROCESSING_TIMEOUT": "Xử lý quá lâu nên đã dừng.",
       "DOCUMENT_CLEANUP_FAILED": "Dọn dẹp chưa xong. Hãy thử lại.",
-      "generic": "Đã có lỗi xảy ra. Hãy thử lại."
+      "generic": "Đã có lỗi xảy ra. Hãy thử lại.",
+      "DOCUMENT_AI_MODEL_UNAVAILABLE": "Chưa cấu hình model AI cho việc trích xuất. Hãy chọn model trong bảng cấu hình, hoặc kết nối trong phần cài đặt Hub.",
+      "DOCUMENT_AI_OUTPUT_TRUNCATED": "Model hết ngân sách token giữa chừng nên JSON bị cắt. Tăng PDF_EXTRACT_MAX_OUTPUT_TOKENS hoặc chọn model có ngân sách lớn hơn.",
+      "DOCUMENT_AI_INVALID_RESPONSE": "Model trả về văn bản không phải JSON như yêu cầu. Hãy thử lại, hoặc đổi sang model tuân thủ schema tốt hơn.",
+      "DOCUMENT_AI_EMPTY_RESPONSE": "Model trả về rỗng hoặc trang không tạo được ảnh. Hãy thử lại trang đó.",
+      "DOCUMENT_AI_RELAY_FAILED": "Relay TM Hub không kết nối được tới nhà cung cấp model. Kiểm tra kết nối rồi thử lại.",
+      "DOCUMENT_AI_EXTRACT_FAILED": "Trích xuất thất bại. Xem nhật ký công việc để biết mã lỗi của engine."
     },
     "convert": {
       "configHint": "Word, Excel và file dữ liệu được dựng lại thành bố cục PDF, không phải bản sao từng điểm ảnh."
