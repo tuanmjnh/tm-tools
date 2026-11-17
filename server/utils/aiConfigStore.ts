@@ -147,6 +147,11 @@ async function decryptKey(record: StoredAIConnection): Promise<string | undefine
   return undefined
 }
 
+/** Server-only: returns the decrypted provider key, never serialise it to the renderer. */
+export async function openConnectionKey(record: StoredAIConnection): Promise<string | undefined> {
+  return decryptKey(record)
+}
+
 export async function importEnvConnections(ownerId: string, rawLocal?: string): Promise<number> {
   const store = aiConfigStore(ownerId)
   const existing = await store.listConnections()
