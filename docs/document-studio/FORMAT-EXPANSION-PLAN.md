@@ -243,3 +243,53 @@ disabled on Vercel with `native-canvas-unavailable`, exactly like
 
 **Phase C (csv↔xlsx, xml↔json) and Phase D (SVG→ICO already covered; ICNS not
 built) remain open** — they were not part of this increment.
+
+---
+
+## 8. Implemented — Phase C and ICNS (2026-11-17)
+
+The remaining actionable items from this plan shipped as `structured.convert`
+and the `.icns` target on `image.convert`. Document Studio now registers
+**eleven** operations.
+
+### Phase C — structured data (`structured.convert`)
+
+| Edge | Rules (written down, enforced by tests) |
+|---|---|
+| csv → xlsx | row grid → one-sheet workbook (`exceljs`); ragged rows padded to a rectangle |
+| xlsx → csv | first worksheet → rows; dates as ISO, formulas as their cached result |
+| xml → json | attributes → `@name`, mixed content → `#text`, repeated siblings → arrays, root name dropped |
+| json → xml | caller supplies `root`; `@name` → attributes, `#text` → text, arrays repeat the tag |
+
+Cross-family conversions (e.g. csv → xml) are refused at validation, not at
+execution: a cell grid is not a meaningful XML tree. Malformed XML throws
+`XML_INVALID` rather than returning a partial tree. Pure core lives in
+`server/modules/document/structured.ts`; `exceljs` was already a direct
+dependency, so no new package.
+
+### ICNS — macOS icon (`image.convert` target)
+
+`.icns` is a flat element list (`icns` + total length, then typed `[type][len]`
+pieces). The PNG-backed codes `icp4/icp5/icp6/ic07/ic08/ic09` carry a PNG
+payload directly, so packing is a header plus pieces on the same canvas the
+image ops already use. **Unlike `.ico`, ICNS represents 512 in one file**, so
+the full 16/32/64/128/256/512 ladder is embedded with no sidecar. `icns → png`
+reads back the largest payload. The ICO path still keeps its 256 cap and PNG
+sidecar for 512 — the two formats are honest about their different limits.
+
+### Verification (real, not typecheck-only)
+
+- `tests/unit/document_structured_icns.spec.ts` — 14/14: ICNS header/length/
+  element offsets/size map, CSV quoting+ragged rows, XML attributes/arrays/
+  malformed rejection.
+- Real runtime: a real `exceljs` workbook written and read back equals the CSV
+  rows; `xml ↔ json` round-trips attributes and arrays; a real ICNS built and
+  parsed back to sizes `[64, 512]`.
+- Gate ladder: `nuxt typecheck` exit 0 (0 `error TS`), eslint 0 on touched
+  files after config regen, `pnpm test` **79/79**.
+
+### Still open
+
+- `xlsx → docx`, `docx → xlsx` remain `available: false` (layout reconstruction,
+  not data mapping) — out of scope for Phase C.
+- `doc` / `xls` legacy still need an external converter; unchanged.
