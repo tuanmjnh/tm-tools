@@ -3172,6 +3172,19 @@
     "deleteConfirmDesc": "Soft-delete route '{id}'? It will disappear from the menu."
   },
   "document": {
+    "watermark": {
+      "mode": "Removal mode",
+      "modeManual": "Pick a region",
+      "modeManualHint": "Drag over the mark on the image below.",
+      "modeBatch": "Same spot for all",
+      "modeBatchHint": "Pick once; the same relative block is applied to every image.",
+      "modeAuto": "Suggest a region",
+      "modeAutoHint": "Proposes the bottom-right corner; you confirm before it runs.",
+      "selection": "Selected {width} × {height} px",
+      "noPreview": "Choose an image, then drag over the area to erase.",
+      "manualFallback": "No area selected yet — the bottom-right corner is used.",
+      "limitNote": "The fill copies the surrounding pixels. Over detailed content you will still see a patch."
+    },
     "connection": {
       "title": "This device is not connected to Hub",
       "notConfigured": "The local server has no shared JWT secret, so it cannot verify your session and every tool list stays empty. Open the Hub connection settings and paste the same AUTH_JWT_SECRET value TM Hub uses.",

@@ -102,6 +102,14 @@ export function operationIdFromSlug(slug: string): DocumentOperationId {
   return SLUG_TO_OPERATION_ID[slug] || (slug as DocumentOperationId)
 }
 
+/** Shape the watermark panel emits and the server executor reads. */
+export interface WatermarkConfigModel {
+  mode?: 'manual' | 'batch' | 'auto'
+  region?: { x: number, y: number, width: number, height: number }
+  regionRatio?: { xRatio: number, yRatio: number, widthRatio: number, heightRatio: number }
+  [key: string]: unknown
+}
+
 export function extensionOf(name: string): string {
   return name.split('.').pop()?.toLowerCase() ?? ''
 }

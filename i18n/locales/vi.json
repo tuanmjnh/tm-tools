@@ -3172,6 +3172,19 @@
     "deleteConfirmDesc": "Xóa mềm route '{id}'? Route sẽ biến mất khỏi menu."
   },
   "document": {
+    "watermark": {
+      "mode": "Chế độ xoá",
+      "modeManual": "Kéo chọn vùng",
+      "modeManualHint": "Kéo chuột trên ảnh bên dưới để bao quanh vùng đánh dấu.",
+      "modeBatch": "Cùng vị trí cho mọi ảnh",
+      "modeBatchHint": "Chọn một lần; cùng một khung tương đối sẽ áp cho mọi ảnh.",
+      "modeAuto": "Gợi ý vùng",
+      "modeAutoHint": "Đề xuất góc dưới bên phải; bạn xem lại rồi mới chạy.",
+      "selection": "Đã chọn {width} × {height} px",
+      "noPreview": "Chọn một ảnh rồi kéo chọn vùng cần xoá.",
+      "manualFallback": "Chưa chọn vùng — hệ thống dùng góc dưới bên phải.",
+      "limitNote": "Phần lấp sao chép các pixel xung quanh. Trên nền nhiều chi tiết vẫn sẽ thấy một mảng."
+    },
     "connection": {
       "title": "Thiết bị này chưa kết nối với Hub",
       "notConfigured": "Máy chủ cục bộ chưa có secret JWT chia sẻ nên không xác minh được phiên đăng nhập, danh sách công cụ vì thế trống. Hãy mở cài đặt kết nối Hub và dán đúng giá trị AUTH_JWT_SECRET mà TM Hub đang dùng.",

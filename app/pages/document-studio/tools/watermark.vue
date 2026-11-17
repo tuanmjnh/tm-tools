@@ -1,9 +1,18 @@
 <script setup lang="ts">
+import type { WatermarkConfigModel } from '~/utils/documentStudio'
+
 const page = useDocumentOperationPage('image.watermark-remove')
+const config = ref<WatermarkConfigModel>(page.restoredConfig<WatermarkConfigModel>({ mode: 'manual' }))
+const preview = computed(() => page.selection.previewFile())
 
 function runWatermark() {
-  void page.run()
+  void page.run(config.value)
 }
+
+watch(config, (value) => {
+  page.batch.updateConfig(value)
+  page.rememberSettings(value)
+}, { deep: true })
 </script>
 
 <template>
@@ -49,7 +58,11 @@ function runWatermark() {
         @update:concurrency="page.batch.setConcurrency"
         @update:pause-ms="page.batch.setPauseMs"
         @update:max-retry="page.batch.setMaxRetry"
-      />
+      >
+        <template #config>
+          <DocumentStudioOperationsConfigsWatermarkConfig v-model="config" :preview="preview" />
+        </template>
+      </DocumentStudioOperationPageShell>
     </div>
   </BasePage>
 </template>

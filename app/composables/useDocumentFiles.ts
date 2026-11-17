@@ -83,6 +83,12 @@ export function useDocumentFiles(operation: MaybeRefOrGetter<DocumentOperationDe
       })
   }
 
+  /** First selected file, for config previews that must render before upload. */
+  function previewFile(): File | null {
+    const entry = files.value.find(item => item.status === 'selected')
+    return entry ? blobs.get(entry.id) ?? null : null
+  }
+
   const valid = computed(() => files.value.filter(entry => entry.status === 'selected'))
   const invalid = computed(() => files.value.filter(entry => entry.status === 'invalid'))
   const totalBytes = computed(() => valid.value.reduce((total, entry) => total + entry.size, 0))
@@ -107,6 +113,7 @@ export function useDocumentFiles(operation: MaybeRefOrGetter<DocumentOperationDe
     remove,
     clear,
     move,
-    uploadPayload
+    uploadPayload,
+    previewFile
   }
 }
