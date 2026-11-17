@@ -128,7 +128,7 @@ export default defineEventHandler(async (event) => {
       systemPrompt,
       temperature: 0.7,
       maxTokens: 2048
-    } satisfies GatewayChatBody)
+    } satisfies GatewayChatBody, event)
 
     const userMessage = store.appendMessage({
       conversationId: conversation.id,

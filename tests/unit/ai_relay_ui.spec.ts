@@ -16,6 +16,13 @@ describe('AI relay failure surfaces', () => {
     assert.match(read(chatRoute), /chatModelsFromCatalog/)
   })
 
+  it('the chat send route forwards the request so app-local rows resolve', () => {
+    assert.match(
+      read('server/api/v1/chat/message.post.ts'),
+      /chatWithConnection\(\{[\s\S]*?\} satisfies GatewayChatBody, event\)/
+    )
+  })
+
   it('extraction shows the relay reason instead of an empty picker', () => {
     const source = read(extractConfig)
     assert.match(source, /modelsError/)
