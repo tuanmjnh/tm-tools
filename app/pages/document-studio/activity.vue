@@ -476,7 +476,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
             <div class="flex flex-col h-full space-y-2.5">
               <div class="flex items-start justify-between gap-2">
                 <div class="flex items-center gap-2 min-w-0">
-                  <UBadge :color="statusColor(job.status)" variant="soft" size="sm">
+                  <UBadge
+                    :color="statusColor(job.status)"
+                    variant="soft"
+                    size="sm"
+                    :icon="job.status === 'running' ? 'i-lucide-loader-circle' : undefined"
+                    :ui="job.status === 'running' ? { leadingIcon: 'animate-spin motion-reduce:animate-pulse' } : undefined"
+                  >
                     {{ t(`document.status.${job.status}`) }}
                   </UBadge>
                   <span class="truncate text-sm font-semibold text-foreground">
@@ -578,7 +584,13 @@ function artifactMenu(job: DocumentJobView, artifact: DocumentArtifactView): Dro
           <AppContextMenu :items="jobMenu(job)">
             <div class="space-y-2.5">
               <div class="flex flex-wrap items-center gap-2">
-                <UBadge :color="statusColor(job.status)" variant="soft" size="sm">
+                <UBadge
+                  :color="statusColor(job.status)"
+                  variant="soft"
+                  size="sm"
+                  :icon="job.status === 'running' ? 'i-lucide-loader-circle' : undefined"
+                  :ui="job.status === 'running' ? { leadingIcon: 'animate-spin motion-reduce:animate-pulse' } : undefined"
+                >
                   {{ t(`document.status.${job.status}`) }}
                 </UBadge>
                 <span class="min-w-0 flex-1 truncate text-sm font-semibold">

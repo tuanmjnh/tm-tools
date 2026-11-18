@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.split')
-const splitConfig = ref({ createSubfolder: true })
+const splitConfig = ref(page.restoredConfig({ createSubfolder: true }))
 
 function runSplit() {
   void page.run(splitConfig.value)
@@ -8,6 +8,7 @@ function runSplit() {
 
 watch(splitConfig, (opts) => {
   page.batch.updateConfig(opts)
+  page.rememberSettings(opts)
 }, { deep: true })
 </script>
 

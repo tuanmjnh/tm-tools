@@ -1,5 +1,6 @@
 import type { DocumentOperationDefinition } from '#shared/types/document'
 import { documentStudioOperation } from '~/utils/documentStudio'
+import { loadBatchSettings, loadConfig, savePrefs } from '~/utils/documentPrefs'
 
 export interface OperationPageConfig {
   operationId: string
@@ -65,6 +66,27 @@ export function useDocumentOperationPage(operationId: string) {
     else session.removeArtifact(artifactId)
   }
 
+  /**
+   * Saves the settings the page is currently showing, so the next visit opens
+   * with the same model, preset, formats and pool tuning.
+   */
+  function rememberSettings(config?: Record<string, unknown>) {
+    if (!import.meta.client) return
+    const patch: Parameters<typeof savePrefs>[1] = {}
+    if (config) patch.config = config
+    if (isPerFileBatch.value) {
+      patch.concurrency = batch.concurrency.value
+      patch.pauseMs = batch.pauseMs.value
+      patch.maxRetry = batch.maxRetry.value
+    }
+    savePrefs(operationId, patch)
+  }
+
+  /** Defaults merged with the last run's values for this operation. */
+  function restoredConfig<T extends Record<string, unknown>>(defaults: T): T {
+    return loadConfig(operationId, defaults)
+  }
+
   function addFiles(files: File[]) {
     const overflow = selection.add(files)
     if (overflow > 0) {
@@ -80,6 +102,8 @@ export function useDocumentOperationPage(operationId: string) {
       session.error.value = { code: 'DOCUMENT_INPUT_REQUIRED' }
       return false
     }
+    // Whichever settings produced this run are the ones worth restoring next time.
+    rememberSettings(config)
     const executionConfig: Record<string, unknown> = { ...config }
     if (runtime.isLocal.value && runtime.outputPath.value) {
       executionConfig.outputDir = runtime.outputPath.value
@@ -105,7 +129,15 @@ export function useDocumentOperationPage(operationId: string) {
     return ok
   }
 
-  onMounted(loadDefinition)
+  onMounted(async () => {
+    await loadDefinition()
+    // Pool tuning is per operation and survives a reload; restoring it before
+    // the first run means the operator does not re-enter it each session.
+    const saved = loadBatchSettings(operationId)
+    if (saved.concurrency !== undefined) batch.setConcurrency(saved.concurrency)
+    if (saved.pauseMs !== undefined) batch.setPauseMs(saved.pauseMs)
+    if (saved.maxRetry !== undefined) batch.setMaxRetry(saved.maxRetry)
+  })
 
   async function reload() {
     await loadDefinition()
@@ -134,6 +166,8 @@ export function useDocumentOperationPage(operationId: string) {
     addFiles,
     removeArtifact,
     run,
+    restoredConfig,
+    rememberSettings,
     errorText: computed(() => session.error.value ? t(`document.errors.${session.error.value.code}`) : '')
   }
 }

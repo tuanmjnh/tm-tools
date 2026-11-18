@@ -344,15 +344,28 @@ const batchActive = computed(() => {
  */
 const multiJobArtifacts = computed(() => new Set(props.artifacts.map(artifact => artifact.jobId)).size > 1)
 
-/** Batch progress is per pool; a single run only knows the page counts the job reported. */
+/**
+ * `null` renders the indeterminate bar, which keeps moving while the engine
+ * works. Batch engines here report progress only when they finish, so a
+ * determinate 0 would sit still for the whole run and then jump to 100 —
+ * indistinguishable from a hang.
+ */
 const progressValue = computed<number | null>(() => {
-  if (props.batch) return props.batch.overallProgress
-  return props.progress ?? null
+  const pool = props.batch
+  if (!pool) return props.progress ?? null
+  if (!pool.total) return null
+  if (pool.done + pool.failed >= pool.total) return 100
+  if (pool.overallProgress > 0) return props.batch.overallProgress
+  return null
 })
 
 const progressText = computed(() => {
   if (props.batch) {
-    const { done, total, activePercent } = props.batch
+    const { done, total, activePercent, items } = props.batch
+    // A running item's own label names the page being read, which is the only
+    // evidence of life when the job has a single unit.
+    const runningLabel = items.find(item => item.status === 'running')?.progressLabel
+    if (runningLabel) return runningLabel
     // One file at a time gives a whole-file counter the same value for minutes,
     // so show the page progress of the file that is actually running.
     if (activePercent !== null && activePercent > 0 && activePercent < 100) {

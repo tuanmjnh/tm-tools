@@ -3,7 +3,10 @@ import type { PdfSourceExportFormat } from '#shared/types/pdf'
 
 const page = useDocumentOperationPage('pdf.export')
 
-const formats = ref<PdfSourceExportFormat[]>(['png'])
+const saved = page.restoredConfig<{ formats?: PdfSourceExportFormat[] }>({ formats: ['png'] })
+const formats = ref<PdfSourceExportFormat[]>(
+  Array.isArray(saved.formats) && saved.formats.length ? saved.formats : ['png']
+)
 
 function runExport() {
   void page.run({ formats: formats.value })
@@ -11,6 +14,7 @@ function runExport() {
 
 watch(formats, (f) => {
   page.batch.updateConfig({ formats: f })
+  page.rememberSettings({ formats: f })
 }, { deep: true })
 </script>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.rasterize')
-const rasterConfig = ref({ createSubfolder: true })
+const rasterConfig = ref(page.restoredConfig({ createSubfolder: true }))
 
 function runRasterize() {
   void page.run(rasterConfig.value)
@@ -8,6 +8,7 @@ function runRasterize() {
 
 watch(rasterConfig, (opts) => {
   page.batch.updateConfig(opts)
+  page.rememberSettings(opts)
 }, { deep: true })
 </script>
 

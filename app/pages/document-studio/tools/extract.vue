@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('document.ai-extract')
-const extractOptions = ref<Record<string, unknown>>({})
+const extractOptions = ref<Record<string, unknown>>(page.restoredConfig({}))
 
 function runExtract() {
   void page.run(extractOptions.value)
@@ -8,6 +8,7 @@ function runExtract() {
 
 watch(extractOptions, (opts) => {
   page.batch.updateConfig(opts)
+  page.rememberSettings(opts)
 }, { deep: true })
 </script>
 

@@ -85,6 +85,16 @@ function canRetry(item: BatchItem): boolean {
   return (item.status === 'failed' || item.status === 'cancelled') && !stopping.value
 }
 
+/**
+ * A single-page job never moves past 0 until it finishes, so a running item
+ * with no measured progress renders the indeterminate bar instead of a frozen
+ * empty track. Progress above zero always stays determinate.
+ */
+function itemProgress(item: BatchItem): number | null {
+  if (item.progress > 0) return item.progress
+  return item.status === 'running' ? null : 0
+}
+
 const runningCount = computed(() => props.items.filter(i => i.status === 'running').length)
 const doneCount = computed(() => props.items.filter(i => i.status === 'done').length)
 const failedCount = computed(() => props.items.filter(i => i.status === 'failed' || i.status === 'cancelled').length)
@@ -416,7 +426,7 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
             <UIcon
               :name="meta(item).icon"
               class="size-4 shrink-0 transition-colors duration-150 ease-out"
-              :class="[meta(item).text, item.status === 'running' ? 'animate-pulse' : '']"
+              :class="[meta(item).text, item.status === 'running' ? 'queue-spin' : '']"
             />
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
@@ -427,12 +437,13 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
               </div>
               <div v-if="item.status === 'running' || item.progress > 0" class="mt-1 flex items-center gap-2">
                 <UProgress
-                  :model-value="item.progress"
+                  :model-value="itemProgress(item)"
+                  :animation="itemProgress(item) === null ? 'carousel' : undefined"
                   size="xs"
                   class="w-full flex-1"
                 />
                 <span class="shrink-0 text-[11px] font-medium tabular-nums text-muted">
-                  {{ item.progress }}%
+                  {{ item.progress > 0 ? `${item.progress}%` : (item.progressLabel || t('document.batch.working')) }}
                 </span>
               </div>
               <p
@@ -576,11 +587,26 @@ function artifactMenu(artifact: DocumentArtifactView): DropdownMenuItem[][] {
   inset-inline: 0;
 }
 
+/* A running row's icon turns so the queue visibly advances between polls. */
+.queue-spin {
+  animation: queue-spin 900ms linear infinite;
+}
+
+@keyframes queue-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .doc-row-enter-active,
   .doc-row-leave-active,
   .doc-row-move {
     transition: none;
+  }
+
+  .queue-spin {
+    animation: none;
   }
 }
 </style>

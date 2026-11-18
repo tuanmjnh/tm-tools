@@ -1,17 +1,21 @@
 <script setup lang="ts">
 import type { PdfSourceExportFormat } from '#shared/types/pdf'
 import { operationIdFromSlug } from '~/utils/documentStudio'
+import { loadConfig, savePrefs } from '~/utils/documentPrefs'
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || ''))
 const operationId = computed(() => operationIdFromSlug(slug.value))
 
 const page = useDocumentOperationPage(operationId.value)
-const exportFormats = ref<PdfSourceExportFormat[]>(['png'])
-const extractConfig = ref<Record<string, unknown>>({})
-const splitConfig = ref({ createSubfolder: true })
-const mergeConfig = ref({ outputName: '' })
-const rasterConfig = ref({ createSubfolder: true })
+const savedExport = loadConfig<{ formats?: PdfSourceExportFormat[] }>('pdf.export', { formats: ['png'] })
+const exportFormats = ref<PdfSourceExportFormat[]>(
+  Array.isArray(savedExport.formats) && savedExport.formats.length ? savedExport.formats : ['png']
+)
+const extractConfig = ref<Record<string, unknown>>(loadConfig('document.ai-extract', {}))
+const splitConfig = ref(loadConfig('pdf.split', { createSubfolder: true }))
+const mergeConfig = ref(loadConfig('pdf.merge', { outputName: '' }))
+const rasterConfig = ref(loadConfig('pdf.rasterize', { createSubfolder: true }))
 
 // Watch for slug changes if navigating between tools
 watch(operationId, (newId) => {
@@ -44,20 +48,27 @@ function handleRun() {
 }
 
 watch(exportFormats, (formats) => {
+  savePrefs('pdf.export', { config: { formats } })
   if (operationId.value === 'pdf.export') page.batch.updateConfig({ formats })
 }, { deep: true })
 
 watch(extractConfig, (config) => {
+  savePrefs('document.ai-extract', { config })
   if (operationId.value === 'document.ai-extract') page.batch.updateConfig(config)
 }, { deep: true })
 
 watch(splitConfig, (config) => {
+  savePrefs('pdf.split', { config })
   if (operationId.value === 'pdf.split') page.batch.updateConfig(config)
 }, { deep: true })
 
 watch(rasterConfig, (config) => {
+  savePrefs('pdf.rasterize', { config })
   if (operationId.value === 'pdf.rasterize') page.batch.updateConfig(config)
 }, { deep: true })
+
+// The dynamic route has no dedicated merge config watcher because merge is not
+// reachable through it (its static page owns the form).
 </script>
 
 <template>

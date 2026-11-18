@@ -13,6 +13,8 @@ Bộ tài liệu v5 là nguồn sự thật (Single Source of Truth) quy định
 | [**`DOCUMENT-STUDIO-STANDARDIZATION-SPEC-v5.md`**](./DOCUMENT-STUDIO-STANDARDIZATION-SPEC-v5.md) | **Tài liệu đặc tả kiến trúc gốc**: Tầm nhìn phân hệ, tái cấu trúc trang, chuẩn hóa 2 root thư viện (`input` / `output`), Format / Operation / Conversion / Executor Registries, Storage & Runtime Matrix, bảo mật và Definition of Done. |
 | [**`DOCUMENT-STUDIO-FORMAT-AND-EXTRACTION-CONTRACT-v5.md`**](./DOCUMENT-STUDIO-FORMAT-AND-EXTRACTION-CONTRACT-v5.md) | **Hợp đồng kỹ thuật định dạng & trích xuất**: Ma trận chuyển đổi 13 định dạng (PDF, DOCX, XLSX, Markdown, v.v.), cơ chế chọn AI Model (`gemini-2.5-flash`, `gemini-2.5-pro`), bộ Prompt Presets chuẩn hóa, cấu hình định dạng xuất, Checkpoint & Resumability, và quy trình xử lý Artifacts trong Activity. |
 | [**`DOCUMENT-STUDIO-LEGACY-MIGRATION-PLAN-v5.md`**](./DOCUMENT-STUDIO-LEGACY-MIGRATION-PLAN-v5.md) | **Kế hoạch chuyển đổi dữ liệu và mã nguồn legacy**: Lộ trình 7 giai đoạn (P0 → P6), ma trận ánh xạ thư mục cũ (`sources/`, `split/`, `ocr/`, v.v. sang `input/` & `output/`), cơ chế Dry-run / Copy / Checksum / Rollback, nâng cấp Activity Log và các Test Gates kiểm soát chất lượng. |
+| [**`FORMAT-EXPANSION-PLAN.md`**](./FORMAT-EXPANSION-PLAN.md) | **Kế hoạch mở rộng định dạng**: hiện trạng 7 operation, 4 edge đã khai báo nhưng chưa chạy, và lộ trình 5 giai đoạn (đóng gap khai báo → structured data → ảnh → Word → icon). |
+| [**`IMAGE-STUDIO-DESIGN.md`**](./IMAGE-STUDIO-DESIGN.md) | **Thiết kế xử lý ảnh**: xoá vùng đánh dấu (3 chế độ) và xoá phông (chroma + AI ISNet qua WASM), lý do giữ trong Document Studio, và chính sách tải model 328 MB riêng. |
 
 ---
 

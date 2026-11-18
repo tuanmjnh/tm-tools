@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const page = useDocumentOperationPage('pdf.merge')
-const mergeConfig = ref({ outputName: '' })
+const mergeConfig = ref(page.restoredConfig({ outputName: '' }))
 
 function runMerge() {
   void page.run(mergeConfig.value)

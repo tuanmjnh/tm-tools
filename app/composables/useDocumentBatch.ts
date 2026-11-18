@@ -12,6 +12,8 @@ export interface BatchItem extends PoolItem {
   size: number
   jobId?: string
   progress: number
+  /** Server-side label of the unit being processed, when the engine reports one. */
+  progressLabel?: string
   artifacts: DocumentArtifactView[]
   error?: DocumentErrorPayload
 }
@@ -151,6 +153,7 @@ export function useDocumentBatch(
           if (progress.totalUnits > 0) {
             item.progress = Math.round((progress.completedUnits / progress.totalUnits) * 100)
           }
+          item.progressLabel = progress.currentLabel
         }
       })
       item.artifacts = result.artifacts
