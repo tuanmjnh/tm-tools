@@ -92,6 +92,8 @@ export interface PdfExtractJobState {
   productCount: number
   rowCount: number
   error: string | null
+  /** Engine detail for the last failure: not user text, for diagnosis only. */
+  errorDetail?: string | null
   createdAt: string
   finishedAt: string | null
   cancelRequested: boolean

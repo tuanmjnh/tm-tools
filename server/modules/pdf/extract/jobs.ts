@@ -374,6 +374,10 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
         const code = (error as Error)?.message || 'PDF_AI_REQUEST_FAILED'
         entry.state.failedPages.push(unit.id)
         entry.state.error = code
+        // The code alone does not say whether the budget ran out or the model
+        // answered badly; keep the message and page so a failure is diagnosable
+        // from the journal without re-running the job.
+        entry.state.errorDetail = `${unit.id}: ${(error as Error)?.stack?.split('\n')[0] || code}`
         // No usable model/connection: every remaining unit would fail the same way.
         if (code === 'PDF_AI_NO_MODEL') break
       }
@@ -402,6 +406,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
   } catch (error) {
     entry.state.status = 'failed'
     entry.state.error = (error as Error)?.message || 'PDF_EXTRACT_FAILED'
+    entry.state.errorDetail = (error as Error)?.stack?.split('\n').slice(0, 3).join(' | ') || null
   } finally {
     entry.state.currentPage = null
     entry.state.finishedAt = new Date().toISOString()
