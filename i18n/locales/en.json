@@ -299,7 +299,11 @@
     "document_export": "Export",
     "document_extract": "AI Extraction",
     "document_activity": "Activity",
-    "document_settings": "Settings"
+    "document_settings": "Settings",
+    "document_watermark": "Remove Watermark",
+    "document_remove_bg": "Remove Background",
+    "document_image_convert": "Image / Icon Convert",
+    "document_structured_convert": "Data Convert"
   },
   "dashboard": {
     "title": "Dashboard",

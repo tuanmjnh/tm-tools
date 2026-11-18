@@ -299,7 +299,11 @@
     "document_export": "Xuất tài liệu",
     "document_extract": "Trích xuất AI",
     "document_activity": "Hoạt động",
-    "document_settings": "Cài đặt"
+    "document_settings": "Cài đặt",
+    "document_watermark": "Xoá watermark",
+    "document_remove_bg": "Xoá phông",
+    "document_image_convert": "Chuyển ảnh / icon",
+    "document_structured_convert": "Chuyển dữ liệu bảng"
   },
   "dashboard": {
     "title": "Bảng điều khiển",
