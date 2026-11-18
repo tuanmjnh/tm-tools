@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HubAuditLog } from 'tm-hub-client'
+import type { HubAuditLog } from '@tuanmjnh/tm-hub-client'
 import { formatTimeAgo } from '@vueuse/core'
 import { getErrorMessage } from '~/shared/utils/errors'
 import type { HeaderAction } from '~/components/base/HeaderActions.vue'

@@ -1,5 +1,5 @@
 import type { Role, ModuleDefinition, ModulePermission, PermissionAction } from '#shared/types/rbac'
-import type { HubRole } from 'tm-hub-client'
+import type { HubRole } from '@tuanmjnh/tm-hub-client'
 
 function mapHubRoleToRole(hubRole: HubRole): Role {
   const permissions = (hubRole.permissions || []).map(p => ({

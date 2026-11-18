@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HubExportJob, HubExportTemplate } from 'tm-hub-client'
+import type { HubExportJob, HubExportTemplate } from '@tuanmjnh/tm-hub-client'
 
 definePageMeta({
   middleware: () => {

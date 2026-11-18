@@ -293,17 +293,20 @@ importers:
         specifier: ^3.32.0
         version: 3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0)(vue@3.5.44(typescript@6.0.3))
       '@tuanmjnh/tm-ai-client':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: 0.4.1
+        version: 0.4.1
       '@tuanmjnh/tm-core':
         specifier: ^0.1.2
         version: 0.1.2
       '@tuanmjnh/tm-hub-client':
         specifier: 1.2.0
         version: 1.2.0
+      '@tuanmjnh/tm-mongo':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@tuanmjnh/tm-ui':
-        specifier: ^0.1.4
-        version: 0.1.4(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(aa03ebed33eabf1709826bf9a1aa42cf))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))
+        specifier: ^0.2.0
+        version: 0.2.0(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(aa03ebed33eabf1709826bf9a1aa42cf))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))
       '@unovis/ts':
         specifier: ^1.6.7
         version: 1.7.1(supports-color@10.2.2)
@@ -362,8 +365,11 @@ importers:
         specifier: ^1.13.0
         version: 1.13.0
       mongodb:
-        specifier: ^7.5.0
-        version: 7.7.0
+        specifier: ^7.8.0
+        version: 7.8.0
+      mongoose:
+        specifier: ^9.12.1
+        version: 9.12.1
       node-machine-id:
         specifier: ^1.1.12
         version: 1.1.12
@@ -3842,8 +3848,8 @@ packages:
       y-protocols: ^1.0.1
       yjs: ^13.5.38
 
-  '@tuanmjnh/tm-ai-client@0.2.1':
-    resolution: {integrity: sha512-vSZgqu3VhQb/bXYadICw9C5FQRUqVhXmtylSS7puNIEdSQPPr8nfvoy8ledXMgMkXLo7fyoCj7dMGVre+SBsyQ==}
+  '@tuanmjnh/tm-ai-client@0.4.1':
+    resolution: {integrity: sha512-/Ag/rjZI540n1sNTeWIidEq0xEowYRSNN4Cjz7bC07TJa5tS5bUJckOq3rtgj6Ag3Ogu7sSVPOYrXGqXG0jC/Q==}
 
   '@tuanmjnh/tm-core@0.1.2':
     resolution: {integrity: sha512-8ZgdJy4ofun7svDxsjcxUFWGJZxT3O+WWWiDu0FS2t+UfvOZVFzC2V9/zHUOO/PzzYKLZNegg5bQNpALBFF61w==}
@@ -3851,8 +3857,11 @@ packages:
   '@tuanmjnh/tm-hub-client@1.2.0':
     resolution: {integrity: sha512-2a46mgIu89kdXcrVtGacgqmPkWrRLobMUUUT3Re6dxXv7L7+UQ6F8UimuCZsW3Ue770kXr8dibgKTIkr4KskhA==}
 
-  '@tuanmjnh/tm-ui@0.1.4':
-    resolution: {integrity: sha512-nl295bcpD/gVq0sV1/sRRQLXjxgMFxhec1A52dU+oaNDUUgQo2Am/Eq4DwQRIzKqtYB8udxImYjFOlbc9GF3VQ==}
+  '@tuanmjnh/tm-mongo@0.1.0':
+    resolution: {integrity: sha512-jhQsqD8gG7w3CG4cZz5yPoi7aVZgrxIbDR+buNiEKPBH/tXAAMw5eCyyQPJ0PCbZeLqpuAWYA+fhpuZMGjO/Eg==}
+
+  '@tuanmjnh/tm-ui@0.2.0':
+    resolution: {integrity: sha512-gEo4iLlGrcGdARFBiLhlJotnMNaxGFrIpA68C1nnmDoLkrA7gKCjvNIxun1TkWMm9oBY405Aa03GVR4wntk/sw==}
     peerDependencies:
       '@he-tree/vue': ^2.10.1
       '@nuxt/ui': ^4.0.0
@@ -7087,6 +7096,10 @@ packages:
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
 
+  kareem@3.4.1:
+    resolution: {integrity: sha512-UlgCAFNAdk/HLSsbfkmbH8pJqpEN52Ek8RG53Ys1i3Q3gbCQruSrWpplZlgIGyDHX/LNoLW97ei3OG43s7UhUA==}
+    engines: {node: '>=18.0.0'}
+
   kdbush@3.0.0:
     resolution: {integrity: sha512-hRkd6/XW4HTsA9vjVpY9tuXJYLSlelnkTmVFu4M9/7MIYQtFcHpbugAU7UbOfjOiVSVYl2fqgBuJ32JUmRo5Ew==}
 
@@ -7574,8 +7587,8 @@ packages:
     resolution: {integrity: sha512-ZoS07RoFqpKYQwAk59qmrx8+jJHNHU30UjlU96QktiGn1ltvDr+vCznLX5DiUBLEpMAHatHNWV1nM/74ul66kA==}
     engines: {node: '>=20.19.0'}
 
-  mongodb@7.7.0:
-    resolution: {integrity: sha512-XG1xXEqyouAV8GCb3PuRaujofeXKpAJAPvXYWZgHl6Dz4QHSJ1nRLl0+GpqaLTwKvC0RFE9truOur34RNFY1nw==}
+  mongodb@7.8.0:
+    resolution: {integrity: sha512-p2NKagbQ41+daACG/ZSvhTzeAo+DoEyWE9Cmpf/SyP3pTC43+X0mwKE/44PpKtCxp5wOxnXz+t2pXEZRSkt9Yg==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@aws-sdk/credential-providers': ^3.806.0
@@ -7601,6 +7614,10 @@ packages:
       socks:
         optional: true
 
+  mongoose@9.12.1:
+    resolution: {integrity: sha512-wPw1NKurTDShT+kr/JJvhdwPKIJkxFJv5GEbv++QahN8snPR9Fp/BFg6nQbbCyUHBB8DexwwlCQW6SfBD99QCg==}
+    engines: {node: '>=20.19.0'}
+
   motion-dom@14.3.1:
     resolution: {integrity: sha512-6gsjOAjXgZPoLLHNiBI1uBVNhSrIXSm6YBU8RsFM//byOvIys8YHPQE3VZqW3rWR021tcd3eT8pmV8zWTY9Jsg==}
 
@@ -7612,6 +7629,14 @@ packages:
     peerDependencies:
       '@vueuse/core': '>=10.0.0'
       vue: '>=3.0.0'
+
+  mpath@0.9.0:
+    resolution: {integrity: sha512-ikJRQTk8hw5DEoFVxHG1Gn9T/xcjtdnOKIU1JTmGjZZlg9LST2mBLmcX3/ICIbgJydT2GOc15RnNy5mHmzfSew==}
+    engines: {node: '>=4.0.0'}
+
+  mquery@6.0.1:
+    resolution: {integrity: sha512-/Nijmq3JcpHwDM+5CwBp5yEl6fUa6jLsIhPsoQywlGXU/ZrKIvSpBzfaGnW9BLqcne/CoUwd1ch7MRqptDgFTA==}
+    engines: {node: '>=20.19.0'}
 
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
@@ -8564,6 +8589,9 @@ packages:
   side-channel@1.1.1:
     resolution: {integrity: sha512-6x6dK6zJdpTzF4sQeNYxwtvBzf6Eg4GtlesS94HOvTudUeyK2WXAaIfmDgsyslYrRBeFIlsi54AYsFGUuhmvrQ==}
     engines: {node: '>= 0.4'}
+
+  sift@17.1.4:
+    resolution: {integrity: sha512-/OIVvj9Ts1mFwTYzW09YODMPeIOnDoigMOvKSIN44OmaCyhuCH/05UPF45XW7Ax0snmzDzCzdlSYqvqsn8+sIg==}
 
   signal-exit@3.0.7:
     resolution: {integrity: sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==}
@@ -13594,13 +13622,15 @@ snapshots:
       y-protocols: 1.0.7(yjs@13.6.33)
       yjs: 13.6.33
 
-  '@tuanmjnh/tm-ai-client@0.2.1': {}
+  '@tuanmjnh/tm-ai-client@0.4.1': {}
 
   '@tuanmjnh/tm-core@0.1.2': {}
 
   '@tuanmjnh/tm-hub-client@1.2.0': {}
 
-  '@tuanmjnh/tm-ui@0.1.4(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(aa03ebed33eabf1709826bf9a1aa42cf))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))':
+  '@tuanmjnh/tm-mongo@0.1.0': {}
+
+  '@tuanmjnh/tm-ui@0.2.0(@he-tree/vue@2.10.1(vue@3.5.44(typescript@6.0.3)))(@nuxt/ui@4.12.0(aa03ebed33eabf1709826bf9a1aa42cf))(@tuanmjnh/tm-core@0.1.2)(@vueuse/core@15.0.0(vue@3.5.44(typescript@6.0.3)))(sortablejs@1.15.7)(vue@3.5.44(typescript@6.0.3))':
     dependencies:
       '@he-tree/vue': 2.10.1(vue@3.5.44(typescript@6.0.3))
       '@tuanmjnh/tm-core': 0.1.2
@@ -17409,6 +17439,8 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
+  kareem@3.4.1: {}
+
   kdbush@3.0.0: {}
 
   kdbush@4.1.0: {}
@@ -17840,11 +17872,29 @@ snapshots:
       '@types/whatwg-url': 13.0.0
       whatwg-url: 14.2.0
 
-  mongodb@7.7.0:
+  mongodb@7.8.0:
     dependencies:
       '@mongodb-js/saslprep': 1.5.5
       bson: 7.3.3
       mongodb-connection-string-url: 7.0.2
+
+  mongoose@9.12.1:
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      kareem: 3.4.1
+      mongodb: 7.8.0
+      mpath: 0.9.0
+      mquery: 6.0.1
+      ms: 2.1.3
+      sift: 17.1.4
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-providers'
+      - '@mongodb-js/zstd'
+      - gcp-metadata
+      - kerberos
+      - mongodb-client-encryption
+      - snappy
+      - socks
 
   motion-dom@14.3.1:
     dependencies:
@@ -17863,6 +17913,10 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+
+  mpath@0.9.0: {}
+
+  mquery@6.0.1: {}
 
   mrmime@2.0.1: {}
 
@@ -19181,6 +19235,8 @@ snapshots:
       side-channel-list: 1.0.1
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
+
+  sift@17.1.4: {}
 
   signal-exit@3.0.7: {}
 

@@ -106,7 +106,7 @@ export default defineNuxtConfig({
         '@nuxt/ui > @tiptap/core',
         '@nuxt/ui > @tiptap/vue-3',
         '@nuxt/ui > @tiptap/pm',
-        'tm-hub-client',
+        '@tuanmjnh/tm-hub-client',
         'zod'
       ]
     },

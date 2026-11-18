@@ -1,4 +1,4 @@
-import type { HubExportFormat, HubExportJob, HubExportOptions, HubExportScope, HubExportTemplate } from 'tm-hub-client'
+import type { HubExportFormat, HubExportJob, HubExportOptions, HubExportScope, HubExportTemplate } from '@tuanmjnh/tm-hub-client'
 import { getErrorMessage } from '~/shared/utils/errors'
 
 const MODULES = ['users', 'roles', 'routes', 'permissions', 'notifications', 'configs', 'media', 'logs'] as const
