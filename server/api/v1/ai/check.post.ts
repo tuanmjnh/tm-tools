@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3'
+import { stripAppCatalogId } from '@tuanmjnh/tm-ai-client'
 import { chatWithConnection } from '#server/utils/aiGateway'
 import { parseUpstreamAiError } from '#shared/utils/aiError'
 
@@ -14,10 +15,14 @@ export default defineEventHandler(async (event) => {
   let model = String(body?.model || '').trim()
 
   if ((!connectionId || !model) && typeof body?.modelKey === 'string') {
-    const [conn, ...rest] = body.modelKey.split(':')
-    if (conn && rest.length > 0) {
-      connectionId = conn
-      model = rest.join(':')
+    // Catalogue ids are `<connectionId>:<modelId>`; an app-local id carries
+    // the `app:` namespace first. Splitting on the first colon keeps model ids
+    // that contain one (`llama3.2:latest`) intact.
+    const key = stripAppCatalogId(body.modelKey)
+    const separator = key.indexOf(':')
+    if (separator > 0) {
+      connectionId = key.slice(0, separator)
+      model = key.slice(separator + 1)
     }
   }
 

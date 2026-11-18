@@ -5,8 +5,12 @@ export interface AvailableModel {
   connectionId: string
   connectionName: string
   provider: string
+  providerName?: string
   modelId: string
   displayName: string
+  /** Which source owns the row; the picker badges an overlapping provider. */
+  source?: 'hub' | 'app'
+  shadowed?: boolean
   isPrimary?: boolean
 }
 

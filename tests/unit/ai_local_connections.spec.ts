@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseAILocalConnections, findAILocalConnection } from '../../shared/utils/aiLocalConnections'
+import { findAppConnection, parseAppConnections } from '@tuanmjnh/tm-ai-client'
 
 describe('AI local connections config', () => {
   it('accepts an explicit JSON array and normalizes the base URL', () => {
-    const { connections, errors } = parseAILocalConnections(JSON.stringify([
+    const { connections, errors } = parseAppConnections(JSON.stringify([
       {
         connectionId: 'free-local',
         provider: 'openai-compatible',
@@ -17,12 +17,14 @@ describe('AI local connections config', () => {
     assert.equal(connections.length, 1)
     assert.equal(connections[0]!.baseUrl, 'http://127.0.0.1:31415/v1')
     assert.equal(connections[0]!.apiKey, 'sk-local')
-    assert.deepEqual(connections[0]!.models?.map(model => model.modelId), ['auto', 'gpt-4o-mini'])
-    assert.equal(connections[0]!.models?.[1]?.displayName, 'GPT-4o mini')
+    // The legacy adapter family is recorded as the registry key the pickers use.
+    assert.equal(connections[0]!.providerKey, 'custom')
+    assert.deepEqual(connections[0]!.models.map(model => model.modelId), ['auto', 'gpt-4o-mini'])
+    assert.equal(connections[0]!.models[1]?.displayName, 'GPT-4o mini')
   })
 
   it('rejects malformed entries instead of partially accepting them', () => {
-    const { connections, errors } = parseAILocalConnections([
+    const { connections, errors } = parseAppConnections([
       { connectionId: '', baseUrl: 'http://localhost:11434/v1' },
       { connectionId: 'no-url' },
       { connectionId: 'bad-url', baseUrl: 'file:///etc/passwd' },
@@ -36,23 +38,23 @@ describe('AI local connections config', () => {
 
   it('treats empty config as no local connections', () => {
     for (const value of ['', '   ', undefined, null]) {
-      assert.deepEqual(parseAILocalConnections(value), { connections: [], errors: [] })
+      assert.deepEqual(parseAppConnections(value), { connections: [], errors: [] })
     }
   })
 
   it('reports invalid JSON without throwing', () => {
-    const { connections, errors } = parseAILocalConnections('{not json')
+    const { connections, errors } = parseAppConnections('{not json')
     assert.deepEqual(connections, [])
     assert.equal(errors.length, 1)
     assert.match(errors[0]!, /not valid JSON/)
   })
 
   it('finds a connection by id and never by empty id', () => {
-    const { connections } = parseAILocalConnections([
+    const { connections } = parseAppConnections([
       { connectionId: 'a', baseUrl: 'http://localhost:11434/v1' }
     ])
-    assert.equal(findAILocalConnection(connections, 'a')?.connectionId, 'a')
-    assert.equal(findAILocalConnection(connections, ''), undefined)
-    assert.equal(findAILocalConnection(connections, 'missing'), undefined)
+    assert.equal(findAppConnection(connections, 'a')?.connectionId, 'a')
+    assert.equal(findAppConnection(connections, ''), undefined)
+    assert.equal(findAppConnection(connections, 'missing'), undefined)
   })
 })

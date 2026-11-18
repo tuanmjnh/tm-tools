@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ModelSelect as TmModelSelect } from '@tuanmjnh/tm-ui'
 import type { ModelCheckResult } from '@tuanmjnh/tm-ui'
+import { providerIconFor } from '@tuanmjnh/tm-ai-client'
 import type { AvailableModel } from '~/types/chat'
 
 const props = withDefaults(defineProps<{
@@ -27,6 +28,8 @@ const notify = useNotify()
 
 const labels = computed(() => ({
   placeholder: t('chat.selectModel'),
+  sourceHub: t('chat.sourceHub'),
+  sourceApp: t('chat.sourceApp'),
   checking: t('chat.checkingModel'),
   available: ({ ms }: { ms: number }) => t('chat.modelAvailable', { ms }),
   unavailable: ({ status }: { status: number }) => t('chat.modelUnavailable', { status }),
@@ -73,6 +76,7 @@ function onCheckError(payload: { title: string, description: string }) {
     :show-check="props.showCheck"
     :labels="labels"
     :check-model="checkModel"
+    :provider-icon="providerIconFor"
     @update:model-value="emit('update:modelValue', $event)"
     @check:success="onCheckSuccess"
     @check:error="onCheckError"

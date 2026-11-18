@@ -1,21 +1,18 @@
-import type { Db } from 'mongodb'
-import { MongoClient } from 'mongodb'
+import type { Db, MongoClient } from 'mongodb'
+import mongoose, { type Connection } from 'mongoose'
+import { createMongoConnectionManager } from '@tuanmjnh/tm-mongo'
 import { config } from '../../config/index'
 
-let client: MongoClient | null = null
-let db: Db | null = null
+const manager = createMongoConnectionManager<Connection>({
+  createConnection: (uri, options) => mongoose.createConnection(uri, options)
+})
 
 export async function getSharedConnection(): Promise<{ client: MongoClient, db: Db }> {
-  if (client && db) return { client, db }
-
-  client = new MongoClient(config.mongodb.uri)
-  await client.connect()
-  db = client.db(config.mongodb.dbName)
-  return { client, db }
+  const conn = await manager.get(config.mongodb.uri, config.mongodb.dbName, 'tm-tools')
+  if (!conn || !conn.db) throw new Error('MongoDB is not reachable')
+  return { client: conn.getClient(), db: conn.db }
 }
 
 export async function closeSharedConnection(): Promise<void> {
-  await client?.close()
-  client = null
-  db = null
+  await manager.close('tm-tools')
 }
