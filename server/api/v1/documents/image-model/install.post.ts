@@ -1,5 +1,6 @@
 import { runDocument } from '#server/utils/documentApi'
 import { DocumentError } from '#server/modules/document/operations'
+import { detectRuntime } from '#server/modules/document/runtime'
 import { installModel, isInstalling, modelStatus } from '#server/modules/image/model-installer'
 
 /**
@@ -11,6 +12,8 @@ import { installModel, isInstalling, modelStatus } from '#server/modules/image/m
  */
 export default defineEventHandler(async (event) => {
   return runDocument(event, async () => {
+    // A serverless host has no writable install dir and cannot serve the AI mode.
+    if (detectRuntime() === 'vercel') throw new DocumentError('DOCUMENT_OPERATION_NOT_SUPPORTED')
     if (isInstalling()) {
       const status = modelStatus()
       return { started: false, installing: true, ...status }

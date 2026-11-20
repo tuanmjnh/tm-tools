@@ -1,4 +1,6 @@
 import { runDocument } from '#server/utils/documentApi'
+import { DocumentError } from '#server/modules/document/operations'
+import { detectRuntime } from '#server/modules/document/runtime'
 import { isInstalling, installProgress, modelStatus } from '#server/modules/image/model-installer'
 
 /**
@@ -8,6 +10,7 @@ import { isInstalling, installProgress, modelStatus } from '#server/modules/imag
  */
 export default defineEventHandler(async (event) => {
   return runDocument(event, async () => {
+    if (detectRuntime() === 'vercel') throw new DocumentError('DOCUMENT_OPERATION_NOT_SUPPORTED')
     const status = modelStatus()
     return {
       installed: status.installed,
