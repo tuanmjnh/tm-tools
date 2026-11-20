@@ -3564,6 +3564,10 @@
       "targetXlsxHint": "Excel workbook with one sheet.",
       "targetXmlHint": "Element tree; attributes prefixed with an at sign.",
       "targetJsonHint": "JavaScript Object Notation."
+    },
+    "unavailable": {
+      "title": "Not available on this runtime",
+      "default": "This tool needs the desktop app. Open TM Tools on your computer to use it."
     }
   }
 }

@@ -152,7 +152,7 @@ export function useDocumentApi() {
     operations: () => get<{
       runtime: string
       capabilities: DocumentRuntimeCapabilities
-      operations: (DocumentOperationDefinition & { available: boolean })[]
+      operations: (DocumentOperationDefinition & { available: boolean, runtimeSupport?: { enabled: boolean, reasonDisabled?: string } })[]
       formats?: import('#shared/types/document/formats').DocumentFormatDefinition[]
       conversions?: import('#shared/types/document/formats').ConversionEdge[]
     }>('/operations'),

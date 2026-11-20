@@ -3564,6 +3564,10 @@
       "targetXlsxHint": "Bảng tính Excel một sheet.",
       "targetXmlHint": "Cây phần tử; thuộc tính mang tiền tố dấu a còng.",
       "targetJsonHint": "JavaScript Object Notation."
+    },
+    "unavailable": {
+      "title": "Không khả dụng trên môi trường này",
+      "default": "Công cụ này cần ứng dụng desktop. Mở TM Tools trên máy tính để sử dụng."
     }
   }
 }

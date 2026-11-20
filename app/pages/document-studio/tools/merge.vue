@@ -17,6 +17,8 @@ function runMerge() {
     <div class="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
       <DocumentStudioOperationPageShell
         :operation="page.definition.value"
+        :available="page.entry.value.available"
+        :unavailable-reason="page.entry.value.unavailableReason"
         :capabilities="page.runtime.capabilities.value"
         :files="page.selection.files.value"
         :connection-code="page.runtime.connectionError.value"

@@ -36,6 +36,10 @@ const props = withDefaults(defineProps<{
   multiple?: boolean
   /** Present only for per-file batch operations; switches the action bar to pool controls. */
   batch?: BatchViewModel | null
+  /** False when this operation cannot run on the current runtime (e.g. native ops on web). */
+  available?: boolean
+  /** Localized reason shown in the unavailable panel. */
+  unavailableReason?: string | null
 }>(), {
   running: false,
   uploading: false,
@@ -48,7 +52,9 @@ const props = withDefaults(defineProps<{
   connectionCode: null,
   accept: '',
   multiple: false,
-  batch: null
+  batch: null,
+  available: true,
+  unavailableReason: null
 })
 
 const emit = defineEmits<{
@@ -384,6 +390,19 @@ const progressText = computed(() => {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-3">
+    <div
+      v-if="!available && !loadingDefinition"
+      class="flex min-h-40 flex-1 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-8 text-center"
+    >
+      <UIcon name="i-lucide-circle-slash" class="size-8 text-dimmed" />
+      <p class="text-sm font-medium">
+        {{ t('document.unavailable.title') }}
+      </p>
+      <p class="text-xs text-muted">
+        {{ unavailableReason || t('document.unavailable.default') }}
+      </p>
+    </div>
+    <template v-else>
     <DocumentStudioOperationStepHeader
       :operation="operation"
       :step="(running || batchActive) ? 'process' : artifacts.length ? 'save' : 'choose'"
@@ -891,6 +910,7 @@ const progressText = computed(() => {
         </div>
       </div>
     </div>
+    </template>
 
     <BaseConfirmModal
       v-model:open="deleteOpen"

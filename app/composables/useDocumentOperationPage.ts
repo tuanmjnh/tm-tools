@@ -19,6 +19,8 @@ export function useDocumentOperationPage(operationId: string) {
 
   const definition = ref<DocumentOperationDefinition | null>(null)
   const loadingDefinition = ref(true)
+  /** Runtime availability of this operation, folded from the catalogue. */
+  const entry = ref<{ available: boolean, unavailableReason: string | null }>({ available: true, unavailableReason: null })
 
   const selection = useDocumentFiles(() => definition.value)
   const session = useDocumentRun()
@@ -30,7 +32,11 @@ export function useDocumentOperationPage(operationId: string) {
       // One `/operations` call feeds both the definition and the runtime
       // capabilities; fetching them separately doubled the request per mount.
       const catalog = await api.operations()
-      definition.value = catalog.operations.find(operation => operation.id === operationId) ?? null
+      const matched = catalog.operations.find(operation => operation.id === operationId)
+      definition.value = matched ?? null
+      entry.value = matched
+        ? { available: matched.available, unavailableReason: matched.runtimeSupport?.reasonDisabled ?? null }
+        : { available: true, unavailableReason: null }
       await runtime.load(catalog)
     } catch (caught) {
       definition.value = null
@@ -145,6 +151,7 @@ export function useDocumentOperationPage(operationId: string) {
 
   return {
     definition,
+    entry: computed(() => entry.value),
     operationMeta,
     title,
     description,
