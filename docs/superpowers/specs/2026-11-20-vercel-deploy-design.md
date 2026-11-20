@@ -142,3 +142,23 @@ Durable jobs need a Postgres job store and byte storage. `runtime-context.ts` al
 
 - **Phase B — chat on Mongo:** replace `better-sqlite3` in `server/modules/chat/store.ts` with the Mongo adapter (`@tuanmjnh/tm-mongo` / `mongodb`); same `/chat/*` routes.
 - **Phase D — media on web:** `@ffmpeg/ffmpeg` (WASM) for render/convert, rewritten to run in-browser; **YouTube download stays desktop-only or moves to a dedicated VPS/container** — `ytdlp-nodejs`/`youtube-dl-exec` are binary wrappers (not serverless-viable) and `youtubei.js` is an unofficial, easily-blocked engine.
+
+---
+
+## 10. Phase 1 implementation status (2026-11-20)
+
+Implemented in this repo (commits: capability gate, model-route guard, unavailable panel, vercel.json):
+
+| Piece | Where | State |
+|---|---|---|
+| `useCapabilities` + `isDesktopOnlyPath` | `app/composables/useCapabilities.ts` | done |
+| Sidebar hides desktop-only routes on web | `app/composables/useNavMenu.ts` (`buildNavItems`) | done |
+| Route guard redirects desktop-only paths to `/` on web | `app/middleware/auth.global.ts` | done |
+| Model install/status refuse `vercel` (501) | `server/api/v1/documents/image-model/*` | done |
+| Tool pages honour catalogue `available` (unavailable panel) | `OperationPageShell.vue` + 11 tool pages + funnel `entry` | done |
+| `vercel.json` deployment enabled | `vercel.json` | done |
+| i18n `document.unavailable` (en + vi) | `i18n/locales/*.json` | done |
+
+**Gate evidence:** `nuxt typecheck` exit 0 / 0 `error TS`; eslint exit 0 on all touched files **after** the final `.nuxt/eslint.config.mjs` regen (11:09:54); `pnpm test` **87/87**. Desktop unchanged: both gates are guarded by `isDesktop.value`, verified by grep.
+
+**Owner actions still required (not code):** provision Supabase reachable from Vercel and a Hub storage grant for the tm-tools app; set `NUXT_PUBLIC_HUB_URL`/`NUXT_PUBLIC_HUB_APP_ID` and the server-only `NUXT_HUB_APP_SECRET`/Supabase keys in the Vercel project; confirm the Hub app `allowedOrigins` covers the Vercel domain. Deployment itself is the owner's act.

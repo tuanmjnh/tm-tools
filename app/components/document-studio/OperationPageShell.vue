@@ -403,405 +403,215 @@ const progressText = computed(() => {
       </p>
     </div>
     <template v-else>
-    <DocumentStudioOperationStepHeader
-      :operation="operation"
-      :step="(running || batchActive) ? 'process' : artifacts.length ? 'save' : 'choose'"
-      :loading="running || batchActive"
-    />
+      <DocumentStudioOperationStepHeader
+        :operation="operation"
+        :step="(running || batchActive) ? 'process' : artifacts.length ? 'save' : 'choose'"
+        :loading="running || batchActive"
+      />
 
-    <DocumentStudioConnectionAlert v-if="connectionCode" :code="connectionCode" @retry="emit('reload')" />
+      <DocumentStudioConnectionAlert v-if="connectionCode" :code="connectionCode" @retry="emit('reload')" />
 
-    <div v-if="loadingDefinition" class="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[minmax(0,1fr)_380px]" aria-busy="true">
-      <div class="panel-flat flex min-h-36 flex-col items-center justify-center gap-3 rounded-md border border-dashed border-default/70 p-6">
-        <USkeleton class="size-7 rounded-full" />
-        <USkeleton class="h-3 w-40" />
-        <USkeleton class="h-3 w-28" />
-        <div class="mt-2 flex gap-2">
-          <USkeleton class="h-7 w-24 rounded-md" />
-          <USkeleton class="h-7 w-28 rounded-md" />
+      <div v-if="loadingDefinition" class="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[minmax(0,1fr)_380px]" aria-busy="true">
+        <div class="panel-flat flex min-h-36 flex-col items-center justify-center gap-3 rounded-md border border-dashed border-default/70 p-6">
+          <USkeleton class="size-7 rounded-full" />
+          <USkeleton class="h-3 w-40" />
+          <USkeleton class="h-3 w-28" />
+          <div class="mt-2 flex gap-2">
+            <USkeleton class="h-7 w-24 rounded-md" />
+            <USkeleton class="h-7 w-28 rounded-md" />
+          </div>
+        </div>
+        <div class="panel-flat space-y-3 rounded-md p-4">
+          <USkeleton class="h-3 w-24" />
+          <USkeleton class="h-3 w-full" />
+          <USkeleton class="h-3 w-3/4" />
+          <USkeleton class="h-16 w-full rounded-md" />
         </div>
       </div>
-      <div class="panel-flat space-y-3 rounded-md p-4">
-        <USkeleton class="h-3 w-24" />
-        <USkeleton class="h-3 w-full" />
-        <USkeleton class="h-3 w-3/4" />
-        <USkeleton class="h-16 w-full rounded-md" />
-      </div>
-    </div>
 
-    <div v-else class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
-      <div class="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
-        <!-- Contextual Dropzone: full when empty, compact when files/batch exist -->
-        <div
-          v-if="!files.length && (!batch || batch.total === 0)"
-          class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
-          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
-          @dragover.prevent="dragging = true"
-          @dragleave.prevent="dragging = false"
-          @drop.prevent="onDrop"
-        >
-          <input
-            ref="inputRef"
-            type="file"
-            class="hidden"
-            :accept="accept || undefined"
-            :multiple="multiple"
-            @change="onPick"
+      <div v-else class="grid min-h-0 flex-1 gap-4 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+        <div class="flex min-h-0 flex-col gap-3 lg:overflow-y-auto lg:pr-1">
+          <!-- Contextual Dropzone: full when empty, compact when files/batch exist -->
+          <div
+            v-if="!files.length && (!batch || batch.total === 0)"
+            class="panel-flat flex min-h-36 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-default/70 p-6 text-center transition-colors shrink-0"
+            :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
+            @dragover.prevent="dragging = true"
+            @dragleave.prevent="dragging = false"
+            @drop.prevent="onDrop"
           >
-          <input
-            ref="folderInputRef"
-            type="file"
-            class="hidden"
-            webkitdirectory
-            directory
-            @change="onPick"
-          >
-          <UIcon name="i-lucide-cloud-upload" class="size-7 text-dimmed" />
-          <p class="text-sm font-medium">
-            {{ t(operation?.input.mode === 'single-file' ? 'document.input.dropSingle' : 'document.input.dropMany') }}
-          </p>
-          <p class="text-xs text-muted">
-            {{ accept ? t('document.input.accepted', { types: accept }) : t('document.input.anyFile') }}
-          </p>
-          <div class="flex items-center gap-2">
-            <UButton
-              color="neutral"
-              variant="soft"
-              size="sm"
-              icon="i-lucide-file-plus"
-              :label="t('document.input.browse')"
-              @click="browse"
-            />
-            <UButton
-              v-if="multiple"
-              color="neutral"
-              variant="soft"
-              size="sm"
-              icon="i-lucide-folder-open"
-              :label="t('document.input.browseFolder')"
-              @click="browseFolder"
-            />
-          </div>
-        </div>
-
-        <div
-          v-else
-          class="panel-flat flex items-center justify-between rounded-md border border-dashed border-default/70 px-4 py-2.5 text-xs transition-colors shrink-0"
-          :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
-          @dragover.prevent="dragging = true"
-          @dragleave.prevent="dragging = false"
-          @drop.prevent="onDrop"
-        >
-          <input
-            ref="inputRef"
-            type="file"
-            class="hidden"
-            :accept="accept || undefined"
-            :multiple="multiple"
-            @change="onPick"
-          >
-          <input
-            ref="folderInputRef"
-            type="file"
-            class="hidden"
-            webkitdirectory
-            directory
-            @change="onPick"
-          >
-          <div class="flex items-center gap-2 min-w-0">
-            <UIcon name="i-lucide-cloud-upload" class="size-4 shrink-0 text-primary" />
-            <span class="truncate text-muted">
-              {{ t(operation?.input.mode === 'single-file' ? 'document.input.dropSingle' : 'document.input.dropMany') }}
-            </span>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <UButton
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              icon="i-lucide-file-plus"
-              :label="t('document.input.browse')"
-              @click="browse"
-            />
-            <UButton
-              v-if="multiple"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              icon="i-lucide-folder-open"
-              :label="t('document.input.browseFolder')"
-              @click="browseFolder"
-            />
-          </div>
-        </div>
-
-        <!-- Selected files (before batch start or in non-batch mode) -->
-        <div v-if="files.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
-          <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-              {{ t('document.input.selected', { count: files.length }) }}
-            </p>
-            <UButton
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              icon="i-lucide-x"
-              :label="t('document.input.clear')"
-              @click="emit('reset')"
-            />
-          </div>
-          <TransitionGroup
-            tag="ul"
-            name="doc-row"
-            class="relative max-h-64 divide-y divide-default/50 overflow-auto"
-          >
-            <li
-              v-for="(file, index) in files"
-              :key="file.id"
-              class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors"
+            <input
+              ref="inputRef"
+              type="file"
+              class="hidden"
+              :accept="accept || undefined"
+              :multiple="multiple"
+              @change="onPick"
             >
-              <UIcon :name="fileIcon(file.name)" class="size-4 shrink-0 text-dimmed" />
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium">
-                  {{ file.name }}
-                </p>
-                <p class="text-xs" :class="file.status === 'invalid' ? 'text-error' : 'text-muted'">
-                  <template v-if="file.status === 'invalid'">
-                    {{ t('document.errors.DOCUMENT_INPUT_TYPE_NOT_SUPPORTED') }}
-                  </template>
-                  <template v-else>
-                    {{ formatBytes(file.size) }}
-                  </template>
-                </p>
-              </div>
-              <div v-if="multiple" class="flex shrink-0 items-center gap-0.5">
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  icon="i-lucide-arrow-up"
-                  :disabled="index === 0"
-                  :aria-label="t('document.input.moveUp')"
-                  @click="emit('move', index, index - 1)"
-                />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  square
-                  icon="i-lucide-arrow-down"
-                  :disabled="index === files.length - 1"
-                  :aria-label="t('document.input.moveDown')"
-                  @click="emit('move', index, index + 1)"
-                />
-              </div>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                square
-                icon="i-lucide-trash-2"
-                :aria-label="t('document.input.remove')"
-                @click="emit('remove', file.id)"
-              />
-            </li>
-          </TransitionGroup>
-        </div>
-
-        <!-- Unified Batch Work Area (Left Column) when batch has items -->
-        <DocumentStudioBatchPanel
-          v-if="batch && batch.total > 0"
-          :items="batch.items"
-          :concurrency="batch.concurrency"
-          :pause-ms="batch.pauseMs"
-          :max-retry="batch.maxRetry"
-          :status="batch.status"
-          :concurrency-cap="batch.concurrencyCap"
-          :disabled="batch.status === 'stopping'"
-          :output-path="outputPath"
-          :artifacts="artifacts"
-          @update:concurrency="emit('update:concurrency', $event)"
-          @update:pause-ms="emit('update:pauseMs', $event)"
-          @update:max-retry="emit('update:maxRetry', $event)"
-          @retry="emit('batch-retry', $event)"
-          @retry-all="emit('batch-retry-all')"
-          @clear="emit('batch-clear')"
-          @preview-artifact="previewArtifact"
-          @download-artifact="downloadArtifact"
-          @download-all="downloadAllArtifacts"
-          @open-output-folder="openOutputFolder"
-        />
-
-        <div v-if="artifacts.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
-          <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-              {{ t('document.result.title', { count: artifacts.length }) }}
+            <input
+              ref="folderInputRef"
+              type="file"
+              class="hidden"
+              webkitdirectory
+              directory
+              @change="onPick"
+            >
+            <UIcon name="i-lucide-cloud-upload" class="size-7 text-dimmed" />
+            <p class="text-sm font-medium">
+              {{ t(operation?.input.mode === 'single-file' ? 'document.input.dropSingle' : 'document.input.dropMany') }}
+            </p>
+            <p class="text-xs text-muted">
+              {{ accept ? t('document.input.accepted', { types: accept }) : t('document.input.anyFile') }}
             </p>
             <div class="flex items-center gap-2">
               <UButton
-                v-if="artifacts.length > 1 && hasInlineResults"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                icon="i-lucide-file-plus"
+                :label="t('document.input.browse')"
+                @click="browse"
+              />
+              <UButton
+                v-if="multiple"
+                color="neutral"
+                variant="soft"
+                size="sm"
+                icon="i-lucide-folder-open"
+                :label="t('document.input.browseFolder')"
+                @click="browseFolder"
+              />
+            </div>
+          </div>
+
+          <div
+            v-else
+            class="panel-flat flex items-center justify-between rounded-md border border-dashed border-default/70 px-4 py-2.5 text-xs transition-colors shrink-0"
+            :class="dragging ? 'border-primary bg-primary/5' : 'hover:border-primary/40'"
+            @dragover.prevent="dragging = true"
+            @dragleave.prevent="dragging = false"
+            @drop.prevent="onDrop"
+          >
+            <input
+              ref="inputRef"
+              type="file"
+              class="hidden"
+              :accept="accept || undefined"
+              :multiple="multiple"
+              @change="onPick"
+            >
+            <input
+              ref="folderInputRef"
+              type="file"
+              class="hidden"
+              webkitdirectory
+              directory
+              @change="onPick"
+            >
+            <div class="flex items-center gap-2 min-w-0">
+              <UIcon name="i-lucide-cloud-upload" class="size-4 shrink-0 text-primary" />
+              <span class="truncate text-muted">
+                {{ t(operation?.input.mode === 'single-file' ? 'document.input.dropSingle' : 'document.input.dropMany') }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UButton
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                icon="i-lucide-folder-down"
-                :label="t('document.result.downloadAll')"
-                @click="saveInlineArchive"
+                icon="i-lucide-file-plus"
+                :label="t('document.input.browse')"
+                @click="browse"
               />
               <UButton
-                v-else-if="artifacts.length > 1 && artifacts[0] && !multiJobArtifacts"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                icon="i-lucide-folder-down"
-                :label="t('document.result.downloadAll')"
-                @click="triggerDownload(archivePath(artifacts[0].jobId))"
-              />
-              <UButton
-                v-else-if="artifacts.length > 1"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                icon="i-lucide-folder-down"
-                :label="t('document.result.downloadAll')"
-                @click="downloadAllArtifacts"
-              />
-              <UButton
-                v-if="outputPath"
+                v-if="multiple"
                 color="neutral"
                 variant="ghost"
                 size="xs"
                 icon="i-lucide-folder-open"
-                :label="t('document.activity.openOutputFolder')"
-                @click="openOutputFolder"
+                :label="t('document.input.browseFolder')"
+                @click="browseFolder"
               />
-              <span class="text-xs text-muted">{{ destinationText }}</span>
             </div>
           </div>
-          <TransitionGroup
-            tag="ul"
-            name="doc-row"
-            class="relative max-h-64 divide-y divide-default/50 overflow-auto"
-          >
-            <li v-for="artifact in artifacts" :key="artifact.id">
-              <AppContextMenu :items="artifactMenu(artifact)">
-                <div class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
-                  <UIcon :name="fileIcon(artifact.fileName)" class="size-4 shrink-0 text-dimmed" />
-                  <div class="min-w-0 flex-1">
-                    <button
-                      v-if="canPreview(artifact)"
-                      type="button"
-                      class="truncate text-start text-sm font-medium text-foreground hover:underline hover:text-primary cursor-pointer block max-w-full"
-                      :title="artifact.fileName"
-                      @click="previewArtifact(artifact)"
-                    >
-                      {{ artifact.fileName }}
-                    </button>
-                    <p v-else class="truncate text-sm font-medium" :title="artifact.fileName">
-                      {{ artifact.fileName }}
-                    </p>
-                    <p class="text-xs text-muted">
-                      {{ formatBytes(artifact.size) }}
-                    </p>
-                  </div>
-                  <UButton
-                    v-if="canPreview(artifact)"
-                    color="neutral"
-                    variant="ghost"
-                    size="xs"
-                    icon="i-lucide-external-link"
-                    :aria-label="t('document.result.preview')"
-                    @click="previewArtifact(artifact)"
-                  />
-                  <UButton
-                    color="neutral"
-                    variant="soft"
-                    size="xs"
-                    icon="i-lucide-download"
-                    :label="t('document.result.download')"
-                    @click="downloadArtifact(artifact)"
-                  />
-                  <UDropdownMenu :items="artifactMenu(artifact)">
-                    <UButton
-                      color="neutral"
-                      variant="ghost"
-                      size="xs"
-                      icon="i-lucide-ellipsis-vertical"
-                      :aria-label="t('document.result.more')"
-                    />
-                  </UDropdownMenu>
+
+          <!-- Selected files (before batch start or in non-batch mode) -->
+          <div v-if="files.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
+            <div class="flex items-center justify-between border-b border-default/60 px-3 py-2 bg-muted/5">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                {{ t('document.input.selected', { count: files.length }) }}
+              </p>
+              <UButton
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                icon="i-lucide-x"
+                :label="t('document.input.clear')"
+                @click="emit('reset')"
+              />
+            </div>
+            <TransitionGroup
+              tag="ul"
+              name="doc-row"
+              class="relative max-h-64 divide-y divide-default/50 overflow-auto"
+            >
+              <li
+                v-for="(file, index) in files"
+                :key="file.id"
+                class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors"
+              >
+                <UIcon :name="fileIcon(file.name)" class="size-4 shrink-0 text-dimmed" />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium">
+                    {{ file.name }}
+                  </p>
+                  <p class="text-xs" :class="file.status === 'invalid' ? 'text-error' : 'text-muted'">
+                    <template v-if="file.status === 'invalid'">
+                      {{ t('document.errors.DOCUMENT_INPUT_TYPE_NOT_SUPPORTED') }}
+                    </template>
+                    <template v-else>
+                      {{ formatBytes(file.size) }}
+                    </template>
+                  </p>
                 </div>
-              </AppContextMenu>
-            </li>
-          </TransitionGroup>
-        </div>
-      </div>
-
-      <div class="flex min-h-0 flex-col gap-3">
-        <div class="min-h-0 flex-1 flex-col overflow-y-auto space-y-3 lg:pr-1">
-          <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
-            <template #header>
-              <div class="flex items-center gap-2">
-                <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
-                <p class="text-sm font-semibold">
-                  {{ t('document.shell.summary') }}
-                </p>
-              </div>
-            </template>
-
-            <dl class="space-y-2 text-sm mb-2">
-              <div class="flex items-start justify-between gap-3">
-                <dt class="text-muted">
-                  {{ t('document.summary.operation') }}
-                </dt>
-                <dd class="text-end font-medium">
-                  {{ operation ? t(operation.titleKey) : '—' }}
-                </dd>
-              </div>
-              <div class="flex items-start justify-between gap-3">
-                <dt class="text-muted">
-                  {{ t('document.summary.input') }}
-                </dt>
-                <dd class="text-end font-medium">
-                  {{ t('document.summary.files', { count: summaryInputCount }) }}
-                </dd>
-              </div>
-              <div class="flex items-start justify-between gap-3">
-                <dt class="text-muted">
-                  {{ t('document.summary.output') }}
-                </dt>
-                <dd class="flex flex-col items-end gap-1">
-                  <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                    <UBadge
-                      v-if="artifacts.length > 0"
-                      color="primary"
-                      variant="subtle"
-                      size="xs"
-                    >
-                      {{ artifacts.length }} {{ t('document.result.title', { count: artifacts.length }) }}
-                    </UBadge>
-                    <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
-                  </div>
+                <div v-if="multiple" class="flex shrink-0 items-center gap-0.5">
                   <UButton
-                    v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
                     color="neutral"
                     variant="ghost"
                     size="xs"
-                    icon="i-lucide-folder-cog"
-                    :label="t('document.output.changeFolder')"
-                    @click="onPickCustomOutput"
+                    square
+                    icon="i-lucide-arrow-up"
+                    :disabled="index === 0"
+                    :aria-label="t('document.input.moveUp')"
+                    @click="emit('move', index, index - 1)"
                   />
-                </dd>
-              </div>
-            </dl>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    square
+                    icon="i-lucide-arrow-down"
+                    :disabled="index === files.length - 1"
+                    :aria-label="t('document.input.moveDown')"
+                    @click="emit('move', index, index + 1)"
+                  />
+                </div>
+                <UButton
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  square
+                  icon="i-lucide-trash-2"
+                  :aria-label="t('document.input.remove')"
+                  @click="emit('remove', file.id)"
+                />
+              </li>
+            </TransitionGroup>
+          </div>
 
-            <slot name="config" />
-          </UCard>
-
-          <slot name="advanced" />
-
+          <!-- Unified Batch Work Area (Left Column) when batch has items -->
           <DocumentStudioBatchPanel
-            v-if="batch && batch.total === 0"
+            v-if="batch && batch.total > 0"
             :items="batch.items"
             :concurrency="batch.concurrency"
             :pause-ms="batch.pauseMs"
@@ -822,94 +632,284 @@ const progressText = computed(() => {
             @download-all="downloadAllArtifacts"
             @open-output-folder="openOutputFolder"
           />
+
+          <div v-if="artifacts.length && (!batch || batch.total === 0)" class="panel-flat rounded-md shrink-0 overflow-hidden">
+            <div class="flex items-center justify-between gap-2 border-b border-default/60 px-3 py-2 bg-muted/5">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                {{ t('document.result.title', { count: artifacts.length }) }}
+              </p>
+              <div class="flex items-center gap-2">
+                <UButton
+                  v-if="artifacts.length > 1 && hasInlineResults"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-folder-down"
+                  :label="t('document.result.downloadAll')"
+                  @click="saveInlineArchive"
+                />
+                <UButton
+                  v-else-if="artifacts.length > 1 && artifacts[0] && !multiJobArtifacts"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-folder-down"
+                  :label="t('document.result.downloadAll')"
+                  @click="triggerDownload(archivePath(artifacts[0].jobId))"
+                />
+                <UButton
+                  v-else-if="artifacts.length > 1"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-folder-down"
+                  :label="t('document.result.downloadAll')"
+                  @click="downloadAllArtifacts"
+                />
+                <UButton
+                  v-if="outputPath"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  icon="i-lucide-folder-open"
+                  :label="t('document.activity.openOutputFolder')"
+                  @click="openOutputFolder"
+                />
+                <span class="text-xs text-muted">{{ destinationText }}</span>
+              </div>
+            </div>
+            <TransitionGroup
+              tag="ul"
+              name="doc-row"
+              class="relative max-h-64 divide-y divide-default/50 overflow-auto"
+            >
+              <li v-for="artifact in artifacts" :key="artifact.id">
+                <AppContextMenu :items="artifactMenu(artifact)">
+                  <div class="flex items-center gap-2 px-3 py-2 hover:bg-muted/10 transition-colors">
+                    <UIcon :name="fileIcon(artifact.fileName)" class="size-4 shrink-0 text-dimmed" />
+                    <div class="min-w-0 flex-1">
+                      <button
+                        v-if="canPreview(artifact)"
+                        type="button"
+                        class="truncate text-start text-sm font-medium text-foreground hover:underline hover:text-primary cursor-pointer block max-w-full"
+                        :title="artifact.fileName"
+                        @click="previewArtifact(artifact)"
+                      >
+                        {{ artifact.fileName }}
+                      </button>
+                      <p v-else class="truncate text-sm font-medium" :title="artifact.fileName">
+                        {{ artifact.fileName }}
+                      </p>
+                      <p class="text-xs text-muted">
+                        {{ formatBytes(artifact.size) }}
+                      </p>
+                    </div>
+                    <UButton
+                      v-if="canPreview(artifact)"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      icon="i-lucide-external-link"
+                      :aria-label="t('document.result.preview')"
+                      @click="previewArtifact(artifact)"
+                    />
+                    <UButton
+                      color="neutral"
+                      variant="soft"
+                      size="xs"
+                      icon="i-lucide-download"
+                      :label="t('document.result.download')"
+                      @click="downloadArtifact(artifact)"
+                    />
+                    <UDropdownMenu :items="artifactMenu(artifact)">
+                      <UButton
+                        color="neutral"
+                        variant="ghost"
+                        size="xs"
+                        icon="i-lucide-ellipsis-vertical"
+                        :aria-label="t('document.result.more')"
+                      />
+                    </UDropdownMenu>
+                  </div>
+                </AppContextMenu>
+              </li>
+            </TransitionGroup>
+          </div>
         </div>
 
-        <div class="shrink-0 space-y-2 rounded-md border border-default/60 bg-elevated/40 p-3">
-          <div v-if="batch ? (batchActive || batch.total > 0) : running" class="space-y-1.5">
-            <UProgress
-              :model-value="progressValue"
-              :animation="progressValue === null ? 'carousel' : undefined"
-              size="xs"
+        <div class="flex min-h-0 flex-col gap-3">
+          <div class="min-h-0 flex-1 flex-col overflow-y-auto space-y-3 lg:pr-1">
+            <UCard :ui="{ root: 'panel-flat ring-0', body: 'gap-3 p-4 sm:p-4' }">
+              <template #header>
+                <div class="flex items-center gap-2">
+                  <UIcon :name="operation?.icon ?? 'i-lucide-file-cog'" class="size-4 text-primary" />
+                  <p class="text-sm font-semibold">
+                    {{ t('document.shell.summary') }}
+                  </p>
+                </div>
+              </template>
+
+              <dl class="space-y-2 text-sm mb-2">
+                <div class="flex items-start justify-between gap-3">
+                  <dt class="text-muted">
+                    {{ t('document.summary.operation') }}
+                  </dt>
+                  <dd class="text-end font-medium">
+                    {{ operation ? t(operation.titleKey) : '—' }}
+                  </dd>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                  <dt class="text-muted">
+                    {{ t('document.summary.input') }}
+                  </dt>
+                  <dd class="text-end font-medium">
+                    {{ t('document.summary.files', { count: summaryInputCount }) }}
+                  </dd>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                  <dt class="text-muted">
+                    {{ t('document.summary.output') }}
+                  </dt>
+                  <dd class="flex flex-col items-end gap-1">
+                    <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                      <UBadge
+                        v-if="artifacts.length > 0"
+                        color="primary"
+                        variant="subtle"
+                        size="xs"
+                      >
+                        {{ artifacts.length }} {{ t('document.result.title', { count: artifacts.length }) }}
+                      </UBadge>
+                      <span class="break-all text-end font-medium">{{ destinationText || '—' }}</span>
+                    </div>
+                    <UButton
+                      v-if="capabilities?.runtime === 'local' || capabilities?.runtime === 'electron'"
+                      color="neutral"
+                      variant="ghost"
+                      size="xs"
+                      icon="i-lucide-folder-cog"
+                      :label="t('document.output.changeFolder')"
+                      @click="onPickCustomOutput"
+                    />
+                  </dd>
+                </div>
+              </dl>
+
+              <slot name="config" />
+            </UCard>
+
+            <slot name="advanced" />
+
+            <DocumentStudioBatchPanel
+              v-if="batch && batch.total === 0"
+              :items="batch.items"
+              :concurrency="batch.concurrency"
+              :pause-ms="batch.pauseMs"
+              :max-retry="batch.maxRetry"
+              :status="batch.status"
+              :concurrency-cap="batch.concurrencyCap"
+              :disabled="batch.status === 'stopping'"
+              :output-path="outputPath"
+              :artifacts="artifacts"
+              @update:concurrency="emit('update:concurrency', $event)"
+              @update:pause-ms="emit('update:pauseMs', $event)"
+              @update:max-retry="emit('update:maxRetry', $event)"
+              @retry="emit('batch-retry', $event)"
+              @retry-all="emit('batch-retry-all')"
+              @clear="emit('batch-clear')"
+              @preview-artifact="previewArtifact"
+              @download-artifact="downloadArtifact"
+              @download-all="downloadAllArtifacts"
+              @open-output-folder="openOutputFolder"
             />
-            <div class="flex items-center justify-between gap-2 text-xs text-muted">
-              <span class="truncate">{{ progressText }}</span>
-              <span v-if="progressValue !== null" class="shrink-0 font-medium tabular-nums text-toned">
-                {{ progressValue }}%
-              </span>
-            </div>
           </div>
 
-          <UAlert
-            v-if="error"
-            color="error"
-            variant="soft"
-            icon="i-lucide-circle-alert"
-            :title="t(`document.errors.${error.code}`)"
-          />
+          <div class="shrink-0 space-y-2 rounded-md border border-default/60 bg-elevated/40 p-3">
+            <div v-if="batch ? (batchActive || batch.total > 0) : running" class="space-y-1.5">
+              <UProgress
+                :model-value="progressValue"
+                :animation="progressValue === null ? 'carousel' : undefined"
+                size="xs"
+              />
+              <div class="flex items-center justify-between gap-2 text-xs text-muted">
+                <span class="truncate">{{ progressText }}</span>
+                <span v-if="progressValue !== null" class="shrink-0 font-medium tabular-nums text-toned">
+                  {{ progressValue }}%
+                </span>
+              </div>
+            </div>
 
-          <div v-if="batch" class="flex items-center gap-2">
-            <UButton
-              v-if="batch.status === 'running'"
-              class="flex-1"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-pause"
-              :label="t('document.batch.pause')"
-              @click="emit('batch-pause')"
-            />
-            <UButton
-              v-else-if="batch.status === 'paused'"
-              class="flex-1"
-              color="primary"
-              variant="soft"
-              icon="i-lucide-play"
-              :label="t('document.batch.resume')"
-              @click="emit('batch-resume')"
-            />
-            <UButton
-              v-else
-              class="flex-1"
-              color="primary"
-              variant="soft"
-              icon="i-lucide-play"
-              :label="t('document.batch.start')"
-              :disabled="!canRun"
-              @click="emit('batch-start')"
-            />
-            <UButton
-              v-if="batchActive"
+            <UAlert
+              v-if="error"
               color="error"
               variant="soft"
-              icon="i-lucide-square"
-              :label="t('document.batch.stop')"
-              :loading="batch.status === 'stopping'"
-              :disabled="batch.status === 'stopping'"
-              @click="emit('batch-stop')"
+              icon="i-lucide-circle-alert"
+              :title="t(`document.errors.${error.code}`)"
             />
+
+            <div v-if="batch" class="flex items-center gap-2">
+              <UButton
+                v-if="batch.status === 'running'"
+                class="flex-1"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-pause"
+                :label="t('document.batch.pause')"
+                @click="emit('batch-pause')"
+              />
+              <UButton
+                v-else-if="batch.status === 'paused'"
+                class="flex-1"
+                color="primary"
+                variant="soft"
+                icon="i-lucide-play"
+                :label="t('document.batch.resume')"
+                @click="emit('batch-resume')"
+              />
+              <UButton
+                v-else
+                class="flex-1"
+                color="primary"
+                variant="soft"
+                icon="i-lucide-play"
+                :label="t('document.batch.start')"
+                :disabled="!canRun"
+                @click="emit('batch-start')"
+              />
+              <UButton
+                v-if="batchActive"
+                color="error"
+                variant="soft"
+                icon="i-lucide-square"
+                :label="t('document.batch.stop')"
+                :loading="batch.status === 'stopping'"
+                :disabled="batch.status === 'stopping'"
+                @click="emit('batch-stop')"
+              />
+              <UButton
+                v-if="!batchActive && batch.total > 0"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-trash-2"
+                :label="t('document.batch.clearList')"
+                @click="emit('batch-clear')"
+              />
+            </div>
+
             <UButton
-              v-if="!batchActive && batch.total > 0"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-trash-2"
-              :label="t('document.batch.clearList')"
-              @click="emit('batch-clear')"
+              v-else
+              block
+              color="primary"
+              variant="soft"
+              icon="i-lucide-play"
+              :label="t('document.actions.run')"
+              :loading="running"
+              :disabled="!canRun && !running"
+              @click="emit('run')"
             />
           </div>
-
-          <UButton
-            v-else
-            block
-            color="primary"
-            variant="soft"
-            icon="i-lucide-play"
-            :label="t('document.actions.run')"
-            :loading="running"
-            :disabled="!canRun && !running"
-            @click="emit('run')"
-          />
         </div>
       </div>
-    </div>
     </template>
 
     <BaseConfirmModal
