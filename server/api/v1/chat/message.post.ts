@@ -3,7 +3,7 @@ import { CHAT_ATTACHMENT_LIMIT, CHAT_ATTACHMENT_TEXT_LIMIT } from '#shared/utils
 import { chatWithConnection, type GatewayChatBody } from '../../../utils/aiGateway'
 import type { RelayMessage } from '../../../utils/aiRelay'
 import { requireChatUser, requireChatWrite } from '../../../utils/chatAuth'
-import { deriveTitle, getChatStore, CHAT_HISTORY_WINDOW } from '../../../modules/chat/store'
+import { deriveTitle, CHAT_HISTORY_WINDOW, getChatRepository } from '../../../modules/chat/repository'
 
 function badRequest(message: string) {
   return createError({ statusCode: 400, statusMessage: 'error.bad_request', message })
@@ -93,16 +93,16 @@ export default defineEventHandler(async (event) => {
     throw badRequest('connectionId and model are required')
   }
 
-  const store = getChatStore()
+  const store = getChatRepository()
   const titleSeed = message || attachments?.[0]?.name || ''
 
   // The conversation is created before the provider call so a thread keeps its
   // own title, but any failure after that point must not leave an empty row
   // behind: the user never saw a stored turn.
-  let conversation = conversationId ? store.getConversation(auth.userId, conversationId) : null
+  let conversation = conversationId ? await store.getConversation(auth.userId, conversationId) : null
   const isNewConversation = !conversation
   if (!conversation) {
-    conversation = store.createConversation({
+    conversation = await store.createConversation({
       userId: auth.userId,
       appId: auth.appId,
       title: deriveTitle(titleSeed),
@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const existing = store.listMessages(auth.userId, conversation.id, CHAT_HISTORY_WINDOW)
+    const existing = await store.listMessages(auth.userId, conversation.id, CHAT_HISTORY_WINDOW)
     const relayMessages: RelayMessage[] = existing
       .filter(entry => entry.role === 'user' || entry.role === 'assistant')
       .map(entry => ({
@@ -130,7 +130,7 @@ export default defineEventHandler(async (event) => {
       maxTokens: 2048
     } satisfies GatewayChatBody, event)
 
-    const userMessage = store.appendMessage({
+    const userMessage = await store.appendMessage({
       conversationId: conversation.id,
       userId: auth.userId,
       role: 'user',
@@ -139,7 +139,7 @@ export default defineEventHandler(async (event) => {
       model,
       connectionId
     })
-    const assistantMessage = store.appendMessage({
+    const assistantMessage = await store.appendMessage({
       conversationId: conversation.id,
       userId: auth.userId,
       role: 'assistant',
@@ -149,7 +149,7 @@ export default defineEventHandler(async (event) => {
       inputTokens: result.usage?.inputTokens,
       outputTokens: result.usage?.outputTokens
     })
-    store.touchConversation(conversation.id, result.model || model, connectionId)
+    await store.touchConversation(conversation.id, result.model || model, connectionId)
 
     return {
       success: true,
@@ -162,7 +162,7 @@ export default defineEventHandler(async (event) => {
     }
   } catch (err: unknown) {
     if (isNewConversation) {
-      store.deleteConversation(auth.userId, conversation.id)
+      await store.deleteConversation(auth.userId, conversation.id)
     }
     throw err
   }

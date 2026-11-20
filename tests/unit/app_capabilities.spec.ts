@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { isDesktopOnlyPath, DESKTOP_ONLY_PREFIXES } from '../../app/composables/useCapabilities'
+import { isDesktopOnlyPath, isWebNoticePath, DESKTOP_ONLY_PREFIXES, WEB_NOTICE_PREFIXES } from '../../app/composables/useCapabilities'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -28,6 +28,25 @@ describe('desktop-only path gate', () => {
   })
 })
 
+describe('web notice vs redirect split', () => {
+  // The media pages already render an alert when Electron is absent. Redirecting
+  // them to `/` hides that notice, so they must be allowed to render on the web
+  // and explain themselves instead of bouncing the visitor to the dashboard.
+  it('treats the media pages as a notice, not a redirect', () => {
+    assert.deepEqual([...WEB_NOTICE_PREFIXES], ['/media/video', '/media/download'])
+    assert.equal(isWebNoticePath('/media/video'), true)
+    assert.equal(isWebNoticePath('/media/download'), true)
+    assert.equal(isWebNoticePath('/media'), false)
+    assert.equal(isWebNoticePath('/browser-hub'), false)
+  })
+
+  it('a notice path is still desktop-only', () => {
+    for (const path of WEB_NOTICE_PREFIXES) {
+      assert.equal(isDesktopOnlyPath(path), true, `${path} must stay desktop-only for the sidebar filter`)
+    }
+  })
+})
+
 describe('sidebar hides desktop-only routes on web', () => {
   it('filters buildNavItems by isDesktopOnlyPath when not desktop', () => {
     const src = read('app/composables/useNavMenu.ts')
@@ -37,11 +56,29 @@ describe('sidebar hides desktop-only routes on web', () => {
   })
 })
 
-describe('route guard refuses desktop-only paths on web', () => {
-  it('uses useCapabilities and redirects desktop-only paths', () => {
+describe('route guard', () => {
+  it('redirects only the non-notice desktop-only paths on web', () => {
     const src = read('app/middleware/auth.global.ts')
     assert.match(src, /useCapabilities\(\)/)
     assert.match(src, /isDesktopOnlyPath/)
+    // A notice path must be rendered (so its alert shows), never redirected.
+    assert.match(src, /isWebNoticePath/)
     assert.match(src, /navigateTo\('\/'\)/)
+  })
+
+  it('media pages render a "desktop only" notice when Electron is absent', () => {
+    const video = read('app/pages/media/video.vue')
+    const download = read('app/pages/media/download.vue')
+    assert.match(video, /tools\.noElectron/)
+    assert.match(download, /tools\.noElectron/)
+  })
+
+  it('media pages disable their controls when Electron is absent', () => {
+    // Without this a button stays clickable on the web and silently does
+    // nothing, because every action goes through the missing IPC bridge.
+    const video = read('app/pages/media/video.vue')
+    const download = read('app/pages/media/download.vue')
+    assert.match(video, /controlsDisabled[^\n]*!\s*taskManager\.isElectron\.value/)
+    assert.match(download, /controlsDisabled[^\n]*!\s*isElectron/)
   })
 })

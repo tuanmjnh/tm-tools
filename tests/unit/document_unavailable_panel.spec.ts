@@ -14,7 +14,7 @@ describe('tool shell unavailable panel', () => {
     assert.match(shell, /unavailableReason\??:/)
   })
   it('renders a panel gated on !available', () => {
-    assert.match(shell, /!available \&\& !loadingDefinition/)
+    assert.match(shell, /!available && !loadingDefinition/)
     assert.match(shell, /document\.unavailable/)
   })
 

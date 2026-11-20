@@ -1,4 +1,4 @@
-import { getChatStore, type UpdateConversationInput } from '../../../../modules/chat/store'
+import { getChatRepository, type UpdateConversationInput } from '../../../../modules/chat/repository'
 import { requireChatUser, requireChatWrite } from '../../../../utils/chatAuth'
 import { isConversationColor } from '#shared/utils/chat'
 
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'error.bad_request', message: 'No conversation fields to update' })
   }
 
-  const conversation = getChatStore().updateConversation(auth.userId, id, patch)
+  const conversation = await getChatRepository().updateConversation(auth.userId, id, patch)
   if (!conversation) {
     throw createError({ statusCode: 404, statusMessage: 'error.notFound', message: 'Conversation not found' })
   }

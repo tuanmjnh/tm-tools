@@ -162,3 +162,26 @@ Implemented in this repo (commits: capability gate, model-route guard, unavailab
 **Gate evidence:** `nuxt typecheck` exit 0 / 0 `error TS`; eslint exit 0 on all touched files **after** the final `.nuxt/eslint.config.mjs` regen (11:09:54); `pnpm test` **87/87**. Desktop unchanged: both gates are guarded by `isDesktop.value`, verified by grep.
 
 **Owner actions still required (not code):** provision Supabase reachable from Vercel and a Hub storage grant for the tm-tools app; set `NUXT_PUBLIC_HUB_URL`/`NUXT_PUBLIC_HUB_APP_ID` and the server-only `NUXT_HUB_APP_SECRET`/Supabase keys in the Vercel project; confirm the Hub app `allowedOrigins` covers the Vercel domain. Deployment itself is the owner's act.
+
+### 10.1 Phase B — chat on Mongo (done 2026-11-20)
+
+`better-sqlite3` is a native module: it cannot load on Vercel, so `/chat` would have failed there. The store is now split behind one async contract:
+
+| Piece | Where | State |
+|---|---|---|
+| Shared repository contract + title/window helpers | `server/modules/chat/types.ts` | done |
+| Mongo repository (two collections, derived counts) | `server/modules/chat/mongo.ts` | done |
+| SQLite store kept for desktop/offline (sync API unchanged) | `server/modules/chat/store.ts` | done |
+| Backend pick by runtime (`detectRuntime() === 'vercel'` → Mongo) | `server/modules/chat/repository.ts` | done |
+| All five `/api/v1/chat/*` routes on the async repository | `server/api/v1/chat/**` | done |
+| Storage badge no longer names one backend | `i18n/locales/*.json` (`chat.storageBadge`) | done |
+
+**Evidence (measured):** with `VERCEL=1`, `GET /api/v1/chat/conversations` returned 0 (empty Mongo) while the same call in `local` returned the 4 existing SQLite threads, proving the backend really switches; a chat turn under `VERCEL=1` wrote `chat_conversations` + `chat_messages` (2 docs, assistant content `MONGO`), and PATCH/pagination/DELETE all answered correctly on Mongo. Desktop/local still reads SQLite. `90/90` specs pass (new: `chat_mongo_store.spec.ts`, `chat_repository.spec.ts`).
+
+### 10.2 Model-install refusal corrected to 501 (done 2026-11-20)
+
+The two image-model routes answered `404 DOCUMENT_OPERATION_NOT_SUPPORTED` on `vercel`, but §6 specifies `501`. `404` is reserved for an unknown operation id; a runtime that cannot serve a known route is `501 DOCUMENT_RUNTIME_NOT_SUPPORTED`. Both routes now use that code — confirmed live under `VERCEL=1`: `status` and `install` both return `501`. `image_model_web_guard.spec.ts` was corrected to pin the 501 code, and a second spec (`image_model_web_guard_status.spec.ts`) asserts the shared status map keeps `DOCUMENT_RUNTIME_NOT_SUPPORTED: 501`.
+
+### 10.3 Phase D — media on web (NOT started; scope is large)
+
+Measured before committing to it: the two media pages are 2,538 lines and call `electronAPI` 22 times (ffmpeg task manager, yt-dlp downloader, native file open/reveal); there is no `@ffmpeg/ffmpeg` dependency and no server-side media executor to migrate. Delivering media on the web means a new in-browser WASM pipeline plus a rewritten UI, and YouTube download stays `ytdlp-nodejs`/binary-only (not serverless-viable). This is a separate project, not a Phase 1 gap; the routes stay gated on the web as designed in §4.

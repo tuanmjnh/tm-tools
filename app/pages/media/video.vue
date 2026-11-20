@@ -214,7 +214,7 @@ const encoderOptions = computed(() => [
   { label: `AMD AMF (h264_amf)${gpuSupport.value.amf ? '' : ' - ' + t('tools.notSupported')}`, value: 'amf', disabled: !gpuSupport.value.amf }
 ])
 
-const controlsDisabled = computed(() => exeState.value === 'missing' || taskManager.processing.value || taskManager.paused.value)
+const controlsDisabled = computed(() => !taskManager.isElectron.value || exeState.value === 'missing' || taskManager.processing.value || taskManager.paused.value)
 
 // Media size & Visual preview
 const singleInputPath = ref('')
@@ -549,8 +549,14 @@ onMounted(async () => {
           </div>
         </template>
       </UAlert>
-      <UAlert v-if="!taskManager.isElectron.value" icon="i-lucide-monitor" color="warning" variant="subtle"
-        :title="t('tools.noElectron')" />
+      <UAlert
+        v-if="!taskManager.isElectron.value"
+        icon="i-lucide-monitor"
+        color="warning"
+        variant="subtle"
+        :title="t('tools.noElectron')"
+        :description="t('tools.noElectronMedia')"
+      />
     </div>
 
     <!-- Main Columns -->

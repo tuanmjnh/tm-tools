@@ -10,7 +10,7 @@ import { isInstalling, installProgress, modelStatus } from '#server/modules/imag
  */
 export default defineEventHandler(async (event) => {
   return runDocument(event, async () => {
-    if (detectRuntime() === 'vercel') throw new DocumentError('DOCUMENT_OPERATION_NOT_SUPPORTED')
+    if (detectRuntime() === 'vercel') throw new DocumentError('DOCUMENT_RUNTIME_NOT_SUPPORTED')
     const status = modelStatus()
     return {
       installed: status.installed,

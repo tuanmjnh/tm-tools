@@ -35,10 +35,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo(redirect ? { path: '/login', query: { redirect } } : '/login')
   }
 
-  // Desktop-only sections (browser profiles, media) have no web backend; a direct
-  // visit on the web must not open a page whose IPC calls do not exist.
+  // Desktop-only sections have no web backend. Browser Hub would fail on its
+  // IPC calls, so it redirects; the media pages render a "requires the desktop
+  // app" alert instead, which a redirect would hide.
   const capabilities = useCapabilities()
-  if (!capabilities.isDesktop.value && capabilities.isDesktopOnlyPath(to.path)) {
+  if (!capabilities.isDesktop.value
+    && capabilities.isDesktopOnlyPath(to.path)
+    && !capabilities.isWebNoticePath(to.path)) {
     return navigateTo('/')
   }
 

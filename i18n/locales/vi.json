@@ -201,7 +201,7 @@
     "attachmentUploadFailed": "Không thể tải lên {name}",
     "loadOlder": "Tải tin nhắn cũ hơn",
     "tokens": "tokens",
-    "storageBadge": "Lưu trong SQLite",
+    "storageBadge": "Lưu trong ứng dụng",
     "systemPrompt": "Chỉ thị hệ thống",
     "systemPromptDesc": "Chỉ dẫn bổ sung áp dụng cho mọi tin nhắn",
     "systemPromptPlaceholder": "Bạn là trợ lý hữu ích, trả lời ngắn gọn...",
@@ -384,6 +384,7 @@
     "retrying": "Đang thử lại",
     "noTasks": "Chưa có tác vụ",
     "noElectron": "Tính năng này cần ứng dụng desktop (Electron).",
+    "noElectronMedia": "Công cụ video và tải xuống chạy trên ứng dụng desktop vì cần FFmpeg và yt-dlp trên máy của bạn. Môi trường web không thể chạy được.",
     "refreshStatus": "Làm mới trạng thái",
     "output": "Đầu ra",
     "input": "Đầu vào",
@@ -3104,6 +3105,8 @@
     }
   },
   "notifications": {
+    "title": "Thông báo",
+    "description": "Xem thông báo và gửi Web Push đến người dùng.",
     "pushTitle": "Thông báo Push",
     "pushDesc": "Nhận cảnh báo ứng dụng trên thiết bị này qua Firebase Cloud Messaging hoặc VAPID web push.",
     "pushUnsupported": "Trình duyệt này không hỗ trợ web push notification.",

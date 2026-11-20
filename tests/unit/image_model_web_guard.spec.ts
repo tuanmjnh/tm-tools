@@ -18,7 +18,10 @@ describe('image-model routes refuse the cloud runtime', () => {
       const src = read(route)
       assert.match(src, /detectRuntime/)
       assert.match(src, /'vercel'/)
-      assert.match(src, /DOCUMENT_OPERATION_NOT_SUPPORTED/)
+      // The route exists; the runtime cannot serve it. That is a 501
+      // (DOCUMENT_RUNTIME_NOT_SUPPORTED), not the 404 reserved for an unknown
+      // operation id.
+      assert.match(src, /DOCUMENT_RUNTIME_NOT_SUPPORTED/)
     })
   }
 })

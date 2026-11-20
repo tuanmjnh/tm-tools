@@ -1,14 +1,27 @@
 <script setup lang="ts">
 const { t } = useI18n()
+const { isDesktop } = useCapabilities()
 </script>
 
 <template>
   <div>
     <UPageHeader :title="t('nav.media_studio')" class="mb-6" />
 
+    <UAlert
+      v-if="!isDesktop"
+      icon="i-lucide-monitor"
+      color="warning"
+      variant="subtle"
+      class="mb-4"
+      :title="t('tools.noElectron')"
+      :description="t('tools.noElectronMedia')"
+    />
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <UCard class="cursor-pointer hover:ring-2 hover:ring-primary transition-all"
-        @click="navigateTo('/media/download')">
+      <UCard
+        class="cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+        @click="navigateTo('/media/download')"
+      >
         <template #header>
           <div class="flex items-center gap-3">
             <UIcon name="i-lucide-download" class="text-primary text-xl" />

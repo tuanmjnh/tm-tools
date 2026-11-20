@@ -201,7 +201,7 @@
     "attachmentUploadFailed": "Could not upload {name}",
     "loadOlder": "Load older messages",
     "tokens": "tokens",
-    "storageBadge": "Stored in SQLite",
+    "storageBadge": "Stored in this app",
     "systemPrompt": "System instructions",
     "systemPromptDesc": "Extra instructions applied to every message",
     "systemPromptPlaceholder": "You are a helpful assistant that answers concisely...",
@@ -384,6 +384,7 @@
     "retrying": "Retrying",
     "noTasks": "No tasks yet",
     "noElectron": "This feature requires the desktop app (Electron).",
+    "noElectronMedia": "Video and download tools run on the desktop app because they need FFmpeg and yt-dlp on your machine. Web hosting cannot run them.",
     "refreshStatus": "Refresh status",
     "output": "Output",
     "input": "Input",
@@ -3104,6 +3105,8 @@
     }
   },
   "notifications": {
+    "title": "Notifications",
+    "description": "View notifications and send Web Push to users.",
     "pushTitle": "Push Notifications",
     "pushDesc": "Receive app alerts on this device via Firebase Cloud Messaging or VAPID web push.",
     "pushUnsupported": "This browser does not support web push notifications.",

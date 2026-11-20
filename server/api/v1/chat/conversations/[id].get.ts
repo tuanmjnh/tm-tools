@@ -1,4 +1,4 @@
-import { getChatStore } from '../../../../modules/chat/store'
+import { getChatRepository } from '../../../../modules/chat/repository'
 import { requireChatUser } from '../../../../utils/chatAuth'
 
 const DEFAULT_PAGE_SIZE = 30
@@ -16,14 +16,14 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'error.missingId', message: 'Conversation id is required' })
 
-  const store = getChatStore()
-  const conversation = store.getConversation(auth.userId, id)
+  const store = getChatRepository()
+  const conversation = await store.getConversation(auth.userId, id)
   if (!conversation) {
     throw createError({ statusCode: 404, statusMessage: 'error.notFound', message: 'Conversation not found' })
   }
 
   const query = getQuery(event)
-  const page = store.listMessagePage(auth.userId, id, {
+  const page = await store.listMessagePage(auth.userId, id, {
     limit: parseLimit(query.limit),
     before: typeof query.before === 'string' && query.before ? query.before : undefined
   })

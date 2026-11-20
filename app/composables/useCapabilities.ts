@@ -8,8 +8,20 @@ export type AppPlatform = 'desktop' | 'web'
  */
 export const DESKTOP_ONLY_PREFIXES: readonly string[] = ['/browser-hub', '/media/video', '/media/download']
 
+/**
+ * A subset that explains itself instead of bouncing to the dashboard: the media
+ * pages already render a "requires the desktop app" alert when the Electron
+ * bridge is absent, so redirecting them would hide that notice.
+ */
+export const WEB_NOTICE_PREFIXES: readonly string[] = ['/media/video', '/media/download']
+
 export function isDesktopOnlyPath(path: string): boolean {
   return DESKTOP_ONLY_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
+}
+
+/** True when the web build should render the page (and its notice) rather than redirect. */
+export function isWebNoticePath(path: string): boolean {
+  return WEB_NOTICE_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
 }
 
 /**
@@ -20,5 +32,5 @@ export function isDesktopOnlyPath(path: string): boolean {
 export function useCapabilities() {
   const platform = computed<AppPlatform>(() => (isDesktopRuntime() ? 'desktop' : 'web'))
   const isDesktop = computed(() => platform.value === 'desktop')
-  return { platform, isDesktop, isDesktopOnlyPath }
+  return { platform, isDesktop, isDesktopOnlyPath, isWebNoticePath }
 }

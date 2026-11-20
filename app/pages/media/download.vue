@@ -227,7 +227,7 @@ const deleteConfigTarget = ref<YoutubeConfig | null>(null)
 const deletingConfig = ref(false)
 
 // Computed
-const controlsDisabled = computed(() => exeState.value === 'missing' || isTaskProcessing.value || isTaskPaused.value)
+const controlsDisabled = computed(() => !isElectron.value || exeState.value === 'missing' || isTaskProcessing.value || isTaskPaused.value)
 
 async function refreshExe() {
   const rs = await taskManager.checkExecutable()
@@ -813,8 +813,14 @@ watch(() => state.urlText, detectPlaylist, { deep: true })
             </div>
           </template>
         </UAlert>
-        <UAlert v-if="!isElectron" icon="i-lucide-monitor" color="warning" variant="subtle"
-          :title="t('tools.noElectron')" />
+        <UAlert
+          v-if="!isElectron"
+          icon="i-lucide-monitor"
+          color="warning"
+          variant="subtle"
+          :title="t('tools.noElectron')"
+          :description="t('tools.noElectronMedia')"
+        />
       </div>
 
       <!-- Two-Column Responsive Layout -->

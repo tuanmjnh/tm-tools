@@ -4,65 +4,25 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { ChatAttachment } from '#shared/types/chat'
 import type { ConversationColor } from '#shared/utils/chat'
+import type {
+  AppendMessageInput,
+  CreateConversationInput,
+  MessagePage,
+  StoredConversation,
+  StoredMessage,
+  UpdateConversationInput
+} from './types'
 
-export type ChatRole = 'user' | 'assistant' | 'system'
-
-export interface StoredMessage {
-  id: string
-  conversationId: string
-  role: ChatRole
-  content: string
-  attachments?: ChatAttachment[]
-  model: string | null
-  connectionId: string | null
-  inputTokens: number | null
-  outputTokens: number | null
-  createdAt: string
-}
-
-export interface StoredConversation {
-  id: string
-  title: string
-  model: string
-  connectionId: string
-  messageCount: number
-  lastMessageAt: string
-  createdAt: string
-  archived: boolean
-  color: ConversationColor
-}
-
-export interface CreateConversationInput {
-  userId: string
-  appId?: string
-  title: string
-  connectionId: string
-  model: string
-}
-
-export interface AppendMessageInput {
-  conversationId: string
-  userId: string
-  role: ChatRole
-  content: string
-  attachments?: ChatAttachment[]
-  model?: string
-  connectionId?: string
-  inputTokens?: number
-  outputTokens?: number
-}
-
-export interface UpdateConversationInput {
-  title?: string
-  archived?: boolean
-  color?: ConversationColor
-}
-
-export interface MessagePage {
-  messages: StoredMessage[]
-  hasMore: boolean
-  nextCursor: string | null
-}
+export { CHAT_HISTORY_WINDOW, deriveTitle, TITLE_MAX_LENGTH } from './types'
+export type {
+  AppendMessageInput,
+  ChatRole,
+  CreateConversationInput,
+  MessagePage,
+  StoredConversation,
+  StoredMessage,
+  UpdateConversationInput
+} from './types'
 
 /** Row-level shape returned by better-sqlite3 for the joined list query. */
 interface ConversationRow {
@@ -80,7 +40,7 @@ interface ConversationRow {
 interface MessageRow {
   id: string
   conversation_id: string
-  role: ChatRole
+  role: StoredMessage['role']
   content: string
   attachments: string | null
   model: string | null
@@ -129,22 +89,17 @@ function mapConversationRow(row: ConversationRow): StoredConversation {
   }
 }
 
-export const TITLE_MAX_LENGTH = 60
-
-export function deriveTitle(text: string): string {
-  const line = text.replace(/\s+/g, ' ').trim()
-  if (line.length <= TITLE_MAX_LENGTH) return line || 'Untitled chat'
-  return `${line.slice(0, TITLE_MAX_LENGTH - 1).trimEnd()}…`
-}
-
 /**
- * Conversation persistence for the /chat surface. SQLite is the only store:
- * tm-tools owns its own history, while the provider credential stays in TM Hub
- * and inference goes through the hub relay.
+ * Conversation persistence for the desktop app. SQLite is the only store that
+ * survives offline: the packaged Electron runtime keeps history in
+ * `TOOLS_DATA_DIR`, so the desktop never needs a server to list or open a
+ * thread. The hosted runtime uses the Mongo repository instead (see
+ * `repository.ts`).
  *
  * Every method is scoped by userId, so one account can never read or delete
  * another account's history even when it knows a conversation id.
  */
+
 export class ChatStore {
   private readonly db: Database.Database
 
@@ -408,7 +363,7 @@ export class ChatStore {
 let store: ChatStore | null = null
 
 /**
- * One connection per process. The packaged Electron runtime runs Nitro inside
+ * The desktop/dev SQLite file. The packaged Electron runtime runs Nitro inside
  * the main process, so TOOLS_DATA_DIR points at userData there; the web/dev
  * runtime falls back to the gitignored .data directory.
  */
@@ -417,9 +372,8 @@ function resolveDatabasePath(): string {
   return join(dataDir, 'chat.sqlite')
 }
 
+/** Desktop/offline SQLite store. Hosted runtimes use `getChatRepository`. */
 export function getChatStore(): ChatStore {
   if (!store) store = new ChatStore(resolveDatabasePath())
   return store
 }
-
-export const CHAT_HISTORY_WINDOW = 40
