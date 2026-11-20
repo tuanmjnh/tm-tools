@@ -35,6 +35,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo(redirect ? { path: '/login', query: { redirect } } : '/login')
   }
 
+  // Desktop-only sections (browser profiles, media) have no web backend; a direct
+  // visit on the web must not open a page whose IPC calls do not exist.
+  const capabilities = useCapabilities()
+  if (!capabilities.isDesktop.value && capabilities.isDesktopOnlyPath(to.path)) {
+    return navigateTo('/')
+  }
+
   const auth = useAuth()
   const user = auth.user.value
   if (!user) return

@@ -1,6 +1,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { RouteTreeNode } from '#shared/types/rbac'
 import type { HubSystemRoute } from '@tuanmjnh/tm-hub-client'
+import { useCapabilities } from './useCapabilities'
 
 function mapHubRouteToRouteTreeNode(hubRoute: HubSystemRoute): RouteTreeNode {
   return {
@@ -33,6 +34,7 @@ export const useNavMenu = () => {
   const { $i18n } = useNuxtApp()
   const auth = useAuth()
   const { routes } = useHub()
+  const { isDesktop, isDesktopOnlyPath } = useCapabilities()
 
   const allowedRoutes = useState<RouteTreeNode[]>('nav:allowedRoutes', () => [])
 
@@ -128,6 +130,9 @@ export const useNavMenu = () => {
     const hidden = new Set(['settings'])
     const items = allowedRoutes.value
       .filter((node: RouteTreeNode) => !hidden.has(node.name) && node.isVisible !== false)
+      // Desktop-only sections have no web backend; hide them rather than render
+      // a menu entry that would immediately redirect.
+      .filter((node: RouteTreeNode) => isDesktop.value || !isDesktopOnlyPath(normalizePath(node.path)))
     const shadowed = shadowedPaths(items)
     return items.map(node => mapRouteToNav(node, open, shadowed))
   }
