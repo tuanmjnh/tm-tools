@@ -120,9 +120,9 @@ describe('model check quick action', () => {
   const modelSelect = 'app/components/aiProviders/ModelSelect.vue'
   // The picker, its check button and the error popover live in the shared
   // package; the app file is a wrapper that supplies labels and the transport.
-  // The package is consumed from the registry, so this reads the compiled module
-  // it actually ships rather than a source file that is not installed.
-  const sharedModelSelect = 'node_modules/@tuanmjnh/tm-ui/ModelSelect.js'
+  // The package is installed from GitHub at a pinned commit, so the shipped
+  // module keeps the repo layout under dist/ rather than a flattened root.
+  const sharedModelSelect = 'node_modules/@tuanmjnh/tm-ui/dist/ModelSelect.js'
   const checkEndpoint = 'server/api/v1/ai/check.post.ts'
 
   it('provides a check endpoint backed by the AI gateway', () => {
