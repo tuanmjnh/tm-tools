@@ -14,6 +14,7 @@ export const DOCUMENT_FORMAT_IDS = [
   'ico',
   'icns',
   'txt',
+  'md',
   'zip'
 ] as const
 
@@ -41,6 +42,13 @@ export const DOCUMENT_FORMATS: readonly DocumentFormatDefinition[] = [
     mimeTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     category: 'document',
     previewKind: 'none'
+  },
+  {
+    id: 'md',
+    extensions: ['md', 'markdown'],
+    mimeTypes: ['text/markdown'],
+    category: 'document',
+    previewKind: 'text'
   },
   {
     id: 'doc',
@@ -197,8 +205,31 @@ export const CONVERSION_MATRIX: readonly ConversionEdge[] = [
   { source: 'json', target: 'xml', operationId: 'structured.convert', strategy: 'structured-data', available: true },
   // webp → PDF now runs: pdf-lib embeds it after the canvas re-encodes to PNG.
   { source: 'webp', target: 'pdf', operationId: 'pdf.images-to-pdf', strategy: 'layout', available: true },
-  { source: 'xlsx', target: 'docx', operationId: 'spreadsheet.xlsx-to-docx', strategy: 'layout', available: false, reasonDisabled: 'Not implemented' },
-  { source: 'docx', target: 'xlsx', operationId: 'document.docx-table-extract', strategy: 'structured-data', available: false, reasonDisabled: 'Not implemented' }
+  // Office & Data (Word, Excel, CSV, Markdown, JSON, XML — deterministic or AI-guided).
+  { source: 'xlsx', target: 'docx', operationId: 'office.convert', strategy: 'layout', available: true },
+  { source: 'xlsx', target: 'md', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'xlsx', target: 'json', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'xlsx', target: 'xml', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'xls', target: 'docx', operationId: 'office.convert', strategy: 'layout', available: true },
+  { source: 'docx', target: 'xlsx', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'docx', target: 'csv', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'docx', target: 'md', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'docx', target: 'json', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'docx', target: 'xml', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'doc', target: 'xlsx', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'doc', target: 'csv', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'doc', target: 'md', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'doc', target: 'json', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'doc', target: 'xml', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'csv', target: 'docx', operationId: 'office.convert', strategy: 'layout', available: true },
+  { source: 'csv', target: 'md', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'csv', target: 'json', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'csv', target: 'xml', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'md', target: 'docx', operationId: 'office.convert', strategy: 'layout', available: true },
+  { source: 'md', target: 'xlsx', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'md', target: 'csv', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'md', target: 'json', operationId: 'office.convert', strategy: 'structured-data', available: true },
+  { source: 'md', target: 'xml', operationId: 'office.convert', strategy: 'structured-data', available: true }
 ]
 
 export function formatById(id: string): DocumentFormatDefinition | null {

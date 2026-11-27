@@ -303,7 +303,9 @@
     "document_watermark": "Xoá watermark",
     "document_remove_bg": "Xoá phông",
     "document_image_convert": "Chuyển ảnh / icon",
-    "document_structured_convert": "Chuyển dữ liệu bảng"
+    "document_structured_convert": "Chuyển dữ liệu bảng",
+    "document_office_convert": "Word ↔ Excel",
+    "document_office_convert": "Word ↔ Excel"
   },
   "dashboard": {
     "title": "Bảng điều khiển",
@@ -1897,6 +1899,20 @@
       "presetDescriptionHint": "Đây là loại tài liệu gì, từng cột nghĩa là gì, và những quy tắc riêng mà prompt mặc định không biết.",
       "presetSample": "Mẫu tham khảo",
       "presetSampleHint": "Dán vài dòng kết quả đúng (JSON hoặc CSV). Model sẽ bắt chước cách diễn đạt và chia biến thể, không chép giá trị.",
+      "presetCategoryTitle": "Cây danh mục tự động (tùy chọn)",
+      "presetCategoryHint": "Nạp file JSON hoặc CSV danh mục để tự động gán đường dẫn danh mục đúng cho từng trang/sản phẩm.",
+      "presetCategoryImport": "Nạp danh mục (JSON/CSV)",
+      "presetCategoryClear": "Xóa",
+      "presetCategoryLoaded": "Đã nạp {count} danh mục",
+      "presetCategoryBadFile": "Không đọc được danh mục từ tệp này. Cần file JSON mảng hoặc CSV có dòng tiêu đề.",
+      "presetCategoryMode": "Chế độ khớp danh mục",
+      "presetCategoryModeSystem": "Chỉ hệ thống (0 token AI — khớp theo tên/SKU)",
+      "presetCategoryModeAi": "AI hỗ trợ (gửi danh sách rút gọn, server ghép đường dẫn)",
+      "presetCategoryModeAuto": "Kết hợp (Hệ thống trước, AI dự phòng)",
+      "presetCategoryColTitle": "Cột tên danh mục",
+      "presetCategoryColSlug": "Cột slug",
+      "presetCategoryColPid": "Cột danh mục cha (tùy chọn)",
+      "presetCategoryColMatchers": "Cột tiền tố SKU / từ khóa (tùy chọn)",
       "presetSave": "Lưu mẫu",
       "presetSaved": "Đã lưu mẫu.",
       "presetDeleted": "Đã xoá mẫu.",
@@ -3412,6 +3428,10 @@
       "structuredConvert": {
         "title": "Chuyển dữ liệu bảng",
         "description": "Chuyển CSV ↔ XLSX và XML ↔ JSON theo quy tắc rõ ràng."
+      },
+      "officeConvert": {
+        "title": "Word ↔ Excel",
+        "description": "Chuyển đổi Word (.doc, .docx) sang Excel (.xlsx) và ngược lại — có hỗ trợ prompt AI."
       }
     },
     "split": {
@@ -3567,6 +3587,22 @@
       "targetXlsxHint": "Bảng tính Excel một sheet.",
       "targetXmlHint": "Cây phần tử; thuộc tính mang tiền tố dấu a còng.",
       "targetJsonHint": "JavaScript Object Notation."
+    },
+    "officeConvert": {
+      "target": "Định dạng đầu ra",
+      "targetAuto": "Tự động (Word → Excel, Excel → Word)",
+      "targetXlsx": "Excel (.xlsx)",
+      "targetDocx": "Word (.docx)",
+      "targetCsv": "CSV (.csv)",
+      "targetMd": "Markdown (.md)",
+      "targetJson": "JSON (.json)",
+      "targetXml": "XML (.xml)",
+      "useAi": "Kết hợp AI hỗ trợ chuyển đổi",
+      "useAiHint": "Dùng AI để tách cột bảng giá/dữ liệu từ Word sang Excel, hoặc viết báo cáo/văn bản có cấu trúc từ Excel sang Word.",
+      "model": "Model AI",
+      "aiPrompt": "Prompt hướng dẫn AI (tùy chọn)",
+      "aiPromptHint": "Mô tả cách bạn muốn tách cột, chuẩn hóa dữ liệu hoặc trình bày lại nội dung.",
+      "aiPromptPlaceholder": "Ví dụ: Tách thành các cột Mã SP, Tên, Giá bán, Kích thước; hoặc tổng hợp dữ liệu từng sheet thành báo cáo chuyên nghiệp."
     },
     "unavailable": {
       "title": "Không khả dụng trên môi trường này",

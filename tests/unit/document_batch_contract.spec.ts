@@ -33,7 +33,7 @@ describe('batch contract', () => {
     }
   })
 
-  it('does not change the operation count', () => {
-    assert.equal(DOCUMENT_OPERATIONS.length, 11)
+  it('includes every registered operation', () => {
+    assert.equal(DOCUMENT_OPERATIONS.length, 12)
   })
 })

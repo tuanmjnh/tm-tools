@@ -4,11 +4,16 @@
  * normalizes what a file claims and decides what a merge would add.
  */
 
+import type { PdfCategoryMatchMode, PdfCategoryNode } from '#shared/types/pdf'
+import { normalizeCategoryMode, sanitizeCategoryNodes } from '#shared/utils/pdfCategoryTree'
+
 export interface PresetTransferEntry {
   id?: string
   name: string
   description?: string
   sample?: string
+  categoryMode?: PdfCategoryMatchMode
+  categories?: PdfCategoryNode[]
 }
 
 export type PresetParseResult
@@ -36,6 +41,10 @@ function normalizeEntry(raw: unknown): PresetTransferEntry | null {
   if (description) entry.description = description
   const sample = clamp(record.sample, LIMITS.sample)
   if (sample) entry.sample = sample
+  const categoryMode = normalizeCategoryMode(record.categoryMode)
+  if (categoryMode) entry.categoryMode = categoryMode
+  const categories = sanitizeCategoryNodes(record.categories)
+  if (categories.length) entry.categories = categories
   return entry
 }
 
@@ -78,7 +87,9 @@ export function serializePresetFile(
     id: entry.id,
     name: entry.name,
     description: entry.description ?? '',
-    sample: entry.sample ?? ''
+    sample: entry.sample ?? '',
+    ...(entry.categoryMode ? { categoryMode: entry.categoryMode } : {}),
+    ...(entry.categories?.length ? { categories: entry.categories } : {})
   }))
   return `${JSON.stringify({ version: PRESET_TRANSFER_VERSION, exportedAt, presets }, null, 2)}\n`
 }

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { PdfExtractPreset } from '#shared/types/pdf'
+import type { PdfCategoryMatchMode, PdfCategoryNode, PdfExtractPreset } from '#shared/types/pdf'
+import { normalizeCategoryMode, sanitizeCategoryNodes } from '#shared/utils/pdfCategoryTree'
 import { ensureDir, pdfDirs, writeFileAtomic } from '../paths'
 
 /**
@@ -12,6 +13,8 @@ export interface PdfExtractInstructions {
   preset?: string
   description?: string
   sample?: string
+  categoryMode?: PdfCategoryMatchMode
+  categories?: PdfCategoryNode[]
 }
 
 const MAX_PRESETS = 40
@@ -34,13 +37,19 @@ function readAll(): PdfExtractPreset[] {
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter((entry): entry is PdfExtractPreset => Boolean(entry) && typeof entry.id === 'string')
-      .map(entry => ({
-        id: entry.id,
-        name: clamp(entry.name, LIMITS.name) || entry.id,
-        description: clamp(entry.description, LIMITS.description),
-        sample: clamp(entry.sample, LIMITS.sample),
-        updatedAt: String(entry.updatedAt ?? '')
-      }))
+      .map((entry) => {
+        const categories = sanitizeCategoryNodes(entry.categories)
+        const categoryMode = normalizeCategoryMode(entry.categoryMode)
+        return {
+          id: entry.id,
+          name: clamp(entry.name, LIMITS.name) || entry.id,
+          description: clamp(entry.description, LIMITS.description),
+          sample: clamp(entry.sample, LIMITS.sample),
+          ...(categoryMode ? { categoryMode } : {}),
+          ...(categories.length ? { categories } : {}),
+          updatedAt: String(entry.updatedAt ?? '')
+        }
+      })
   } catch {
     // A corrupt file must not break extraction: treat it as "no presets".
     return []
@@ -69,6 +78,8 @@ export function savePreset(input: {
   name?: unknown
   description?: unknown
   sample?: unknown
+  categoryMode?: unknown
+  categories?: unknown
 }): PdfExtractPreset {
   const name = clamp(input.name, LIMITS.name)
   if (!name) throw new Error('PDF_PRESET_NAME_REQUIRED')
@@ -76,12 +87,16 @@ export function savePreset(input: {
   const presets = readAll()
   const id = typeof input.id === 'string' ? input.id.trim() : ''
   const existing = id ? presets.find(entry => entry.id === id) : undefined
+  const categories = sanitizeCategoryNodes(input.categories)
+  const categoryMode = normalizeCategoryMode(input.categoryMode)
 
   const preset: PdfExtractPreset = {
     id: existing?.id ?? (id || randomUUID()),
     name,
     description: clamp(input.description, LIMITS.description),
     sample: clamp(input.sample, LIMITS.sample),
+    ...(categoryMode ? { categoryMode } : {}),
+    ...(categories.length ? { categories } : {}),
     updatedAt: new Date().toISOString()
   }
 
@@ -106,10 +121,14 @@ export function deletePreset(id: string): boolean {
 export function sanitizeInstructions(raw: unknown): PdfExtractInstructions | null {
   if (!raw || typeof raw !== 'object') return null
   const record = raw as Record<string, unknown>
+  const categories = sanitizeCategoryNodes(record.categories)
+  const categoryMode = normalizeCategoryMode(record.categoryMode)
   const instructions: PdfExtractInstructions = {
     preset: clamp(record.preset, LIMITS.name) || undefined,
     description: clamp(record.description, LIMITS.description) || undefined,
-    sample: clamp(record.sample, LIMITS.sample) || undefined
+    sample: clamp(record.sample, LIMITS.sample) || undefined,
+    categoryMode,
+    categories: categories.length ? categories : undefined
   }
-  return instructions.description || instructions.sample ? instructions : null
+  return instructions.description || instructions.sample || instructions.categories?.length ? instructions : null
 }

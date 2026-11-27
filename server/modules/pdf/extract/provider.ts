@@ -36,10 +36,12 @@ function standardFontsUrl(): string | undefined {
 
 class PdfProviderError extends Error {
   status: number
+  detail?: string
 
-  constructor(message: string, status = 0) {
+  constructor(message: string, status = 0, detail?: string) {
     super(message)
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -66,9 +68,12 @@ function parseProduct(raw: unknown): PdfExtractProduct | null {
     ? record.variants.map(parseVariant)
     : []
 
+  const categorySlug = asString(record.categorySlug).trim()
+
   return {
     sku,
     title: asString(record.title).trim() || sku,
+    ...(categorySlug ? { categorySlug } : {}),
     isNewProduct: record.isNewProduct === true,
     width: asString(record.width).trim(),
     depth: asString(record.depth).trim(),
@@ -128,9 +133,9 @@ function maxOutputTokens(): number {
  * PDF font falls back to the built-in one. Passing an absolute URL restores the
  * glyphs; without it a page's own typography is lost in the image we send.
  */
-async function renderPage(buffer: Buffer): Promise<Buffer> {
+async function renderPage(buffer: Buffer, scale = config.pdf.imageScale): Promise<Buffer> {
   const document = await pdf(buffer, {
-    scale: config.pdf.imageScale,
+    scale,
     docInitParams: { standardFontDataUrl: standardFontsUrl() }
   })
   try {
@@ -138,6 +143,54 @@ async function renderPage(buffer: Buffer): Promise<Buffer> {
     return await document.getPage(1)
   } finally {
     await document.destroy()
+  }
+}
+
+/**
+ * Extracts selectable text from a single-page PDF, grouping items by Y row
+ * so price tables keep their row structure (` | ` between columns). Used as
+ * a fallback when vision returns an empty answer on an image-rendered page.
+ */
+export async function extractPdfPageText(buffer: Buffer): Promise<string> {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const task = pdfjs.getDocument({
+      data: new Uint8Array(buffer),
+      standardFontDataUrl: standardFontsUrl()
+    })
+    const doc = await task.promise
+    try {
+      if (doc.numPages < 1) return ''
+      const page = await doc.getPage(1)
+      const content = await page.getTextContent()
+      const items = (content.items as Array<{ str?: string, transform?: number[] }>)
+        .filter(item => typeof item.str === 'string' && item.str.trim().length > 0 && Array.isArray(item.transform))
+        .map(item => ({
+          str: item.str!.trim(),
+          x: Number(item.transform![4] ?? 0),
+          y: Number(item.transform![5] ?? 0)
+        }))
+        .sort((a, b) => (Math.abs(b.y - a.y) > 4 ? b.y - a.y : a.x - b.x))
+
+      const rows: string[] = []
+      let currentY: number | null = null
+      let currentCells: string[] = []
+      for (const item of items) {
+        if (currentY === null || Math.abs(item.y - currentY) > 4) {
+          if (currentCells.length) rows.push(currentCells.join(' | '))
+          currentY = item.y
+          currentCells = [item.str]
+        } else {
+          currentCells.push(item.str)
+        }
+      }
+      if (currentCells.length) rows.push(currentCells.join(' | '))
+      return rows.join('\n')
+    } finally {
+      await task.destroy()
+    }
+  } catch {
+    return ''
   }
 }
 
@@ -177,12 +230,15 @@ function toProviderError(error: unknown): PdfProviderError {
     statusCode?: number
     statusMessage?: string
     message?: string
-    data?: { detail?: string }
+    data?: { detail?: string, data?: { detail?: string } }
   }
   const status = typeof record.statusCode === 'number' ? record.statusCode : 0
   const code = String(record.statusMessage || record.message || '').trim()
   const known = /^(ai\.|error\.ai)/.test(code) ? code.toUpperCase().replace(/\./g, '_') : ''
-  return new PdfProviderError(known || code || 'PDF_AI_REQUEST_FAILED', status)
+  const rawDetail = String(record.data?.detail || record.data?.data?.detail || '').trim()
+  const msg = String(record.message || '').trim()
+  const detail = rawDetail || (msg && msg !== code ? msg : '')
+  return new PdfProviderError(known || code || 'PDF_AI_REQUEST_FAILED', status, detail || undefined)
 }
 
 async function callPage(
@@ -190,11 +246,12 @@ async function callPage(
   pageId: string,
   target: PdfExtractTarget,
   instructions?: PdfExtractInstructions | null,
-  event?: H3Event
+  event?: H3Event,
+  scale = config.pdf.imageScale
 ): Promise<PdfExtractPage> {
   const { temperature } = config.pdf.extract
 
-  const image = await renderPage(buffer)
+  const image = await renderPage(buffer, scale)
 
   const result = await chatWithConnection({
     connectionId: target.connectionId,
@@ -259,12 +316,33 @@ export async function extractPageWithRetry(
   }
 
   let lastError: unknown
+  let textFallbackTried = false
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt++) {
     try {
-      return await callPage(buffer, pageId, target, instructions, event)
+      const scale = attempt === 1
+        ? config.pdf.imageScale
+        : Math.max(1, config.pdf.imageScale * 0.75)
+      return await callPage(buffer, pageId, target, instructions, event, scale)
     } catch (error) {
-      lastError = toProviderError(error)
+      const providerErr = toProviderError(error)
+      lastError = providerErr
+
+      // When vision returns an empty answer (safety/recitation/thinking edge
+      // case on that specific PNG), fall back to embedded PDF text if present
+      // instead of repeating the exact same failing image call.
+      if (providerErr.message === 'PDF_AI_EMPTY_RESPONSE' && !textFallbackTried) {
+        textFallbackTried = true
+        const embeddedText = await extractPdfPageText(buffer)
+        if (embeddedText.replace(/\s+/g, '').length >= 40) {
+          try {
+            return await callTextChunk(pageId, pageId, embeddedText, target, instructions, event)
+          } catch (textErr) {
+            lastError = toProviderError(textErr)
+          }
+        }
+      }
+
       if (!isRetryable(lastError) || attempt >= maxRetries) break
       await delay(attempt * retryDelayMs)
     }

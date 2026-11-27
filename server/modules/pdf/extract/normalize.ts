@@ -1,4 +1,5 @@
-import type { PdfExportRow, PdfExtractPage, PdfExtractProduct } from '#shared/types/pdf'
+import type { PdfCategoryMatchMode, PdfCategoryNode, PdfExportRow, PdfExtractPage, PdfExtractProduct } from '#shared/types/pdf'
+import { buildCategoryPathMap, matchCategoryBySystem, resolveCategoryPath } from '#shared/utils/pdfCategoryTree'
 
 const ROOT_SLUG = 'noi-that-the-one'
 const DEFAULT_CATEGORIES = 'noi-that-the-one,noi-that-van-phong,ghe-van-phong,ghe-lanh-dao-cao-cap'
@@ -41,15 +42,41 @@ export function categoryTags(categories: string): string {
   return [...parts, 'hoa-phat', 'the-one'].join(',')
 }
 
-export function normalizeTo25Columns(pages: PdfExtractPage[]): PdfExportRow[] {
+export interface NormalizeCategoryOptions {
+  categoryMode?: PdfCategoryMatchMode
+  categories?: PdfCategoryNode[]
+}
+
+export function normalizeTo25Columns(pages: PdfExtractPage[], options?: NormalizeCategoryOptions | null): PdfExportRow[] {
   const rows: PdfExportRow[] = []
   let rowNo = 1
 
+  const tree = options?.categories?.length ? options.categories : null
+  const mode: PdfCategoryMatchMode = options?.categoryMode ?? (tree ? 'auto' : 'ai')
+  const pathMap = tree ? buildCategoryPathMap(tree) : null
+
   for (const page of pages) {
-    const categories = page.pageCategorySlugs?.trim() || DEFAULT_CATEGORIES
-    const baseTags = categoryTags(categories)
+    const aiResolved = pathMap
+      ? resolveCategoryPath(page.pageCategorySlugs, pathMap)
+      : (page.pageCategorySlugs?.trim() || null)
+    const pageCategories = aiResolved || DEFAULT_CATEGORIES
 
     for (const product of page.products || []) {
+      let categories = pageCategories
+      if (tree && pathMap) {
+        const productText = `${product.title} ${product.shortDesc} ${product.description}`
+        const aiProductResolved = resolveCategoryPath(product.categorySlug, pathMap)
+        if (mode === 'system') {
+          categories = matchCategoryBySystem(productText, product.sku, tree, pathMap) || aiProductResolved || aiResolved || DEFAULT_CATEGORIES
+        } else if (mode === 'ai') {
+          categories = aiProductResolved || aiResolved || DEFAULT_CATEGORIES
+        } else {
+          // Hybrid ('auto'): trust AI's per-product / page classification first,
+          // and fall back to system keyword/SKU matching if AI returned nothing valid.
+          categories = aiProductResolved || matchCategoryBySystem(productText, product.sku, tree, pathMap) || aiResolved || DEFAULT_CATEGORIES
+        }
+      }
+      const baseTags = categoryTags(categories)
       const basePrice = minPrice(product)
       const tags = product.isNewProduct ? `${baseTags},san-pham-moi` : baseTags
       const sku = product.sku.trim()

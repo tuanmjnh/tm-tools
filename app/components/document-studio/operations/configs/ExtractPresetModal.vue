@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { getPresetErrorMessage } from '~/shared/utils/errors'
-import type { PdfExtractPreset } from '#shared/types/pdf'
+import type { PdfCategoryMatchMode, PdfCategoryNode, PdfExtractPreset } from '#shared/types/pdf'
+import {
+  applyCategoryMapping,
+  guessCategoryColumns,
+  parseCategoryImport,
+  type CategoryColumnMapping,
+  type CategoryImportTable
+} from '#shared/utils/pdfCategoryTree'
 import {
   parsePresetFile,
   presetFileName,
@@ -21,13 +28,46 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const notify = useNotify()
 
-const form = ref({ id: '', name: '', description: '', sample: '' })
+const form = ref<{
+  id: string
+  name: string
+  description: string
+  sample: string
+  categoryMode: PdfCategoryMatchMode
+  categories: PdfCategoryNode[]
+}>({
+  id: '',
+  name: '',
+  description: '',
+  sample: '',
+  categoryMode: 'auto',
+  categories: []
+})
 const saving = ref(false)
 const error = ref('')
 const notice = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+const importedTable = ref<CategoryImportTable | null>(null)
+const columnMapping = ref<CategoryColumnMapping>({ title: '', slug: '', pid: '', matchers: '' })
 
 const isEditing = computed(() => Boolean(props.preset?.id))
+
+const categoryModeOptions = computed(() => [
+  { label: t('pdf.extract.presetCategoryModeAuto'), value: 'auto' },
+  { label: t('pdf.extract.presetCategoryModeSystem'), value: 'system' },
+  { label: t('pdf.extract.presetCategoryModeAi'), value: 'ai' }
+])
+
+const headerOptions = computed(() =>
+  (importedTable.value?.headers ?? []).map(h => ({ label: h, value: h }))
+)
+
+const NONE_COL = '__none__'
+
+const optionalHeaderOptions = computed(() => [
+  { label: '—', value: NONE_COL },
+  ...headerOptions.value
+])
 
 watch(() => props.open, (open) => {
   if (!open) return
@@ -35,11 +75,24 @@ watch(() => props.open, (open) => {
     id: props.preset?.id || '',
     name: props.preset?.name || '',
     description: props.preset?.description || '',
-    sample: props.preset?.sample || ''
+    sample: props.preset?.sample || '',
+    categoryMode: props.preset?.categoryMode || 'auto',
+    categories: props.preset?.categories ? [...props.preset.categories] : []
   }
+  importedTable.value = null
   error.value = ''
   notice.value = ''
 }, { immediate: true })
+
+watch(columnMapping, (mapping) => {
+  if (!importedTable.value) return
+  form.value.categories = applyCategoryMapping(importedTable.value, {
+    title: mapping.title,
+    slug: mapping.slug,
+    pid: mapping.pid === NONE_COL ? '' : mapping.pid,
+    matchers: mapping.matchers === NONE_COL ? '' : mapping.matchers
+  })
+}, { deep: true })
 
 function saveJsonFile(content: string, fileName: string) {
   const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }))
@@ -61,7 +114,8 @@ function exportCurrent() {
       id: form.value.id || undefined,
       name,
       description: form.value.description,
-      sample: form.value.sample
+      sample: form.value.sample,
+      ...(form.value.categories.length ? { categoryMode: form.value.categoryMode, categories: form.value.categories } : {})
     }]),
     presetFileName(name)
   )
@@ -94,10 +148,44 @@ function applyImported(entry: PresetTransferEntry) {
     id: entry.id && entry.id === form.value.id ? entry.id : '',
     name: entry.name,
     description: entry.description ?? '',
-    sample: entry.sample ?? ''
+    sample: entry.sample ?? '',
+    categoryMode: entry.categoryMode ?? 'auto',
+    categories: entry.categories ? [...entry.categories] : []
   }
+  importedTable.value = null
   error.value = ''
   notice.value = t('pdf.extract.presetImportLoaded', { name: entry.name })
+}
+
+function pickCategoryFile() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json,.csv,application/json,text/csv'
+  input.onchange = async () => {
+    const file = input.files?.[0]
+    if (!file) return
+    const table = parseCategoryImport(await file.text())
+    if (!table) {
+      error.value = t('pdf.extract.presetCategoryBadFile')
+      return
+    }
+    importedTable.value = table
+    const guessed = guessCategoryColumns(table.headers)
+    columnMapping.value = {
+      title: guessed.title,
+      slug: guessed.slug,
+      pid: guessed.pid || NONE_COL,
+      matchers: guessed.matchers || NONE_COL
+    }
+    form.value.categories = applyCategoryMapping(table, guessed)
+    error.value = ''
+  }
+  input.click()
+}
+
+function clearCategories() {
+  importedTable.value = null
+  form.value.categories = []
 }
 
 async function save() {
@@ -113,6 +201,10 @@ async function save() {
       name,
       description: form.value.description,
       sample: form.value.sample
+    }
+    if (form.value.categories.length) {
+      body.categoryMode = form.value.categoryMode
+      body.categories = form.value.categories
     }
     if (form.value.id) body.id = form.value.id
     const res = await $fetch<{ data: PdfExtractPreset }>('/api/v1/pdf/extract/presets', { method: 'POST', body })
@@ -177,6 +269,91 @@ async function save() {
             autoresize
           />
         </UFormField>
+        <div class="space-y-3 rounded-md border border-default/60 bg-muted/5 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-sm font-medium">
+                {{ t('pdf.extract.presetCategoryTitle') }}
+              </p>
+              <p class="text-xs text-muted">
+                {{ t('pdf.extract.presetCategoryHint') }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <UButton
+                icon="i-lucide-folder-tree"
+                color="neutral"
+                variant="soft"
+                size="xs"
+                :label="t('pdf.extract.presetCategoryImport')"
+                @click="pickCategoryFile"
+              />
+              <UButton
+                v-if="form.categories.length"
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :label="t('pdf.extract.presetCategoryClear')"
+                @click="clearCategories"
+              />
+            </div>
+          </div>
+          <div v-if="importedTable" class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <UFormField :label="t('pdf.extract.presetCategoryColTitle')">
+              <USelect
+                v-model="columnMapping.title"
+                :items="headerOptions"
+                value-key="value"
+                class="w-full"
+                size="xs"
+              />
+            </UFormField>
+            <UFormField :label="t('pdf.extract.presetCategoryColSlug')">
+              <USelect
+                v-model="columnMapping.slug"
+                :items="headerOptions"
+                value-key="value"
+                class="w-full"
+                size="xs"
+              />
+            </UFormField>
+            <UFormField :label="t('pdf.extract.presetCategoryColPid')">
+              <USelect
+                v-model="columnMapping.pid"
+                :items="optionalHeaderOptions"
+                value-key="value"
+                class="w-full"
+                size="xs"
+              />
+            </UFormField>
+            <UFormField :label="t('pdf.extract.presetCategoryColMatchers')">
+              <USelect
+                v-model="columnMapping.matchers"
+                :items="optionalHeaderOptions"
+                value-key="value"
+                class="w-full"
+                size="xs"
+              />
+            </UFormField>
+          </div>
+          <div v-if="form.categories.length" class="space-y-2">
+            <div class="flex items-center gap-2">
+              <UBadge color="primary" variant="subtle" size="xs">
+                {{ t('pdf.extract.presetCategoryLoaded', { count: form.categories.length }) }}
+              </UBadge>
+            </div>
+            <UFormField :label="t('pdf.extract.presetCategoryMode')">
+              <USelect
+                v-model="form.categoryMode"
+                :items="categoryModeOptions"
+                value-key="value"
+                class="w-full"
+                size="sm"
+              />
+            </UFormField>
+          </div>
+        </div>
         <p v-if="notice" class="text-xs text-success">
           {{ notice }}
         </p>

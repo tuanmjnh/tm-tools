@@ -189,6 +189,31 @@ export const DOCUMENT_OPERATIONS: readonly DocumentOperationDefinition[] = [
     output: { artifactMode: 'single', defaultFileNamePattern: '{stem}.{ext}', mimeTypes: ['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/xml', 'application/json'] },
     execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
     batch: { mode: 'per-file', maxFiles: 50 }
+  },
+  {
+    id: 'office.convert',
+    version: '1.0.0',
+    category: 'convert',
+    titleKey: 'document.operations.officeConvert.title',
+    descriptionKey: 'document.operations.officeConvert.description',
+    icon: 'i-lucide-file-spreadsheet',
+    enabled: true,
+    input: { mode: 'single-file', acceptedExtensions: ['doc', 'docx', 'xlsx', 'xls', 'csv', 'md', 'json', 'xml'], minFiles: 1, maxFiles: 1, ordered: false, allowFromInputLibrary: true },
+    configuration: { componentKey: 'office-convert', hasAdvancedOptions: false },
+    output: {
+      artifactMode: 'single',
+      defaultFileNamePattern: '{stem}.{ext}',
+      mimeTypes: [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/csv',
+        'text/markdown',
+        'application/json',
+        'application/xml'
+      ]
+    },
+    execution: { mode: 'inline', supportsProgress: true, supportsCancel: false, supportsPartial: false, resourceProfile: 'image-cleanup' },
+    batch: { mode: 'per-file', maxFiles: 30 }
   }
 ]
 

@@ -102,6 +102,14 @@ export const DOCUMENT_STUDIO_OPERATIONS: readonly DocumentStudioOperation[] = [
     icon: 'i-lucide-table-2',
     route: '/document-studio/tools/structured-convert',
     category: 'convert'
+  },
+  {
+    id: 'office.convert',
+    titleKey: 'document.operations.officeConvert.title',
+    descriptionKey: 'document.operations.officeConvert.description',
+    icon: 'i-lucide-file-spreadsheet',
+    route: '/document-studio/tools/office-convert',
+    category: 'convert'
   }
 ]
 
@@ -122,7 +130,8 @@ const SLUG_TO_OPERATION_ID: Record<string, DocumentOperationId> = {
   'watermark': 'image.watermark-remove',
   'remove-bg': 'image.background-remove',
   'image-convert': 'image.convert',
-  'structured-convert': 'structured.convert'
+  'structured-convert': 'structured.convert',
+  'office-convert': 'office.convert'
 }
 
 export function operationIdFromSlug(slug: string): DocumentOperationId {
@@ -156,6 +165,16 @@ export interface ImageConvertConfigModel {
 /** Shape the structured-convert panel emits and the server executor reads. */
 export interface StructuredConvertConfigModel {
   target?: 'csv' | 'xlsx' | 'xml' | 'json'
+  [key: string]: unknown
+}
+
+/** Shape the office-convert (Word ↔ Excel / CSV / MD / JSON / XML) panel emits and the server executor reads. */
+export interface OfficeConvertConfigModel {
+  target?: 'auto' | 'xlsx' | 'docx' | 'csv' | 'md' | 'json' | 'xml'
+  useAi?: boolean
+  model?: string
+  connectionId?: string
+  aiPrompt?: string
   [key: string]: unknown
 }
 

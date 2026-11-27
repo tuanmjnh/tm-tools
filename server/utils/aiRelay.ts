@@ -77,7 +77,8 @@ export function relayUpstreamError(
 ): { statusCode: number, statusMessage: string, message: string, data: { detail: string } } {
   const body = (err as { data?: RelayErrorBody })?.data ?? {}
   const upstream = (err as { statusCode?: number })?.statusCode
-  const detail = String(body.data?.detail ?? '').trim()
+  const errMessage = err instanceof Error ? err.message.trim() : ''
+  const detail = String(body.data?.detail ?? '').trim() || errMessage
   const code = String(body.message ?? '').trim()
   const status = typeof upstream === 'number' && upstream >= 400 ? upstream : 502
 
@@ -155,8 +156,9 @@ export async function relayChat(body: {
     ? [{ role: 'system', content: body.systemPrompt.trim() }, ...body.messages]
     : body.messages
 
+  let res: { success: boolean, data: RelayChatResult }
   try {
-    const res = await $fetch<{ success: boolean, data: RelayChatResult }>(`${target.url}/chat`, {
+    res = await $fetch<{ success: boolean, data: RelayChatResult }>(`${target.url}/chat`, {
       method: 'POST',
       headers: target.headers,
       body: {
@@ -167,9 +169,20 @@ export async function relayChat(body: {
         temperature: body.temperature
       }
     })
-    if (!res?.data?.content) throw new Error('AI relay returned an empty response')
-    return res.data
   } catch (err: unknown) {
     throw createError(relayUpstreamError(err, 'AI relay upstream failed'))
   }
+  if (!res?.data?.content) {
+    const meta = res?.data
+      ? `provider=${res.data.provider ?? '?'}, model=${res.data.model ?? '?'}, usage=${JSON.stringify(res.data.usage ?? null)}`
+      : `raw=${JSON.stringify(res ?? null).slice(0, 200)}`
+    const detail = `AI relay returned an empty response (${meta})`
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'PDF_AI_EMPTY_RESPONSE',
+      message: detail,
+      data: { detail }
+    })
+  }
+  return res.data
 }

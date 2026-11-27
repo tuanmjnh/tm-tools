@@ -24,6 +24,10 @@ const productSchema = {
       type: 'STRING',
       description: 'Full product name combining the category label and the SKU, e.g. "Ghế lãnh đạo cao cấp TQ01".'
     },
+    categorySlug: {
+      type: 'STRING',
+      description: 'Optional leaf category slug for this specific product when a page contains products from different categories.'
+    },
     isNewProduct: {
       type: 'BOOLEAN',
       description: 'True when the source page marks the product as "(sản phẩm mới)".'

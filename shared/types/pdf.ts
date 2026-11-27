@@ -49,6 +49,7 @@ export interface PdfExtractVariant {
 export interface PdfExtractProduct {
   sku: string
   title: string
+  categorySlug?: string
   isNewProduct: boolean
   width: string
   depth: string
@@ -100,6 +101,22 @@ export interface PdfExtractJobState {
 }
 
 /**
+ * How `pageCategorySlugs` is assigned when a preset carries a category tree:
+ * - `system`: 0 extra AI tokens; backend matches product/page text & SKU prefixes against the tree.
+ * - `ai`: AI picks a leaf slug from the tree; backend resolves the full `root,...,leaf` path.
+ * - `auto`: backend tries system matchers first, falling back to AI's chosen leaf slug.
+ */
+export type PdfCategoryMatchMode = 'system' | 'ai' | 'auto'
+
+export interface PdfCategoryNode {
+  title: string
+  slug: string
+  pid?: string
+  /** Optional SKU prefixes or keywords (e.g. ["HS", "BF"]) for zero-token system matching. */
+  matchers?: string[]
+}
+
+/**
  * Reusable extraction guidance. `description` tells the model what the document
  * is and how its columns work; `sample` is a short example of correct output.
  */
@@ -108,6 +125,8 @@ export interface PdfExtractPreset {
   name: string
   description: string
   sample: string
+  categoryMode?: PdfCategoryMatchMode
+  categories?: PdfCategoryNode[]
   updatedAt: string
 }
 

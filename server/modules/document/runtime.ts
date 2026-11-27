@@ -225,7 +225,8 @@ const SCRATCH_MULTIPLIER: Record<DocumentOperationId, number> = {
   'image.background-remove': 4,
   'image.convert': 4,
   // Parsed rows / JSON tree in memory plus the rendered file.
-  'structured.convert': 3
+  'structured.convert': 3,
+  'office.convert': 3
 }
 
 export function policyFor(runtime: DocumentRuntimeKind = detectRuntime()): RuntimePolicy {

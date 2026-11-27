@@ -65,7 +65,9 @@ export function presetFingerprint(instructions?: PdfExtractInstructions | null):
   return stableHash(canonical({
     preset: instructions?.preset ?? '',
     description: instructions?.description ?? '',
-    sample: instructions?.sample ?? ''
+    sample: instructions?.sample ?? '',
+    categoryMode: instructions?.categoryMode ?? '',
+    categories: instructions?.categories ?? []
   })).slice(0, 16)
 }
 

@@ -90,7 +90,7 @@ describe('document run lifecycle', () => {
 })
 
 describe('operation catalogue', () => {
-  it('covers the eleven server operation ids exactly once', () => {
+  it('covers all twelve server operation ids exactly once', () => {
     const source = read('app/utils/documentStudio.ts')
     const ids = [...source.matchAll(/id: '([a-z.-]+)'/g)].map(match => match[1])
     assert.deepEqual(ids.sort(), [
@@ -99,6 +99,7 @@ describe('operation catalogue', () => {
       'image.background-remove',
       'image.convert',
       'image.watermark-remove',
+      'office.convert',
       'pdf.export',
       'pdf.images-to-pdf',
       'pdf.merge',
@@ -111,7 +112,7 @@ describe('operation catalogue', () => {
   it('points every entry at a page that exists', () => {
     const source = read('app/utils/documentStudio.ts')
     const entries = [...source.matchAll(/id: '([a-z.-]+)',[\s\S]*?route: '([^']+)'/g)]
-    assert.equal(entries.length, 11)
+    assert.equal(entries.length, 12)
 
     for (const [, id, route] of entries) {
       assert.ok(id && route)

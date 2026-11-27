@@ -1,3 +1,4 @@
+import { formatCategoriesForPrompt } from '#shared/utils/pdfCategoryTree'
 import { productExtractionSchema } from './schema'
 import type { PdfExtractInstructions } from './presets'
 
@@ -93,6 +94,14 @@ export function buildSystemPrompt(instructions?: PdfExtractInstructions | null):
   const sample = instructions?.sample?.trim()
   if (sample) {
     parts.push(`MẪU THAM KHẢO — bắt chước cách đặt tên, cách chia biến thể và văn phong mô tả; KHÔNG chép giá trị, mã hay sản phẩm có trong mẫu:\n${sample}`)
+  }
+
+  // Only include the category list when AI participates ('ai' or 'auto');
+  // 'system' mode matches categories on the server at 0 extra AI token cost.
+  if (instructions?.categories?.length && instructions.categoryMode !== 'system') {
+    parts.push(
+      `DANH MỤC HỢP LỆ — chọn đúng 1 slug lá phù hợp nhất cho từng sản phẩm vào trường "categorySlug" (và điền slug chính của trang vào "pageCategorySlugs"). Nếu 1 trang có nhiều loại sản phẩm thuộc các danh mục khác nhau, PHẢI gán "categorySlug" riêng cho từng sản phẩm; không tự bịa slug ngoài danh sách:\n${formatCategoriesForPrompt(instructions.categories)}`
+    )
   }
 
   return parts.join('\n\n')

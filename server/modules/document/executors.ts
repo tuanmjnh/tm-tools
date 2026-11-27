@@ -23,6 +23,7 @@ import { writeProducts } from '../pdf/extract/export'
 import { BackgroundExecutor, WatermarkExecutor } from './image-executors'
 import { ImageConvertExecutor } from './image-convert-executor'
 import { StructuredConvertExecutor } from './structured-convert-executor'
+import { OfficeConvertExecutor } from './office-convert-executor'
 import { ensureDir, writeFileAtomic } from '../pdf/paths'
 import { documentStem, naturalCompare, safeFileName, safeStem } from '../pdf/security'
 import { config } from '#server/config'
@@ -283,6 +284,7 @@ export function extractFailureCode(code: string | null | undefined): DocumentErr
   switch (code) {
     case 'PDF_AI_NO_MODEL':
     case 'PDF_AI_KEY_MISSING':
+    case 'ERROR_AILOCALKEYMISSING':
       return 'DOCUMENT_AI_MODEL_UNAVAILABLE'
     case 'PDF_AI_OUTPUT_TRUNCATED':
       return 'DOCUMENT_AI_OUTPUT_TRUNCATED'
@@ -293,7 +295,12 @@ export function extractFailureCode(code: string | null | undefined): DocumentErr
     case 'PDF_AI_EMPTY_PAGE':
       return 'DOCUMENT_AI_EMPTY_RESPONSE'
     case 'PDF_AI_TIMEOUT':
+    case 'ERROR_AITIMEOUT':
       return 'DOCUMENT_PROCESSING_TIMEOUT'
+    case 'ERROR_AIFAILED':
+    case 'ERROR_AIRATELIMITED':
+    case 'ERROR_AILOCALUPSTREAMFAILED':
+      return 'DOCUMENT_AI_RELAY_FAILED'
     default:
       if (code?.startsWith('ERROR_AI_RELAY')) return 'DOCUMENT_AI_RELAY_FAILED'
       return 'DOCUMENT_AI_EXTRACT_FAILED'
@@ -319,7 +326,15 @@ class AiExtractExecutor implements DocumentOperationExecutor<Record<string, unkn
       input.safeName,
       force,
       target,
-      preset ? { sample: preset.sample, description: preset.description, preset: preset.name } : null,
+      preset
+        ? {
+            sample: preset.sample,
+            description: preset.description,
+            preset: preset.name,
+            categoryMode: preset.categoryMode,
+            categories: preset.categories
+          }
+        : null,
       true,
       requestedFormats,
       { path: input.stagedPath, kind: input.extension === 'pdf' ? 'pdf' : 'word' },
@@ -383,7 +398,8 @@ const EXECUTORS: Record<string, DocumentOperationExecutor<never>> = {
   'image.watermark-remove': new WatermarkExecutor() as unknown as DocumentOperationExecutor<never>,
   'image.background-remove': new BackgroundExecutor() as unknown as DocumentOperationExecutor<never>,
   'image.convert': new ImageConvertExecutor() as unknown as DocumentOperationExecutor<never>,
-  'structured.convert': new StructuredConvertExecutor() as unknown as DocumentOperationExecutor<never>
+  'structured.convert': new StructuredConvertExecutor() as unknown as DocumentOperationExecutor<never>,
+  'office.convert': new OfficeConvertExecutor() as unknown as DocumentOperationExecutor<never>
 }
 
 export function executorFor(operationId: DocumentOperationId): DocumentOperationExecutor<never> {

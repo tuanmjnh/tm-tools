@@ -303,7 +303,9 @@
     "document_watermark": "Remove Watermark",
     "document_remove_bg": "Remove Background",
     "document_image_convert": "Image / Icon Convert",
-    "document_structured_convert": "Data Convert"
+    "document_structured_convert": "Data Convert",
+    "document_office_convert": "Word ↔ Excel",
+    "document_office_convert": "Word ↔ Excel"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1897,6 +1899,20 @@
       "presetDescriptionHint": "What kind of document this is, what each column means, and any rule the default prompt cannot know.",
       "presetSample": "Reference sample",
       "presetSampleHint": "Paste a few rows of a correct result (JSON or CSV). The model copies the wording and variant style, not the values.",
+      "presetCategoryTitle": "Category tree (optional)",
+      "presetCategoryHint": "Import a JSON or CSV category list so each page/product resolves the right category path automatically.",
+      "presetCategoryImport": "Import categories (JSON/CSV)",
+      "presetCategoryClear": "Clear",
+      "presetCategoryLoaded": "{count} categories loaded",
+      "presetCategoryBadFile": "Could not read categories from that file. Expected a JSON array or CSV with a header row.",
+      "presetCategoryMode": "Matching mode",
+      "presetCategoryModeSystem": "System only (0 AI tokens — match SKU/keywords)",
+      "presetCategoryModeAi": "AI assisted (send compact list, server builds path)",
+      "presetCategoryModeAuto": "Hybrid (System first, AI fallback)",
+      "presetCategoryColTitle": "Name column",
+      "presetCategoryColSlug": "Slug column",
+      "presetCategoryColPid": "Parent slug column (optional)",
+      "presetCategoryColMatchers": "SKU / keywords column (optional)",
       "presetSave": "Save preset",
       "presetSaved": "Preset saved.",
       "presetDeleted": "Preset deleted.",
@@ -3412,6 +3428,10 @@
       "structuredConvert": {
         "title": "Convert structured data",
         "description": "Convert CSV ↔ XLSX and XML ↔ JSON with predictable rules."
+      },
+      "officeConvert": {
+        "title": "Word ↔ Excel",
+        "description": "Convert Word (.doc, .docx) to Excel (.xlsx) and back — optionally guided by an AI prompt."
       }
     },
     "split": {
@@ -3567,6 +3587,22 @@
       "targetXlsxHint": "Excel workbook with one sheet.",
       "targetXmlHint": "Element tree; attributes prefixed with an at sign.",
       "targetJsonHint": "JavaScript Object Notation."
+    },
+    "officeConvert": {
+      "target": "Output format",
+      "targetAuto": "Auto (Word → Excel, Excel → Word)",
+      "targetXlsx": "Excel (.xlsx)",
+      "targetDocx": "Word (.docx)",
+      "targetCsv": "CSV (.csv)",
+      "targetMd": "Markdown (.md)",
+      "targetJson": "JSON (.json)",
+      "targetXml": "XML (.xml)",
+      "useAi": "Use AI prompt assistance",
+      "useAiHint": "Let AI restructure tables, extract columns, or rewrite Excel sheets into a formatted Word report.",
+      "model": "AI model",
+      "aiPrompt": "AI conversion prompt (optional)",
+      "aiPromptHint": "Describe how you want columns split, cleaned, or formatted in the output file.",
+      "aiPromptPlaceholder": "Example: Split products into SKU, Name, Price, Size columns; or summarize each sheet into a formal report."
     },
     "unavailable": {
       "title": "Not available on this runtime",

@@ -371,13 +371,18 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
         entry.pages.push(data)
         entry.state.productCount += data.products.length
       } catch (error) {
-        const code = (error as Error)?.message || 'PDF_AI_REQUEST_FAILED'
+        const providerErr = error as Error & { status?: number, detail?: string }
+        const code = providerErr?.message || 'PDF_AI_REQUEST_FAILED'
         entry.state.failedPages.push(unit.id)
         entry.state.error = code
         // The code alone does not say whether the budget ran out or the model
         // answered badly; keep the message and page so a failure is diagnosable
         // from the journal without re-running the job.
-        entry.state.errorDetail = `${unit.id}: ${(error as Error)?.stack?.split('\n')[0] || code}`
+        const statusPart = providerErr?.status ? ` (HTTP ${providerErr.status})` : ''
+        const detailPart = providerErr?.detail ? ` — ${providerErr.detail}` : ''
+        entry.state.errorDetail = detailPart || statusPart
+          ? `${unit.id}: ${code}${statusPart}${detailPart}`
+          : `${unit.id}: ${providerErr?.stack?.split('\n')[0] || code}`
         // No usable model/connection: every remaining unit would fail the same way.
         if (code === 'PDF_AI_NO_MODEL') break
       }
@@ -391,7 +396,7 @@ async function runJob(entry: JobEntry, force: boolean, target: PdfExtractTarget)
       }
     }
 
-    entry.rows = normalizeTo25Columns(entry.pages)
+    entry.rows = normalizeTo25Columns(entry.pages, entry.instructions)
     entry.state.rowCount = entry.rows.length
     await writeProducts(pdfDirs.products, `${stem}_products`, entry.rows, entry.formats ?? undefined)
     recordAudit({ action: 'output', area: 'products', target: `${stem}_products`, tool: 'extract' })

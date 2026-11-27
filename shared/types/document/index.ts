@@ -23,7 +23,8 @@ export const DOCUMENT_OPERATION_IDS = [
   'image.watermark-remove',
   'image.background-remove',
   'image.convert',
-  'structured.convert'
+  'structured.convert',
+  'office.convert'
 ] as const
 
 export type DocumentOperationId = typeof DOCUMENT_OPERATION_IDS[number]
@@ -37,7 +38,7 @@ export const DOCUMENT_INPUT_MODES = ['single-file', 'multi-file', 'folder-batch'
 export type DocumentInputMode = typeof DOCUMENT_INPUT_MODES[number]
 
 /** Configuration forms the client is allowed to mount for an operation. */
-export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'rasterize', 'export-formats', 'ai-extraction', 'watermark', 'background', 'image-convert', 'structured-convert'] as const
+export const DOCUMENT_CONFIG_COMPONENTS = ['none', 'split', 'merge', 'rasterize', 'export-formats', 'ai-extraction', 'watermark', 'background', 'image-convert', 'structured-convert', 'office-convert'] as const
 
 export type DocumentConfigComponent = typeof DOCUMENT_CONFIG_COMPONENTS[number]
 
