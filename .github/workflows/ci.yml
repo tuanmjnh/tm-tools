@@ -1,0 +1,94 @@
+name: CI
+
+# One required check. It answers "does the source still typecheck, lint its own
+# change, and pass its suites" — the questions a developer can also answer
+# locally. Electron packaging and the Windows installer are deliberately not
+# here: they fail for signing and symlink-privilege reasons that say nothing
+# about source quality, and mixing them would make a red build ambiguous.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Node 24 matches the version the lockfile and the sibling apps are built on.
+  # This manifest declares no `engines` range, so nothing here narrows it.
+  NODE_VERSION: '24'
+
+jobs:
+  quality-gates:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The changed-files lint below diffs against a base commit, so the
+          # history has to be there rather than a shallow single commit.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typecheck runs FIRST: `nuxt typecheck` regenerates .nuxt/eslint.config.mjs,
+      # so linting before this step would judge a config file about to be replaced.
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # ESLint on the files this change touches, not the whole tree. The repo
+      # carries a lint backlog that predates this workflow; a repo-wide gate
+      # would be red on the first push and teach everyone to ignore it. This
+      # gate fails only when the change under review introduces a problem.
+      - name: Lint changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.before }}" ] \
+            && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            BASE="${{ github.event.before }}"
+          else
+            BASE="$(git rev-parse HEAD^)"
+          fi
+
+          echo "Lint base: $BASE"
+          mapfile -t CHANGED < <(git diff --name-only --diff-filter=ACMR "$BASE"...HEAD -- \
+            '*.ts' '*.mts' '*.js' '*.cjs' '*.mjs' '*.vue')
+
+          if [ "${#CHANGED[@]}" -eq 0 ]; then
+            echo "No lintable files changed; nothing for ESLint to judge."
+            exit 0
+          fi
+
+          printf 'Linting %d file(s):\n' "${#CHANGED[@]}"
+          printf '  %s\n' "${CHANGED[@]}"
+          pnpm exec eslint "${CHANGED[@]}"
+
+      - name: Unit specs
+        run: pnpm test
+
+      - name: Source hygiene (no emitted twins)
+        run: pnpm check:hygiene
+
+      # The production build is the only step that exercises every route and
+      # component through Nitro, so a type-clean tree that cannot bundle still
+      # gets caught here rather than at release.
+      - name: Production build
+        run: pnpm build
